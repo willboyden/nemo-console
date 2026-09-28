@@ -3,13 +3,16 @@
 Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Claims use the labels
 implemented / verified-live / unverified defined in the README.
 
-## [Unreleased]
+## [0.1.2] - 2026-09-28
 
 ### Added
 
-- `nemo-console open` and `make install-desktop`: a desktop launcher that starts the console in the background if
-  nothing is serving (log in `<state dir>/console.log`), waits for `/api/v1/health`, then opens the UI. It refuses a
-  port held by another service and never handles keys.
+- `nemo-console open` / `nemo-console stop` and `make install-desktop`: a desktop launcher (Linux). `open` starts the
+  console in the background if nothing is serving, waits for `/api/v1/health`, then opens the UI. It uses loopback
+  addresses only, and opens a page only when every listener on the port belongs to the current user and the answer
+  looks like Nemo Console (a same-user process can still impersonate it: THREAT-MODEL S-6). The server runs with
+  `python -I` so the launch directory is not on its import path. `stop` signals only the process it started. The
+  launcher never handles keys.
 - An app icon, also served as the UI's favicon (`frontend/favicon.svg`).
 
 ## [0.1.1] - 2026-09-28

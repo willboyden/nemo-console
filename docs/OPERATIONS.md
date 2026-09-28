@@ -84,22 +84,33 @@ Logs are JSON lines on stderr (secrets and tracebacks scrubbed). The console's o
 
 ```bash
 curl -s http://127.0.0.1:8793/api/v1/health
-# {"status":"degraded","version":"0.1.1","trust":"bearer","role":"public","trust_notice":null,"systems":{...}}   (run, unauthenticated)
+# {"status":"degraded","version":"0.1.2","trust":"bearer","role":"public","trust_notice":null,"systems":{...}}   (run, unauthenticated)
 ```
 
 `status` is `ok` only when all three systems are `up`. A system that is down is reported, not an error.
 
-### From the desktop (opt-in)
+### From the desktop (opt-in, Linux)
 
 ```bash
-make install-desktop      # writes ~/.local/share/applications/nemo-console.desktop; `make uninstall-desktop` removes it
+make install-desktop      # writes $XDG_DATA_HOME/applications/nemo-console.desktop; `make uninstall-desktop` removes it
 ```
 
-The launcher runs `nemo-console open`. If `/api/v1/health` already answers as Nemo Console, it opens the UI with
-`xdg-open`. If nothing answers, it starts the console in the background (log: `<state dir>/console.log`, mode 0600),
-waits up to 30 s for health, then opens the UI. It refuses to open the page if something else holds the port. It
-never touches keys: the UI still asks for one. A console started this way runs until you log out or stop it
-(`pkill -f nemo_console.main`). Failures also show as a desktop notification when `notify-send` exists.
+The menu entry runs `nemo-console open`; its right-click action **Stop Nemo Console** runs `nemo-console stop`.
+
+- `open` only uses a loopback address (a non-loopback `NEMO_CONSOLE_HOST` is refused). If the console already
+  answers, it opens the UI with `xdg-open`. If nothing answers, it starts the console in the background
+  (`python -I -m nemo_console.main`, so the launch directory is not on its import path; log in
+  `<state dir>/console.log`, mode 0600, rotated past 10 MiB; pid in `<state dir>/console.pid`), waits up to 30 s for
+  health, then opens the UI.
+- It opens the page only if **every socket listening on the port belongs to your user** (read from `/proc/net/tcp`
+  and `tcp6`) **and** the answer looks like Nemo Console. This stops another user's process that holds the port from
+  collecting your key. A process running as your own user, including a rootless-Docker published port, can still
+  impersonate it (THREAT-MODEL S-6).
+- It never touches keys: each new window asks for one.
+- `stop` signals only the process recorded in `console.pid`, and only if it is yours and its command line is exactly
+  the launcher's. A console started this way keeps running after logout when lingering is enabled
+  (`loginctl show-user $USER -p Linger`).
+- Failures also show as a desktop notification when `notify-send` exists.
 
 ### As a systemd user unit (opt-in)
 

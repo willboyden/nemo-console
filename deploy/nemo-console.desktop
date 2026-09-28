@@ -3,9 +3,15 @@ Type=Application
 Name=Nemo Console
 GenericName=LLM Stack Console
 Comment=Monitor, configure and interact with NeMo Switchyard, NeMo Relay and NVIDIA Dynamo
+TryExec=@BIN@
 Exec=@BIN@ open
 Icon=@ICON@
 Terminal=false
 StartupNotify=false
 Categories=System;Monitor;
 Keywords=NeMo;Switchyard;Relay;Dynamo;LLM;
+Actions=stop;
+
+[Desktop Action stop]
+Name=Stop Nemo Console
+Exec=@BIN@ stop

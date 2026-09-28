@@ -12,7 +12,7 @@ It is a host-run FastAPI process bound to loopback, with a zero-build, zero-npm 
 system plugs into a system-agnostic core; the UI renders from descriptors (status, metrics, config files,
 parameters, actions, playground), so adding a fourth system is one adapter file.
 
-> **Status: v0.1.1.** Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
+> **Status: v0.1.2.** Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
 > Nothing here has been used by anyone other than its author, on one workstation, against one set of pinned
 > versions (Switchyard 0.3.0, Relay 0.9.2, Dynamo 1.5.0).
 
@@ -26,10 +26,10 @@ Every feature claim in this repo is one of:
 | **verified-live** | Exercised against a real Switchyard 0.3.0, Relay 0.9.2 and Dynamo 1.5.0 on one workstation (evidence is stated in [`docs/FEATURE-MATRIX.md`](docs/FEATURE-MATRIX.md)). |
 | **unverified** | Only fakes have run it. It may work; nobody has watched it work. |
 
-Gate results (re-run on 2026-09-28 against the release tree): `pytest -q` 358 passed / 3 skipped in the author's
+Gate results (re-run on 2026-09-28 against the release tree): `pytest -q` 384 passed / 3 skipped in the author's
 deployment checkout (the skips are opt-in or environment-gated live smoke tests; the Dynamo live smoke enables itself
-when a frontend answers on 127.0.0.1:8020), `ruff check` clean, `mypy --strict src` clean (40 files), `node --test` 94
-passed. From a clean copy of the release tree outside that checkout (`make setup && make all`): 356 passed / 5 skipped,
+when a frontend answers on 127.0.0.1:8020), `ruff check` clean, `mypy --strict src` clean (41 files), `node --test` 94
+passed. From a clean copy of the release tree outside that checkout (`make setup && make all`): 382 passed / 5 skipped,
 ruff and mypy clean, frontend 94 passed; the extra skips are the tests that need the deployment's repository layout. Mermaid diagrams in these docs were **not
 rendered**; treat them as unvalidated.
 
@@ -73,7 +73,7 @@ works and is what the author used), the three systems deployed the way the adapt
 make setup          # uv venv --python 3.13 && uv sync --frozen
 make run            # serves API + UI on http://127.0.0.1:8793
 make all            # ruff + mypy --strict + pytest + node --test (all offline)
-make install-desktop  # optional: "Nemo Console" in your app menu; starts the console if needed, then opens the UI
+make install-desktop  # optional (Linux): "Nemo Console" in your app menu; see docs/OPERATIONS.md section 3
 ```
 
 **A key is required for everything except `GET /api/v1/health`.** First start writes an admin API key to

@@ -11,7 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 try:
     __version__ = metadata.version("nemo-console")
 except metadata.PackageNotFoundError:  # pragma: no cover
-    __version__ = "0.1.1"
+    __version__ = "0.1.2"
 
 ENV_PREFIX = "NEMO_CONSOLE_"
 NO_USER_ENV = "NEMO_CONSOLE_NO_USER_ENV"

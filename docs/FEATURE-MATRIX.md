@@ -14,9 +14,9 @@ Two columns are kept apart on purpose.
   real system.
 - **unverified**: not exercised by tests or by a live run in a way that proves the claim.
 
-Gates re-run for this revision on 2026-09-28: backend `pytest -q` 358 passed / 3 skipped in the author's deployment
-checkout, `ruff check` clean, `mypy --strict` clean (40 files), frontend `node --test` 94 passed. From a clean copy of the
-release tree outside that checkout (`make setup && make all`): 356 passed / 5 skipped, frontend 94 passed. Passing tests
+Gates re-run for this revision on 2026-09-28: backend `pytest -q` 384 passed / 3 skipped in the author's deployment
+checkout, `ruff check` clean, `mypy --strict` clean (41 files), frontend `node --test` 94 passed. From a clean copy of the
+release tree outside that checkout (`make setup && make all`): 382 passed / 5 skipped, frontend 94 passed. Passing tests
 prove behaviour against fakes, not against production. Fixtures under `backend/tests/*/fixtures` are captured output
 from the real systems, which anchors the parsers but not the write paths.
 
@@ -119,6 +119,15 @@ Dynamo `restart`, assistive technology, browsers other than headless Firefox.
 | Assistive technology (screen readers, keyboard-only walk-through) | Partial | **unverified** | ARIA tabs, live regions, skip link, focus styles, reduced-motion CSS exist; none was tested with real AT. |
 | Dark/light theme, English only | Implemented | unverified beyond the frontend render | Other locales: Not planned. |
 | Mock server for UI development | Implemented | frontend test exists | Canned data only; default port 8796 (the real backend is 8793). |
+
+## Desktop launcher (Linux)
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| `nemo-console open`: start in the background if needed, wait for health, open the UI | Implemented | verified live (maintainer, 2026-09-28, GNOME: a cold start answered healthy in under 1 s, a second launch reused the running console, the server ran with `-I` and a 0600 pid file); tests in `test_desktop.py` | Loopback only; a non-loopback host is refused. |
+| Refuses a port it cannot trust | Implemented | verified live for a same-user non-console HTTP server on the port (refused, no browser); the other-user case is fakes only (`/proc/net/tcp` parsing verified live: `{uid}` for the running console) | THREAT-MODEL S-6. A same-user impersonator that copies the `/health` shape is not detected. |
+| `nemo-console stop` and the menu's **Stop Nemo Console** action | Implemented | verified live (stopped the launcher's console, pid file removed; a second `stop` reports nothing recorded); the recycled-pid and other-user refusals are fakes only | Signals only the recorded pid, and only if its owner and command line match. |
+| `make install-desktop` | Implemented | verified live (entry passes `desktop-file-validate`); unsafe checkout paths refused in a scratch test | Paths limited to `[A-Za-z0-9._/+-]`. |
 
 ## Not planned for v1
 

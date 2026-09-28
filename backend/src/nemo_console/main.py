@@ -20,7 +20,7 @@ from nemo_console.api.routers import act, admin, configure, observe
 from nemo_console.api.security import SecurityMiddleware
 from nemo_console.config import Settings, __version__, user_env_file
 from nemo_console.container import Container, build_container
-from nemo_console.desktop import open_console
+from nemo_console.desktop import open_console, stop_console
 from nemo_console.services.auth import Principal, write_private_file
 from nemo_console.services.common import KNOWN
 from nemo_console.services.playground import resolve_secret
@@ -120,6 +120,8 @@ def run() -> None:
         raise SystemExit(mint_key(sys.argv[2:]))
     if len(sys.argv) > 1 and sys.argv[1] == "open":
         raise SystemExit(open_console(sys.argv[2:]))
+    if len(sys.argv) > 1 and sys.argv[1] == "stop":
+        raise SystemExit(stop_console(sys.argv[2:]))
     cfg = Settings(_env_file=user_env_file())
     configure_logging()
     uvicorn.run(create_app(cfg), host=cfg.host, port=cfg.port, log_config=None, access_log=False)

@@ -4,7 +4,6 @@ SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 BACKEND  := backend
 FRONTEND := frontend
-APPS_DIR := $(HOME)/.local/share/applications
 
 .PHONY: help setup run test lint typecheck frontend-test all install-desktop uninstall-desktop
 
@@ -31,13 +30,16 @@ frontend-test:  ## node --test on the pure-logic modules (no npm install needed)
 
 all: lint typecheck test frontend-test  ## every gate
 
+# Paths go into a .desktop Exec line and a sed replacement, so the checkout path is limited to a safe character set.
 install-desktop:  ## add "Nemo Console" to your app menu (starts the console if needed, then opens the UI)
 	test -x $(BACKEND)/.venv/bin/nemo-console || { echo "run 'make setup' first" >&2; exit 1; }
-	mkdir -p $(APPS_DIR)
-	sed -e 's|@BIN@|$(CURDIR)/$(BACKEND)/.venv/bin/nemo-console|' -e 's|@ICON@|$(CURDIR)/$(FRONTEND)/favicon.svg|' \
-	    deploy/nemo-console.desktop > $(APPS_DIR)/nemo-console.desktop
-	chmod 644 $(APPS_DIR)/nemo-console.desktop
-	@echo "installed $(APPS_DIR)/nemo-console.desktop"
+	dir=$$(pwd -P); apps="$${XDG_DATA_HOME:-$$HOME/.local/share}/applications"; \
+	case "$$dir" in *[!A-Za-z0-9._/+-]*) echo "install-desktop: move the checkout to a path of [A-Za-z0-9._/+-] only" >&2; exit 1;; esac; \
+	mkdir -p "$$apps"; \
+	sed -e "s|@BIN@|$$dir/$(BACKEND)/.venv/bin/nemo-console|g" -e "s|@ICON@|$$dir/$(FRONTEND)/favicon.svg|g" \
+	    deploy/nemo-console.desktop > "$$apps/nemo-console.desktop"; \
+	chmod 644 "$$apps/nemo-console.desktop"; \
+	echo "installed $$apps/nemo-console.desktop"
 
 uninstall-desktop:  ## remove that launcher
-	rm -f $(APPS_DIR)/nemo-console.desktop
+	rm -f "$${XDG_DATA_HOME:-$$HOME/.local/share}/applications/nemo-console.desktop"
