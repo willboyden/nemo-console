@@ -1,0 +1,152 @@
+# NVIDIA Dynamo 1.5.0 — an ALTERNATIVE serving path for Qwen3.8-27B, behind the LiteLLM router.
+#
+#   clients ─▶ litellm :4000 ─▶ dynamo-frontend :8000 (Rust HTTP + parsers) ─TCP─▶ dynamo-worker (vLLM 0.28.0)
+#
+# NOTHING EXISTING IS REWIRED. LiteLLM gets one NEW alias, `qwen3.8-27b-dynamo`, next to the
+# existing `qwen3.8-27b-1m` (plain vLLM 0.27.1). Same checkpoint, same flags, so the two can be
+# A/B'd through one router. Both want the same card, so they are MUTUALLY EXCLUSIVE:
+#   scripts/use-model.sh qwen3.8-27b-dynamo     # stops vllm-qwen38, starts this
+#   scripts/use-model.sh qwen3.8-27b-1m         # and back
+#
+# Generated 2026-09-23, unverified on a real GPU worker. What WAS checked (this image, this box):
+#   - image pulled: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0 (20.1 GB), ai-dynamo 1.5.0,
+#     vLLM 0.28.0, torch 2.13.0+cu130, get_device_capability() == (12, 0) on the Workstation card
+#   - every flag below appears in `--help` of dynamo.frontend / dynamo.vllm in that image
+#   - the frontend<->worker plumbing across two containers: `docker compose --profile mock up`
+#     (CPU-only mocker, no VRAM) — see README.md for what it proved
+# Not yet checked: that the NVFP4 Qwen3.8 weights load and answer under 0.28.0 on sm_120, and the
+# parser choice on real tool calls. Do that with the README's "First real run".
+#
+# NO etcd / NATS. Discovery is the `file` backend: frontend and worker share DYN_FILE_KV on a
+# named volume; the request plane is TCP. NATS is only needed for KV-event routing, which buys
+# nothing with one worker (see README).
+#
+# DYNAMO SPEAKS ITS OWN DIALECT ON THE WORKER, not vLLM's flags: tool/reasoning parsing runs in the
+# Rust frontend and is chosen by --dyn-tool-call-parser / --dyn-reasoning-parser on the WORKER.
+# Passing vLLM's --tool-call-parser here does nothing useful. Qwen3.8 uses qwen3_coder (the XML tool
+# format vLLM calls qwen3_xml) — CONFIRM on a real tool call before trusting it.
+#
+# THE PINNED SNAPSHOT IS LOADED BY PATH, not `--model <id> --revision <sha>`. Dynamo resolves the model
+# through the HF cache's refs/main, which in the lab's shared cache points at a different revision
+# (f0b7c9e…, metadata only) than the pin (16b6615…, the 22 GB one). By id it crash-loops with
+# "Cannot find an appropriate cached snapshot folder ... outgoing traffic has been disabled".
+# Measured 2026-09-23. Same reason the mocker takes the snapshot dir.
+#
+# Egress: none needed. HF_HUB_OFFLINE=1 — the checkpoint is already in the shared cache.
+name: ai-lab-dynamo
+
+x-image: &image nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0
+x-common: &common
+  image: *image
+  # Rootless Docker: uid 0 in the container is this host user, so the shared HF cache is readable.
+  # The image's default uid 1000 would map to a subuid that cannot read it.
+  user: "0:0"
+  entrypoint: []
+  networks: [ai-lab]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+
+services:
+  dynamo-frontend:
+    <<: *common
+    command: ["python3", "-m", "dynamo.frontend", "--http-host", "0.0.0.0", "--http-port", "8000",
+              "--discovery-backend", "file", "--request-plane", "tcp"]
+    environment:
+      DYN_FILE_KV: /dynamo-kv
+      # Traces -> the lab's collector (Tempo/Phoenix/Langfuse), same bus name every other service uses.
+      # Off until you flip it: the endpoint below is only reachable when observability/ is up.
+      DYN_LOGGING_JSONL: "${DYN_LOGGING_JSONL:-false}"
+      OTEL_EXPORT_ENABLED: "${OTEL_EXPORT_ENABLED:-false}"
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: dynamo-frontend
+    volumes:
+      - dynamo-kv:/dynamo-kv
+    ports:
+      - "127.0.0.1:8020:8000"        # host loopback only; 8000 is taken by the vllm-* engines
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request as u;u.urlopen('http://127.0.0.1:8000/health',timeout=3)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    read_only: true
+    # The frontend materialises each worker's model card (tokenizer, chat template) into
+    # ~/.cache/dynamo before it will list the model. read_only:true without this = an EMPTY
+    # /v1/models and a WARN "creating MDC blobs dir ... Read-only file system" on repeat.
+    tmpfs: [/tmp, /home/dynamo/.cache]
+    pids_limit: 512
+
+  dynamo-worker:
+    <<: *common
+    command: >
+      python3 -m dynamo.vllm
+      --model /root/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4/snapshots/16b6615af3548b88e2d8e382457bc705b00479cf
+      --served-model-name unsloth/Qwen3.8-27B-NVFP4
+      --discovery-backend file
+      --request-plane tcp
+      --dyn-tool-call-parser qwen3_coder
+      --dyn-reasoning-parser qwen3
+      --dyn-enable-structural-tag
+      --max-model-len ${CTX:-262144}
+      --speculative-config '{"method":"mtp","num_speculative_tokens":2}'
+      --gpu-memory-utilization ${GPU_MEM_UTIL:-0.50}
+      --kv-cache-memory-bytes ${KV_CACHE_MEMORY:-20000000000}
+      --max-num-seqs ${MAX_NUM_SEQS:-64}
+      --max-num-batched-tokens 8192
+      --enable-chunked-prefill
+      --enable-prefix-caching
+    environment:
+      # The image's HOME is /home/dynamo even for uid 0, so without this the flashinfer/vllm cache
+      # volumes below (mounted at /root/.cache) are never used and every start recompiles.
+      HOME: /root
+      DYN_FILE_KV: /dynamo-kv
+      DYN_SYSTEM_PORT: "8081"        # worker /metrics (+ engine metrics), scraped on the bus
+      HF_HUB_OFFLINE: "1"
+      TORCH_CUDA_ARCH_LIST: "12.0"
+      CUTE_DSL_ARCH: "sm_120"
+      FLASHINFER_NVCC_THREADS: "2"
+      NVCC_THREADS: "2"
+      MAX_JOBS: "4"
+      OTEL_SERVICE_NAME: dynamo-worker
+    volumes:
+      - dynamo-kv:/dynamo-kv
+      - /srv/models/hf:/root/.cache/huggingface
+      - flashinfer-cache:/root/.cache/flashinfer
+      - vllm-cache:/root/.cache/vllm
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["GPU-00000000-0000-0000-0000-000000000001"]   # Workstation Edition, same card as vllm-qwen38
+              capabilities: [gpu]
+    depends_on: [dynamo-frontend]
+
+  # CPU-only stand-in worker to prove frontend<->worker discovery + routing with NO VRAM.
+  # `docker compose --profile mock up -d` — never alongside dynamo-worker (same model name).
+  # --model-path is the pinned SNAPSHOT DIR, not the repo id: the shared cache's refs/main points at
+  # a different revision than the pin, so the id form fails "Model snapshots ... not found in cache".
+  dynamo-mocker:
+    <<: *common
+    profiles: [mock]
+    command: ["python3", "-m", "dynamo.mocker", "--model-path",
+              "/root/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4/snapshots/16b6615af3548b88e2d8e382457bc705b00479cf",
+              "--model-name", "unsloth/Qwen3.8-27B-NVFP4", "--discovery-backend", "file", "--request-plane", "tcp"]
+    environment:
+      DYN_FILE_KV: /dynamo-kv
+      HF_HUB_OFFLINE: "1"
+    volumes:
+      - dynamo-kv:/dynamo-kv
+      - /srv/models/hf:/root/.cache/huggingface:ro
+    depends_on: [dynamo-frontend]
+
+volumes:
+  dynamo-kv:
+  flashinfer-cache:
+  vllm-cache:
+
+networks:
+  ai-lab:
+    external: true

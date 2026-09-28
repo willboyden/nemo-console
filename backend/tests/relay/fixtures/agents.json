@@ -1,0 +1,36 @@
+[
+  {
+    "name": "claude",
+    "status": "pass",
+    "configured": true,
+    "command": "claude",
+    "path": "/home/user/.local/bin/claude",
+    "version": "2.1.281 (Claude Code)",
+    "annotation": "configured; hooks: injected during run"
+  },
+  {
+    "name": "codex",
+    "status": "info",
+    "configured": false,
+    "command": "codex",
+    "path": null,
+    "version": null,
+    "annotation": "not configured; command `codex` not found; hooks: injected during run"
+  },
+  {
+    "name": "pi",
+    "status": "info",
+    "configured": false,
+    "command": "pi",
+    "path": null,
+    "version": null,
+    "annotation": "not configured; command `pi` not found; NeMo Relay pi extension not located; run `nemo-relay install pi`, or set NEMO_RELAY_PI_EXTENSION to a copy you manage yourself",
+    "checks": [
+      {
+        "name": "pi extension load path",
+        "status": "info",
+        "details": "the NeMo Relay pi extension was not found; run `nemo-relay install pi`, or set NEMO_RELAY_PI_EXTENSION to a copy you manage yourself"
+      }
+    ]
+  }
+]

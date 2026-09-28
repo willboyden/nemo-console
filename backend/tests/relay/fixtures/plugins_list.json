@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "command": "plugins list",
+  "target": null,
+  "warnings": [],
+  "data": [
+    {
+      "id": "nvidia.switchyard",
+      "name": null,
+      "kind": "rust_dynamic",
+      "enabled": true,
+      "tombstoned": false,
+      "validation_state": "valid",
+      "policy_state": "valid",
+      "runtime_state": "stopped",
+      "startup_class": "optional",
+      "attestation_mode": "signature_required",
+      "last_error": null,
+      "host_config": "present"
+    }
+  ]
+}

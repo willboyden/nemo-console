@@ -1,0 +1,356 @@
+[
+    {
+        "Id": "5db7731f134b0ea07339830084043a4976823c8afd1c1375f83693f22e6fe71d",
+        "Created": "2026-09-24T08:06:42.677569384Z",
+        "Path": "python3",
+        "Args": [
+            "-m",
+            "dynamo.frontend",
+            "--http-host",
+            "0.0.0.0",
+            "--http-port",
+            "8000",
+            "--discovery-backend",
+            "file",
+            "--request-plane",
+            "tcp"
+        ],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 996214,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-09-24T08:06:42.736199778Z",
+            "FinishedAt": "0001-01-01T00:00:00Z",
+            "Health": {
+                "Status": "healthy",
+                "FailingStreak": 0,
+                "Log": [
+                    {
+                        "Start": "2026-09-24T04:09:18.17701258-04:00",
+                        "End": "2026-09-24T04:09:18.235566374-04:00",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-09-24T04:09:48.235951059-04:00",
+                        "End": "2026-09-24T04:09:48.297276784-04:00",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-09-24T04:10:18.298029057-04:00",
+                        "End": "2026-09-24T04:10:18.35623761-04:00",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-09-24T04:10:48.357552896-04:00",
+                        "End": "2026-09-24T04:10:48.414947085-04:00",
+                        "ExitCode": 0,
+                        "Output": ""
+                    },
+                    {
+                        "Start": "2026-09-24T04:11:18.41619916-04:00",
+                        "End": "2026-09-24T04:11:18.477114453-04:00",
+                        "ExitCode": 0,
+                        "Output": ""
+                    }
+                ]
+            }
+        },
+        "Image": "sha256:d7f73fdc1a66d2e1e0bdec2a74f49093ff6c85bc5e9f5ddf8296634418abe761",
+        "ResolvConfPath": "/srv/docker/containers/5db7731f134b0ea07339830084043a4976823c8afd1c1375f83693f22e6fe71d/resolv.conf",
+        "HostnamePath": "/srv/docker/containers/5db7731f134b0ea07339830084043a4976823c8afd1c1375f83693f22e6fe71d/hostname",
+        "HostsPath": "/srv/docker/containers/5db7731f134b0ea07339830084043a4976823c8afd1c1375f83693f22e6fe71d/hosts",
+        "LogPath": "/srv/docker/containers/5db7731f134b0ea07339830084043a4976823c8afd1c1375f83693f22e6fe71d/5db7731f134b0ea07339830084043a4976823c8afd1c1375f83693f22e6fe71d-json.log",
+        "Name": "/ai-lab-dynamo-dynamo-frontend-1",
+        "RestartCount": 0,
+        "Driver": "overlayfs",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": [
+                "ai-lab-dynamo_dynamo-kv:/dynamo-kv:rw"
+            ],
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "ai-lab",
+            "PortBindings": {
+                "8000/tcp": [
+                    {
+                        "HostIp": "127.0.0.1",
+                        "HostPort": "8020"
+                    }
+                ]
+            },
+            "RestartPolicy": {
+                "Name": "unless-stopped",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": [
+                "ALL"
+            ],
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": null,
+            "DnsSearch": null,
+            "ExtraHosts": [],
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 200,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": true,
+            "SecurityOpt": [
+                "no-new-privileges:true"
+            ],
+            "Tmpfs": {
+                "/home/dynamo/.cache": "",
+                "/tmp": ""
+            },
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": null,
+            "BlkioDeviceReadBps": null,
+            "BlkioDeviceWriteBps": null,
+            "BlkioDeviceReadIOps": null,
+            "BlkioDeviceWriteIOps": null,
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": null,
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": 512,
+            "Ulimits": null,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "Storage": {
+            "RootFS": {
+                "Snapshot": {
+                    "Name": "overlayfs"
+                }
+            }
+        },
+        "Mounts": [
+            {
+                "Type": "volume",
+                "Name": "ai-lab-dynamo_dynamo-kv",
+                "Source": "/srv/docker/volumes/ai-lab-dynamo_dynamo-kv/_data",
+                "Destination": "/dynamo-kv",
+                "Driver": "local",
+                "Mode": "rw",
+                "RW": true,
+                "Propagation": ""
+            }
+        ],
+        "Config": {
+            "Hostname": "5db7731f134b",
+            "Domainname": "",
+            "User": "0:0",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "ExposedPorts": {
+                "8000/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "DYN_FILE_KV=/dynamo-kv",
+                "DYN_LOGGING_JSONL=false",
+                "OTEL_EXPORT_ENABLED=false",
+                "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otel-collector:4317",
+                "OTEL_SERVICE_NAME=dynamo-frontend",
+                "PATH=/opt/uv/bin:/usr/local/bin/etcd:/usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "NVARCH=x86_64",
+                "NVIDIA_REQUIRE_CUDA=cuda>=13.0 brand=unknown,driver>=535,driver<536 brand=grid,driver>=535,driver<536 brand=tesla,driver>=535,driver<536 brand=nvidia,driver>=535,driver<536 brand=quadro,driver>=535,driver<536 brand=quadrortx,driver>=535,driver<536 brand=nvidiartx,driver>=535,driver<536 brand=vapps,driver>=535,driver<536 brand=vpc,driver>=535,driver<536 brand=vcs,driver>=535,driver<536 brand=vws,driver>=535,driver<536 brand=cloudgaming,driver>=535,driver<536 brand=unknown,driver>=550,driver<551 brand=grid,driver>=550,driver<551 brand=tesla,driver>=550,driver<551 brand=nvidia,driver>=550,driver<551 brand=quadro,driver>=550,driver<551 brand=quadrortx,driver>=550,driver<551 brand=nvidiartx,driver>=550,driver<551 brand=vapps,driver>=550,driver<551 brand=vpc,driver>=550,driver<551 brand=vcs,driver>=550,driver<551 brand=vws,driver>=550,driver<551 brand=cloudgaming,driver>=550,driver<551 brand=unknown,driver>=565,driver<566 brand=grid,driver>=565,driver<566 brand=tesla,driver>=565,driver<566 brand=nvidia,driver>=565,driver<566 brand=quadro,driver>=565,driver<566 brand=quadrortx,driver>=565,driver<566 brand=nvidiartx,driver>=565,driver<566 brand=vapps,driver>=565,driver<566 brand=vpc,driver>=565,driver<566 brand=vcs,driver>=565,driver<566 brand=vws,driver>=565,driver<566 brand=cloudgaming,driver>=565,driver<566 brand=unknown,driver>=570,driver<571 brand=grid,driver>=570,driver<571 brand=tesla,driver>=570,driver<571 brand=nvidia,driver>=570,driver<571 brand=quadro,driver>=570,driver<571 brand=quadrortx,driver>=570,driver<571 brand=nvidiartx,driver>=570,driver<571 brand=vapps,driver>=570,driver<571 brand=vpc,driver>=570,driver<571 brand=vcs,driver>=570,driver<571 brand=vws,driver>=570,driver<571 brand=cloudgaming,driver>=570,driver<571 brand=unknown,driver>=575,driver<576 brand=grid,driver>=575,driver<576 brand=tesla,driver>=575,driver<576 brand=nvidia,driver>=575,driver<576 brand=quadro,driver>=575,driver<576 brand=quadrortx,driver>=575,driver<576 brand=nvidiartx,driver>=575,driver<576 brand=vapps,driver>=575,driver<576 brand=vpc,driver>=575,driver<576 brand=vcs,driver>=575,driver<576 brand=vws,driver>=575,driver<576 brand=cloudgaming,driver>=575,driver<576",
+                "NV_CUDA_CUDART_VERSION=13.0.96-1",
+                "CUDA_VERSION=13.0.2",
+                "LD_LIBRARY_PATH=/opt/dynamo/nixl:/opt/dynamo/nixl/plugins:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64",
+                "NVIDIA_VISIBLE_DEVICES=all",
+                "NVIDIA_DRIVER_CAPABILITIES=video,compute,utility",
+                "DEBIAN_FRONTEND=noninteractive",
+                "UV_HTTP_TIMEOUT=500",
+                "UV_INDEX_STRATEGY=unsafe-best-match",
+                "UV_LINK_MODE=copy",
+                "UV_PYTHON_INSTALL_DIR=/opt/uv/python",
+                "UV_CACHE_DIR=/opt/uv/cache",
+                "UV_OVERRIDE=/etc/uv-overrides.txt",
+                "VLLM_ENABLE_CUDA_COMPATIBILITY=0",
+                "TORCH_CUDA_ARCH_LIST=7.5 8.0 8.6 8.9 9.0 10.0 12.0",
+                "VLLM_USAGE_SOURCE=production-docker-image",
+                "VLLM_BUILD_COMMIT=2cf0a6915ce544dc493a0990f2ea38d81601128a",
+                "VLLM_BUILD_PIPELINE=019d130e-464e-4ff7-b84b-492992c0c06b",
+                "VLLM_BUILD_URL=https://buildkite.com/vllm/release-v2/builds/5584",
+                "VLLM_IMAGE_TAG=vllm/vllm-openai:v0.28.0-ubuntu2404",
+                "DYNAMO_HOME=/opt/dynamo",
+                "HOME=/home/dynamo",
+                "NIXL_PREFIX=/opt/dynamo/nixl",
+                "NIXL_LIB_DIR=/opt/dynamo/nixl",
+                "NIXL_PLUGIN_DIR=/opt/dynamo/nixl/plugins",
+                "IMAGEIO_FFMPEG_EXE=/usr/local/bin/ffmpeg",
+                "DYNAMO_COMMIT_SHA=32b8b2f8c63fa3531c34b64c1cf2cbe39a6f9653"
+            ],
+            "Cmd": [
+                "python3",
+                "-m",
+                "dynamo.frontend",
+                "--http-host",
+                "0.0.0.0",
+                "--http-port",
+                "8000",
+                "--discovery-backend",
+                "file",
+                "--request-plane",
+                "tcp"
+            ],
+            "Healthcheck": {
+                "Test": [
+                    "CMD-SHELL",
+                    "python3 -c \"import urllib.request as u;u.urlopen('http://127.0.0.1:8000/health',timeout=3)\""
+                ],
+                "Interval": 30000000000,
+                "Timeout": 5000000000,
+                "StartPeriod": 20000000000,
+                "Retries": 3
+            },
+            "Image": "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0",
+            "Volumes": null,
+            "WorkingDir": "/workspace",
+            "Entrypoint": [],
+            "Labels": {
+                "ai.vllm.build.commit": "2cf0a6915ce544dc493a0990f2ea38d81601128a",
+                "ai.vllm.build.pipeline": "019d130e-464e-4ff7-b84b-492992c0c06b",
+                "ai.vllm.build.url": "https://buildkite.com/vllm/release-v2/builds/5584",
+                "ai.vllm.image.tag": "vllm/vllm-openai:v0.28.0-ubuntu2404",
+                "com.docker.compose.config-hash": "6bba01bf37da0c042334cf419c171615eed7e6bc3de8d2fbe84d52ba97c59540",
+                "com.docker.compose.container-number": "1",
+                "com.docker.compose.depends_on": "",
+                "com.docker.compose.image": "sha256:d7f73fdc1a66d2e1e0bdec2a74f49093ff6c85bc5e9f5ddf8296634418abe761",
+                "com.docker.compose.oneoff": "False",
+                "com.docker.compose.project": "ai-lab-dynamo",
+                "com.docker.compose.project.config_files": "/home/user/lab/inference/dynamo/docker-compose.yml",
+                "com.docker.compose.project.working_dir": "/home/user/lab/inference/dynamo",
+                "com.docker.compose.service": "dynamo-frontend",
+                "com.docker.compose.version": "5.1.4",
+                "maintainer": "NVIDIA CORPORATION <cudatools@nvidia.com>",
+                "org.opencontainers.image.ref.name": "ubuntu",
+                "org.opencontainers.image.revision": "2cf0a6915ce544dc493a0990f2ea38d81601128a",
+                "org.opencontainers.image.source": "https://github.com/vllm-project/vllm",
+                "org.opencontainers.image.url": "https://buildkite.com/vllm/release-v2/builds/5584",
+                "org.opencontainers.image.version": "vllm/vllm-openai:v0.28.0-ubuntu2404"
+            }
+        },
+        "NetworkSettings": {
+            "SandboxID": "764520a5219d9f8e645d0f7992297b850bcbab361b5ad2557b1a79ec3f740116",
+            "SandboxKey": "/run/user/1000/docker/netns/764520a5219d",
+            "Ports": {
+                "8000/tcp": [
+                    {
+                        "HostIp": "127.0.0.1",
+                        "HostPort": "8020"
+                    }
+                ]
+            },
+            "Networks": {
+                "ai-lab": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "ai-lab-dynamo-dynamo-frontend-1",
+                        "dynamo-frontend"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "5ea221cfe2dbdecbcdcc681153a88ce06ea81e2700b10abe4c3c6782a1b61d60",
+                    "EndpointID": "958413622c90cf83500b36f907c1e46257fa7fb0c23b779404b49bc8d7813198",
+                    "Gateway": "172.21.0.1",
+                    "IPAddress": "172.21.0.17",
+                    "MacAddress": "02:00:00:00:00:01",
+                    "IPPrefixLen": 16,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "ai-lab-dynamo-dynamo-frontend-1",
+                        "dynamo-frontend",
+                        "5db7731f134b"
+                    ]
+                }
+            }
+        },
+        "ImageManifestDescriptor": {
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "digest": "sha256:d18389c89eb319401fdd73f1fbbaff10d9382f634b879941dfba75bbf7260c1e",
+            "size": 13071,
+            "platform": {
+                "architecture": "amd64",
+                "os": "linux"
+            }
+        }
+    }
+]

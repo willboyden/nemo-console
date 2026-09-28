@@ -1,0 +1,8 @@
+LoadState=not-found
+ActiveState=inactive
+SubState=dead
+UnitFileState=
+ActiveEnterTimestamp=
+MainPID=0
+Result=success
+NRestarts=0

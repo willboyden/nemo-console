@@ -1,0 +1,29 @@
+/* Responsive tiers. Loaded LAST so these override the component rules above at equal specificity. */
+@media (max-width: 1100px) {
+  .grid.two, .grid.three { grid-template-columns: 1fr; }
+}
+@media (max-width: 1023px) {
+  /* Single column: rows must size to content (auto) and the page area takes the rest, otherwise the two grid rows split
+     100vh and the nav bar stretches to half the screen. */
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .sidebar { position: sticky; top: 0; z-index: 20; height: auto; flex-direction: row; align-items: center; gap: var(--s3); overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: var(--s2) var(--s3); }
+  .nav { flex-direction: row; align-self: center; flex-wrap: nowrap; }
+  .nav a { padding: var(--s2); }
+  .topbar { position: static; }
+}
+@media (max-width: 720px) {
+  main { padding: var(--s3); }
+  .topbar { padding: var(--s2) var(--s3); }
+  .nav span, .brand span:last-child { display: none; }
+  .grid.tiles { grid-template-columns: 1fr; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kv { grid-template-columns: 1fr; gap: 0; }
+  .pgrid { grid-template-columns: 1fr; }
+  .row > input[type=search], .row > input[type=text] { min-width: 0; width: 100%; }
+  .tablewrap table { min-width: 580px; }
+  td.wrap-anywhere { min-width: 140px; }
+  table.diff.split { min-width: 640px; }
+  .card-head, .card-body { padding-left: var(--s3); padding-right: var(--s3); }
+  dialog.modal { width: 96vw; }
+  th, td { padding: var(--s2); }
+}

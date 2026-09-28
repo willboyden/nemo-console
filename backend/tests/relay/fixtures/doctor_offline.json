@@ -1,0 +1,178 @@
+{
+ "schema_version": 2,
+ "binary_version": "0.9.2",
+ "target_agent": null,
+ "environment": {
+  "os": "linux 7.0.0-31-generic",
+  "arch": "x86_64",
+  "shell": "bash"
+ },
+ "configuration": {
+  "global": {
+   "path": "/home/user/.config/nemo-relay/config.toml",
+   "status": "pass",
+   "active": true,
+   "details": "valid"
+  },
+  "system": {
+   "path": "/etc/nemo-relay/config.toml",
+   "status": "info",
+   "active": false,
+   "details": "not present"
+  },
+  "upstream_auth": {
+   "openai": "unset",
+   "anthropic": "unset"
+  },
+  "plugin_configs": [
+   {
+    "path": "/home/user/.config/nemo-relay/plugins.toml",
+    "status": "pass",
+    "active": true,
+    "details": "discovered and contributes to plugin resolution"
+   },
+   {
+    "path": "/etc/nemo-relay/plugins.toml",
+    "status": "info",
+    "active": false,
+    "details": "not present"
+   }
+  ],
+  "plugin_resolution": {
+   "name": "Plugin resolution",
+   "status": "info",
+   "details": "effective plugin configuration loaded; see Plugin validation below"
+  },
+  "plugin_host_validation": {
+   "status": "pass",
+   "details": "core plugin-host validation passed for 1 dynamic plugin(s)",
+   "report": {
+    "config": {
+     "diagnostics": [
+      {
+       "level": "warning",
+       "code": "plugin.configuration_inherited",
+       "message": "inherited plugin configuration from discovered file: /home/user/.config/nemo-relay/plugins.toml"
+      }
+     ]
+    },
+    "dynamic_plugins": [
+     {
+      "plugin_id": "nvidia.switchyard",
+      "manifest_ref": "/home/user/.local/share/nemo-relay-plugins/switchyard-0.3.0/relay-plugin.toml",
+      "kind": "rust_dynamic",
+      "status": {
+       "manifest": "valid",
+       "compatibility": "valid",
+       "integrity": "valid",
+       "environment": "unknown",
+       "authenticity": "valid",
+       "policy_satisfied": "valid",
+       "message": "validated by core"
+      },
+      "selected": true
+     }
+    ],
+    "config_paths": [
+     "/home/user/.config/nemo-relay/plugins.toml"
+    ],
+    "resolved_config": {
+     "note": "omitted from fixture"
+    }
+   }
+  },
+  "resolution": {
+   "name": "Resolution",
+   "status": "pass",
+   "details": "valid"
+  },
+  "default_agent": null,
+  "configured_agents": [
+   "claude"
+  ],
+  "dynamic_plugins": [
+   {
+    "plugin_id": "nvidia.switchyard",
+    "manifest_ref": "/home/user/.local/share/nemo-relay-plugins/switchyard-0.3.0/relay-plugin.toml",
+    "source": "/home/user/.config/nemo-relay/plugins.toml",
+    "host_config_status": "present"
+   }
+  ]
+ },
+ "agents": [
+  {
+   "name": "claude",
+   "status": "pass",
+   "configured": true,
+   "command": "claude",
+   "path": "/home/user/.local/bin/claude",
+   "version": "2.1.281 (Claude Code)",
+   "annotation": "configured; hooks: injected during run"
+  },
+  {
+   "name": "codex",
+   "status": "info",
+   "configured": false,
+   "command": "codex",
+   "path": null,
+   "version": null,
+   "annotation": "not configured; command `codex` not found; hooks: injected during run"
+  },
+  {
+   "name": "pi",
+   "status": "info",
+   "configured": false,
+   "command": "pi",
+   "path": null,
+   "version": null,
+   "annotation": "not configured; command `pi` not found; NeMo Relay pi extension not located; run `nemo-relay install pi`, or set NEMO_RELAY_PI_EXTENSION to a copy you manage yourself",
+   "checks": [
+    {
+     "name": "pi extension load path",
+     "status": "info",
+     "details": "the NeMo Relay pi extension was not found; run `nemo-relay install pi`, or set NEMO_RELAY_PI_EXTENSION to a copy you manage yourself"
+    }
+   ]
+  }
+ ],
+ "host_plugins": [],
+ "observability": [
+  {
+   "name": "Plugin validation",
+   "status": "pass",
+   "details": "validation passed"
+  },
+  {
+   "name": "ATOF file sink",
+   "status": "pass",
+   "details": "sinks[0]: /home/user/.local/share/nemo-relay/atof (appears writable)"
+  },
+  {
+   "name": "ATIF dir",
+   "status": "pass",
+   "details": "/home/user/.local/share/nemo-relay/atif (appears writable)"
+  },
+  {
+   "name": "OpenTelemetry endpoint",
+   "status": "info",
+   "details": "endpoints[0] (gen_ai): live network probe skipped (--offline)"
+  },
+  {
+   "name": "Model pricing",
+   "status": "info",
+   "details": "component not configured"
+  },
+  {
+   "name": "Response cache",
+   "status": "info",
+   "details": "not configured"
+  }
+ ],
+ "completions": [
+  {
+   "name": "Completions",
+   "status": "info",
+   "details": "bash: not installed (run `nemo-relay completions bash > /home/user/.bash_completion.d/nemo-relay`)"
+  }
+ ]
+}

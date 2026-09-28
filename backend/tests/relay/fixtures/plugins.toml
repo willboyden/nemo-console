@@ -1,0 +1,147 @@
+version = 1
+
+[[plugins.dynamic]]
+manifest = "/home/user/.local/share/nemo-relay-plugins/switchyard-0.3.0/relay-plugin.toml"
+
+# Switchyard deployment. schema_version-1 TOML, the SAME language switchyard-server reads.
+# Host-side copy: Relay runs on the host so the router is 127.0.0.1:4000, and its clients must be
+# anthropic_messages because the plugin does NOT translate wire formats.
+[plugins.dynamic.config]
+priority = 0
+switchyard_config_path = "/home/user/lab/clients/nemo-relay/routes.toml"
+
+# Require a real signature rather than the integrity_only downgrade. The bundle is signed and this
+# key is verified against it (authenticity_state=valid; a wrong key is rejected). integrity_only
+# would let anyone who can write the plugin directory rewrite the .so AND its sha256 together.
+[plugins.policy.defaults]
+attestation = "signature_required"
+trusted_public_keys = ["ed25519:rASDTu8lHF/D+tIowmL7Tpu2pOPDzmN+NrC8FZdO+aM="]
+
+[[components]]
+kind = "pii_redaction"
+enabled = true
+
+[components.config]
+version = 1
+
+[[components.config.profiles]]
+
+[components.config.profiles.builtin]
+action = "redact"
+detector = "email"
+replacement = "[REDACTED-EMAIL]"
+
+[[components.config.profiles]]
+
+[components.config.profiles.builtin]
+action = "redact"
+detector = "phone"
+replacement = "[REDACTED-PHONE]"
+
+[[components.config.profiles]]
+
+[components.config.profiles.builtin]
+action = "redact"
+detector = "ip_address"
+replacement = "[REDACTED-IP_ADDRESS]"
+
+[[components.config.profiles]]
+
+[components.config.profiles.builtin]
+action = "redact"
+detector = "credit_card"
+replacement = "[REDACTED-CREDIT_CARD]"
+
+[[components.config.profiles]]
+
+[components.config.profiles.builtin]
+action = "redact"
+detector = "api_key"
+replacement = "[REDACTED-API_KEY]"
+
+[[components.config.profiles]]
+
+[components.config.profiles.builtin]
+action = "redact"
+detector = "bearer_token"
+replacement = "[REDACTED-BEARER_TOKEN]"
+
+[[components.config.profiles]]
+
+[components.config.profiles.builtin]
+action = "redact"
+detector = "jwt"
+replacement = "[REDACTED-JWT]"
+
+[[components.config.profiles]]
+
+[components.config.profiles.builtin]
+action = "redact"
+detector = "aws_access_key_id"
+replacement = "[REDACTED-AWS_ACCESS_KEY_ID]"
+
+[[components.config.profiles]]
+
+[components.config.profiles.builtin]
+action = "redact"
+detector = "aws_secret_access_key"
+replacement = "[REDACTED-AWS_SECRET_ACCESS_KEY]"
+
+[[components.config.profiles]]
+
+[components.config.profiles.builtin]
+action = "redact"
+detector = "gcp_api_key"
+replacement = "[REDACTED-GCP_API_KEY]"
+
+[[components.config.profiles]]
+
+[components.config.profiles.builtin]
+action = "redact"
+detector = "azure_storage_account_key"
+replacement = "[REDACTED-AZURE_STORAGE_ACCOUNT_KEY]"
+
+[[components]]
+kind = "observability"
+enabled = true
+
+[components.config]
+version = 4
+enable_full_payloads = false
+
+[components.config.atof]
+enabled = true
+
+[[components.config.atof.sinks]]
+type = "file"
+output_directory = "/home/user/.local/share/nemo-relay/atof"
+filename = "relay-events.jsonl"
+mode = "append"
+
+[components.config.atif]
+enabled = true
+agent_name = "lab"
+output_directory = "/home/user/.local/share/nemo-relay/atif"
+filename_template = "nemo-relay-atif-{session_id}.json"
+
+# ── OTLP EXPORT TO THE LAB COLLECTOR (added 2026-09-15) ─────────────────────────────────────
+# Metrics -> otel-collector :4318 -> Prometheus (OTLP receiver) -> Grafana "AI Lab — NeMo Relay Routing".
+# Traces  -> otel-collector -> Tempo + Phoenix (project "nemo-relay" via the collector transform).
+# gen_ai projection on purpose: it omits messages and tool payloads, matching the lab rule that prompt
+# content is not exported (observability/README.md). Metrics carry labels only, never content.
+# Logs deliberately OFF: every llm.chunk and hook mark would become a LogRecord, and hook marks carry
+# prompt text. service_name becomes the Prometheus `job` label (the board's $relay_job).
+[components.config.opentelemetry]
+enabled = true
+
+[[components.config.opentelemetry.endpoints]]
+type = "gen_ai"
+endpoint = "http://127.0.0.1:4318/v1/traces"
+transport = "http_binary"
+service_name = "nemo-relay"
+
+[components.config.opentelemetry.metrics]
+enabled = true
+# Metrics endpoint is derived from the trace endpoint: http://127.0.0.1:4318/v1/metrics.
+# 15 s instead of the 60 s default so the 10 s-refresh board lags a scrape, not a minute.
+export_interval_millis = 15000

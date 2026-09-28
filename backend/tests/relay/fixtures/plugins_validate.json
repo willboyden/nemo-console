@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "command": "plugins validate",
+  "target": "nvidia.switchyard",
+  "warnings": [],
+  "data": {
+    "target_kind": "plugin_id",
+    "resolved_plugin_id": "nvidia.switchyard",
+    "valid": true,
+    "errors": [],
+    "warnings": [],
+    "notes": [
+      "validated by CLI"
+    ],
+    "manifest_ref": "/home/user/.local/share/nemo-relay-plugins/switchyard-0.3.0/relay-plugin.toml",
+    "kind": "rust_dynamic",
+    "policy_state": "valid",
+    "integrity_state": "valid",
+    "environment_state": "unknown",
+    "authenticity_state": "valid",
+    "startup_class": "optional",
+    "attestation_mode": "signature_required",
+    "desired_enabled": true,
+    "host_config_status": "present"
+  }
+}

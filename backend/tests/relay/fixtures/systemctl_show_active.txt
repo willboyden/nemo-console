@@ -1,0 +1,8 @@
+LoadState=loaded
+ActiveState=active
+SubState=running
+UnitFileState=enabled
+ActiveEnterTimestamp=@1790223677
+MainPID=2247751
+Result=success
+NRestarts=0

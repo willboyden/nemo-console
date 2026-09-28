@@ -1,0 +1,50 @@
+# OPT-IN TEMPLATE. Nothing installs this for you. Not exercised under systemd yet (generated
+# 2026-09-24, unverified): start it by hand once and check `journalctl --user -u nemo-console`.
+#
+# Install:  mkdir -p ~/.config/systemd/user && cp deploy/nemo-console.service ~/.config/systemd/user/
+#           1. edit the two paths marked EDIT to your checkout (the directory holding backend/)
+#           2. optional credential for the playground: put `LITELLM_API_KEY=...` in the EnvironmentFile
+#              below, chmod 600 (the console reads it only by env-var NAME and never returns it)
+#           3. systemctl --user daemon-reload && systemctl --user enable --now nemo-console.service
+#
+# Runs as YOUR user on purpose: the console drives rootless Docker and `systemctl --user`, so it must
+# use your own sockets. It binds 127.0.0.1 only (docs/OPERATIONS.md). Do not run it as root.
+[Unit]
+Description=Nemo Console (Switchyard / Relay / Dynamo control plane)
+
+[Service]
+Type=simple
+WorkingDirectory=%h/PATH/TO/nemo-console/backend
+ExecStart=%h/PATH/TO/nemo-console/backend/.venv/bin/nemo-console
+Environment=NEMO_CONSOLE_PORT=8793
+# Set if the checkout is not inside the repo that holds inference/dynamo/docker-compose.yml:
+#Environment=NEMO_CONSOLE_REPO_ROOT=%h/PATH/TO/repo
+# Rootless Docker socket (uncomment if `docker` cannot find it from a user unit):
+#Environment=DOCKER_HOST=unix://%t/docker.sock
+EnvironmentFile=-%h/.config/nemo-console/env
+UMask=0077
+Restart=on-failure
+RestartSec=5
+
+# Sandboxing. The console must write its state dir, the config files it edits, and reach the docker
+# and user-systemd sockets, so this is a narrow read-only-filesystem, not a full lockdown.
+# If you enable ProtectSystem=strict, add every directory it edits to ReadWritePaths (state dir,
+# the switchyard and relay config directories, and ~/.config/nemo-relay if you use the Relay tab).
+NoNewPrivileges=true
+LockPersonality=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# The next lines create namespaces or mounts, which a --user unit can only do when unprivileged user
+# namespaces are allowed. On distros that restrict them (e.g. Ubuntu with AppArmor userns limits) the
+# unit fails at start with status 226/NAMESPACE. Uncomment one at a time and check `systemctl --user status`.
+#PrivateTmp=true
+#ProtectKernelTunables=true
+#ProtectKernelModules=true
+#ProtectControlGroups=true
+#RestrictNamespaces=true
+#ProtectSystem=strict
+#ReadWritePaths=%h/.local/share/nemo-console %h/PATH/TO/repo
+
+[Install]
+WantedBy=default.target

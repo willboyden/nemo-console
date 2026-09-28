@@ -1,0 +1,16 @@
+invalid server config /dev/stdin: failed to parse TOML: TOML parse error at line 1, column 6
+  |
+1 | a = [
+  |      ^
+unclosed array, expected `]`
+: failed to parse TOML: TOML parse error at line 1, column 6
+  |
+1 | a = [
+  |      ^
+unclosed array, expected `]`
+: TOML parse error at line 1, column 6
+  |
+1 | a = [
+  |      ^
+unclosed array, expected `]`
+

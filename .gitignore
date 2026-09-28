@@ -1,0 +1,29 @@
+# runtime state / secrets — never commit
+*.db
+*.db-wal
+*.db-shm
+*.key
+secrets/
+.env
+.env.*
+bootstrap-admin.key
+# python
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+*.egg-info/
+# node (frontend has no runtime deps; only the node:test runner is used)
+node_modules/
+# local artifacts
+*.log
+screenshots/
+.DS_Store
+
+# test fixtures are real captured logs — keep them despite the *.log rule above
+!backend/tests/**/fixtures/*.log

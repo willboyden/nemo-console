@@ -1,0 +1,347 @@
+[
+    {
+        "Id": "bb6b2f8d2be9511708971681f4935887dfa3211c18a5692477993a93746d576b",
+        "Created": "2026-09-23T23:38:23.137100488Z",
+        "Path": "switchyard-server",
+        "Args": [
+            "--config",
+            "/etc/switchyard/routes.toml",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "4010",
+            "--routing-log-file",
+            "/var/log/switchyard/routing.jsonl"
+        ],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 408326,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-09-23T23:38:23.398942234Z",
+            "FinishedAt": "0001-01-01T00:00:00Z",
+            "Health": {
+                "Status": "healthy",
+                "FailingStreak": 0,
+                "Log": [
+                    {
+                        "Start": "2026-09-24T04:09:24.296242274-04:00",
+                        "End": "2026-09-24T04:09:24.318436223-04:00",
+                        "ExitCode": 0,
+                        "Output": "{\"status\":\"ok\"}"
+                    },
+                    {
+                        "Start": "2026-09-24T04:09:54.318929033-04:00",
+                        "End": "2026-09-24T04:09:54.341725534-04:00",
+                        "ExitCode": 0,
+                        "Output": "{\"status\":\"ok\"}"
+                    },
+                    {
+                        "Start": "2026-09-24T04:10:24.342801644-04:00",
+                        "End": "2026-09-24T04:10:24.364764002-04:00",
+                        "ExitCode": 0,
+                        "Output": "{\"status\":\"ok\"}"
+                    },
+                    {
+                        "Start": "2026-09-24T04:10:54.365204233-04:00",
+                        "End": "2026-09-24T04:10:54.387635322-04:00",
+                        "ExitCode": 0,
+                        "Output": "{\"status\":\"ok\"}"
+                    },
+                    {
+                        "Start": "2026-09-24T04:11:24.389001499-04:00",
+                        "End": "2026-09-24T04:11:24.412328342-04:00",
+                        "ExitCode": 0,
+                        "Output": "{\"status\":\"ok\"}"
+                    }
+                ]
+            }
+        },
+        "Image": "sha256:d5227e4b54397327e4f7342a78cf20ba82c12c2e7984b87cc9019e97b0a2d8ce",
+        "ResolvConfPath": "/srv/docker/containers/bb6b2f8d2be9511708971681f4935887dfa3211c18a5692477993a93746d576b/resolv.conf",
+        "HostnamePath": "/srv/docker/containers/bb6b2f8d2be9511708971681f4935887dfa3211c18a5692477993a93746d576b/hostname",
+        "HostsPath": "/srv/docker/containers/bb6b2f8d2be9511708971681f4935887dfa3211c18a5692477993a93746d576b/hosts",
+        "LogPath": "/srv/docker/containers/bb6b2f8d2be9511708971681f4935887dfa3211c18a5692477993a93746d576b/bb6b2f8d2be9511708971681f4935887dfa3211c18a5692477993a93746d576b-json.log",
+        "Name": "/ai-lab-switchyard-switchyard-1",
+        "RestartCount": 0,
+        "Driver": "overlayfs",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": [
+                "/home/user/lab/inference/switchyard/routes.toml:/etc/switchyard/routes.toml:ro",
+                "ai-lab-switchyard_switchyard-log:/var/log/switchyard:rw"
+            ],
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "ai-lab-switchyard",
+            "PortBindings": {
+                "4010/tcp": [
+                    {
+                        "HostIp": "127.0.0.1",
+                        "HostPort": "4010"
+                    }
+                ]
+            },
+            "RestartPolicy": {
+                "Name": "unless-stopped",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": [
+                "ALL"
+            ],
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": null,
+            "DnsSearch": null,
+            "ExtraHosts": [],
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 200,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": true,
+            "SecurityOpt": [
+                "no-new-privileges:true"
+            ],
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 1073741824,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": null,
+            "BlkioDeviceReadBps": null,
+            "BlkioDeviceWriteBps": null,
+            "BlkioDeviceReadIOps": null,
+            "BlkioDeviceWriteIOps": null,
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": null,
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 2147483648,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": 256,
+            "Ulimits": null,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "Storage": {
+            "RootFS": {
+                "Snapshot": {
+                    "Name": "overlayfs"
+                }
+            }
+        },
+        "Mounts": [
+            {
+                "Type": "bind",
+                "Source": "/home/user/lab/inference/switchyard/routes.toml",
+                "Destination": "/etc/switchyard/routes.toml",
+                "Mode": "ro",
+                "RW": false,
+                "Propagation": "rprivate"
+            },
+            {
+                "Type": "volume",
+                "Name": "ai-lab-switchyard_switchyard-log",
+                "Source": "/srv/docker/volumes/ai-lab-switchyard_switchyard-log/_data",
+                "Destination": "/var/log/switchyard",
+                "Driver": "local",
+                "Mode": "rw",
+                "RW": true,
+                "Propagation": ""
+            }
+        ],
+        "Config": {
+            "Hostname": "bb6b2f8d2be9",
+            "Domainname": "",
+            "User": "10001:10001",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "ExposedPorts": {
+                "4010/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            ],
+            "Cmd": [
+                "--config",
+                "/etc/switchyard/routes.toml",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "4010",
+                "--routing-log-file",
+                "/var/log/switchyard/routing.jsonl"
+            ],
+            "Healthcheck": {
+                "Test": [
+                    "CMD",
+                    "curl",
+                    "-fsS",
+                    "http://127.0.0.1:4010/health"
+                ],
+                "Interval": 30000000000,
+                "Timeout": 5000000000,
+                "StartPeriod": 10000000000,
+                "Retries": 3
+            },
+            "Image": "ai-lab-switchyard:0.3.0",
+            "Volumes": null,
+            "WorkingDir": "",
+            "Entrypoint": [
+                "switchyard-server"
+            ],
+            "Labels": {
+                "com.docker.compose.config-hash": "d9a40a66b48f9b3d059c5cebbd16b10f8219423963b4195dc0b4ffd724c930d9",
+                "com.docker.compose.container-number": "1",
+                "com.docker.compose.depends_on": "",
+                "com.docker.compose.image": "sha256:d5227e4b54397327e4f7342a78cf20ba82c12c2e7984b87cc9019e97b0a2d8ce",
+                "com.docker.compose.oneoff": "False",
+                "com.docker.compose.project": "ai-lab-switchyard",
+                "com.docker.compose.project.config_files": "/home/user/lab/inference/switchyard/docker-compose.yml",
+                "com.docker.compose.project.working_dir": "/home/user/lab/inference/switchyard",
+                "com.docker.compose.replace": "switchyard-1",
+                "com.docker.compose.service": "switchyard",
+                "com.docker.compose.version": "5.1.4"
+            }
+        },
+        "NetworkSettings": {
+            "SandboxID": "15ceaf7d27e1342f99e166a2dd2d19c84d31b8f0cc172b3dac2becacd7288b0a",
+            "SandboxKey": "/run/user/1000/docker/netns/15ceaf7d27e1",
+            "Ports": {
+                "4010/tcp": [
+                    {
+                        "HostIp": "127.0.0.1",
+                        "HostPort": "4010"
+                    }
+                ]
+            },
+            "Networks": {
+                "ai-lab-switchyard": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "ai-lab-switchyard-switchyard-1",
+                        "switchyard"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "6d4f0a4355d1f0092956356d7a1bfa3dc7bdf9c168609c148f895b4c71e5af59",
+                    "EndpointID": "38df27dd63f890f88fc9aecf630f0ae25e847f7ed5bfc080612701bef687f84f",
+                    "Gateway": "",
+                    "IPAddress": "172.20.0.2",
+                    "MacAddress": "02:00:00:00:00:03",
+                    "IPPrefixLen": 20,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "ai-lab-switchyard-switchyard-1",
+                        "switchyard",
+                        "bb6b2f8d2be9"
+                    ]
+                },
+                "ai-lab-switchyard_default": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "ai-lab-switchyard-switchyard-1",
+                        "switchyard"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "450dd6c42a3f1eafa9a6978191f94b37b414a1d56ef536ec38a272a6dffaa865",
+                    "EndpointID": "222b142a3560f7ea30697a98d165eaa0c4d39f7fe30c353a0f04b4cef3ff9641",
+                    "Gateway": "172.21.0.1",
+                    "IPAddress": "172.21.0.2",
+                    "MacAddress": "02:00:00:00:00:04",
+                    "IPPrefixLen": 20,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "ai-lab-switchyard-switchyard-1",
+                        "switchyard",
+                        "bb6b2f8d2be9"
+                    ]
+                }
+            }
+        },
+        "ImageManifestDescriptor": {
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "digest": "sha256:d5227e4b54397327e4f7342a78cf20ba82c12c2e7984b87cc9019e97b0a2d8ce",
+            "size": 1430,
+            "annotations": {
+                "io.containerd.image.name": "docker.io/library/ai-lab-switchyard:0.3.0",
+                "org.opencontainers.image.created": "2026-09-23T22:44:53Z",
+                "org.opencontainers.image.ref.name": "0.3.0"
+            },
+            "platform": {
+                "architecture": "amd64",
+                "os": "linux"
+            }
+        }
+    }
+]

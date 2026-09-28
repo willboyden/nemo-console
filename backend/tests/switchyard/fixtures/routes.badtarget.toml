@@ -1,0 +1,12 @@
+schema_version = 1
+[llm_clients.litellm]
+format = "openai_chat"
+base_url = "http://litellm:4000/v1"
+forward_auth = true
+[targets.a]
+id = "m1"
+llm_client = "litellm"
+[routes.x]
+id = "x"
+type = "passthrough"
+target = "nope"

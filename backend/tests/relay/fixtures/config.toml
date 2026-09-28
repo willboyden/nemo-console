@@ -1,0 +1,4 @@
+[agents]
+
+[agents.claude]
+command = "claude"
