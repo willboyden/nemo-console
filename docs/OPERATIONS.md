@@ -89,6 +89,18 @@ curl -s http://127.0.0.1:8793/api/v1/health
 
 `status` is `ok` only when all three systems are `up`. A system that is down is reported, not an error.
 
+### From the desktop (opt-in)
+
+```bash
+make install-desktop      # writes ~/.local/share/applications/nemo-console.desktop; `make uninstall-desktop` removes it
+```
+
+The launcher runs `nemo-console open`. If `/api/v1/health` already answers as Nemo Console, it opens the UI with
+`xdg-open`. If nothing answers, it starts the console in the background (log: `<state dir>/console.log`, mode 0600),
+waits up to 30 s for health, then opens the UI. It refuses to open the page if something else holds the port. It
+never touches keys: the UI still asks for one. A console started this way runs until you log out or stop it
+(`pkill -f nemo_console.main`). Failures also show as a desktop notification when `notify-send` exists.
+
 ### As a systemd user unit (opt-in)
 
 `deploy/nemo-console.service` is a template; nothing installs it for you. It runs as **your** user on purpose

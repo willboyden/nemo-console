@@ -3,6 +3,15 @@
 Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Claims use the labels
 implemented / verified-live / unverified defined in the README.
 
+## [Unreleased]
+
+### Added
+
+- `nemo-console open` and `make install-desktop`: a desktop launcher that starts the console in the background if
+  nothing is serving (log in `<state dir>/console.log`), waits for `/api/v1/health`, then opens the UI. It refuses a
+  port held by another service and never handles keys.
+- An app icon, also served as the UI's favicon (`frontend/favicon.svg`).
+
 ## [0.1.1] - 2026-09-28
 
 First public release. 0.1.0 was an internal build and was never published; this release starts a fresh

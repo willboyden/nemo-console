@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <title>Nemo Console</title>
+  <!-- Three linked systems (Switchyard, Relay, Dynamo) on the UI's own surface and status colours. -->
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="#161b22" stroke="#46525f" stroke-width="4"/>
+  <path d="M64 36 L34 88 L94 88 Z" fill="none" stroke="#8a96a5" stroke-width="8" stroke-linejoin="round"/>
+  <circle cx="64" cy="36" r="16" fill="#6ea8fe"/>
+  <circle cx="34" cy="88" r="16" fill="#4cc38a"/>
+  <circle cx="94" cy="88" r="16" fill="#e8b04b"/>
+</svg>

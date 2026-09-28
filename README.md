@@ -73,6 +73,7 @@ works and is what the author used), the three systems deployed the way the adapt
 make setup          # uv venv --python 3.13 && uv sync --frozen
 make run            # serves API + UI on http://127.0.0.1:8793
 make all            # ruff + mypy --strict + pytest + node --test (all offline)
+make install-desktop  # optional: "Nemo Console" in your app menu; starts the console if needed, then opens the UI
 ```
 
 **A key is required for everything except `GET /api/v1/health`.** First start writes an admin API key to
