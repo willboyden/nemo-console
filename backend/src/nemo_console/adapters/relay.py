@@ -5,7 +5,11 @@ Facts this adapter is built on (source in brackets; see backend/tests/relay/fixt
     `nemo-relay-gateway.service` [systemctl show, live 2026-09-24]. There is NO `gateway status`
     subcommand [`nemo-relay gateway --help`]; liveness is an HTTP probe, unit state is systemd's.
   * `GET /health` is 404 and `GET /v1/models` is 401 without a bearer [live curl]. Any HTTP answer
-    below 500 therefore means "the gateway is up"; a 401 is NOT a failure.
+    below 500 therefore means "the gateway is up"; a 404 or 401 is NOT a failure.
+  * Liveness polls `/health`, never `/v1/models` (since 2026-10-04). The gateway answers `/health` itself, while it
+    FORWARDS `/v1/models` to LiteLLM, which logged every keyless poll as an ERROR trace in Langfuse:
+    ~43,000 a day at the 2 s poll, 98% of all traces [live, 2026-10-04]. "Is the upstream up" is asked
+    of LiteLLM's unauthenticated `/health/liveliness` instead, which creates no Langfuse trace [live].
   * `nemo-relay plugins list --json` carries enabled / validation / policy / attestation_mode
     (schema_version 1) and `doctor --offline --json` exists (schema_version 2) [live].
   * `plugins validate` and `doctor` PASS while a gateway start can still fail (unsigned plugin
@@ -62,6 +66,7 @@ from nemo_console.domain.models import (
 
 UNIT = "nemo-relay-gateway.service"
 DEFAULT_URL = "http://127.0.0.1:4040"
+DEFAULT_LITELLM_URL = "http://127.0.0.1:4000"   # the gateway's upstream; ctx.urls["litellm"] overrides it
 DEFAULT_ROUTE_IDS = ["auto-local", "direct-27b", "direct-lightning"]
 
 MAX_CONFIG_BYTES = 256 * 1024
@@ -651,7 +656,7 @@ class RelayAdapter(SystemAdapter):
     #   relay_routes  clients/nemo-relay/routes.toml     relay_plugins ~/.config/nemo-relay/plugins.toml
     #   relay_config  ~/.config/nemo-relay/config.toml   relay_atof_dir ~/.local/share/nemo-relay/atof
     #   relay_atif_dir ~/.local/share/nemo-relay/atif
-    # ctx.urls: "relay" (default http://127.0.0.1:4040).
+    # ctx.urls: "relay" (default http://127.0.0.1:4040), "litellm" (the gateway's upstream, default :4000).
     def __init__(self, ctx: AdapterContext) -> None:
         super().__init__(ctx)
         self.poll_interval = 1.0        # health poll cadence after a restart (tests set 0)
@@ -664,6 +669,10 @@ class RelayAdapter(SystemAdapter):
     @property
     def _base(self) -> str:
         return self.ctx.urls.get("relay", DEFAULT_URL).rstrip("/")
+
+    @property
+    def _litellm(self) -> str:
+        return self.ctx.urls.get("litellm", DEFAULT_LITELLM_URL).rstrip("/")
 
     def _path(self, key: str) -> Path:
         p = self.ctx.paths.get(key)
@@ -700,13 +709,21 @@ class RelayAdapter(SystemAdapter):
         r = await self._run(SHOW_ARGV, timeout=8.0)
         return parse_systemctl_show(r.stdout) if r.returncode == 0 else UnitState(known=False)
 
-    async def _probe(self) -> Probe:
+    async def _get_probe(self, url: str) -> Probe:
         try:
-            resp = await self.ctx.http.get(f"{self._base}/v1/models", timeout=3.0, follow_redirects=False)
+            resp = await self.ctx.http.get(url, timeout=3.0, follow_redirects=False)
         except Exception as e:  # noqa: BLE001
             return Probe(False, None, f"{type(e).__name__}")
-        # /health is 404 and /v1/* is 401 without a bearer: any answer below 500 means the gateway is up.
         return Probe(True, resp.status_code, f"HTTP {resp.status_code}")
+
+    async def _probe(self) -> Probe:
+        # The gateway answers /health itself (404): any answer below 500 means it is up. Never /v1/models,
+        # which the gateway forwards to LiteLLM (see the module docstring).
+        return await self._get_probe(f"{self._base}/health")
+
+    async def _upstream(self) -> Probe:
+        # LiteLLM's unauthenticated liveness route: not a model route, so it leaves no Langfuse trace.
+        return await self._get_probe(f"{self._litellm}/health/liveliness")
 
     async def _version(self) -> str | None:
         async def go() -> str | None:
@@ -759,7 +776,8 @@ class RelayAdapter(SystemAdapter):
     # ── observe ─────────────────────────────────────────────────────────────────────────────
     async def status(self) -> SystemStatus:
         now = time.time()
-        probe, unit, version, plist = await asyncio.gather(self._probe(), self._unit(), self._version(), self._plugins_list())
+        probe, upstream, unit, version, plist = await asyncio.gather(
+            self._probe(), self._upstream(), self._unit(), self._version(), self._plugins_list())
         summary, plugins_mtime = await asyncio.to_thread(self._plugins_summary)
         atof_scan = await asyncio.to_thread(self._scan_dir, "relay_atof_dir", None)
         problems: list[Problem] = []
@@ -781,17 +799,28 @@ class RelayAdapter(SystemAdapter):
                       detail=(f"{unit.active}/{unit.sub} pid={unit.pid} restarts={unit.restarts} enabled={unit.enabled}"
                               if unit.known else "systemctl --user show failed")),
             Component(kind="http", name="gateway " + self._base, state="running" if probe.reachable else "stopped",
-                      detail=(f"{probe.detail} on GET /v1/models (401 without a bearer is expected and means UP)"
+                      detail=(f"{probe.detail} on GET /health (the gateway answers it itself; 404 is expected and means UP)"
                               if probe.reachable else f"unreachable ({probe.detail})")),
+            Component(kind="http", name="upstream " + self._litellm,
+                      state="running" if upstream.reachable and (upstream.status or 0) < 500 else "stopped",
+                      detail=f"{upstream.detail} on GET /health/liveliness" if upstream.reachable
+                      else f"unreachable ({upstream.detail})"),
         ]
 
         health: str
         if probe.reachable:
-            health = "degraded" if (probe.status or 0) >= 500 else "up"
+            health = "up"
             if (probe.status or 0) >= 500:
+                health = "degraded"
+                problems.append(Problem(severity="warn", code="relay.gateway.error",
+                                        message=f"Gateway answered /health with HTTP {probe.status}.",
+                                        fix=restart_fix))
+            if not upstream.reachable or (upstream.status or 0) >= 500:
+                health = "degraded"
                 problems.append(Problem(severity="warn", code="relay.gateway.upstream_error",
-                                        message=f"Gateway answered but /v1/models returned HTTP {probe.status}; its upstream (LiteLLM) may be down.",
-                                        fix="curl -s -o /dev/null -w '%{http_code}\\n' http://127.0.0.1:4000/health/liveliness"))
+                                        message=(f"Gateway is up but its upstream LiteLLM ({self._litellm}) is not answering "
+                                                 f"/health/liveliness ({upstream.detail}); requests through the gateway will fail."),
+                                        fix=f"curl -s -o /dev/null -w '%{{http_code}}\\n' {self._litellm}/health/liveliness"))
             if unit.known and not unit_running:
                 problems.append(Problem(severity="info", code="relay.gateway.not_under_systemd",
                                         message=f"The gateway answers but {UNIT} is {unit.active}; it is being run by hand.",

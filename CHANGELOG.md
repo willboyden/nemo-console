@@ -3,6 +3,18 @@
 Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Claims use the labels
 implemented / verified-live / unverified defined in the README.
 
+## [Unreleased]
+
+### Fixed
+
+- The Relay liveness probe no longer floods Langfuse. It polled `GET /v1/models` on the gateway, which forwards
+  it to LiteLLM; without a bearer every poll was a 401 that LiteLLM logged to Langfuse as an ERROR trace
+  (about 43,000 a day at the 2 s poll, 98% of all traces on the author's deployment). Liveness now uses the
+  gateway's own `/health` (404 = up) and the upstream check uses LiteLLM's unauthenticated `/health/liveliness`,
+  which leaves no trace (verified live). New problem code `relay.gateway.error` for a 5xx from the gateway
+  itself; `relay.gateway.upstream_error` now means LiteLLM is not answering. The URL comes from the existing
+  `litellm` setting.
+
 ## [0.1.2] - 2026-09-28
 
 ### Added

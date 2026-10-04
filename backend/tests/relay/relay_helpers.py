@@ -82,7 +82,7 @@ def build_tree(tmp: Path, *, plugins_toml: str | None = None, atof_lines: str | 
 
 def make_ctx(tmp: Path, runner: object, http: httpx.AsyncClient, **kw: object) -> AdapterContext:
     paths = build_tree(tmp, **kw)  # type: ignore[arg-type]
-    return AdapterContext(runner=runner, http=http, urls={"relay": "http://127.0.0.1:4040"},  # type: ignore[arg-type]
+    return AdapterContext(runner=runner, http=http, urls={"relay": "http://127.0.0.1:4040", "litellm": "http://127.0.0.1:4000"},  # type: ignore[arg-type]
                           paths=paths, state_dir=tmp / "state")
 
 

@@ -15,7 +15,11 @@ from nemo_console.adapters.relay import RelayAdapter
 @pytest.fixture
 def router() -> Any:
     with respx.mock(assert_all_called=False) as r:
-        r.get("http://127.0.0.1:4040/v1/models").respond(401, json={"error": {"message": "Authentication Error, No api key passed in."}})
+        r.get("http://127.0.0.1:4040/health", name="gateway_health").respond(404)
+        r.get("http://127.0.0.1:4000/health/liveliness", name="upstream_liveliness").respond(200, json="I'm alive!")
+        # Kept mocked so a regression that polls it again shows up as a call count, not a respx error.
+        r.get("http://127.0.0.1:4040/v1/models", name="gateway_models").respond(
+            401, json={"error": {"message": "Authentication Error, No api key passed in."}})
         yield r
 
 

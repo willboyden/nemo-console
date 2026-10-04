@@ -43,7 +43,7 @@ async def test_post_apply_readonly_file_refused(make_adapter) -> None:  # type: 
 async def test_post_apply_unhealthy_when_gateway_never_answers(make_adapter, router) -> None:  # type: ignore[no-untyped-def]
     import httpx
 
-    router.get("http://127.0.0.1:4040/v1/models").mock(side_effect=httpx.ConnectError("refused"))
+    router.get("http://127.0.0.1:4040/health").mock(side_effect=httpx.ConnectError("refused"))
     a, _ = make_adapter()
     a.restart_timeout = 0.05
     r = await a.post_apply("routes", restart=True)
@@ -82,7 +82,7 @@ async def test_run_gateway_restart(make_adapter) -> None:  # type: ignore[no-unt
 async def test_run_gateway_restart_unhealthy_reports_problem(make_adapter, router) -> None:  # type: ignore[no-untyped-def]
     import httpx
 
-    router.get("http://127.0.0.1:4040/v1/models").mock(side_effect=httpx.ConnectError("refused"))
+    router.get("http://127.0.0.1:4040/health").mock(side_effect=httpx.ConnectError("refused"))
     a, _ = make_adapter()
     a.restart_timeout = 0.05
     res = await a.run_action("gateway_restart", {})

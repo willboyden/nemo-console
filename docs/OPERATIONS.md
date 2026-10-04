@@ -208,7 +208,7 @@ only `0001` exists at v0.1.0, so no downgrade path has been exercised.
 | System | Needs | Console reads |
 |---|---|---|
 | Switchyard | container running as the compose service the adapter expects, HTTP on the configured URL; `docker` on PATH | `/health`, `/v1/models`, `/v1/stats`, `/metrics`, `routing.jsonl` via `docker exec ... tail`, `routes.toml` |
-| Relay | user unit `nemo-relay-gateway.service`, `systemctl` and `nemo-relay` on PATH, gateway on the configured URL | `systemctl --user show`, `GET /v1/models` (any HTTP answer under 500 means up; 401 is expected), `plugins list --json`, ATOF directory listing and tail, `plugins.toml`, `config.toml`, `routes.toml` |
+| Relay | user unit `nemo-relay-gateway.service`, `systemctl` and `nemo-relay` on PATH, gateway on the configured URL | `systemctl --user show`, the gateway's own `GET /health` (any HTTP answer under 500 means up; 404 is expected), LiteLLM's `GET /health/liveliness` for the upstream, `plugins list --json`, ATOF directory listing and tail, `plugins.toml`, `config.toml`, `routes.toml` |
 | Dynamo | compose project with `dynamo-frontend`, `dynamo-worker` (and optional `--profile mock` mocker); `docker` on PATH | frontend `/health`, `/v1/models`, `/metrics`; worker metrics read through `docker exec` (the worker port is not reachable from the host under rootless Docker); `docker logs` |
 
 ## 7. Troubleshooting
@@ -278,7 +278,9 @@ shows is prefixed with the code words for security rejections.
 | `switchyard.tier.capable_dark` | A container listed in `ENGINE_PROBES` is not running (or absent) and its alias is the capable-tier model of a `stage_router` route (the message names the routes). Switchyard turns `degraded` with a summary starting "capable tier dark". The fix is the container's `ENGINE_START` command, else the compose directory to `up`. It shares one cached `docker inspect` probe with the topology view; a probe error or an unparseable `routes.toml` yields no problem. |
 | `switchyard.capable_tier.upstream_errors` | Inferred from error counts in `/v1/stats` that the capable-tier engine is failing. **Heuristic:** no active probe, so it appears only after traffic hit the failing tier and never for an idle one. |
 | `switchyard.routing.fallback_unavailable` | Requests were re-routed because a target was unavailable. |
-| `relay.gateway.down` | Gateway URL does not answer; run `systemctl --user restart nemo-relay-gateway.service`. A 401 from `/v1/models` is **up**, not a failure. |
+| `relay.gateway.down` | Gateway URL does not answer; run `systemctl --user restart nemo-relay-gateway.service`. A 404 from `/health` is **up**, not a failure. |
+| `relay.gateway.error` | The gateway answered its own `/health` with a 5xx; restart it. |
+| `relay.gateway.upstream_error` | The gateway is up but its upstream LiteLLM does not answer `/health/liveliness`, so requests through it will fail. The console never polls `/v1/models` through the gateway: LiteLLM logs every keyless call to Langfuse as an error. |
 | `relay.plugin.attestation_weak` / `relay.exporters.off` / `relay.pii_redaction.off` / `relay.plugin.none_configured` | Policy findings from `plugins.toml`. Human decisions; the console will not change them. |
 | `relay.config.newer_than_gateway` | `plugins.toml` changed after the gateway started; restart the gateway. |
 | `relay.atof.large` | ATOF directory over 1 GiB; Relay has no retention. Prune rotated files by hand. |

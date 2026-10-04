@@ -15,12 +15,13 @@ def codes(st) -> set[str]:  # type: ignore[no-untyped-def]
     return {p.code for p in st.problems}
 
 
-async def test_status_healthy_treats_401_as_up(make_adapter) -> None:  # type: ignore[no-untyped-def]
+async def test_status_healthy_treats_404_as_up(make_adapter) -> None:  # type: ignore[no-untyped-def]
     a, run = make_adapter()
     st = await a.status()
     assert st.health == "up" and st.system == "relay" and st.version == "0.9.2"
-    assert [c.state for c in st.components] == ["running", "running"]
-    assert "401" in (st.components[1].detail or "") and "UP" in (st.components[1].detail or "")
+    assert [c.state for c in st.components] == ["running", "running", "running"]
+    assert "404" in (st.components[1].detail or "") and "UP" in (st.components[1].detail or "")
+    assert st.components[2].name == "upstream http://127.0.0.1:4000" and "liveliness" in (st.components[2].detail or "")
     assert st.endpoints[0].url == "http://127.0.0.1:4040"
     assert not [p for p in st.problems if p.severity == "error"]
     assert "relay.config.newer_than_gateway" not in codes(st)
@@ -45,7 +46,7 @@ async def test_status_flags_exporters_off_and_missing_pii(make_adapter) -> None:
 
 
 async def test_status_gateway_down_is_data_not_exception(make_adapter, router) -> None:  # type: ignore[no-untyped-def]
-    router.get("http://127.0.0.1:4040/v1/models").mock(side_effect=httpx.ConnectError("refused"))
+    router.get("http://127.0.0.1:4040/health").mock(side_effect=httpx.ConnectError("refused"))
     inactive = "ActiveState=inactive\nSubState=dead\nLoadState=loaded\nMainPID=0\nNRestarts=0\nResult=success\nUnitFileState=enabled\n"
     a, _ = make_adapter(standard_runner(show=inactive))
     st = await a.status()
@@ -57,12 +58,39 @@ async def test_status_gateway_down_is_data_not_exception(make_adapter, router) -
 
 
 async def test_status_active_but_silent_is_degraded_and_5xx_is_degraded(make_adapter, router) -> None:  # type: ignore[no-untyped-def]
-    router.get("http://127.0.0.1:4040/v1/models").mock(side_effect=httpx.ReadTimeout("slow"))
+    router.get("http://127.0.0.1:4040/health").mock(side_effect=httpx.ReadTimeout("slow"))
     a, _ = make_adapter()
     assert (await a.status()).health == "degraded"
-    router.get("http://127.0.0.1:4040/v1/models").respond(502)
+    router.get("http://127.0.0.1:4040/health").respond(502)
+    st = await a.status()
+    assert st.health == "degraded" and "relay.gateway.error" in codes(st)
+
+
+async def test_status_upstream_down_is_degraded_with_its_own_problem(make_adapter, router) -> None:  # type: ignore[no-untyped-def]
+    a, _ = make_adapter()
+    router.get("http://127.0.0.1:4000/health/liveliness").mock(side_effect=httpx.ConnectError("refused"))
     st = await a.status()
     assert st.health == "degraded" and "relay.gateway.upstream_error" in codes(st)
+    p = next(p for p in st.problems if p.code == "relay.gateway.upstream_error")
+    assert p.fix and "http://127.0.0.1:4000/health/liveliness" in p.fix
+    router.get("http://127.0.0.1:4000/health/liveliness").respond(503)
+    assert "relay.gateway.upstream_error" in codes(await a.status())
+    router.get("http://127.0.0.1:4000/health/liveliness").respond(200)
+    st = await a.status()
+    assert st.health == "up" and "relay.gateway.upstream_error" not in codes(st)
+
+
+async def test_polling_never_forwards_a_keyless_request_to_litellm(make_adapter, router) -> None:  # type: ignore[no-untyped-def]
+    # Regression (2026-10-04): liveness used GET /v1/models, which the gateway forwards to LiteLLM; every keyless poll
+    # became a 401 that LiteLLM logged to Langfuse as an ERROR trace (~43,000 a day). Status and metrics must only
+    # touch the gateway's own /health and LiteLLM's unauthenticated /health/liveliness.
+    a, _ = make_adapter()
+    for _ in range(3):
+        await a.status()
+        await a.metrics()
+    assert router.routes["gateway_models"].call_count == 0
+    assert router.routes["gateway_health"].call_count >= 6
+    assert router.routes["upstream_liveliness"].call_count >= 3
 
 
 async def test_status_survives_every_command_failing(make_adapter) -> None:  # type: ignore[no-untyped-def]
