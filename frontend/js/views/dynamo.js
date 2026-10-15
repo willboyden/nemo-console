@@ -122,12 +122,15 @@ function lifecycleTab(scope) {
     const pf = parsePreflight(res.output);
     let stopBox = null;
     const lines = [];
-    if (pf.container) lines.push(t('dyn.confirm_shares', { name: pf.container, state: pf.sharingRunning ? t('comp.running') : t('comp.stopped') }));
+    for (const s of pf.sharers) lines.push(t('dyn.confirm_shares', { name: s.name, state: s.running ? t('comp.running') : t('comp.stopped') }));
+    // Up is refused while any running sharer other than the one stoppable engine holds the card (e.g. the default model).
+    if (id === 'up') for (const s of pf.sharers) if (s.running && s.name !== pf.stoppable?.name) lines.push(t('dyn.confirm_refused', { name: s.name }));
     if (pf.darkAliases.length) lines.push(t('dyn.confirm_dark', { aliases: pf.darkAliases.join(', ') }));
     lines.push(t('dyn.confirm_other_cards'));
     const params = {};
-    if (id === 'up' && pf.sharingRunning) stopBox = h('input', { type: 'checkbox', id: 'stop-sharing' });
-    const extra = stopBox ? h('div', { class: 'note warn' }, h('label', { class: 'check' }, stopBox, h('span', t('dyn.stop_sharing', { name: pf.container }))), h('div', { class: 'hint' }, t('dyn.stop_sharing_hint'))) : null;
+    // Only the backend-named stoppable engine is ever offered (never the default model; see `stoppable:` in preflight).
+    if (id === 'up' && pf.stoppable) stopBox = h('input', { type: 'checkbox', id: 'stop-sharing' });
+    const extra = stopBox ? h('div', { class: 'note warn' }, h('label', { class: 'check' }, stopBox, h('span', t('dyn.stop_sharing', { name: pf.stoppable.name }))), h('div', { class: 'hint' }, t('dyn.stop_sharing_hint'))) : null;
     const specs = await scope.api.actions('dynamo').catch(() => []);
     const spec = specs.find((s) => s.id === id);
     const ok = await confirmEffect({ title: t('dyn.confirm_title', { name: spec?.label || id }), effect: spec?.description || t(`dyn.effect_${id}`), danger: true, confirmLabel: spec?.label || id, lines, extra });
@@ -151,8 +154,9 @@ function lifecycleTab(scope) {
 
 export function preflightView(res) {
   const pf = parsePreflight(res.output);
-  const shares = pf.container ? h('div', { class: `preflight-hero ${pf.sharingRunning ? 'warn' : 'ok'}` },
-    h('div', h('div', { class: 'muted small' }, t('dyn.shares_card')), h('strong', { class: 'big-name' }, pf.container), ' ', badge(pf.sharingRunning ? t('comp.running') : t('comp.stopped'), pf.sharingRunning ? 'warn' : 'ok')),
+  const busy = pf.sharers.some((s) => s.running);
+  const shares = pf.sharers.length || pf.darkAliases.length ? h('div', { class: `preflight-hero ${busy ? 'warn' : 'ok'}` },
+    pf.sharers.length ? h('div', h('div', { class: 'muted small' }, t('dyn.shares_card')), pf.sharers.map((s) => h('div', h('strong', { class: 'big-name' }, s.name), ' ', badge(s.running ? t('comp.running') : t('comp.stopped'), s.running ? 'warn' : 'ok')))) : null,
     pf.darkAliases.length ? h('div', h('div', { class: 'muted small' }, t('dyn.go_dark')), h('div', { class: 'row gap wrap' }, pf.darkAliases.map((a) => badge(a, 'bad')))) : null) : null;
   return h('div', { class: 'stack-v preflight' }, h('div', { class: 'row gap wrap' }, badge(res.ok ? t('act.ok') : t('act.failed'), res.ok ? 'ok' : 'bad'), h('span', { class: 'muted small' }, t('dyn.preflight_note'))),
     shares, problemList(res.problems),

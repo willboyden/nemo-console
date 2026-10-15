@@ -21,11 +21,23 @@ llm_client = "litellm"
 id = "qwen3.8-flash-next"
 llm_client = "litellm"
 
+# auto-local's capable tier is the default engine (since 2026-09-26). Own client on purpose: target identity is
+# (model id, llm_client), so a second target on the same id and client would be dropped.
+[llm_clients.litellm_auto]
+format = "openai_chat"
+base_url = "http://litellm:4000/v1"
+forward_auth = true
+max_retries = 2
+
+[targets.flash-next-auto]
+id = "qwen3.8-flash-next"
+llm_client = "litellm_auto"
+
 # PRIMARY. Fully local.
 [routes.auto-local]
 id = "auto-local"
 type = "stage_router"
-capable_target = "qwen-27b-1m"
+capable_target = "flash-next-auto"
 efficient_target = "lightning"
 picker = "efficient_first"
 confidence_threshold = 0.5
@@ -74,10 +86,14 @@ llm_client = "litellm_anthropic"
 id = "qwen3.8-27b-1m"
 llm_client = "litellm_anthropic"
 
+[targets.flash-next]
+id = "qwen3.8-flash-next"
+llm_client = "litellm_anthropic"
+
 [routes.auto-local]
 id = "auto-local"
 type = "stage_router"
-capable_target = "qwen-27b-1m"
+capable_target = "flash-next"
 efficient_target = "lightning"
 picker = "efficient_first"
 confidence_threshold = 0.5

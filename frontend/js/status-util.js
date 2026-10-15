@@ -1,7 +1,13 @@
 // Pure interpretation of SystemStatus / ActionResult payloads. No DOM.
-/** Dynamo (and any system) is "loading" when the status says so; a loading system is not down. */
+/** Badge kind per health. "off" (opt-in and stopped on purpose, e.g. Dynamo by default) is neutral, never an error. */
+export const HEALTH_KIND = { up: 'ok', degraded: 'warn', down: 'bad', unknown: 'muted', off: 'muted' };
+export const healthKind = (hl) => HEALTH_KIND[hl] || 'muted';
+/** Shape glyph per health (colour is never the only cue): off is a hollow circle, unknown a question mark. */
+const GLYPH = { up: '●', degraded: '▲', down: '✕', unknown: '?', off: '○' };
+export const healthGlyph = (hl) => GLYPH[hl] || '?';
+/** Dynamo (and any system) is "loading" when the status says so; a loading system is not down (nor off). */
 export function isLoading(st) {
-  if (!st || st.health === 'down') return false;
+  if (!st || st.health === 'down' || st.health === 'off') return false;
   return /\bload(ing)?\b/i.test(st.summary || '') || (st.components || []).some((c) => /\bload(ing)?\b/i.test(c.detail || '')) || (st.problems || []).some((p) => /\.loading$/.test(p.code || ''));
 }
 /** Attestation is reported as a component named "attestation" (state running = verified). */
@@ -21,8 +27,10 @@ export function healthChanges(prev, next) {
   return (next.systems || []).filter((s) => before.has(s.system) && before.get(s.system) !== s.health).map((s) => ({ id: s.system, from: before.get(s.system), to: s.health }));
 }
 /**
- * Preflight output is `key: value` lines. Extracts what the UI must show prominently:
- * the container sharing the card (with its state) and the router aliases that go dark. Unparsed lines stay in `rows`.
+ * Preflight output is `key: value` lines. Extracts what the UI must show prominently: every container listed as
+ * sharing the card (`shares_card:`, one line each, with its state), the ONE container `stop_sharing_engine` may stop
+ * (`stoppable:`) and the router aliases that go dark. The exact machine keys win over the fuzzy fallback, so a prose
+ * line that happens to contain "dark" or "shares" is never mistaken for them. Unparsed lines stay in `rows`.
  */
 export function parsePreflight(output) {
   const rows = [];
@@ -30,14 +38,21 @@ export function parsePreflight(output) {
     const m = /^\s*([A-Za-z][\w .-]*?)\s*:\s*(.+?)\s*$/.exec(line);
     if (m) rows.push({ key: m[1], value: m[2] });
   }
-  const find = (re) => rows.find((r) => re.test(r.key));
-  const share = find(/shar/i);
-  const dark = find(/dark|alias/i);
-  const container = share ? (/[a-z][\w.-]*-\d+/i.exec(share.value) || [null])[0] : null;
-  const running = share ? /running|up\b/i.test(share.value) && !/not running|stopped/i.test(share.value) : false;
+  const pick = (key, re) => { const exact = rows.filter((r) => r.key === key); return exact.length ? exact : rows.filter((r) => re.test(r.key)).slice(0, 1); };
+  const entry = (value) => {
+    const name = (/[a-z][\w.-]*-\d+/i.exec(value) || [null])[0];
+    return name ? { name, running: /running|up\b/i.test(value) && !/not running|stopped/i.test(value) } : null;
+  };
+  const sharers = pick('shares_card', /shar/i).map((r) => entry(r.value)).filter(Boolean);
+  const stopRow = rows.find((r) => r.key === 'stoppable');
+  const stoppable = stopRow ? entry(stopRow.value) : null;
+  const dark = pick('router_aliases_dark', /dark|alias/i)[0];
+  const first = sharers[0] || null;
   return {
-    rows, container, sharingRunning: !!container && running,
-    darkAliases: dark ? dark.value.split(/[,;]/).map((x) => x.trim().replace(/\s*\(.*\)$/, '')).filter(Boolean) : [],
+    rows, sharers, container: first ? first.name : null, sharingRunning: !!first && first.running,
+    // Older backends have no `stoppable:` line: then the first sharer is the candidate (the previous behaviour).
+    stoppable: stopRow ? (stoppable && stoppable.running ? stoppable : null) : (first && first.running ? first : null),
+    darkAliases: dark && !/^none$/i.test(dark.value) ? dark.value.split(/[,;]/).map((x) => x.trim().replace(/\s*\(.*\)$/, '')).filter(Boolean) : [],
     parsed: rows.length > 0,
   };
 }

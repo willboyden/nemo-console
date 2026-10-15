@@ -11,7 +11,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 SystemId = Literal["switchyard", "relay", "dynamo"]
-Health = Literal["up", "degraded", "down", "unknown"]
+Health = Literal["up", "degraded", "down", "unknown", "off"]   # "off": opt-in and stopped on purpose (addendum 9.4)
 Severity = Literal["info", "warn", "error"]
 Role = Literal["admin", "viewer"]
 

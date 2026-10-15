@@ -34,6 +34,18 @@ async def test_down_system_is_200_not_5xx(env: Env) -> None:
         assert (await c.get("/api/v1/health")).json()["status"] == "degraded"
 
 
+async def test_overall_health_ignores_systems_that_are_off(env: Env) -> None:
+    """Addendum 9.4: an opt-in system that is off on purpose (Dynamo) must not keep /health `degraded` for good."""
+    env.adapters["dynamo"].health = "off"
+    env.container.status.invalidate("dynamo")
+    async with env.client() as c:
+        h = (await c.get("/api/v1/health")).json()
+        assert h["systems"]["dynamo"] == "off" and h["status"] == "ok"
+        env.adapters["relay"].health = "degraded"
+        env.container.status.invalidate("relay")
+        assert (await c.get("/api/v1/health")).json()["status"] == "degraded"     # off is ignored, nothing else is
+
+
 async def test_topology_probe_failures_are_data(env: Env) -> None:
     env.mock.get("http://127.0.0.1:4000/health/liveliness").mock(side_effect=httpx.ConnectError("x"))
     async with env.client() as c:
@@ -209,7 +221,7 @@ async def test_real_adapters_with_no_paths_give_problems_not_500(env: Env) -> No
                 r = await cl.get(f"/api/v1/systems/{sid}/{path}")
                 assert r.status_code < 500, (sid, path, r.status_code, r.text[:200])
             st = (await cl.get(f"/api/v1/systems/{sid}/status")).json()
-            assert st["health"] in ("down", "unknown", "degraded", "up")
+            assert st["health"] in ("down", "unknown", "degraded", "up", "off")
             for f in (await cl.get(f"/api/v1/systems/{sid}/config")).json():
                 r = await cl.get(f"/api/v1/systems/{sid}/config/{f['id']}")
                 assert r.status_code < 500, (sid, f["id"], r.text[:200])

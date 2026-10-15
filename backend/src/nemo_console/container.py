@@ -58,6 +58,17 @@ class Container:
         return self.busy.setdefault(system, asyncio.Lock())
 
 
+def _configure_dynamo(adapter: SystemAdapter, cfg: Settings) -> None:
+    """Hand the Dynamo card settings (`dynamo_*`, addendum 9.4) to the registry-built adapter. Imported lazily so a
+    broken adapter module still degrades to MissingAdapter; injected adapters (tests) keep their own policy."""
+    from nemo_console.adapters.dynamo import CardPolicy, DynamoAdapter
+    if isinstance(adapter, DynamoAdapter):
+        adapter.policy = CardPolicy(
+            opt_in=cfg.dynamo_opt_in, start=cfg.dynamo_start, restore=cfg.default_model_start,
+            exclusive=tuple(cfg.dynamo_exclusive_engines), coexisting=tuple(cfg.dynamo_coexisting_engines),
+            ignored=tuple(cfg.dynamo_ignored_containers), dark=tuple(cfg.dynamo_dark_while_held))
+
+
 def build_container(cfg: Settings, *, adapters: dict[SystemId, SystemAdapter] | None = None,
                     runner: CommandRunner | None = None, http: httpx.AsyncClient | None = None) -> Container:
     store = Store(cfg.state_dir)
@@ -75,6 +86,8 @@ def build_container(cfg: Settings, *, adapters: dict[SystemId, SystemAdapter] | 
             continue
         try:
             built[sid] = build_adapter(sid, ctx)
+            if sid == "dynamo":
+                _configure_dynamo(built[sid], cfg)
         except Exception as e:  # noqa: BLE001 - a missing/broken adapter degrades that system only
             log.warning("adapter %s unavailable: %s", sid, type(e).__name__)
             built[sid] = MissingAdapter(sid, ctx, f"{type(e).__name__}: {e}")

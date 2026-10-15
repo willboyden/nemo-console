@@ -24,7 +24,7 @@ router = APIRouter()
 async def health(c: C, p: Annotated[Principal, Depends(public)]) -> dict[str, Any]:
     statuses = await c.status.all()
     systems: dict[str, Health] = {s.system: s.health for s in statuses}
-    ok = all(h == "up" for h in systems.values())
+    ok = all(h in ("up", "off") for h in systems.values())     # "off" = opt-in and stopped on purpose (addendum 9.4)
     trust = "loopback-admin" if p.name == "loopback" else "bearer"
     return {"status": "ok" if ok else "degraded", "version": __version__, "trust": trust, "role": p.role, "trust_notice": c.trust_notice, "systems": systems}
 

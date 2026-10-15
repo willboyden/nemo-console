@@ -11,6 +11,7 @@ import httpx
 import respx
 
 from nemo_console.adapters.base import CommandResult
+from nemo_console.adapters.dynamo import CardPolicy
 
 from .conftest import BASE_URL
 from .helpers import FakeRunner, fail, frontend_doc, fx, fxj, inspect_json, is_docker, ok, worker_doc
@@ -31,6 +32,27 @@ def engine_doc(running: bool = True, name: str = ENG, project: str = "ai-lab-vll
     d["HostConfig"]["DeviceRequests"][0]["DeviceIDs"] = [uuid]
     d["Config"]["Image"] = "vllm/vllm-openai:v0.27.1"
     return d
+
+
+FN = "ai-lab-sglang-flashnext-flashnext-1"
+LIGHTNING = "ai-lab-vllm-nemotron-lightning-nemotron-lightning-1"
+OLLAMA = "ai-lab-ollama-ollama-1"
+DCGM = "ai-lab-observability-dcgm-exporter-1"
+OTHER_UUID = "GPU-00000000-0000-0000-0000-000000000002"
+
+
+def gpu_doc(name: str, *, uuids: list[str] | None = None, all_gpus: bool = False, running: bool = True,
+            project: str = "other") -> dict[str, Any]:
+    """A running GPU container shaped like the real inspect (the same shape `docker inspect` gave live for flashnext
+    (two UUIDs), lightning (one UUID), ollama and dcgm-exporter (Count -1) on 2026-10-06)."""
+    d = engine_doc(running=running, name=name, project=project)
+    req = d["HostConfig"]["DeviceRequests"][0]
+    req["DeviceIDs"], req["Count"] = (None, -1) if all_gpus else (uuids or [UUID], 0)
+    return d
+
+
+def flashnext_doc(running: bool = True, uuids: list[str] | None = None) -> dict[str, Any]:
+    return gpu_doc(FN, uuids=uuids or [OTHER_UUID, UUID], running=running, project="ai-lab-sglang-flashnext")
 
 
 def wire(runner: FakeRunner, docs: list[dict[str, Any]], ps: str = "") -> None:
@@ -64,11 +86,14 @@ async def test_status_up_real_fixtures(make, runner, mock) -> None:  # type: ign
     assert st.health == "up" and st.version == "1.5.0"
     assert "unsloth/Qwen3.8-27B-NVFP4" in st.summary
     assert [c.name for c in st.components] == [FE, WK] and all(c.state == "running" for c in st.components)
-    # the engine is stopped while Dynamo holds the card -> named dark-alias problem
+    # no exclusive engine runs while Dynamo holds the card -> the DEFAULT model's aliases and routes are named dark
     p = next(p for p in st.problems if p.code == "dynamo.holds_card")
-    assert "qwen3.8-27b-1m" in p.message and "Switchyard capable tier" in p.message and p.fix
-    # the 27B is restored through use-model.sh (it frees the card flashnext TP2 holds), never a bare compose up
-    assert p.fix.endswith("scripts/use-model.sh qwen3.8-27b-1m") and "docker compose up" not in p.fix
+    for dark in ("qwen3.8-flash-next", "qwen3.8-flash-next-quick", "auto-local capable tier", "auto-flashnext capable tier",
+                 "direct-flashnext (Switchyard and Relay)"):
+        assert dark in p.message, dark
+    assert "qwen3.8-27b-1m" not in p.message                      # the 27B is opt-in: it is not what goes dark
+    # restoring = the default model through the switch script (it also takes Dynamo down), never a bare compose up
+    assert p.fix == "scripts/use-model.sh qwen3.8-flash-next"
     assert "dynamo.structural_tag.off" not in codes(st)          # the live worker has the flag
     assert {e.role for e in st.endpoints} == {"api", "health", "metrics"}
 
@@ -81,11 +106,16 @@ async def test_status_loading_when_models_empty(make, runner, mock) -> None:  # 
     assert "loading" in (st.components[1].detail or "")
 
 
-async def test_status_down_when_nothing_exists(make, runner, mock) -> None:  # type: ignore[no-untyped-def]
+async def test_status_off_when_nothing_exists_and_down_when_not_opt_in(make, runner, mock) -> None:  # type: ignore[no-untyped-def]
     wire(runner, [])
     st = await make().status()
-    assert st.health == "down" and {"dynamo.frontend.down", "dynamo.worker.absent"} <= codes(st)
-    assert all(c.state == "absent" for c in st.components)
+    assert st.health == "off" and codes(st) == {"dynamo.off"} and all(c.state == "absent" for c in st.components)
+    # opt-in switched off: the old error-level report, with the configured start command as the fix
+    st2 = await make(policy=CardPolicy(opt_in=False)).status()
+    assert st2.health == "down" and {"dynamo.frontend.down", "dynamo.worker.absent"} <= codes(st2)
+    assert all(c.state == "absent" for c in st2.components)
+    for p in st2.problems:
+        assert p.fix == "scripts/use-model.sh qwen3.8-27b-dynamo" and "docker compose up" not in p.fix
 
 
 async def test_status_frontend_up_worker_absent(make, runner, mock) -> None:  # type: ignore[no-untyped-def]
@@ -357,8 +387,8 @@ async def test_preflight_lists_sharers_by_uuid_and_ignores_other_card(make, runn
     wire(runner, [worker_doc(), engine_doc(), other_card],
          ps=f"{WK}\n{FE}\n{ENG}\nai-lab-sglang-flashnext-flashnext-1\n")
     res = await make().run_action("preflight", {})
-    assert res.ok and ENG in res.output and "flashnext" not in res.output
-    assert "touches no other card" in res.output and "qwen3.8-27b-1m" in res.output
+    assert res.ok and ENG in res.output and "ai-lab-sglang-flashnext-flashnext-1 (" not in res.output   # other card
+    assert "touches no other container" in res.output and "scripts/use-model.sh qwen3.8-flash-next" in res.output
     assert not compose_calls(runner)                                        # safe: nothing was started/stopped
 
 
@@ -490,25 +520,32 @@ async def test_sharers_ignores_container_that_stopped_after_ps(make, runner) -> 
 
 
 async def test_preflight_machine_readable_tail(make, runner) -> None:  # type: ignore[no-untyped-def]
-    # Dynamo holds the card, the sharing engine is stopped -> listed as stopped, aliases dark
+    # Dynamo holds the card, the 27B is stopped and nothing exclusive runs -> listed as stopped, the default's aliases dark
     wire(runner, [worker_doc(), engine_doc(running=False)], ps=f"{WK}\n")
     out = (await make().run_action("preflight", {})).output.splitlines()
-    assert out[-2:] == [f"shares_card: {ENG} (stopped)", "router_aliases_dark: qwen3.8-27b-1m, switchyard-capable-tier"]
+    dark = ("router_aliases_dark: qwen3.8-flash-next, qwen3.8-flash-next-quick, auto-local capable tier "
+            "(Switchyard and Relay), auto-flashnext capable tier, direct-flashnext (Switchyard and Relay)")
+    assert out[-3:] == [f"shares_card: {ENG} (stopped)", "stoppable: none", dark]
     assert "No other container is running" in "\n".join(out)          # prose kept
-    # engine running, Dynamo not the holder
+    # the 27B running, Dynamo not the holder -> it is the one stop_sharing_engine may stop
     runner.rules.clear()
     wire(runner, [engine_doc()], ps=f"{ENG}\n")
     out = (await make().run_action("preflight", {})).output.splitlines()
-    assert out[-2:] == [f"shares_card: {ENG} (running)", "router_aliases_dark: none"]
+    assert out[-3:] == [f"shares_card: {ENG} (running)", f"stoppable: {ENG} (running)", "router_aliases_dark: none"]
+    # the default model running on the card (TP2: both UUIDs) -> listed, but never offered for stopping
+    runner.rules.clear()
+    wire(runner, [flashnext_doc()], ps=f"{FN}\n")
+    out = (await make().run_action("preflight", {})).output.splitlines()
+    assert out[-3:] == [f"shares_card: {FN} (running)", "stoppable: none", "router_aliases_dark: none"]
     # nothing at all
     runner.rules.clear()
     wire(runner, [worker_doc()], ps=f"{WK}\n")
     out = (await make().run_action("preflight", {})).output.splitlines()
-    assert out[-2:] == ["shares_card: none", "router_aliases_dark: qwen3.8-27b-1m, switchyard-capable-tier"]
+    assert out[-3:][:2] == ["shares_card: none", "stoppable: none"] and out[-1].startswith("router_aliases_dark: qwen3.8")
     runner.rules.clear()
     wire(runner, [], ps="")
     out = (await make().run_action("preflight", {})).output.splitlines()
-    assert out[-2:] == ["shares_card: none", "router_aliases_dark: none"]
+    assert out[-3:] == ["shares_card: none", "stoppable: none", "router_aliases_dark: none"]
 
 
 # ── hand-edited override: closed allowlist (audit payloads) ────────────────────────────────────
@@ -625,3 +662,137 @@ async def test_path_or_json_values_must_equal_base(make, runner) -> None:  # typ
 async def test_stray_positional_tokens_rejected(make, runner) -> None:  # type: ignore[no-untyped-def]
     r = await _verdict(make, runner, f"{W}, stray")
     assert not r.ok
+
+
+# ── card model (addendum 9.4): Dynamo is opt-in; exclusive / coexisting / ignored / unknown sharers ──────────────
+START, RESTORE = "scripts/use-model.sh qwen3.8-27b-dynamo", "scripts/use-model.sh qwen3.8-flash-next"
+
+
+def stopped(doc: dict[str, Any], code: int) -> dict[str, Any]:
+    doc["State"].update(Running=False, Restarting=False, Status="exited", ExitCode=code)
+    return doc
+
+
+def restarting(doc: dict[str, Any]) -> dict[str, Any]:
+    # Docker reports Running=true while a container sits in its restart back-off
+    doc["State"].update(Running=True, Restarting=True, Status="restarting", ExitCode=1)
+    doc["RestartCount"] = 57
+    return doc
+
+
+async def test_status_off_is_info_not_error_when_containers_exited(make, runner, mock) -> None:  # type: ignore[no-untyped-def]
+    # the live shape on 2026-10-06: frontend Exited (0), worker Exited (1) 8 days earlier, flashnext serving
+    wire(runner, [stopped(frontend_doc(), 0), stopped(worker_doc(), 1), flashnext_doc()])
+    st = await make().status()
+    assert st.health == "off" and st.summary.startswith("off")
+    assert [(p.severity, p.code, p.fix) for p in st.problems] == [("info", "dynamo.off", START)]
+    assert [(c.name, c.state) for c in st.components] == [(FE, "stopped"), (WK, "stopped")]
+    assert st.components[1].detail == "exited (code 1)"        # an old crash is shown, but it is not failing now
+    assert not any(p.severity == "error" for p in st.problems)
+    assert not mock.calls                                      # nothing is polled over HTTP while off
+
+
+async def test_status_crash_looping_worker_is_not_off_and_contends(make, runner, mock) -> None:  # type: ignore[no-untyped-def]
+    # 2026-09-28: Dynamo started beside flashnext; the worker crash-looped ("Free memory on device ... less than desired")
+    wire(runner, [frontend_doc(), restarting(worker_doc()), flashnext_doc()])
+    http_live(mock, models=False)
+    st = await make().status()
+    assert st.health == "degraded" and "dynamo.off" not in codes(st)
+    wk = next(c for c in st.components if c.name == WK)
+    assert wk.state == "failed" and "restarting" in (wk.detail or "")
+    p = next(p for p in st.problems if p.code == "dynamo.card.contended")
+    assert p.severity == "error" and FN in p.message and START in p.message
+    assert "docker stop" not in (p.fix or "") and "`down`" in (p.fix or "")
+    assert next(p for p in st.problems if p.code == "dynamo.worker.stopped").message.endswith("restarting (crash loop)")
+    # frontend stopped too, worker still looping: still error-level, never "off"
+    runner.rules.clear()
+    wire(runner, [stopped(frontend_doc(), 0), restarting(worker_doc())])
+    st2 = await make().status()
+    assert st2.health == "down" and {"dynamo.frontend.down", "dynamo.worker.stopped"} <= codes(st2)
+    assert next(p for p in st2.problems if p.code == "dynamo.frontend.down").fix == START
+
+
+async def test_card_contended_by_any_exclusive_engine_on_the_card_only(make, runner, mock) -> None:  # type: ignore[no-untyped-def]
+    wire(runner, [frontend_doc(), worker_doc(), flashnext_doc()])
+    http_live(mock)
+    st = await make().status()
+    assert "dynamo.card.contended" in codes(st) and "dynamo.holds_card" not in codes(st)
+    # flashnext in single-GPU mode on the OTHER card: no contention, and its aliases are not dark either
+    runner.rules.clear()
+    wire(runner, [frontend_doc(), worker_doc(), flashnext_doc(uuids=[OTHER_UUID])])
+    st2 = await make().status()
+    assert not {"dynamo.card.contended", "dynamo.holds_card"} & codes(st2) and st2.health == "up"
+    # a coexisting engine beside the worker is not contention
+    runner.rules.clear()
+    wire(runner, [frontend_doc(), worker_doc(), gpu_doc(LIGHTNING)])
+    assert "dynamo.card.contended" not in codes(await make().status())
+
+
+async def test_up_refused_while_default_model_holds_card_fix_is_switch_script(make, runner) -> None:  # type: ignore[no-untyped-def]
+    docs = [flashnext_doc(), gpu_doc(LIGHTNING), gpu_doc(OLLAMA, all_gpus=True), gpu_doc(DCGM, all_gpus=True)]
+    wire(runner, docs, ps="\n".join(d["Name"].lstrip("/") for d in docs))
+    for params in ({}, {"stop_sharing_engine": True}):          # the param can never stop the default model
+        res = await make().run_action("up", params)
+        assert not res.ok and res.problems[0].code == "dynamo.up.exclusive_engine" and res.problems[0].fix == START
+        assert FN in res.output and LIGHTNING not in res.output and OLLAMA not in res.output and DCGM not in res.output
+    assert not compose_calls(runner) and not any(a[:2] == ["docker", "stop"] for a in runner.argvs())
+
+
+async def test_up_proceeds_beside_coexisting_and_ignored_containers(make, runner, mock) -> None:  # type: ignore[no-untyped-def]
+    docs = [gpu_doc(LIGHTNING), gpu_doc(OLLAMA, all_gpus=True), gpu_doc(DCGM, all_gpus=True)]
+    state = {"up": False}
+
+    def _inspect(argv: list[str]) -> CommandResult:
+        live = [*docs, worker_doc()] if state["up"] else docs
+        return inspect_json(*[d for d in live if d["Name"].lstrip("/") in set(argv[2:])])
+
+    def _compose(argv: list[str]) -> CommandResult:
+        state["up"] = state["up"] or "up" in argv
+        return ok()
+
+    runner.on(is_docker("inspect"), _inspect)
+    runner.on(is_docker("ps"), ok("\n".join(d["Name"].lstrip("/") for d in docs)))
+    runner.on(is_docker("compose"), _compose)
+    http_live(mock)
+    res = await make().run_action("up", {})
+    assert res.ok, res.output
+    assert [a[-4:] for a in compose_calls(runner)] == [["up", "-d", "dynamo-frontend", "dynamo-worker"]]
+    assert not any(a[:2] == ["docker", "stop"] or a[-1] == "down" for a in runner.argvs())   # nothing stopped
+
+
+async def test_up_refuses_unknown_container_and_names_it_without_docker_stop(make, runner) -> None:  # type: ignore[no-untyped-def]
+    wire(runner, [gpu_doc("comfyui-b-1", project="comfyui")], ps="comfyui-b-1\n")
+    res = await make().run_action("up", {"stop_sharing_engine": True})
+    assert not res.ok and res.problems[0].code == "dynamo.up.card_in_use" and "comfyui-b-1" in res.problems[0].message
+    assert "docker stop" not in (res.problems[0].fix or "") and "docker stop" not in res.output
+    assert "comfyui-b-1" in (res.problems[0].fix or "") and not compose_calls(runner)
+    pf = await make().run_action("preflight", {})
+    assert [p.code for p in pf.problems] == ["dynamo.card.unknown"] and "docker stop" not in (pf.problems[0].fix or "")
+
+
+async def test_stop_sharing_engine_stops_only_the_27b_never_flashnext(make, runner) -> None:  # type: ignore[no-untyped-def]
+    docs = [flashnext_doc(), engine_doc()]
+    wire(runner, docs, ps=f"{FN}\n{ENG}\n")
+    res = await make().run_action("up", {"stop_sharing_engine": True})
+    assert not res.ok and res.problems[0].fix == START and not compose_calls(runner)
+    up = next(a for a in make().actions() if a.id == "up")
+    assert ENG in up.params[0].help and FN not in up.params[0].help and START in up.description
+    assert "docker stop" not in up.description
+
+
+async def test_policy_settings_drive_every_text(make, runner, mock) -> None:  # type: ignore[no-untyped-def]
+    pol = CardPolicy(start="my/start dyn", restore="my/restore", exclusive=("my-excl-1",), coexisting=("my-co-1",),
+                     ignored=("my-mon-1",), dark=("alias-a", "route-b"))
+    wire(runner, [frontend_doc(), worker_doc()])
+    http_live(mock)
+    st = await make(policy=pol).status()
+    hc = next(p for p in st.problems if p.code == "dynamo.holds_card")
+    assert hc.fix == "my/restore" and hc.message.endswith("alias-a, route-b")
+    runner.rules.clear()
+    wire(runner, [gpu_doc("my-excl-1"), gpu_doc("my-co-1"), gpu_doc("my-mon-1", all_gpus=True)],
+         ps="my-excl-1\nmy-co-1\nmy-mon-1\n")
+    res = await make(policy=pol).run_action("up", {})
+    assert not res.ok and res.problems[0].fix == "my/start dyn" and "my-co-1" not in res.output
+    runner.rules.clear()
+    wire(runner, [])
+    assert (await make(policy=pol).status()).problems[0].fix == "my/start dyn"

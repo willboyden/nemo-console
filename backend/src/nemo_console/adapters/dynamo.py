@@ -23,7 +23,8 @@ Threat notes for the hand-editable `override` file (validate_config is a CLOSED 
     base compose for that service, and their values may not hold `$` or look like a secret
   * then `docker compose config -q` as the authoritative parse. The generated (render_override) path satisfies all of it.
 
-Lifecycle is `docker compose` on the repo compose plus the override; `scripts/use-model.sh` is never called.
+Lifecycle is `docker compose` on the repo compose plus the override; `scripts/use-model.sh` is never called. It is
+only SHOWN, as the settings-driven start/restore fix (CardPolicy; addendum 9.4 / ADR-0009 addendum).
 """
 from __future__ import annotations
 
@@ -37,6 +38,7 @@ import re
 import shlex
 import time
 from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -45,6 +47,14 @@ import httpx
 import yaml
 
 from nemo_console.adapters.base import AdapterContext, CommandResult, SystemAdapter
+from nemo_console.config import (
+    DEFAULT_DYNAMO_COEXISTING,
+    DEFAULT_DYNAMO_DARK,
+    DEFAULT_DYNAMO_EXCLUSIVE,
+    DEFAULT_DYNAMO_IGNORED,
+    DEFAULT_DYNAMO_START,
+    DEFAULT_MODEL_START,
+)
 from nemo_console.domain.models import (
     ActionResult,
     ActionSpec,
@@ -74,10 +84,13 @@ SVC_WORKER = "dynamo-worker"
 SVC_MOCKER = "dynamo-mocker"
 DYNAMO_NAMES = (FRONTEND, WORKER, MOCKER)
 
-SHARING_ENGINE = "ai-lab-vllm-qwen38-vllm-1"          # the engine the operator swaps against, same GPU UUID
-SHARING_PROJECT = "ai-lab-vllm-qwen38"
-SHARING_SERVICE = "vllm"
-ROUTER_ALIAS = "qwen3.8-27b-1m"
+# The ONE container `up` may stop (stop_sharing_engine=true): the opt-in 27B, verified by name + compose labels and
+# stopped with a compose `down` in its own project (what scripts/use-model.sh does to it too). Fixed on purpose: a
+# setting must not widen what the console stops, and the default model (flashnext, TP2 on both cards) is never stopped
+# here because its start order belongs to its own script.
+STOPPABLE_ENGINE = "ai-lab-vllm-qwen38-vllm-1"
+STOPPABLE_PROJECT = "ai-lab-vllm-qwen38"
+STOPPABLE_SERVICE = "vllm"
 
 DEFAULT_URL = "http://127.0.0.1:8020"
 DEFAULT_MODEL = "unsloth/Qwen3.8-27B-NVFP4"          # the worker's --served-model-name in the compose
@@ -109,6 +122,40 @@ _FIXED_FLAGS_FRONTEND = {"--http-host", "--http-port", "--discovery-backend", "-
 
 class ParamError(ValueError):
     """A parameter value that is unknown, mistyped or out of range."""
+
+
+@dataclass(frozen=True)
+class CardPolicy:
+    """Who may share the worker's GPU, and the text the problems name. Settings-driven (config.py `dynamo_*`, handed in
+    by the container); the defaults describe the author's deployment. `start` / `restore` are DISPLAY ONLY.
+
+    * opt_in      no Dynamo container running or restarting -> health "off" + one info problem, not an error
+    * exclusive   running on the card -> `up` refused (fix: `start`); beside a running worker -> dynamo.card.contended
+    * coexisting  allowed beside the worker; ignored: GPU-visible monitoring, never blocks
+    * any OTHER container on the card blocks `up` too (safe default) and is named, never stopped
+    * dark        what stops answering while Dynamo holds the card (dynamo.holds_card, preflight)
+    """
+    opt_in: bool = True
+    start: str = DEFAULT_DYNAMO_START
+    restore: str = DEFAULT_MODEL_START
+    exclusive: tuple[str, ...] = tuple(DEFAULT_DYNAMO_EXCLUSIVE)
+    coexisting: tuple[str, ...] = tuple(DEFAULT_DYNAMO_COEXISTING)
+    ignored: tuple[str, ...] = tuple(DEFAULT_DYNAMO_IGNORED)
+    dark: tuple[str, ...] = tuple(DEFAULT_DYNAMO_DARK)
+
+    def kind(self, name: str) -> str:
+        """exclusive | coexisting | ignored | unknown. Exclusive wins a name listed twice (the safe reading)."""
+        if name in self.exclusive:
+            return "exclusive"
+        if name in self.coexisting:
+            return "coexisting"
+        return "ignored" if name in self.ignored else "unknown"
+
+    def exclusive_names(self) -> list[str]:
+        return [n for n in self.exclusive if _NAME_RE.fullmatch(n) and n not in DYNAMO_NAMES]
+
+    def dark_text(self) -> str:
+        return ", ".join(self.dark) or "nothing configured (setting dynamo_dark_while_held)"
 
 
 # ── redaction / log parsing ─────────────────────────────────────────────────────────────────────
@@ -559,11 +606,12 @@ class DynamoAdapter(SystemAdapter):
     label = "NVIDIA Dynamo"
 
     def __init__(self, ctx: AdapterContext, *, health_timeout: float = 600.0, poll_interval: float = 5.0,
-                 follow_interval: float = 2.0) -> None:
+                 follow_interval: float = 2.0, policy: CardPolicy | None = None) -> None:
         super().__init__(ctx)
         self.health_timeout = health_timeout
         self.poll_interval = poll_interval
         self.follow_interval = follow_interval
+        self.policy = policy or CardPolicy()      # the container replaces it with the one built from Settings
         self._models: list[str] = []
         self._card_uuid: str | None = None
 
@@ -623,11 +671,41 @@ class DynamoAdapter(SystemAdapter):
         if d is None:
             return "absent"
         st = d.get("State") or {}
+        # Restarting FIRST: Docker reports Running=true while a container sits in its restart back-off, so a
+        # crash-looping worker used to read as "running" (2026-09-28: the worker looped beside flashnext).
+        if st.get("Restarting") or st.get("Status") == "restarting":
+            return "failed"
         if st.get("Running"):
             return "running"
-        if st.get("Restarting") or (st.get("Status") == "exited" and st.get("ExitCode") not in (0, None)):
+        if st.get("Status") == "exited" and st.get("ExitCode") not in (0, None):
             return "failed"
         return "stopped"
+
+    @staticmethod
+    def _active(d: dict[str, Any] | None) -> bool:
+        """Running or restarting: the container is (trying to be) up, so a stopped Dynamo is not 'off'."""
+        st = (d or {}).get("State") or {}
+        return bool(st.get("Running") or st.get("Restarting") or st.get("Status") == "restarting")
+
+    @staticmethod
+    def _pinned(d: dict[str, Any], uuid: str | None) -> bool:
+        """The container requests this GPU (by UUID, or all GPUs). Unknown card: any GPU request counts (fail safe)."""
+        reqs = (d.get("HostConfig") or {}).get("DeviceRequests") or []
+        if uuid is None:
+            return bool(reqs)
+        return any(uuid in (r.get("DeviceIDs") or []) or r.get("Count") == -1 for r in reqs)
+
+    def _compose_uuid(self) -> str | None:
+        """The worker's GPU UUID as pinned in the repo compose (None when unreadable or not a UUID)."""
+        base = self._compose_path()
+        if base is None:
+            return None
+        with contextlib.suppress(OSError, yaml.YAMLError, AttributeError, IndexError, KeyError, TypeError):
+            doc = yaml.safe_load(base.read_text())
+            ids = doc["services"][SVC_WORKER]["deploy"]["resources"]["reservations"]["devices"][0]["device_ids"]
+            uuid = str(ids[0])
+            return uuid if _UUID_RE.fullmatch(uuid) else None
+        return None
 
     async def _get_json(self, path: str) -> Any | None:
         try:
@@ -663,11 +741,22 @@ class DynamoAdapter(SystemAdapter):
                                                   message=redact(str(e))[:300], fix="check the docker runner/socket")])
 
     async def _status(self, now: float) -> SystemStatus:
-        insp = await self._inspect([FRONTEND, WORKER, MOCKER, SHARING_ENGINE])
-        fe, wk, mk, eng = insp.get(FRONTEND), insp.get(WORKER), insp.get(MOCKER), insp.get(SHARING_ENGINE)
+        pol = self.policy
+        excl = pol.exclusive_names()
+        insp = await self._inspect([FRONTEND, WORKER, MOCKER, *excl])
+        fe, wk, mk = insp.get(FRONTEND), insp.get(WORKER), insp.get(MOCKER)
         fe_state, wk_state, mk_state = self._state(fe), self._state(wk), self._state(mk)
+        if pol.opt_in and not any(self._active(d) for d in (fe, wk, mk)):
+            return self._off_status(now, fe, wk, mk)
         problems: list[Problem] = []
         comps: list[Component] = []
+        uuid = self._compose_uuid()
+        if uuid is None:
+            for req in ((wk or {}).get("HostConfig") or {}).get("DeviceRequests") or []:
+                if req.get("DeviceIDs"):
+                    uuid = str(req["DeviceIDs"][0])
+        excl_running = [n for n in excl if self._state(insp.get(n)) == "running"]
+        excl_on_card = [n for n in excl_running if self._pinned(insp[n], uuid)]
 
         models_doc = health_doc = None
         if fe_state == "running":
@@ -688,6 +777,8 @@ class DynamoAdapter(SystemAdapter):
         if wk_state == "running":
             wk_detail = "loading: model not registered with the frontend yet (cold start ~4 min)" if loading else (
                 f"serving {', '.join(models)}" if models else None)
+        elif self._active(wk):
+            wk_detail = f"restarting (crash loop?), restart count {int((wk or {}).get('RestartCount') or 0)}"
         comps.append(Component(kind="container", name=WORKER, state=wk_state,
                                image=(wk or {}).get("Config", {}).get("Image"), detail=wk_detail))
         if mk is not None:
@@ -695,10 +786,11 @@ class DynamoAdapter(SystemAdapter):
                                    image=mk.get("Config", {}).get("Image"), detail="CPU mocker (gibberish by design)"))
 
         # problems --------------------------------------------------------------------------
-        up_cmd = "cd inference/dynamo && docker compose up -d"
+        # 2026-10-06: every start fix is the configured start command (default: the model-switch script, which frees
+        # the card in the right order). A bare `docker compose up -d` beside the default model crash-loops the worker.
         if fe_state != "running":
             problems.append(Problem(severity="error", code="dynamo.frontend.down",
-                                    message=f"frontend container {FRONTEND} is {fe_state}", fix=up_cmd))
+                                    message=f"frontend container {FRONTEND} is {fe_state}", fix=pol.start))
         elif not fe_http:
             problems.append(Problem(severity="error", code="dynamo.frontend.unreachable",
                                     message=f"{FRONTEND} runs but {self.base_url}/health did not answer",
@@ -706,23 +798,22 @@ class DynamoAdapter(SystemAdapter):
         if wk_state == "absent" and mk_state != "running":
             problems.append(Problem(severity="warn" if fe_state == "running" else "info", code="dynamo.worker.absent",
                                     message="no Dynamo worker container: the frontend has nothing to route to",
-                                    fix="run the console action `up` (or: cd inference/dynamo && docker compose up -d)"))
+                                    fix=pol.start))
         elif wk_state in ("stopped", "failed"):
             problems.append(Problem(severity="error", code="dynamo.worker.stopped",
-                                    message=f"worker {WORKER} is {wk_state}",
+                                    message=f"worker {WORKER} is {'restarting (crash loop)' if self._active(wk) else wk_state}",
                                     fix=f"docker logs --tail 80 {WORKER}"))
-        if wk_state == "running" and eng is not None and self._state(eng) == "running":
+        if self._active(wk) and excl_on_card:
             problems.append(Problem(severity="error", code="dynamo.card.contended",
-                                    message=f"{SHARING_ENGINE} and the Dynamo worker are both running on the same "
-                                            "Workstation card; one will fail to allocate VRAM",
-                                    fix="cd inference/vllm-qwen38 && docker compose down"))
-        elif wk_state == "running" and self._state(eng) != "running":
+                                    message=f"{', '.join(excl_on_card)} and the Dynamo worker are both on the worker's "
+                                            "card; they cannot share its VRAM (the worker crash-loops or the engine "
+                                            f"fails). To run Dynamo instead, switch with: {pol.start}",
+                                    fix="run the console action `down` (stops only Dynamo; the other engine keeps running)"))
+        elif wk_state == "running" and not excl_running:
             problems.append(Problem(severity="warn", code="dynamo.holds_card",
-                                    message=f"vllm-qwen38 is {self._state(eng)} -> router alias {ROUTER_ALIAS} and "
-                                            "the Switchyard capable tier are dark while Dynamo holds the card",
-                                    # 2026-09-26: never a bare compose up here. The 27B needs Workstation-card VRAM
-                                    # that the default engine (flashnext TP2, both cards) holds; use-model.sh stops it.
-                                    fix="run the console action `down`, then: scripts/use-model.sh qwen3.8-27b-1m"))
+                                    message="Dynamo holds the card and no exclusive engine is running, so these are "
+                                            f"dark: {pol.dark_text()}",
+                                    fix=pol.restore))
         if mk_state == "running":
             problems.append(Problem(severity="info", code="dynamo.mocker.running",
                                     message="the CPU mocker is registered as the model; its text is gibberish by design",
@@ -757,17 +848,45 @@ class DynamoAdapter(SystemAdapter):
         else:
             health, summary = "up", f"serving {models[0]}" + (f" (+{len(models) - 1})" if len(models) > 1 else "")
 
-        image = (fe or wk or {}).get("Config", {}).get("Image", "") if (fe or wk) else ""
-        version = image.rsplit(":", 1)[-1] if ":" in image.rsplit("/", 1)[-1] else None
-        endpoints = [
+        return SystemStatus(system="dynamo", health=health, version=self._version(fe, wk), summary=summary,
+                            endpoints=self._endpoints(), components=comps, problems=problems, checked_at=now)
+
+    def _off_status(self, now: float, fe: dict[str, Any] | None, wk: dict[str, Any] | None,
+                    mk: dict[str, Any] | None) -> SystemStatus:
+        """Opt-in and nothing running or restarting: intentionally off. One info problem, no error-level noise.
+
+        A container that exited non-zero long ago (e.g. an old crash loop) is shown as `stopped` with its exit code in
+        the detail: it is not failing now, it is off."""
+        comps: list[Component] = []
+        for name, d in ((FRONTEND, fe), (WORKER, wk), (MOCKER, mk)):
+            if d is None and name == MOCKER:
+                continue
+            code = ((d or {}).get("State") or {}).get("ExitCode")
+            comps.append(Component(kind="container", name=name, state="absent" if d is None else "stopped",
+                                   image=(d or {}).get("Config", {}).get("Image"),
+                                   detail=f"exited (code {code})" if d is not None and code not in (None, 0) else None))
+        problem = Problem(severity="info", code="dynamo.off",
+                          message="Dynamo is opt-in and off: no frontend, worker or mocker container is running or "
+                                  "restarting. Start it with the fix: it frees the worker's card first (the console's "
+                                  "`up` is refused while an exclusive engine holds the card).",
+                          fix=self.policy.start)
+        return SystemStatus(system="dynamo", health="off", version=self._version(fe, wk),
+                            summary="off (opt-in): no Dynamo container is running", endpoints=self._endpoints(),
+                            components=comps, problems=[problem], checked_at=now)
+
+    @staticmethod
+    def _version(fe: dict[str, Any] | None, wk: dict[str, Any] | None) -> str | None:
+        image = str((fe or wk or {}).get("Config", {}).get("Image", "") or "")
+        return image.rsplit(":", 1)[-1] if ":" in image.rsplit("/", 1)[-1] else None
+
+    def _endpoints(self) -> list[Endpoint]:
+        return [
             Endpoint(name="frontend api", url=f"{self.base_url}/v1", role="api", auth="none"),
             Endpoint(name="frontend health", url=f"{self.base_url}/health", role="health", auth="none"),
             Endpoint(name="frontend metrics", url=f"{self.base_url}/metrics", role="metrics", auth="none"),
             Endpoint(name="worker metrics (ai-lab bus, read via docker exec)",
                      url=f"http://dynamo-worker:{WORKER_METRICS_PORT}/metrics", role="metrics", auth="none"),
         ]
-        return SystemStatus(system="dynamo", health=health, version=version, summary=summary,
-                            endpoints=endpoints, components=comps, problems=problems, checked_at=now)
 
     async def metrics(self) -> MetricsSnapshot:
         ts = time.time()
@@ -1175,21 +1294,31 @@ class DynamoAdapter(SystemAdapter):
 
     # ── act ─────────────────────────────────────────────────────────────────────────────────
     def actions(self) -> list[ActionSpec]:
+        pol = self.policy
+        excl = ", ".join(pol.exclusive) or "none configured"
         return [
             ActionSpec(id="preflight", label="Preflight (what shares the card)", danger="safe",
-                       description="Lists containers pinned to the same GPU UUID as the Dynamo worker. Dynamo up/down "
-                                   "touches no other card and never runs scripts/use-model.sh."),
+                       description="Lists the running containers pinned to the Dynamo worker's GPU UUID, sorted into "
+                                   "exclusive (block `up`), coexisting (allowed beside the worker), ignored (monitoring) "
+                                   "and unknown (block `up`, never stopped). Dynamo up/down touches no other container "
+                                   "and never runs the model-switch script."),
             ActionSpec(id="up", label="Up (frontend + worker)", danger="disruptive",
                        description=f"docker compose up -d for the frontend and the vLLM worker (cold start ~4 min). "
-                                   f"Refused while another engine holds the same card unless stop_sharing_engine=true, "
-                                   f"which stops exactly {SHARING_ENGINE}. While Dynamo holds the card the router alias "
-                                   f"{ROUTER_ALIAS} and the Switchyard capable tier are dark.",
-                       params=[ParamSpec(key="stop_sharing_engine", label="Stop the sharing engine first", type="bool",
+                                   f"Refused while an exclusive engine runs on the worker's card ({excl}): switch to "
+                                   f"Dynamo with `{pol.start}` instead, which stops them in the right order. "
+                                   f"stop_sharing_engine=true stops only {STOPPABLE_ENGINE}, never another engine. "
+                                   f"A container on the card that the console does not know also refuses `up`. "
+                                   f"While Dynamo holds the card these are dark: {pol.dark_text()}.",
+                       params=[ParamSpec(key="stop_sharing_engine", label=f"Stop {STOPPABLE_ENGINE} first", type="bool",
                                          default=False,
-                                         help=f"Stops exactly {SHARING_ENGINE} (docker compose down in its own project, no -v).")]),
+                                         help=f"Stops only {STOPPABLE_ENGINE} (docker compose down in its own project, "
+                                              "volumes kept: the same down the model-switch script does). Never any "
+                                              "other engine: with another exclusive engine on the card `up` stays "
+                                              "refused.")]),
             ActionSpec(id="down", label="Down (Dynamo only)", danger="disruptive",
-                       description="docker compose down for the Dynamo project (frontend, worker, mocker); volumes are kept. "
-                                   "Frees the Workstation card; touches no other card. Does not restart vllm-qwen38."),
+                       description="docker compose down for the Dynamo project (frontend, worker, mocker); volumes are "
+                                   "kept. Frees the worker's card; touches no other container and does not bring the "
+                                   f"default model back (that is `{pol.restore}`)."),
             ActionSpec(id="restart", label="Restart (recreate)", danger="disruptive",
                        description="up -d --force-recreate of frontend and worker, picking up the override."),
             ActionSpec(id="up_mock", label="Up mock (CPU, no VRAM)", danger="safe",
@@ -1198,14 +1327,10 @@ class DynamoAdapter(SystemAdapter):
         ]
 
     async def _sharers(self) -> tuple[list[dict[str, Any]], str | None]:
-        """Running containers (other than Dynamo's) pinned to the worker's GPU UUID. -> (sharers, error)."""
-        uuid: str | None = None
-        base = self._compose_path()
-        if base is not None:
-            with contextlib.suppress(OSError, yaml.YAMLError, AttributeError, IndexError, TypeError):
-                doc = yaml.safe_load(base.read_text())
-                ids = doc["services"][SVC_WORKER]["deploy"]["resources"]["reservations"]["devices"][0]["device_ids"]
-                uuid = str(ids[0])
+        """Running containers (other than Dynamo's) pinned to the worker's GPU UUID. -> (sharers, error).
+
+        Each sharer carries `kind` from the CardPolicy: exclusive | coexisting | ignored | unknown."""
+        uuid = self._compose_uuid()
         if uuid is None:
             wk = (await self._inspect([WORKER])).get(WORKER)
             for req in ((wk or {}).get("HostConfig") or {}).get("DeviceRequests") or []:
@@ -1231,13 +1356,22 @@ class DynamoAdapter(SystemAdapter):
                                 "service": lb.get("com.docker.compose.service", ""),
                                 "workdir": lb.get("com.docker.compose.project.working_dir", ""),
                                 "config": lb.get("com.docker.compose.project.config_files", ""),
-                                "all_gpus": req.get("Count") == -1})
+                                "all_gpus": req.get("Count") == -1, "kind": self.policy.kind(n)})
                     break
         return sorted(out, key=lambda s: s["name"]), None
 
     @staticmethod
     def _describe(s: dict[str, Any]) -> str:
         return f"{s['name']} ({s['image']}{', requests ALL gpus' if s['all_gpus'] else ''})"
+
+    @staticmethod
+    def _split(sharers: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]],
+                                                        list[dict[str, Any]], list[dict[str, Any]]]:
+        """-> (exclusive that may NOT be stopped here, the stoppable 27B if exclusive, unknown, coexisting, ignored)."""
+        excl = [s for s in sharers if s["kind"] == "exclusive"]
+        return ([s for s in excl if s["name"] != STOPPABLE_ENGINE], [s for s in excl if s["name"] == STOPPABLE_ENGINE],
+                [s for s in sharers if s["kind"] == "unknown"], [s for s in sharers if s["kind"] == "coexisting"],
+                [s for s in sharers if s["kind"] == "ignored"])
 
     async def run_action(self, action_id: str, params: dict[str, object]) -> ActionResult:
         if action_id not in {a.id for a in self.actions()}:
@@ -1251,26 +1385,7 @@ class DynamoAdapter(SystemAdapter):
             return ActionResult(ok=False, problems=[Problem(severity="error", code="dynamo.compose.unset",
                                 message="repo compose path is not configured", fix="set ctx.paths['dynamo_compose']")])
         if action_id == "preflight":
-            sharers, err = await self._sharers()
-            if err:
-                return ActionResult(ok=False, output=err)
-            lines = [
-                (
-                    "Dynamo worker GPU: pinned by UUID in the compose; up/down of Dynamo touches no other card "
-                    "and never calls scripts/use-model.sh."
-                )
-            ]
-            if sharers:
-                lines.append("Running containers on the same card: " + "; ".join(self._describe(s) for s in sharers))
-                lines.append(f"`up` is refused until they stop; stop_sharing_engine=true stops only {SHARING_ENGINE}.")
-            else:
-                lines.append("No other container is running on the Dynamo card.")
-            lines.append(f"While Dynamo holds the card, router alias {ROUTER_ALIAS} and the Switchyard capable tier are dark.")
-            probs = [Problem(severity="warn", code="dynamo.card.shared", message=self._describe(s),
-                             fix="stop it, or run `up` with stop_sharing_engine=true" if s["name"] == SHARING_ENGINE else
-                             f"docker stop {s['name']}") for s in sharers]
-            lines += await self._machine_lines(sharers)
-            return ActionResult(ok=True, output="\n".join(lines), problems=probs)
+            return await self._preflight()
         if action_id == "up_mock":
             return await self._up_mock()
         if action_id == "down":
@@ -1278,20 +1393,65 @@ class DynamoAdapter(SystemAdapter):
             return ActionResult(ok=r.returncode == 0, output=redact((r.stdout + r.stderr).strip())[-2000:])
         return await self._up_or_restart(action_id, params)
 
+    async def _preflight(self) -> ActionResult:
+        pol = self.policy
+        sharers, err = await self._sharers()
+        if err:
+            return ActionResult(ok=False, output=err)
+        blocking, stoppable, unknown, coexisting, ignored = self._split(sharers)
+        lines = [("Dynamo worker GPU: pinned by UUID in the compose; up/down of Dynamo touches no other container "
+                  "and never calls the model-switch script.")]
+        if blocking:
+            lines.append("Exclusive engines running on the card: " + "; ".join(self._describe(s) for s in blocking)
+                         + f". `up` is refused while they run. Switch to Dynamo with `{pol.start}` (it stops them in "
+                         "the right order); the console never stops them.")
+        if stoppable:
+            lines.append(f"{STOPPABLE_ENGINE} (exclusive) is running on the card. `up` is refused until it stops; "
+                         f"stop_sharing_engine=true stops only {STOPPABLE_ENGINE}.")
+        if unknown:
+            lines.append("Containers on the card the console does not know: " + "; ".join(
+                self._describe(s) for s in unknown) + ". `up` is refused while they run; find out what they are "
+                "first (the console never stops them). If one fits beside the worker, add it to the "
+                "dynamo_coexisting_engines setting.")
+        if coexisting:
+            lines.append("Allowed beside the worker (coexisting): " + "; ".join(self._describe(s) for s in coexisting) + ".")
+        if ignored:
+            lines.append("Ignored (monitoring): " + ", ".join(s["name"] for s in ignored) + ".")
+        if not sharers:
+            lines.append("No other container is running on the Dynamo card.")
+        lines.append(f"While Dynamo holds the card these are dark ({pol.dark_text()}). Restore the default model "
+                     f"with `{pol.restore}`.")
+        probs = [Problem(severity="warn", code="dynamo.card.shared", message=self._describe(s), fix=pol.start)
+                 for s in blocking]
+        probs += [Problem(severity="warn", code="dynamo.card.shared", message=self._describe(s),
+                          fix="run `up` with stop_sharing_engine=true") for s in stoppable]
+        probs += [Problem(severity="warn", code="dynamo.card.unknown", message=f"{self._describe(s)} is on the "
+                          "worker's card and is not in the exclusive, coexisting or ignored lists",
+                          fix=f"docker inspect --format '{{{{.Config.Image}}}}' {s['name']}   # identify it before "
+                              "stopping anything") for s in unknown]
+        lines += await self._machine_lines(sharers)
+        return ActionResult(ok=True, output="\n".join(lines), problems=probs)
+
     async def _machine_lines(self, sharers: list[dict[str, Any]]) -> list[str]:
-        """Machine-readable tail of the preflight output (the UI highlights these; the prose above is unchanged)."""
-        names = {s["name"]: "running" for s in sharers}
-        cur = await self._inspect([SHARING_ENGINE, WORKER])
-        eng = cur.get(SHARING_ENGINE)
-        if eng is not None and SHARING_ENGINE not in names:
-            pinned = [
-                i for r in (eng.get("HostConfig") or {}).get("DeviceRequests") or [] for i in r.get("DeviceIDs") or []
-            ]
-            if self._card_uuid in pinned:
-                names[SHARING_ENGINE] = "stopped"
+        """Machine-readable tail of the preflight output (the UI parses these keys; the prose above is for humans).
+
+        shares_card: one line per exclusive engine pinned to the card (running or stopped) and per unknown running
+        container; stoppable: the one container stop_sharing_engine may stop, when it runs; router_aliases_dark: the
+        configured dark list while the worker runs and no exclusive engine does."""
+        excl = self.policy.exclusive_names()
+        names = {s["name"]: "running" for s in sharers if s["kind"] in ("exclusive", "unknown")}
+        cur = await self._inspect([*excl, WORKER])
+        for n in excl:
+            d = cur.get(n)
+            if d is not None and n not in names and self._card_uuid and self._pinned(d, self._card_uuid):
+                names[n] = "running" if self._state(d) == "running" else "stopped"
         out = [f"shares_card: {n} ({st})" for n, st in sorted(names.items())] or ["shares_card: none"]
-        dark = WORKER in cur and self._state(cur[WORKER]) == "running" and names.get(SHARING_ENGINE) != "running"
-        out.append(f"router_aliases_dark: {ROUTER_ALIAS}, switchyard-capable-tier" if dark else "router_aliases_dark: none")
+        stop = any(s["name"] == STOPPABLE_ENGINE and s["kind"] == "exclusive" for s in sharers)
+        out.append(f"stoppable: {STOPPABLE_ENGINE} (running)" if stop else "stoppable: none")
+        excl_running = any(self._state(cur.get(n)) == "running" for n in excl)
+        dark = WORKER in cur and self._state(cur[WORKER]) == "running" and not excl_running
+        out.append(f"router_aliases_dark: {', '.join(self.policy.dark)}" if dark and self.policy.dark
+                   else "router_aliases_dark: none")
         return out
 
     async def _up_mock(self) -> ActionResult:
@@ -1305,6 +1465,7 @@ class DynamoAdapter(SystemAdapter):
         return ActionResult(ok=r.returncode == 0, output=redact((r.stdout + r.stderr).strip())[-2000:])
 
     async def _up_or_restart(self, action_id: str, params: dict[str, object]) -> ActionResult:
+        pol = self.policy
         cur = await self._inspect([WORKER, MOCKER])
         worker_running = WORKER in cur and self._state(cur[WORKER]) == "running"
         out: list[str] = []
@@ -1318,22 +1479,35 @@ class DynamoAdapter(SystemAdapter):
             if err:
                 return ActionResult(ok=False, output=err, problems=[Problem(
                     severity="error", code="dynamo.preflight.failed", message=err)])
-            if sharers:
-                want_stop = params.get("stop_sharing_engine") is True
-                named = [s for s in sharers if s["name"] == SHARING_ENGINE]
-                others = [s for s in sharers if s["name"] != SHARING_ENGINE]
-                if not want_stop or not named or others:
-                    why = "; ".join(self._describe(s) for s in sharers)
-                    hint = "" if want_stop and named else f" Re-run with stop_sharing_engine=true to stop exactly {SHARING_ENGINE}."
-                    if others:
-                        hint = " Other containers on the card are never stopped by the console: " + ", ".join(
-                            s["name"] for s in others) + "."
-                    return ActionResult(ok=False, output=f"refused: the Workstation card is in use by {why}.{hint}",
+            blocking, stoppable, unknown, _coexisting, _ignored = self._split(sharers)
+            if blocking:
+                # Never `docker stop` here: the default model's start order (and the engines it bounces) belongs to
+                # its own script, so the remedy is the configured switch command, run by the operator.
+                why = "; ".join(self._describe(s) for s in blocking)
+                return ActionResult(ok=False, output=f"refused: exclusive engine(s) on the worker's card: {why}. The "
+                                    f"console never stops them; switch to Dynamo with: {pol.start}",
+                                    problems=[Problem(severity="error", code="dynamo.up.exclusive_engine",
+                                                      message=f"card held by {why}", fix=pol.start)])
+            if unknown:
+                why = "; ".join(self._describe(s) for s in unknown)
+                first = unknown[0]["name"]
+                return ActionResult(ok=False, output=f"refused: the worker's card is in use by {why}, which the console "
+                                    "does not know (not in the exclusive, coexisting or ignored lists). It is never "
+                                    "stopped by the console; find out what it is first. If it fits beside the worker, "
+                                    "add it to the dynamo_coexisting_engines setting.",
+                                    problems=[Problem(severity="error", code="dynamo.up.card_in_use",
+                                                      message=f"card in use by {why} (unknown to the console)",
+                                                      fix=f"docker inspect --format '{{{{.Config.Image}}}}' {first}   "
+                                                          "# identify it before stopping anything")])
+            if stoppable:
+                if params.get("stop_sharing_engine") is not True:
+                    why = "; ".join(self._describe(s) for s in stoppable)
+                    return ActionResult(ok=False, output=f"refused: the worker's card is in use by {why}. Re-run with "
+                                        f"stop_sharing_engine=true to stop exactly {STOPPABLE_ENGINE}.",
                                         problems=[Problem(severity="error", code="dynamo.up.card_in_use",
                                                           message=f"card in use by {why}",
-                                                          fix="run `up` with stop_sharing_engine=true" if not others else
-                                                          "docker stop " + others[0]["name"])])
-                stopped = await self._stop_sharing_engine(named[0])
+                                                          fix="run `up` with stop_sharing_engine=true")])
+                stopped = await self._stop_stoppable(stoppable[0])
                 out.append(stopped.output)
                 if not stopped.ok:
                     return ActionResult(ok=False, output="\n".join(out), problems=stopped.problems)
@@ -1351,11 +1525,11 @@ class DynamoAdapter(SystemAdapter):
             severity="error", code="dynamo.up.unhealthy", message=detail,
             fix=f"docker logs --tail 80 {WORKER}")])
 
-    async def _stop_sharing_engine(self, s: dict[str, Any]) -> ActionResult:
-        """Stops exactly SHARING_ENGINE: name + compose labels verified, `docker compose down` in ITS project, no -v."""
+    async def _stop_stoppable(self, s: dict[str, Any]) -> ActionResult:
+        """Stops exactly STOPPABLE_ENGINE: name + compose labels verified, a compose `down` in ITS project, volumes kept."""
         cfg = str(s["config"]).split(",")[0].strip()
         workdir = str(s["workdir"])
-        bad = (s["name"] != SHARING_ENGINE or s["project"] != SHARING_PROJECT or s["service"] != SHARING_SERVICE
+        bad = (s["name"] != STOPPABLE_ENGINE or s["project"] != STOPPABLE_PROJECT or s["service"] != STOPPABLE_SERVICE
                or not cfg.startswith("/") or Path(cfg).name not in _COMPOSE_NAMES
                or str(Path(cfg).parent) != workdir)
         if bad:
@@ -1364,11 +1538,11 @@ class DynamoAdapter(SystemAdapter):
                                                   message=f"{s['name']} failed name/label verification",
                                                   fix=f"stop it by hand: docker stop {s['name']}")])
         r = await self.ctx.runner.run(["docker", "compose", "-f", cfg, "down"], timeout=180.0, cwd=Path(workdir))
-        again = (await self._inspect([SHARING_ENGINE])).get(SHARING_ENGINE)
+        again = (await self._inspect([STOPPABLE_ENGINE])).get(STOPPABLE_ENGINE)
         ok = r.returncode == 0 and self._state(again) != "running"
-        return ActionResult(ok=ok, output=f"stopped {SHARING_ENGINE}: " + redact((r.stdout + r.stderr).strip())[-600:],
+        return ActionResult(ok=ok, output=f"stopped {STOPPABLE_ENGINE}: " + redact((r.stdout + r.stderr).strip())[-600:],
                             problems=[] if ok else [Problem(severity="error", code="dynamo.stop.failed",
-                                                            message=f"{SHARING_ENGINE} is still running")])
+                                                            message=f"{STOPPABLE_ENGINE} is still running")])
 
     # ── interact ────────────────────────────────────────────────────────────────────────────
     def playground(self) -> PlaygroundSpec | None:

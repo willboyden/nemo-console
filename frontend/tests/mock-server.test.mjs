@@ -42,11 +42,14 @@ test('a down Dynamo is 200 with health=down and metrics.available=false (never a
   const m = await (await get('/systems/dynamo/metrics')).json(); assert.equal(m.available, false); assert.deepEqual(m.points, []); assert.ok(m.error);
   assert.equal((await post('/systems/dynamo/playground/chat', { model: 'unsloth/Qwen3.8-27B-NVFP4', messages: [{ role: 'user', content: 'x' }] })).status, 503);
   await dev(`${base}/__dev/scenario?dynamo=loading`); const ld = await (await get('/systems/dynamo/status')).json(); assert.equal(ld.health, 'degraded'); assert.match(ld.summary, /loading/i);
+  await dev(`${base}/__dev/scenario?dynamo=off`); const off = await (await get('/systems/dynamo/status')).json();
+  assert.equal(off.health, 'off'); assert.deepEqual(off.problems.map((p) => p.severity), ['info']);
+  assert.equal((await (await get('/health')).json()).systems.dynamo, 'off');
   await dev(`${base}/__dev/scenario?dynamo=up`);
 });
 test('config: read, validate (authoritative flag), 409 on stale sha, rollback outcome, read-only 403, secret refusal', async () => {
   const f = await (await get('/systems/switchyard/config/routes')).json(); assert.equal(f.sha256, sha(f.content)); assert.equal(f.spec.editable, true);
-  const bad = f.content.replace('capable_target = "qwen-27b-1m"', 'capable_target = "nope"');
+  const bad = f.content.replace('capable_target = "flash-next-auto"', 'capable_target = "nope"');
   const v = await (await post('/systems/switchyard/config/routes/validate', { content: bad })).json(); assert.equal(v.ok, false); assert.match(v.diagnostics[0].message, /unknown target nope/); assert.ok(v.diagnostics[0].line > 0); assert.equal(v.authoritative, true);
   const rv = await (await post('/systems/relay/config/routes/validate', { content: 'schema_version = 1\n' })).json(); assert.equal(rv.authoritative, false); assert.ok(rv.note);
   let r = await post('/systems/switchyard/config/routes/apply', { content: f.content + '# x\n', base_sha256: 'deadbeef', restart: true, confirm: true }); assert.equal(r.status, 409);

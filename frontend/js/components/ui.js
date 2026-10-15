@@ -4,6 +4,7 @@ import { t } from '../i18n.js';
 import { describeError } from '../errors.js';
 import { isAdmin } from '../app-context.js';
 import { toast } from './toast.js';
+import { healthKind } from '../status-util.js';
 
 export const badge = (text, kind = 'muted', title) => h('span', { class: `badge ${kind}`, title }, text);
 export function btn(label, { icon: ic, kind = '', size = '', onClick, title, type = 'button', disabled, ariaLabel } = {}) {
@@ -19,8 +20,7 @@ export const card = (title, body, actions, { id } = {}) => h('section', { class:
   title || actions ? h('header', { class: 'card-head' }, h('h2', title), actions ? h('div', { class: 'row gap' }, actions) : null) : null,
   h('div', { class: 'card-body' }, body));
 
-const HEALTH_KIND = { up: 'ok', degraded: 'warn', down: 'bad', unknown: 'muted' };
-export const healthBadge = (hl) => h('span', { class: `badge ${HEALTH_KIND[hl] || 'muted'}` }, h('span', { class: `dot ${hl}`, 'aria-hidden': 'true' }), t(`health.${hl}`) === `health.${hl}` ? hl : t(`health.${hl}`));
+export const healthBadge = (hl) => h('span', { class: `badge ${healthKind(hl)}` }, h('span', { class: `dot ${hl}`, 'aria-hidden': 'true' }), t(`health.${hl}`) === `health.${hl}` ? hl : t(`health.${hl}`));
 const COMP_KIND = { running: 'ok', stopped: 'muted', failed: 'bad', absent: 'warn', unknown: 'muted' };
 export const compBadge = (s) => badge(t(`comp.${s}`) === `comp.${s}` ? s : t(`comp.${s}`), COMP_KIND[s] || 'muted');
 const SEV_KIND = { info: 'info', warn: 'warn', error: 'bad' };

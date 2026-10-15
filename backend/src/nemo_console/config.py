@@ -46,6 +46,21 @@ DEFAULT_ENGINE_START = {
     "ai-lab-sglang-flashnext-flashnext-1": "inference/sglang-flashnext/flashnext.sh up",
     "ai-lab-vllm-qwen38-vllm-1": "scripts/use-model.sh qwen3.8-27b-1m   # exclusive: this also stops flashnext",
 }
+# Dynamo card model (2026-10-06, addendum 9.4). In the author's deployment Dynamo is OPT-IN and off by default: the
+# default model (qwen3.8-flash-next, SGLang TP2) holds ~60 GB of BOTH cards, so the worker (0.5 x the Workstation card)
+# cannot start beside it. Commands run from the repo root and are DISPLAY ONLY (problem fixes); the console never runs
+# them. Lists REPLACE the defaults when set (NEMO_CONSOLE_DYNAMO_EXCLUSIVE_ENGINES='["a","b"]').
+DEFAULT_DYNAMO_START = "scripts/use-model.sh qwen3.8-27b-dynamo"      # frees the card in the right order, starts Dynamo
+DEFAULT_MODEL_START = "scripts/use-model.sh qwen3.8-flash-next"       # stops Dynamo, restores the default model
+# running on the worker's card, these cannot coexist with it (VRAM): `up` is refused while one runs
+DEFAULT_DYNAMO_EXCLUSIVE = ["ai-lab-sglang-flashnext-flashnext-1", "ai-lab-vllm-qwen38-vllm-1"]
+# allowed beside the worker on its card (ollama holds no VRAM until a model loads)
+DEFAULT_DYNAMO_COEXISTING = ["ai-lab-vllm-nemotron-lightning-nemotron-lightning-1", "ai-lab-ollama-ollama-1"]
+# GPU-visible but holding no meaningful VRAM (monitoring)
+DEFAULT_DYNAMO_IGNORED = ["ai-lab-observability-dcgm-exporter-1"]
+# what stops answering while Dynamo holds the card (the exclusive engines are stopped then); named in dynamo.holds_card
+DEFAULT_DYNAMO_DARK = ["qwen3.8-flash-next", "qwen3.8-flash-next-quick", "auto-local capable tier (Switchyard and Relay)",
+                       "auto-flashnext capable tier", "direct-flashnext (Switchyard and Relay)"]
 DEFAULT_KEY_ENV = {"switchyard": "LITELLM_API_KEY"}
 REPO_MARKER = Path("inference") / "dynamo" / "docker-compose.yml"
 
@@ -86,6 +101,15 @@ class Settings(BaseSettings):
     engine_probes: dict[str, str] = dict(DEFAULT_ENGINE_PROBES)
     # engine container -> start command shown as the capable_dark fix (display only; the console never runs it)
     engine_start: dict[str, str] = dict(DEFAULT_ENGINE_START)
+
+    # Dynamo card model (see DEFAULT_DYNAMO_* above). opt_in: no running Dynamo container = health "off", not "down"
+    dynamo_opt_in: bool = True
+    dynamo_start: str = DEFAULT_DYNAMO_START
+    default_model_start: str = DEFAULT_MODEL_START
+    dynamo_exclusive_engines: list[str] = list(DEFAULT_DYNAMO_EXCLUSIVE)
+    dynamo_coexisting_engines: list[str] = list(DEFAULT_DYNAMO_COEXISTING)
+    dynamo_ignored_containers: list[str] = list(DEFAULT_DYNAMO_IGNORED)
+    dynamo_dark_while_held: list[str] = list(DEFAULT_DYNAMO_DARK)
 
     trust_loopback: bool = False       # opt-in: any local process (and a same-host proxy) would otherwise be admin
     background_tasks: bool = True

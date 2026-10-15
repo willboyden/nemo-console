@@ -67,7 +67,8 @@ from nemo_console.domain.models import (
 UNIT = "nemo-relay-gateway.service"
 DEFAULT_URL = "http://127.0.0.1:4040"
 DEFAULT_LITELLM_URL = "http://127.0.0.1:4000"   # the gateway's upstream; ctx.urls["litellm"] overrides it
-DEFAULT_ROUTE_IDS = ["auto-local", "direct-27b", "direct-lightning"]
+# Fallback only (the playground reads route ids from clients/nemo-relay/routes.toml when it can); mirrors that file.
+DEFAULT_ROUTE_IDS = ["auto-local", "direct-27b", "direct-flashnext", "direct-lightning"]
 
 MAX_CONFIG_BYTES = 256 * 1024
 TAIL_WINDOW_BYTES = 4 * 1024 * 1024          # max bytes read from the end of an ATOF file per call

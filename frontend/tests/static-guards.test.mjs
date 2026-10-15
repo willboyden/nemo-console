@@ -25,7 +25,7 @@ test('every literal t("key") and key-like string used in js/ exists in en.json',
   assert.deepEqual(missing, []);
 });
 test('dynamic key families are complete', () => {
-  const fam = { 'nav.': ['overview', 'switchyard', 'relay', 'dynamo', 'audit', 'settings'], 'sys.': ['switchyard', 'relay', 'dynamo'], 'health.': ['up', 'degraded', 'down', 'unknown'], 'comp.': ['running', 'stopped', 'failed', 'absent', 'unknown'],
+  const fam = { 'nav.': ['overview', 'switchyard', 'relay', 'dynamo', 'audit', 'settings'], 'sys.': ['switchyard', 'relay', 'dynamo'], 'health.': ['up', 'degraded', 'down', 'unknown', 'off'], 'comp.': ['running', 'stopped', 'failed', 'absent', 'unknown'],
     'kind.': ['container', 'systemd', 'process', 'http'], 'sev.': ['info', 'warn', 'error'], 'danger.': ['safe', 'disruptive', 'destructive'], 'postcheck.': ['healthy', 'unhealthy', 'skipped'], 'window.': ['15m', '1h', '24h'],
     'tokens.': ['prompt', 'completion', 'reasoning', 'cached', 'total'], 'act.danger_': ['disruptive', 'destructive'], 'dyn.effect_': ['up', 'down', 'restart'], 'ev.state_': ['live', 'connecting', 'reconnecting', 'paused'], 'relay.att_': ['verified', 'failed', 'unknown', 'unreported', 'reported'],
     'diff.': ['add', 'del', 'eq'], 'role.': ['admin', 'viewer'], 'chart.dyn.': ['ttft', 'itl', 'inflight', 'kv'], 'err.': ['401', '403', '409', '413', '415', '421', '429', '502', '503', 'network'], 'auth.': ['none', 'bearer', 'forwarded'] };

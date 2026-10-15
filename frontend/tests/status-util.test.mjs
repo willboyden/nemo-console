@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeRole, auditLabel, isLoading, attestation, healthChanges, parsePreflight } from '../js/status-util.js';
+import { normalizeRole, auditLabel, isLoading, attestation, healthChanges, parsePreflight, healthKind, healthGlyph, HEALTH_KIND } from '../js/status-util.js';
 import { extractDelta, chatBody, servedBy } from '../js/stream-text.js';
 import { clampMaxTokens } from '../js/format.js';
 
@@ -53,4 +53,25 @@ test('normalizeRole covers admin, viewer, public, and the absent/unknown fallbac
 
 test('attestation falls back to the value in the summary line when there is no component', () => {
   assert.deepEqual(attestation({ components: [], summary: 'gateway up · attestation=signature_required' }), { state: 'reported', detail: '', value: 'signature_required' });
+});
+
+test('health "off" (opt-in, stopped on purpose) is neutral everywhere: badge, glyph, loading', () => {
+  assert.equal(healthKind('off'), 'muted'); assert.equal(healthKind('down'), 'bad'); assert.equal(healthKind('nope'), 'muted');
+  assert.deepEqual(Object.keys(HEALTH_KIND).sort(), ['degraded', 'down', 'off', 'unknown', 'up']);
+  assert.equal(healthGlyph('off'), '○'); assert.notEqual(healthGlyph('off'), healthGlyph('down')); assert.notEqual(healthGlyph('off'), healthGlyph('unknown'));
+  assert.equal(isLoading({ health: 'off', summary: 'off (opt-in): loading nothing', components: [], problems: [] }), false);
+});
+test('parsePreflight: every sharer, the backend-named stoppable engine only, prose never mistaken for machine keys', () => {
+  const out = ['Dynamo worker GPU: pinned by UUID in the compose; up/down of Dynamo touches no other container.',
+    'While Dynamo holds the card these are dark (qwen3.8-flash-next, x). Restore the default model with `y`.',
+    'shares_card: ai-lab-sglang-flashnext-flashnext-1 (running)', 'shares_card: ai-lab-vllm-qwen38-vllm-1 (stopped)',
+    'stoppable: none', 'router_aliases_dark: none'].join('\n');
+  const p = parsePreflight(out);
+  assert.deepEqual(p.sharers, [{ name: 'ai-lab-sglang-flashnext-flashnext-1', running: true }, { name: 'ai-lab-vllm-qwen38-vllm-1', running: false }]);
+  assert.equal(p.stoppable, null);                 // the default model is never offered for stopping
+  assert.deepEqual(p.darkAliases, []);             // "none" is not an alias
+  const q = parsePreflight('shares_card: ai-lab-vllm-qwen38-vllm-1 (running)\nstoppable: ai-lab-vllm-qwen38-vllm-1 (running)\nrouter_aliases_dark: none');
+  assert.deepEqual(q.stoppable, { name: 'ai-lab-vllm-qwen38-vllm-1', running: true });
+  const r = parsePreflight('shares_card: none\nstoppable: none\nrouter_aliases_dark: qwen3.8-flash-next, direct-flashnext (Switchyard and Relay)');
+  assert.deepEqual(r.sharers, []); assert.equal(r.container, null); assert.deepEqual(r.darkAliases, ['qwen3.8-flash-next', 'direct-flashnext']);
 });

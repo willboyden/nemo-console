@@ -140,7 +140,8 @@ def test_playground_falls_back_when_routes_unreadable(make_adapter) -> None:  # 
     a, _ = make_adapter()
     a.config_path("routes").write_text("[[[ broken")
     p = a.playground()
-    assert p is not None and p.models == ["auto-local", "direct-27b", "direct-lightning"]
+    # mirrors clients/nemo-relay/routes.toml, which also has direct-flashnext (the default engine, passthrough)
+    assert p is not None and p.models == ["auto-local", "direct-27b", "direct-flashnext", "direct-lightning"]
 
 
 async def test_plugin_ids_starting_with_dash_are_never_passed_and_dashdash_precedes_ids(make_adapter) -> None:  # type: ignore[no-untyped-def]

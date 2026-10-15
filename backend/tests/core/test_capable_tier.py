@@ -158,11 +158,13 @@ async def test_topology_and_status_share_one_probe(env: Env) -> None:
         await c.get("/api/v1/systems/switchyard/status")
         topo = (await c.get("/api/v1/topology")).json()
     nodes = {n["id"]: n for n in topo["nodes"]}
-    assert nodes["sglang-flashnext"]["health"] == "down" and nodes["vllm-qwen38"]["health"] == "down"
+    # the default engine stopped is a fault (red); the opt-in 27B stopped is just off
+    assert nodes["sglang-flashnext"]["health"] == "down" and nodes["vllm-qwen38"]["health"] == "off"
     assert "both cards" in nodes["sglang-flashnext"]["label"]
     assert any(e["src"] == "litellm" and e["dst"] == "sglang-flashnext" and e["active"] is False for e in topo["edges"])
     inspected = sorted(x[-1] for x in env.runner.calls if x[:2] == ["docker", "inspect"])
-    assert inspected == sorted([FN_NAME, NAME])               # one call per container: status and topology share it
+    # one call per container: status and topology share it (lightning is probed by the topology only)
+    assert inspected == sorted([FN_NAME, NAME, "ai-lab-vllm-nemotron-lightning-nemotron-lightning-1"])
 
 
 async def test_routes_listed_and_generic_hint_for_unknown_engine(tmp_path: Path) -> None:

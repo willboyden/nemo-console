@@ -98,13 +98,34 @@ async def test_capable_tier_dark_problem(adapter: SwitchyardAdapter, mock: respx
 
 
 async def test_capable_tier_failing_now_between_polls(adapter: SwitchyardAdapter, mock: respx.MockRouter) -> None:
+    # `calls` counts SUCCESSES (calls + errors = attempts; fixture: 72 + 1 == total_requests 73)
     stats = json.loads(fx("stats.json"))
+    assert sum(m["calls"] + m["errors"] for m in stats["models"].values()) == stats["total_requests"]
     stats["models"]["qwen3.8-27b-1m"].update(calls=100, errors=1)
     mock.get(f"{BASE}/v1/stats").respond(200, json=stats)
     assert (await adapter.status()).problems == []
-    stats["models"]["qwen3.8-27b-1m"].update(calls=103, errors=4)     # only errors since last poll
+    stats["models"]["qwen3.8-27b-1m"].update(calls=103, errors=4)     # 3 new successes AND 3 new errors: still serving
     mock.get(f"{BASE}/v1/stats").respond(200, json=stats)
-    assert any(p.code == "switchyard.capable_tier.upstream_errors" for p in (await adapter.status()).problems)
+    assert (await adapter.status()).problems == []
+    stats["models"]["qwen3.8-27b-1m"].update(calls=103, errors=6)     # only errors since the last poll
+    mock.get(f"{BASE}/v1/stats").respond(200, json=stats)
+    p = next(p for p in (await adapter.status()).problems if p.code == "switchyard.capable_tier.upstream_errors")
+    assert "(6 errors, 103 successes)" in p.message
+
+
+async def test_capable_tier_with_zero_successes_is_flagged(adapter: SwitchyardAdapter, mock: respx.MockRouter) -> None:
+    # live 2026-10-06: auto-cluster's capable target had calls 0, errors 2 (it never succeeded); the old rule needed calls > 0
+    stats = json.loads(fx("stats.json"))
+    stats["models"]["cluster/glm-5.3-flash"] = {"calls": 0, "errors": 2}
+    mock.get(f"{BASE}/v1/stats").respond(200, json=stats)
+    st = await adapter.status()
+    p = next(p for p in st.problems if p.code == "switchyard.capable_tier.upstream_errors")
+    assert "cluster/glm-5.3-flash" in p.message and "auto-cluster" in p.message and "(2 errors, 0 successes)" in p.message
+    assert st.health == "degraded"
+    # half the attempts failing is flagged; fewer is not (13 successes, 1 error is the healthy fixture)
+    stats["models"]["cluster/glm-5.3-flash"] = {"calls": 2, "errors": 2}
+    mock.get(f"{BASE}/v1/stats").respond(200, json=stats)
+    assert any("cluster/glm-5.3-flash" in p.message for p in (await adapter.status()).problems)
 
 
 async def test_config_drift_problem(adapter: SwitchyardAdapter, routes_dir: Path) -> None:

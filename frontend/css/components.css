@@ -15,7 +15,7 @@
 button.link { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .badge { display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-sm); font-weight: 500; border: 1px solid transparent; white-space: nowrap; }
 .badge.muted { background: var(--surface-3); color: var(--text-2); } .badge.ok { background: var(--ok-soft); color: var(--ok); } .badge.warn { background: var(--warn-soft); color: var(--warn); } .badge.bad { background: var(--bad-soft); color: var(--bad); } .badge.info { background: var(--info-soft); color: var(--info); }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; display: inline-block; } .dot.down { border-radius: 2px; } .dot.degraded { border-radius: 0; clip-path: polygon(50% 0, 100% 100%, 0 100%); } .dot.unknown { background: transparent; border: 2px solid currentColor; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; display: inline-block; } .dot.down { border-radius: 2px; } .dot.degraded { border-radius: 0; clip-path: polygon(50% 0, 100% 100%, 0 100%); } .dot.unknown { background: transparent; border: 2px solid currentColor; } .dot.off { height: 3px; border-radius: 2px; }
 .field { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; }
 .field > label, label.lbl { font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); }
 input[type=text], input[type=search], input[type=number], input[type=password], select, textarea { width: 100%; min-height: 34px; padding: 6px 10px; background: var(--bg); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--r1); font: inherit; }
@@ -57,7 +57,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .fix-cmd { flex: 1 1 260px; min-width: 0; padding: 4px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r1); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .status-summary { margin: 0; }
 .comp-chip { display: inline-flex; align-items: center; gap: var(--s1); font-size: var(--fs-sm); }
-.tile.down { border-color: var(--bad); } .tile.degraded { border-color: var(--warn); }
+.tile.down { border-color: var(--bad); } .tile.degraded { border-color: var(--warn); } .tile.off { border-style: dashed; }
 dl.facts { display: grid; gap: var(--s2); margin: 0; } .kv { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: var(--s3); } .kv dt { color: var(--text-2); } .kv dd { margin: 0; overflow-wrap: anywhere; }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: var(--s3); }
 .stat { display: flex; flex-direction: column; padding: var(--s3); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2); min-width: 0; }
@@ -85,7 +85,7 @@ i.sw.s1 { background: var(--c1); } i.sw.s2 { background: var(--c2); } i.sw.s3 { 
 svg.topology { display: block; width: 100%; min-width: 640px; height: auto; }
 .topology .node-box { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.5; }
 .topology .node-label { fill: var(--text); font: 600 12px var(--font); } .topology .node-health { fill: var(--text-2); font: 11px var(--font); }
-.topology .node.up .node-box { stroke: var(--ok); } .topology .node.degraded .node-box { stroke: var(--warn); stroke-width: 2.5; } .topology .node.down .node-box { stroke: var(--bad); stroke-width: 2.5; fill: var(--bad-soft); } .topology .node.unknown .node-box { stroke-dasharray: 2 3; }
+.topology .node.up .node-box { stroke: var(--ok); } .topology .node.degraded .node-box { stroke: var(--warn); stroke-width: 2.5; } .topology .node.down .node-box { stroke: var(--bad); stroke-width: 2.5; fill: var(--bad-soft); } .topology .node.unknown .node-box { stroke-dasharray: 2 3; } .topology .node.off .node-box { stroke-dasharray: 6 4; } .topology .node.off .node-label { fill: var(--text-2); }
 .topology .node.up .node-health { fill: var(--ok); } .topology .node.degraded .node-health { fill: var(--warn); } .topology .node.down .node-health { fill: var(--bad); }
 .topology .node.managed .node-box { fill: var(--accent-soft); }
 .topology a:hover .node-box, .topology a:focus-visible .node-box { stroke-width: 3; }

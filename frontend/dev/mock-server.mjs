@@ -32,7 +32,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // ---------------------------------------------------------------- state
 const state = {
   role: process.env.MOCK_ROLE === 'viewer' ? 'viewer' : 'admin',
-  dynamo: process.env.MOCK_DYNAMO || 'up',       // up | loading | down
+  dynamo: process.env.MOCK_DYNAMO || 'up',       // up | loading | down | off (opt-in, stopped on purpose)
   vllmRunning: false,                             // the container that shares the Workstation card
   dynamoSince: now() - 5400,
   failNext: null,                                 // {status, n}
@@ -77,7 +77,7 @@ const looksSecret = (s) => /\bsk-[A-Za-z0-9]{12,}|Bearer\s+[A-Za-z0-9._-]{12,}|a
 
 // ---------------------------------------------------------------- system status
 const dynState = () => state.dynamo;
-function health(id) { if (id === 'relay') return 'degraded'; if (id === 'dynamo') return dynState() === 'up' ? 'up' : dynState() === 'loading' ? 'degraded' : 'down'; return 'up'; }
+function health(id) { if (id === 'relay') return 'degraded'; if (id === 'dynamo') return dynState() === 'up' ? 'up' : dynState() === 'loading' ? 'degraded' : dynState() === 'off' ? 'off' : 'down'; return 'up'; }
 function status(id) {
   const checked_at = now();
   if (id === 'switchyard') return { system: id, health: 'up', version: '0.3.0', summary: 'Routing on :4010; 2 of 4 tiers reachable (capable tier qwen3.8-27b-1m is dark)',
@@ -93,6 +93,7 @@ function status(id) {
   const base = { system: 'dynamo', version: '1.5.0', endpoints: [{ name: 'frontend', url: 'http://127.0.0.1:8020/v1', role: 'api', auth: 'none' }, { name: 'worker metrics', url: 'http://ai-lab-dynamo-dynamo-worker-1:8081/metrics', role: 'metrics', auth: 'none' }], checked_at };
   if (s === 'up') return { ...base, health: 'up', summary: 'Serving unsloth/Qwen3.8-27B-NVFP4 on :8020 (worker up 1h30m)', components: [{ kind: 'container', name: 'ai-lab-dynamo-dynamo-frontend-1', state: 'running', image: 'nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0', detail: 'healthy' }, { kind: 'container', name: 'ai-lab-dynamo-dynamo-worker-1', state: 'running', image: 'nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0', detail: 'healthy, registered 1 model' }], problems: [{ severity: 'info', code: 'dynamo.shares_card', message: 'Dynamo holds the Workstation card: router alias qwen3.8-27b-1m is dark until Dynamo is down.', fix: 'cd inference/dynamo && docker compose down' }] };
   if (s === 'loading') return { ...base, health: 'degraded', summary: 'Worker loading model weights (cold start takes about 4 minutes)', components: [{ kind: 'container', name: 'ai-lab-dynamo-dynamo-frontend-1', state: 'running', detail: 'healthy, no worker registered yet' }, { kind: 'container', name: 'ai-lab-dynamo-dynamo-worker-1', state: 'running', detail: 'loading weights 62%' }], problems: [{ severity: 'info', code: 'dynamo.worker.loading', message: 'The worker is still loading. Requests return 503 until it registers.', fix: 'docker logs -f ai-lab-dynamo-dynamo-worker-1' }] };
+  if (s === 'off') return { ...base, health: 'off', summary: 'off (opt-in): no Dynamo container is running', components: [{ kind: 'container', name: 'ai-lab-dynamo-dynamo-frontend-1', state: 'stopped' }, { kind: 'container', name: 'ai-lab-dynamo-dynamo-worker-1', state: 'stopped', detail: 'exited (code 1)' }], problems: [{ severity: 'info', code: 'dynamo.off', message: 'Dynamo is opt-in and off: no frontend, worker or mocker container is running or restarting.', fix: 'scripts/use-model.sh qwen3.8-27b-dynamo' }] };
   return { ...base, health: 'down', summary: 'Dynamo is not running', components: [{ kind: 'container', name: 'ai-lab-dynamo-dynamo-frontend-1', state: 'stopped', detail: 'exited 12 min ago' }, { kind: 'container', name: 'ai-lab-dynamo-dynamo-worker-1', state: 'absent' }], problems: [{ severity: 'error', code: 'dynamo.down', message: 'The frontend on :8020 does not answer and no worker container exists.', fix: 'cd inference/dynamo && docker compose up -d' }] };
 }
 const SYSTEMS = ['switchyard', 'relay', 'dynamo'];
@@ -247,11 +248,11 @@ function runAction(system, id, params) {
   }
   if (id === 'preflight') {
     const shares = `ai-lab-vllm-qwen38-vllm-1 (${state.vllmRunning ? 'running' : 'stopped'})`;
-    return R(true, `dynamo_state: ${state.dynamo}\nshares_card: ${shares}\nrouter_aliases_dark: qwen3.8-27b-1m, switchyard capable tier (auto-local cannot escalate)\nother_cards: untouched (sglang-flashnext keeps running on the Max-Q card)\nnote: down/up of Dynamo does not stop any container except an explicit stop_sharing_engine`,
+    return R(true, `dynamo_state: ${state.dynamo}\nshares_card: ${shares}\nstoppable: ${state.vllmRunning ? 'ai-lab-vllm-qwen38-vllm-1 (running)' : 'none'}\nrouter_aliases_dark: qwen3.8-27b-1m, switchyard capable tier (auto-local cannot escalate)\nother_cards: untouched (sglang-flashnext keeps running on the Max-Q card)\nnote: down/up of Dynamo does not stop any container except an explicit stop_sharing_engine`,
       state.vllmRunning ? [{ severity: 'warn', code: 'dynamo.preflight.sharing_running', message: 'ai-lab-vllm-qwen38-vllm-1 is running on the Workstation card; Up is refused unless it is stopped.', fix: 'docker stop ai-lab-vllm-qwen38-vllm-1   # or tick "stop the engine sharing the card" on Up' }] : []);
   }
   if (id === 'up' || id === 'restart') {
-    if (id === 'up' && state.dynamo !== 'down') return R(true, 'already running; nothing to do');
+    if (id === 'up' && !['down', 'off'].includes(state.dynamo)) return R(true, 'already running; nothing to do');
     if (id === 'up' && state.vllmRunning && !params.stop_sharing_engine) return R(false, 'refused: ai-lab-vllm-qwen38-vllm-1 shares the card and is running', [{ severity: 'error', code: 'dynamo.up.refused_sharing', message: 'Up refused: the engine sharing the Workstation card is running.', fix: 'Re-run Up with stop_sharing_engine=true, or: docker stop ai-lab-vllm-qwen38-vllm-1' }]);
     if (id === 'up' && state.vllmRunning) { state.vllmRunning = false; }
     goLoading();
@@ -425,7 +426,7 @@ function dev(req, res, url) {
   const q = url.searchParams, p = url.pathname;
   // These helpers mutate state over GET, so they need the custom header a cross-site <img>/form cannot send (it forces a CORS preflight).
   if (req.headers['x-console'] !== '1') return err(res, 403, 'csrf', 'missing X-Console: 1 header');
-  if (p === '/__dev/scenario') { const d = q.get('dynamo'); if (['up', 'loading', 'down'].includes(d)) { state.dynamo = d; if (d === 'loading') goLoading(); } return json(res, 200, { dynamo: state.dynamo }); }
+  if (p === '/__dev/scenario') { const d = q.get('dynamo'); if (['up', 'loading', 'down', 'off'].includes(d)) { state.dynamo = d; if (d === 'loading') goLoading(); } return json(res, 200, { dynamo: state.dynamo }); }
   if (p === '/__dev/vllm') { state.vllmRunning = q.get('run') === '1'; return json(res, 200, { vllmRunning: state.vllmRunning }); }
   if (p === '/__dev/role') { state.role = ['viewer', 'public'].includes(q.get('set')) ? q.get('set') : 'admin'; return json(res, 200, { role: state.role }); }
   if (p === '/__dev/touch') { const f = files['switchyard/routes']; f.content += `\n# edited on disk by another process at ${new Date().toISOString()}\n`; f.mtime = now(); return json(res, 200, { sha256: sha(f.content) }); }

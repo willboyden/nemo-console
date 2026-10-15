@@ -3,6 +3,7 @@
 import { h } from '../dom.js';
 import { t } from '../i18n.js';
 import { layoutTopology, describeTopology, wrapLabel } from '../topology-layout.js';
+import { healthGlyph } from '../status-util.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 function s(tag, attrs, ...kids) {
@@ -11,7 +12,6 @@ function s(tag, attrs, ...kids) {
   for (const k of kids.flat()) if (k != null) el.append(k instanceof Node ? k : document.createTextNode(String(k)));
   return el;
 }
-const GLYPH = { up: '●', degraded: '▲', down: '✕', unknown: '?' };
 const ROUTE = { switchyard: '#/switchyard', relay: '#/relay', dynamo: '#/dynamo' };
 
 export function topologyGraph(topology) {
@@ -27,7 +27,7 @@ export function topologyGraph(topology) {
       s('rect', { x: n.x, y: n.y, width: n.w, height: n.h, rx: 8, class: 'node-box' }),
       s('title', null, n.label),
       ...(() => { const ls = wrapLabel(n.label); return [...ls.map((l, i) => s('text', { x: n.x + n.w / 2, y: n.y + 17 + i * 13, 'text-anchor': 'middle', class: 'node-label' }, l)),
-        s('text', { x: n.x + n.w / 2, y: n.y + 17 + ls.length * 13 + 3, 'text-anchor': 'middle', class: 'node-health' }, `${GLYPH[hl] || '?'} ${t(`health.${hl}`)}`)]; })(),
+        s('text', { x: n.x + n.w / 2, y: n.y + 17 + ls.length * 13 + 3, 'text-anchor': 'middle', class: 'node-health' }, `${healthGlyph(hl)} ${t(`health.${hl}`)}`)]; })(),
     ];
     const g = s('g', { class: `node ${n.kind} ${hl}${n.system ? ' managed' : ''}` }, ...inner);
     if (n.system && ROUTE[n.system]) { const a = s('a', { href: ROUTE[n.system], 'aria-label': t('topo.node_link', { name: n.label, health: t(`health.${hl}`) }) }); a.append(g); return a; }

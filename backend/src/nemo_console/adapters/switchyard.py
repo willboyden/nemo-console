@@ -253,7 +253,7 @@ class SwitchyardAdapter(SystemAdapter):
     def __init__(self, ctx: AdapterContext) -> None:
         super().__init__(ctx)
         self._route_ids: list[str] = []                       # last live /v1/models ids
-        self._prev_model_counts: dict[str, tuple[int, int]] = {}   # model -> (calls, errors)
+        self._prev_model_counts: dict[str, tuple[int, int]] = {}   # model -> (calls = SUCCESSES, errors)
         self._route_calls_cache: tuple[float, list[MetricPoint]] | None = None
 
     # ── paths / urls ────────────────────────────────────────────────────────────────────────
@@ -436,15 +436,18 @@ class SwitchyardAdapter(SystemAdapter):
             m = models.get(mid)
             if not isinstance(m, dict):
                 continue
+            # `calls` counts SUCCESSES only: calls + errors = attempts (live 0.3.0: sum(calls) + sum(errors) ==
+            # total_requests; fixture stats.json 72 + 1 == 73). So a target that never succeeded has calls == 0 and
+            # the old `calls > 0 and errs * 2 >= calls` could never flag it (auto-cluster's capable tier: 0 / 2).
             calls, errs = _int(m.get("calls")), _int(m.get("errors"))
             prev = self._prev_model_counts.get(mid)
-            failing_now = (prev is not None and errs > prev[1] and (calls - errs) <= (prev[0] - prev[1]))
-            mostly_failing = calls > 0 and errs * 2 >= calls
+            failing_now = prev is not None and errs > prev[1] and calls <= prev[0]   # new errors, no new success
+            mostly_failing = errs > 0 and errs >= calls                              # >= 50% of attempts failed
             if failing_now or mostly_failing:
                 problems.append(Problem(
                     severity="warn", code="switchyard.capable_tier.upstream_errors",
                     message=(f"Capable-tier model '{mid}' (routes {', '.join(routes)}) is returning upstream errors "
-                             f"({errs} of {calls} calls). The engine behind it may be stopped."),
+                             f"({errs} errors, {calls} successes). The engine behind it may be stopped."),
                     fix=(f"curl -s http://127.0.0.1:4010/v1/stats | jq '.models[\"{mid}\"]'  "
                          "# then start the engine that serves this alias, or route via a direct-* / other auto-* route")))
         for mid, m in models.items():
