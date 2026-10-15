@@ -5,6 +5,17 @@ implemented / verified-live / unverified defined in the README.
 
 ## [Unreleased]
 
+### Added
+
+- A fourth system, **NVIDIA SkillEvaluator** (`skillevaluator`): a Skills page that evaluates the agent skills under
+  `<repo>/.claude/skills` with SkillEvaluator 0.5.0. Tiers `static` (offline), `tier1` (adds the LLM judge) and `tier1+2`
+  (adds embedding deduplication); Tier 3 is not offered because its stock sandboxes need open internet. Every run keeps its
+  JSON + Markdown report in the state dir (newest 200), shows up as a `skilleval.run` event, and feeds `se.*` metrics.
+  The console runs `skillevaluator-local` when it is on PATH (a wrapper that reads its own key file, so the console never
+  holds a provider key), else `skillevaluator` with `SKILL_EVAL_*` from the console's environment; those variables reach
+  the SkillEvaluator binaries only. Verified live on the author's deployment: status, a `tier1+2` evaluation through the
+  API (judge and embeddings through LiteLLM, 10 s) and headless screenshots of the page at 1440 and 600 px.
+
 ### Fixed
 
 - The Relay liveness probe no longer floods Langfuse. It polled `GET /v1/models` on the gateway, which forwards
@@ -14,6 +25,48 @@ implemented / verified-live / unverified defined in the README.
   which leaves no trace (verified live). New problem code `relay.gateway.error` for a 5xx from the gateway
   itself; `relay.gateway.upstream_error` now means LiteLLM is not answering. The URL comes from the existing
   `litellm` setting.
+- A Dynamo that is off on purpose is no longer an error. On the author's deployment Dynamo is opt-in (the default model
+  holds the card), yet a stopped Dynamo reported `health=down` with error-level `dynamo.frontend.down` /
+  `dynamo.worker.stopped`, which kept `/api/v1/health` `degraded` for good. With the new setting `dynamo_opt_in` (default
+  true) and no Dynamo container running or restarting, Dynamo is `health=off` with one info problem `dynamo.off`, and
+  `/health` ignores systems that are `off`. Anything running or restarting keeps the error-level report.
+- A crash-looping Dynamo container was read as running (Docker sets `Running` during a restart back-off); `Restarting` now
+  wins, so the loop shows as a failed worker ("restarting (crash loop)").
+- Wrong start and restore commands in Dynamo fixes. Every start fix was a bare `cd inference/dynamo && docker compose up -d`,
+  which beside the default model crash-loops the worker (it happened on 2026-09-28); it is now the setting `dynamo_start`
+  (default `scripts/use-model.sh qwen3.8-27b-dynamo`). `dynamo.holds_card` advised restoring the 27B and named
+  `qwen3.8-27b-1m` as dark; its fix is now `default_model_start` (default `scripts/use-model.sh qwen3.8-flash-next`) and
+  it names what is really dark (setting `dynamo_dark_while_held`: the flashnext aliases, the auto-local and
+  auto-flashnext capable tiers, `direct-flashnext`). Both commands are display only.
+- Dynamo `up` beside harmless containers. Any running container on the worker's GPU refused `up` (lightning, ollama, even
+  the GPU exporter), and the fix said `docker stop <name>`. Coexisting and ignored containers no longer block; an
+  exclusive engine (the default model) refuses `up` with `dynamo_start` as the fix, never a `docker stop`; an unknown
+  container still refuses (safe default) but is named with an identify-first fix. `dynamo.card.contended` now fires for
+  ANY exclusive engine on the card (it only knew `vllm-qwen38`), also while the worker is crash-looping.
+- `switchyard.capable_tier.upstream_errors` missed a capable tier that never succeeded. Switchyard's `/v1/stats`
+  `calls` counts successes only (calls + errors = attempts: 56 + 5 = 61 `total_requests` read live 2026-10-06), so
+  `calls > 0 and errors * 2 >= calls` never flagged `cluster/glm-5.3-flash` at 0 calls and 2 errors. It now fires when
+  errors >= successes (errors > 0), or when errors rose since the last poll and successes did not; the message says
+  "N errors, M successes".
+- Topology drew the opt-in `vllm-qwen38` (and a stopped Dynamo) red; opt-in engines are now `off`.
+- Relay playground fallback route ids gain `direct-flashnext` (it is in the deployment's `routes.toml`).
+
+### Changed
+
+- `Health` gains the value `"off"` (additive; ARCHITECTURE 9.4). The UI shows it as a neutral badge (○, dashed tile and
+  node), never red; the topology legend says so.
+- Dynamo card model is settings-driven: `dynamo_exclusive_engines`, `dynamo_coexisting_engines`,
+  `dynamo_ignored_containers` (defaults: the author's flashnext + 27B, lightning + ollama, the dcgm exporter) replace the
+  single `SHARING_ENGINE` constant. `stop_sharing_engine` stops only the 27B (`STOPPABLE_ENGINE`), never the default
+  model; its help, the `up`/`down` descriptions and the Lifecycle confirm texts say so. The confirm dialog lists every
+  container on the card and warns when `up` will be refused.
+- Dynamo preflight output gains a `stoppable:` line (the one container the param may stop, or `none`) and the problem
+  `dynamo.card.unknown`; `router_aliases_dark: none` no longer shows as an alias called "none" in the UI.
+- Topology: a node for the always-on lightning engine (the efficient tier of every route); the clients -> Switchyard edge
+  is labelled `default` (opencode's default model is a Switchyard route) and stays active while Switchyard is degraded.
+- The UI mock data uses the deployment's capable targets (`flash-next-auto` for Switchyard `auto-local`, `flash-next` for
+  Relay) and the mock server has a Dynamo `off` scenario.
+- ADR-0009 addendum: the card is shared with the TP2 default model and lightning, not with `vllm-qwen38` alone.
 
 ## [0.1.2] - 2026-09-28
 

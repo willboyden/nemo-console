@@ -64,10 +64,10 @@ The code and `docs/ARCHITECTURE.md` were written inside a larger private reposit
 These are currently constants; move them into `Settings` (with the current values as defaults documented as examples):
 
 - `adapters/switchyard.py`: `CONTAINER`, `COMPOSE_PROJECT`, `COMPOSE_SERVICE`, `FALLBACK_IMAGE`, `LOG_PATH`.
-- `adapters/dynamo.py`: `PROJECT`, `FRONTEND`, `WORKER`, `MOCKER`, service names, `SHARING_ENGINE`, `SHARING_PROJECT`,
-  `SHARING_SERVICE`, `ROUTER_ALIAS`, `DEFAULT_MODEL`.
+- `adapters/dynamo.py`: `PROJECT`, `FRONTEND`, `WORKER`, `MOCKER`, service names, `STOPPABLE_ENGINE`, `STOPPABLE_PROJECT`,
+  `STOPPABLE_SERVICE`, `DEFAULT_MODEL`. (The card model is already in `Settings` since 2026-10-06: `dynamo_*`.)
 - `adapters/relay.py`: `UNIT`, `DEFAULT_ROUTE_IDS`.
-- `services/topology.py` (`SHARED_ENGINE`, `FLASHNEXT_ENGINE`, node labels), `services/engines.py` (`compose_dir_hint`
+- `services/topology.py` (`SHARED_ENGINE`, `FLASHNEXT_ENGINE`, `LIGHTNING_ENGINE`, node labels), `services/engines.py` (`compose_dir_hint`
   assumes a name prefix and layout), `config.py` (`DEFAULT_ENGINE_PROBES`, `DEFAULT_ENGINE_START`, `DEFAULT_URLS`).
 - Optional: an `allowed_service_names` setting for the routes validators (single-label hostnames are currently accepted;
   see THREAT-MODEL R-14).

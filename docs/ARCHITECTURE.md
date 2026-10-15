@@ -10,7 +10,7 @@ additive only, appended to §9 and relayed to affected agents immediately.
 |---|---|---|
 | 1 | Hexagonal core + `SystemAdapter` port (`adapters/base.py`, LOCKED); one adapter per system | New system = one adapter; the UI renders from descriptors |
 | 2 | Host-run FastAPI on `127.0.0.1:8793`, not a container | Controls rootless Docker + a systemd user unit; mounting the socket into a network service is root-equivalent |
-| 3 | All process control through one `CommandRunner` (argv list, binary allowlist `docker`/`systemctl`/`nemo-relay`, timeout, output cap, redaction) | One audited choke point; adapters cannot shell out |
+| 3 | All process control through one `CommandRunner` (argv list, binary allowlist `docker`/`systemctl`/`nemo-relay`/`skillevaluator`/`skillevaluator-local`, timeout, output cap, redaction) | One audited choke point; adapters cannot shell out |
 | 4 | Config files: core does compare-and-swap (sha256), backup, atomic write, audit; adapter only validates + restarts | The dangerous IO exists once |
 | 5 | Config apply = validate → diff → confirm → backup → write → restart → health-check → **auto-rollback on unhealthy** | A bad routes.toml must not leave the router down |
 | 6 | Validators that are only a proxy say so (`authoritative=false`) | Relay's plugin schema differs from `switchyard-server`'s (measured; see clients/nemo-relay/routes.toml header) |
@@ -147,3 +147,47 @@ Dynamo "loading" = `health=degraded` with summary starting "loading" (no new Com
 * Route validators (Switchyard, Relay) ERROR on a `base_url` host that is neither loopback nor a bare single-label service name, and on userinfo.
 * §1 #10 deviation: Dynamo events are redacted log lines, not metadata-only (ADR-0010).
 * §7 Dynamo `preflight` output ends with `shares_card:` / `router_aliases_dark:` lines. New core problem `switchyard.tier.capable_dark` (setting `engine_probes`). Default action timeout 900 s; `action_timeouts` overrides per action (`dynamo.up`).
+
+**9.4 (2026-10-06): Dynamo is opt-in; the card is shared with the default model, not with `vllm-qwen38` alone.** Supersedes §2 (Dynamo
+row: "shares the Workstation card with `vllm-qwen38`") and §7 where they differ. Premise change on the author's deployment: since
+2026-09-26 the default model is `qwen3.8-flash-next` (SGLang, tensor-parallel 2, ~60 GB of BOTH cards) plus the always-on
+`nemotron-lightning` (~29 GB of the Workstation card); Dynamo (worker 0.5 x the Workstation card) and the 27B are opt-in and off.
+* `Health` gains `"off"` (additive Literal value): opt-in and stopped on purpose. Dynamo reports it when the setting `dynamo_opt_in`
+  (default true) is on and NO frontend, worker or mocker container is running or restarting, with one `info` problem `dynamo.off`
+  whose fix is `dynamo_start`. Anything running or restarting (including a crash-looping worker) keeps the error-level report.
+  `/health` `status` ignores systems that are `off`. The UI renders `off` as a neutral badge (○, dashed node/tile), never red.
+* `_state` reads `Restarting` before `Running` (Docker sets both during a restart back-off), so a crash loop is `failed`, not `running`.
+* Card model = settings (`config.py`, `DEFAULT_DYNAMO_*`): `dynamo_exclusive_engines` (cannot run beside the worker; default the
+  flashnext and vllm-qwen38 containers), `dynamo_coexisting_engines` (allowed; default lightning, ollama), `dynamo_ignored_containers`
+  (monitoring; default the dcgm-exporter). Any other running container on the worker's GPU UUID is "unknown" and blocks `up` too.
+  Handed to the adapter as a `CardPolicy` by the container (`_configure_dynamo`; injected adapters keep their own).
+* `dynamo.card.contended` = worker running or restarting AND an exclusive engine running on the worker's card (GPU UUID or all
+  GPUs); fix: the console `down`. `dynamo.holds_card` = worker running and no exclusive engine running; message = the
+  `dynamo_dark_while_held` list, fix = `default_model_start`. Every start fix (`dynamo.frontend.down`, `dynamo.worker.absent`,
+  `dynamo.off`, `dynamo.up.exclusive_engine`) is `dynamo_start`; no bare `docker compose up -d` remains. Both commands are DISPLAY
+  ONLY: the console never runs `scripts/use-model.sh` (ADR-0009 stands for what the console executes).
+* `up`: refused with `dynamo.up.exclusive_engine` (fix `dynamo_start`) while a non-stoppable exclusive engine runs, even with
+  `stop_sharing_engine=true`; refused with `dynamo.up.card_in_use` naming any unknown container (fix: identify it; never
+  `docker stop`). Coexisting and ignored containers do not block. `stop_sharing_engine` stops only the fixed `STOPPABLE_ENGINE`
+  (the 27B, label-verified, compose `down` in its own project), never the default model.
+* Preflight tail: `shares_card:` (one line per exclusive engine pinned to the card, running or stopped, and per unknown running
+  container), NEW `stoppable:` (the one container the param may stop, or `none`), `router_aliases_dark:` (`none` or the dark list).
+  New preflight problem `dynamo.card.unknown`.
+* Topology: `vllm-qwen38` and Dynamo stopped = `off`; new node `vllm-lightning` (efficient tier); the clients -> Switchyard edge is
+  labelled `default` (opencode's default model is a Switchyard route) and is active while Switchyard is up or degraded.
+* Switchyard `/v1/stats` `models[*].calls` counts SUCCESSES (calls + errors = attempts). `switchyard.capable_tier.upstream_errors`:
+  errors >= successes (and > 0), or errors rose since the last poll while successes did not.
+
+**9.5 (2026-10-06): a fourth system, `skillevaluator` (NVIDIA SkillEvaluator).** Additive; nothing above changes.
+* It is a CLI, not a service: `SystemId` gains `"skillevaluator"`, adapter `adapters/skillevaluator.py`. Status = launcher found
+  (`skillevaluator-local` if on PATH, else `skillevaluator`; `--version` cached 300 s), the router's `/health/liveliness`, and the
+  newest stored run. Health: `down` when no launcher, `degraded` when the router is down, else `up`.
+* Runner: both launcher names join the bare-name allowlist. `SKILL_EVAL_*` / `SKILLEVAL_*` (+ `LOCAL_AI_LAB`, `LITELLM_URL`) are passed
+  to those two binaries ONLY. With the wrapper the console holds no provider key at all (the wrapper reads its own 0600 key file).
+* `ctx.paths` gains `skills_dir` = `<repo>/.claude/skills` (one directory per skill with a `SKILL.md`; symlinks and other names are
+  never offered). Actions: `evaluate` (skill enum × tiers `static` | `tier1` | `tier1+2`), `evaluate_all_static`, `report`, `doctor`;
+  all `safe`, admin. Tier 3 is not offered: its stock sandboxes run with `network_mode = "public"`.
+* Verdict = the report JSON's `overall_status`, never the exit code (1 for failed AND incomplete, reports still written).
+  Runs live in `<state>/skillevaluator/runs/<UTC stamp>-<skill>/` (0700; `run.json` 0600, metadata + redacted error text only),
+  newest 200 kept. Events: kind `skilleval.run`, one per run. Metric keys: `se.skills`, `se.runs`, `se.last_quality_score`,
+  `se.last_judge_score`, `se.runs_by_verdict{verdict=passed|failed|incomplete|error}`. No config files (configuration is the launcher's environment).

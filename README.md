@@ -1,16 +1,18 @@
 # Nemo Console
 
-A local, single-user web console to **monitor, configure and interact with** three NVIDIA-ecosystem systems
+A local, single-user web console to **monitor, configure and interact with** four NVIDIA-ecosystem systems
 running on one workstation:
 
 - **NeMo Switchyard**: tier-based request routing (an HTTP server in a container).
 - **NeMo Relay**: an agent gateway with plugin policy and ATOF/ATIF trace export (a host binary, run as a
   systemd user unit).
 - **NVIDIA Dynamo**: an LLM serving frontend plus a vLLM worker (docker compose).
+- **NVIDIA SkillEvaluator** (unreleased): scores agent skills (`SKILL.md` folders) for quality, security and
+  duplication. A CLI, not a service: the console runs it on demand and keeps the reports.
 
 It is a host-run FastAPI process bound to loopback, with a zero-build, zero-npm browser UI. One adapter per
 system plugs into a system-agnostic core; the UI renders from descriptors (status, metrics, config files,
-parameters, actions, playground), so adding a fourth system is one adapter file.
+parameters, actions, playground), so adding a system is one adapter file (SkillEvaluator was added that way).
 
 > **Status: v0.1.2.** Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
 > Nothing here has been used by anyone other than its author, on one workstation, against one set of pinned
@@ -92,7 +94,7 @@ Loopback bind; `Host` allowlist (421); same-origin-or-absent `Origin` on unsafe 
 on every non-GET (403); bearer keys stored as SHA-256 with `admin` / `viewer` roles (an unauthenticated caller is
 role `public` and gets 401 on everything but `/health`); strict CSP and other
 security headers on every response including errors; body and SSE caps; all process control through one argv-only
-runner with a three-binary allowlist; config writes only to paths fixed at startup, refusing symlinks and
+runner with a five-binary allowlist (`docker`, `systemctl`, `nemo-relay`, and the two SkillEvaluator launchers); config writes only to paths fixed at startup, refusing symlinks and
 secret-looking content; secrets referenced by environment-variable **name**, never stored or returned; no
 outbound network beyond configured loopback URLs.
 
@@ -120,8 +122,8 @@ outbound network beyond configured loopback URLs.
 - **Playground "served by" headers are guessed.** The console looks for `X-Served-By-Route` style headers
   (several candidate names); they were absent from real Switchyard responses, so the route/tier badges are
   usually empty.
-- **Topology edges are approximations** built from adapter health plus probes (router liveness, two
-  hard-coded engine containers). They show "plausible path", not observed traffic. The edge label "agent gateway"
+- **Topology edges are approximations** built from adapter health plus probes (router liveness, three
+  hard-coded engine containers; opt-in engines that are stopped are drawn `off`, not red). They show "plausible path", not observed traffic. The edge label "agent gateway"
   is partly clipped behind a node in the rendered view (cosmetic, known).
 - **`plugins.toml` and `config.toml` (Relay) are read-only by design.** They hold signature-enforcement policy;
   the console shows them and never writes them.

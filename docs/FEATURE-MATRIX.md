@@ -35,13 +35,13 @@ Dynamo `restart`, assistive technology, browsers other than headless Firefox.
 
 | Feature | Status | Verification | Notes |
 |---|---|---|---|
-| Per-system status (health, components, endpoints, problems with a fix) | Implemented | Switchyard, Relay, Dynamo: verified live (read path) | Failure is data: a down system is HTTP 200 with `health=down`. Dynamo "loading" is `degraded` with a summary starting "loading". |
+| Per-system status (health, components, endpoints, problems with a fix) | Implemented | Switchyard, Relay, Dynamo: verified live (read path) | Failure is data: a down system is HTTP 200 with `health=down`. Dynamo "loading" is `degraded` with a summary starting "loading". An opt-in system stopped on purpose is `health=off` (Dynamo with `dynamo_opt_in`, the default, and no container running or restarting: one info problem `dynamo.off`, fix `dynamo_start`); the overall `/health` ignores `off` (fakes only). |
 | Metrics snapshot with canonical keys (`sy.*`, `relay.*`, `dyn.*`) | Implemented | verified live (read path, all three) | Keys absent when unreadable; nothing fabricated. `sy.route.calls` counts the newest 2000 routing records (labelled with the window), not a lifetime counter. |
 | Metric history 15m / 1h / 24h | Implemented | fakes only for rollup logic; live polling ran with the server | 15 min ring in memory; 1 h and 24 h from 1 minute rollups (SQLite). Same-key series with different labels are **summed**. |
 | Events list and SSE stream | Implemented | verified live (read path, all three); SSE caps fakes only | Switchyard/Relay: metadata allowlists. **Dynamo: redacted log lines, not an allowlist (ADR-0010 deviation).** The SSE slot is taken inside the generator. |
 | Routing summary (by route, model, tier, tokens, errors) | Implemented | event read path verified live; aggregation fakes only | Derived from the last 5000 routing events; windows 15m/1h/24h/7d. |
-| Topology | Partial | rendered against the real backend (verified live); edge semantics unverified | Edges are approximations, not observed traffic. The edge label "agent gateway" is partly clipped behind a node. Two engine container names are hard-coded. |
-| Switchyard capable-tier-dark detection | Partial | problem shown live (maintainer); logic also fakes (`test_capable_tier.py`) | `switchyard.tier.capable_dark`: alias from `engine_probes` is the `capable_target` model of a `stage_router` route in the parsed `routes.toml` and its container is not running per a shared, cached `docker inspect` (fix: the container's `engine_start` command, else a compose-dir guess); Switchyard becomes `degraded` with summary prefix "capable tier dark". Also the older `/v1/stats` error-count heuristic (`switchyard.capable_tier.upstream_errors`). No request-level probe; a running-but-broken engine is not detected; the default `engine_probes` and `engine_start` entries are deployment-specific. |
+| Topology | Partial | rendered against the real backend (verified live); edge semantics unverified | Edges are approximations, not observed traffic. The edge label "agent gateway" is partly clipped behind a node. Three engine container names are hard-coded (flashnext, lightning, the opt-in 27B). Opt-in engines and a Dynamo that is `off` are drawn `off` (neutral), not red; the clients -> Switchyard edge is labelled `default` (fakes only). |
+| Switchyard capable-tier-dark detection | Partial | problem shown live (maintainer); logic also fakes (`test_capable_tier.py`) | `switchyard.tier.capable_dark`: alias from `engine_probes` is the `capable_target` model of a `stage_router` route in the parsed `routes.toml` and its container is not running per a shared, cached `docker inspect` (fix: the container's `engine_start` command, else a compose-dir guess); Switchyard becomes `degraded` with summary prefix "capable tier dark". Also the older `/v1/stats` error-count heuristic (`switchyard.capable_tier.upstream_errors`), which reads `calls` as SUCCESSES (the sum of calls and errors equalled `total_requests` on the running 0.3.0, read live 2026-10-06): it fires when errors >= successes (errors > 0) or errors rose since the last poll with no new success, so a target that never succeeded is flagged (fakes). No request-level probe; a running-but-broken engine is not detected; the default `engine_probes` and `engine_start` entries are deployment-specific. |
 | Relay gateway health | Implemented | verified live (read path) | Any HTTP answer < 500 from the gateway's own `/health` = up (404 expected); upstream from LiteLLM's `/health/liveliness`; unit state from `systemctl --user show`. Never polls `/v1/models` (forwarded to LiteLLM, logged to Langfuse). |
 | Relay policy findings (attestation, exporters, PII redaction) | Implemented | part of the Relay status read path (verified live) | Read-only analysis of `plugins.toml`. |
 | Console self metrics (`/metrics`) and JSON logs | Implemented | fakes only (`test_console_metrics_endpoint`); JSON log lines seen in a local run | Viewer role. |
@@ -73,9 +73,10 @@ Dynamo `restart`, assistive technology, browsers other than headless Firefox.
 | Switchyard `reset_stats` | Implemented | unauthenticated `POST /v1/stats/reset` -> 200 live (maintainer); console action itself fakes only | Needs no credential; the former `switchyard.auth` problem code no longer exists. |
 | Relay `gateway_status`, `doctor_offline`, `agents_list`, `plugins_validate` | Implemented | verified live (maintainer) | Output carries caveats: passing `plugins validate`/`doctor` does not prove the gateway starts. |
 | Relay `gateway_restart` | Implemented | verified live (maintainer, 2026-09-24: PID 2024310 -> 2358531, 3 consecutive healthy checks, ~3 s) | Waits for several consecutive healthy checks and a stable PID. |
-| Dynamo `preflight`, `down`, `up` | Implemented | verified live (through the console, then serving again) | Compose-only. Preflight output includes machine-readable `shares_card:` and `router_aliases_dark:` lines. |
+| Dynamo `preflight`, `down`, `up` | Implemented | verified live (through the console, then serving again) | Compose-only. Preflight output includes machine-readable `shares_card:` and `router_aliases_dark:` lines, and (2026-10-06) `stoppable:`. Sharers are classified by the `dynamo_*` settings (exclusive / coexisting / ignored / unknown); `up` is refused while an exclusive or unknown container runs on the card, with `dynamo_start` as the fix for the default model (the classification is fakes only; device-request shapes were read live). |
 | Dynamo `restart`, `up_mock` | Implemented | fakes only | Not live. |
-| Dynamo `up` with `stop_sharing_engine=true` | Implemented | **unverified** (fakes only) | Stops exactly one name- and label-verified container. |
+| Dynamo `up` with `stop_sharing_engine=true` | Implemented | **unverified** (fakes only) | Stops only the opt-in 27B (`STOPPABLE_ENGINE`, name- and label-verified), never the default model: with that on the card `up` stays refused. |
+| Dynamo card settings (`dynamo_opt_in`, `dynamo_start`, `default_model_start`, `dynamo_exclusive_engines`, `dynamo_coexisting_engines`, `dynamo_ignored_containers`, `dynamo_dark_while_held`) | Implemented | fakes only (`test_dynamo_policy.py`, `test_adapter.py`) | Environment only (`NEMO_CONSOLE_*`), not editable through `PUT /settings`. The commands are display only. Defaults name the author's containers. |
 
 ## Interact
 
@@ -114,7 +115,7 @@ Dynamo `restart`, assistive technology, browsers other than headless Firefox.
 | Feature | Status | Verification | Notes |
 |---|---|---|---|
 | Views: Overview, Switchyard, Relay, Dynamo, Audit (admin), Settings | Implemented | frontend rendered against the real backend: verified live (headless Firefox) | Dynamo tabs: Status, Params, Lifecycle, Playground. Switchyard: Routing, Config, Playground, Actions. Relay: Status, Config, Diagnostics, Playground (if offered). |
-| Pure-logic unit tests | Implemented | 94 passed (re-run) | Router, SSE parser, API client, formatting, diff, metrics, share, topology, param form, static guards. |
+| Pure-logic unit tests | Implemented | 96 passed (re-run 2026-10-06) | Router, SSE parser, API client, formatting, diff, metrics, share, topology, param form, static guards. |
 | Browsers other than headless Firefox | Implemented (untested) | **unverified** | |
 | Assistive technology (screen readers, keyboard-only walk-through) | Partial | **unverified** | ARIA tabs, live regions, skip link, focus styles, reduced-motion CSS exist; none was tested with real AT. |
 | Dark/light theme, English only | Implemented | unverified beyond the frontend render | Other locales: Not planned. |
@@ -129,8 +130,19 @@ Dynamo `restart`, assistive technology, browsers other than headless Firefox.
 | `nemo-console stop` and the menu's **Stop Nemo Console** action | Implemented | verified live (stopped the launcher's console, pid file removed; a second `stop` reports nothing recorded); the recycled-pid and other-user refusals are fakes only | Signals only the recorded pid, and only if its owner and command line match. |
 | `make install-desktop` | Implemented | verified live (entry passes `desktop-file-validate`); unsafe checkout paths refused in a scratch test | Paths limited to `[A-Za-z0-9._/+-]`. |
 
+## SkillEvaluator
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| Status: launcher, version, router liveness, skill count, last run | Implemented | verified live (maintainer, 2026-10-06: `skillevaluator-local` 0.5.0 found, router 200, 55 skills); fakes in `tests/skillevaluator/` | `--version` is cached 300 s so status polls do not spawn a process each time. |
+| Evaluate one skill (`static`, `tier1`, `tier1+2`) and keep the report | Implemented | verified live (maintainer, 2026-10-06: `tier1+2` on one skill through the API, LLM judge and embeddings through LiteLLM, 10 s, report stored); fakes for argv, verdict-from-JSON, tier2 downgrade, no-report errors | The verdict is the report's `overall_status`; the CLI exits 1 for failed AND incomplete. |
+| Static check of every skill | Implemented | fakes only | About 2 s per skill. |
+| Stored runs as events, metrics, retention (200) | Implemented | events and metrics verified live (one run, then the page); retention fakes only | `run.json` holds metadata and redacted error text only. |
+| SkillEvaluator page (status + Evaluate tabs) | Implemented | headless Firefox screenshots at 1440 and 600 px against the live backend (maintainer, 2026-10-06) | Reports open through the `report` action (Markdown as text). |
+| Tier 3 (live agent evaluation) | Not offered | — | Its stock Docker sandboxes run with `network_mode = "public"` and install agent CLIs from the internet. |
+
 ## Not planned for v1
 
-Editing Relay `plugins.toml` / `config.toml`; a fourth system; multi-user or per-user audit identity beyond the key
+Editing Relay `plugins.toml` / `config.toml`; multi-user or per-user audit identity beyond the key
 id; key revocation UI; TLS; remote (non-loopback) deployment; localisation; active probing of the Switchyard
 capable tier.
