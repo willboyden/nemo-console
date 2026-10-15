@@ -10,8 +10,9 @@ _REGISTRY: dict[SystemId, tuple[str, str]] = {
     "switchyard": ("nemo_console.adapters.switchyard", "SwitchyardAdapter"),
     "relay": ("nemo_console.adapters.relay", "RelayAdapter"),
     "dynamo": ("nemo_console.adapters.dynamo", "DynamoAdapter"),
+    "skillevaluator": ("nemo_console.adapters.skillevaluator", "SkillEvaluatorAdapter"),
 }
-SYSTEM_IDS: tuple[SystemId, ...] = ("switchyard", "relay", "dynamo")
+SYSTEM_IDS: tuple[SystemId, ...] = ("switchyard", "relay", "dynamo", "skillevaluator")
 
 
 def build_adapter(system: SystemId, ctx: AdapterContext) -> SystemAdapter:

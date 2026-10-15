@@ -185,7 +185,8 @@ class Env:
         self.adapters: dict[SystemId, FakeAdapter] = {
             "switchyard": FakeAdapter(ctx, "switchyard", self.cfg_file),
             "relay": FakeAdapter(ctx, "relay"),
-            "dynamo": FakeAdapter(ctx, "dynamo")}
+            "dynamo": FakeAdapter(ctx, "dynamo"),
+            "skillevaluator": FakeAdapter(ctx, "skillevaluator")}
         self.container: Container = build_container(self.settings, adapters=dict(self.adapters), runner=self.runner,  # type: ignore[arg-type]
                                                     http=self.http)
         self.app = create_app(self.settings, self.container)

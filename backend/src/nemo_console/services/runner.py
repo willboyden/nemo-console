@@ -12,9 +12,15 @@ from pathlib import Path
 from nemo_console.adapters.base import CommandResult
 from nemo_console.services.common import redact
 
-ALLOWED_BINARIES = frozenset({"docker", "systemctl", "nemo-relay"})
+ALLOWED_BINARIES = frozenset({"docker", "systemctl", "nemo-relay", "skillevaluator", "skillevaluator-local"})
 CHILD_ENV_KEYS = ("PATH", "HOME", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "DOCKER_HOST", "DOCKER_CONTEXT",
                   "DOCKER_CONFIG", "LANG", "LC_ALL")
+# SkillEvaluator is configured by environment only (SKILL_EVAL_*, no config file). Those variables reach ITS children
+# and no other binary's. The `skillevaluator-local` wrapper needs none of them: it reads its own key file, so with the
+# wrapper the console process never holds the provider key.
+SKILLEVAL_BINARIES = frozenset({"skillevaluator", "skillevaluator-local"})
+SKILLEVAL_ENV_PREFIXES = ("SKILL_EVAL_", "SKILLEVAL_")
+SKILLEVAL_ENV_KEYS = ("LOCAL_AI_LAB", "LITELLM_URL")
 MAX_TIMEOUT = 600.0
 MAX_ARGS = 64
 MAX_ARG_LEN = 8192
@@ -53,9 +59,12 @@ class SubprocessRunner:
             if not isinstance(a, str) or "\x00" in a or len(a) > MAX_ARG_LEN:
                 raise RunnerError("bad argv element")
 
-    def _env(self) -> dict[str, str]:
+    def _env(self, binary: str = "") -> dict[str, str]:
         env = {k: os.environ[k] for k in CHILD_ENV_KEYS if k in os.environ}
         env["PATH"] = os.pathsep.join([env.get("PATH", os.defpath), *self._extra])
+        if binary in SKILLEVAL_BINARIES:
+            env.update({k: v for k, v in os.environ.items()
+                        if k.startswith(SKILLEVAL_ENV_PREFIXES) or k in SKILLEVAL_ENV_KEYS})
         return env
 
     async def run(self, argv: list[str], *, timeout: float = 15.0, max_bytes: int = 256_000,
@@ -66,7 +75,7 @@ class SubprocessRunner:
         start = time.monotonic()
         proc = await asyncio.create_subprocess_exec(
             exe, *argv[1:], stdin=asyncio.subprocess.PIPE if stdin is not None else asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd, env=self._env(),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd, env=self._env(argv[0]),
             start_new_session=True)
         assert proc.stdout is not None and proc.stderr is not None
         state = {"over": False}

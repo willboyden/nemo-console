@@ -185,4 +185,5 @@ class Settings(BaseSettings):
             "relay_atif_dir": home / ".local" / "share" / "nemo-relay" / "atif",
             "dynamo_dir": r / "inference" / "dynamo",
             "dynamo_compose": r / "inference" / "dynamo" / "docker-compose.yml",
+            "skills_dir": r / ".claude" / "skills",          # SkillEvaluator: one sub-directory per skill (SKILL.md)
         }

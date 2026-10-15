@@ -15,10 +15,10 @@ from .conftest import Env
 async def test_health_overview_systems_topology(env: Env) -> None:
     async with env.client() as c:
         h = (await c.get("/api/v1/health")).json()
-        assert h["status"] == "ok" and h["trust"] == "loopback-admin" and set(h["systems"]) == {"switchyard", "relay", "dynamo"}
+        assert h["status"] == "ok" and h["trust"] == "loopback-admin" and set(h["systems"]) == {"switchyard", "relay", "dynamo", "skillevaluator"}
         o = (await c.get("/api/v1/overview")).json()
-        assert len(o["systems"]) == 3 and {n["id"] for n in o["topology"]["nodes"]} >= {"litellm", "switchyard", "relay"}
-        assert len((await c.get("/api/v1/systems")).json()) == 3
+        assert len(o["systems"]) == 4 and {n["id"] for n in o["topology"]["nodes"]} >= {"litellm", "switchyard", "relay"}
+        assert len((await c.get("/api/v1/systems")).json()) == 4
         assert (await c.get("/api/v1/systems/dynamo/status")).json()["system"] == "dynamo"
         t = (await c.get("/api/v1/topology")).json()
         assert next(n for n in t["nodes"] if n["id"] == "litellm")["health"] == "up"
@@ -211,7 +211,7 @@ async def test_real_adapters_with_no_paths_give_problems_not_500(env: Env) -> No
     from nemo_console.container import build_container
     from nemo_console.main import create_app
     ctx = AdapterContext(runner=env.runner, http=env.http, urls={}, paths={}, state_dir=env.tmp / "st3")
-    real = {sid: build_adapter(sid, ctx) for sid in ("switchyard", "relay", "dynamo")}
+    real = {sid: build_adapter(sid, ctx) for sid in ("switchyard", "relay", "dynamo", "skillevaluator")}
     env.settings.state_dir = env.tmp / "state3"
     app = create_app(env.settings, build_container(env.settings, adapters=real, runner=env.runner, http=env.http))  # type: ignore[arg-type]
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app, client=("127.0.0.1", 1)), base_url="http://127.0.0.1:8793",
