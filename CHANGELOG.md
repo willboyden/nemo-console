@@ -3,7 +3,7 @@
 Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Claims use the labels
 implemented / verified-live / unverified defined in the README.
 
-## [Unreleased]
+## [0.2.0] - 2026-10-17
 
 ### Added
 
@@ -16,8 +16,11 @@ implemented / verified-live / unverified defined in the README.
   `interrupted` (the runner sends the launcher SIGINT first); a run left `running` by a restarted console reads as
   `interrupted`. Plain `skillevaluator` is refused for Tier 3 (its stock sandboxes have open network). The runner allows
   4800 s for this one call; every other command keeps the 600 s cap. New metrics `se.live_running`, `se.last_skill_lift`;
-  `se.runs_by_verdict` gains `succeeded` and `interrupted`; the Skills page shows both. Fakes only, plus a parse-only
-  check that the lab launcher accepts the argv; **a live Tier 3 run through the console is unverified**.
+  `se.runs_by_verdict` gains `succeeded` and `interrupted`; the Skills page shows both.
+  Verified live on 2026-10-17 by calling the adapter in-process (the console's own code and settings, a scratch
+  state dir) on the author's deployment: `robust-scripts`, opencode on `nemotron-lightning`, judge
+  `nemotron-lightning-judge`: succeeded, 2 of 2 attempts scored, Skill Lift +0.240 stored in `run.json`, a second
+  request refused as busy. **Through the HTTP API and the UI it is unverified.**
 - `topology_engines` setting (the engine nodes of the topology) and `switchyard.tier.capable_not_deployed`.
 - A fourth system, **NVIDIA SkillEvaluator** (`skillevaluator`): a Skills page that evaluates the agent skills under
   `<repo>/.claude/skills` with SkillEvaluator 0.5.0. Tiers `static` (offline), `tier1` (adds the LLM judge) and `tier1+2`

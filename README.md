@@ -7,16 +7,16 @@ running on one workstation:
 - **NeMo Relay**: an agent gateway with plugin policy and ATOF/ATIF trace export (a host binary, run as a
   systemd user unit).
 - **NVIDIA Dynamo**: an LLM serving frontend plus a vLLM worker (docker compose).
-- **NVIDIA SkillEvaluator** (unreleased): scores agent skills (`SKILL.md` folders) for quality, security and
+- **NVIDIA SkillEvaluator** (new in 0.2.0): scores agent skills (`SKILL.md` folders) for quality, security and
   duplication. A CLI, not a service: the console runs it on demand and keeps the reports.
 
 It is a host-run FastAPI process bound to loopback, with a zero-build, zero-npm browser UI. One adapter per
 system plugs into a system-agnostic core; the UI renders from descriptors (status, metrics, config files,
 parameters, actions, playground), so adding a system is one adapter file (SkillEvaluator was added that way).
 
-> **Status: v0.1.2.** Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
+> **Status: v0.2.0.** Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
 > Nothing here has been used by anyone other than its author, on one workstation, against one set of pinned
-> versions (Switchyard 0.3.0, Relay 0.9.2, Dynamo 1.5.0).
+> versions (Switchyard 0.3.0, Relay 0.9.2, Dynamo 1.5.0 and a 1.6.0 dev build, SkillEvaluator 0.5.0).
 
 ## Status vocabulary
 
@@ -28,11 +28,11 @@ Every feature claim in this repo is one of:
 | **verified-live** | Exercised against a real Switchyard 0.3.0, Relay 0.9.2 and Dynamo 1.5.0 on one workstation (evidence is stated in [`docs/FEATURE-MATRIX.md`](docs/FEATURE-MATRIX.md)). |
 | **unverified** | Only fakes have run it. It may work; nobody has watched it work. |
 
-Gate results (re-run on 2026-09-28 against the release tree): `pytest -q` 384 passed / 3 skipped in the author's
+Gate results (re-run on 2026-10-17 against the release tree): `pytest -q` 470 passed / 2 skipped in the author's
 deployment checkout (the skips are opt-in or environment-gated live smoke tests; the Dynamo live smoke enables itself
-when a frontend answers on 127.0.0.1:8020), `ruff check` clean, `mypy --strict src` clean (41 files), `node --test` 94
-passed. From a clean copy of the release tree outside that checkout (`make setup && make all`): 382 passed / 5 skipped,
-ruff and mypy clean, frontend 94 passed; the extra skips are the tests that need the deployment's repository layout. Mermaid diagrams in these docs were **not
+when a frontend answers on 127.0.0.1:8020), `ruff check` clean, `mypy --strict src` clean (42 files), `node --test` 96
+passed. From a clean copy of the release tree outside that checkout (`make setup && make all`): 467 passed / 5 skipped,
+ruff and mypy clean, frontend 96 passed; the extra skips are the tests that need the deployment's repository layout. Mermaid diagrams in these docs were **not
 rendered**; treat them as unvalidated.
 
 ## What it does
@@ -143,7 +143,6 @@ outbound network beyond configured loopback URLs.
   could send it off the box. An `allowed_service_names` setting is a possible future option, not implemented.
 - **Redaction is bounded and chunked** (4000-character chunks, linear time). A secret straddling a chunk boundary could
   slip through.
-- **Relay playground has no default credential mapping** (only `switchyard` does).
 - **The systemd unit template is untested.** Hardening options that need user namespaces can fail with status
   `226/NAMESPACE` on distributions that restrict unprivileged user namespaces; treat any such option as optional.
 - **Dynamo override gaps:** enum-valued flags are not checked against the catalog's choices and numeric values are not

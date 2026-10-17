@@ -1,7 +1,7 @@
 # Threat model
 
-Scope: the Nemo Console process (backend and static frontend) as designed and implemented at v0.1.0, and its
-interfaces to the browser, the local operating system, Docker, systemd, the three managed systems, and the SkillEvaluator CLI (unreleased, after v0.1.2; see E-5, E-6, R-17). Written
+Scope: the Nemo Console process (backend and static frontend) as designed and implemented at v0.1.0 and updated for v0.2.0, and its
+interfaces to the browser, the local operating system, Docker, systemd, the three managed systems, and the SkillEvaluator CLI (since v0.2.0; see E-5, E-6, R-17). Written
 from the code and tests; nothing here is a penetration-test result.
 
 Evidence labels: **test** = an offline test exists and passed on 2026-10-17 (backend all passed in the deployment checkout: 470 passed / 2 skipped; frontend 96 passed; re-run for this revision); **verified-live** = also exercised

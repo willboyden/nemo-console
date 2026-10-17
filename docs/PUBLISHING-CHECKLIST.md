@@ -13,7 +13,7 @@ What must happen before this repository is released publicly. Paths are relative
 - Section 5, in part: `SECURITY.md` and the CI workflow.
 - Section 7: gates run from a clean clone.
 
-Deferred to 0.2.0 (documented in the README under "Deployment assumptions" and "Known limitations"):
+Deferred, still open after 0.2.0 (documented in the README under "Deployment assumptions" and "Known limitations"):
 - Section 3: the directory layout assumptions.
 - Section 4: configurable deployment names.
 
