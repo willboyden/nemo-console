@@ -136,4 +136,5 @@ def test_env_url_override_merges_into_defaults(monkeypatch: pytest.MonkeyPatch) 
     assert urls["dynamo"] == "http://127.0.0.1:9999"
     assert {k: v for k, v in urls.items() if k != "dynamo"} == {k: v for k, v in DEFAULT_URLS.items() if k != "dynamo"}
     monkeypatch.setenv("NEMO_CONSOLE_PLAYGROUND_KEY_ENV__DYNAMO", "DYN_KEY")
-    assert Settings().playground_key_env == {"switchyard": "LITELLM_API_KEY", "dynamo": "DYN_KEY"}
+    assert Settings().playground_key_env == {"switchyard": "LITELLM_API_KEY", "relay": "LITELLM_API_KEY",
+                                             "dynamo": "DYN_KEY"}

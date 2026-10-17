@@ -115,15 +115,17 @@ outbound network beyond configured loopback URLs.
   is the `capable_target` model of a `stage_router` route in the parsed `routes.toml` (a passthrough such as
   `direct-*` does not count) and the mapped container is *not running* per `docker inspect`; it makes Switchyard
   `degraded` with a summary prefixed "capable tier dark". Its fix is the container's `engine_start` command when one
-  is set, else a guessed `docker compose up -d` in the compose directory. (b) `switchyard.capable_tier.upstream_errors`
+  is set, else a guessed `docker compose up -d` in the compose directory; a mapped container that does not exist at
+  all is only the info problem `switchyard.tier.capable_not_deployed`. (b) `switchyard.capable_tier.upstream_errors`
   is a traffic heuristic on `/v1/stats` error counts. Neither notices a running-but-broken engine, and (a) only knows
   the containers you list in `engine_probes` (the defaults list two aliases and containers from the author's
   deployment).
 - **Playground "served by" headers are guessed.** The console looks for `X-Served-By-Route` style headers
   (several candidate names); they were absent from real Switchyard responses, so the route/tier badges are
   usually empty.
-- **Topology edges are approximations** built from adapter health plus probes (router liveness, three
-  hard-coded engine containers; opt-in engines that are stopped are drawn `off`, not red). They show "plausible path", not observed traffic. The edge label "agent gateway"
+- **Topology edges are approximations** built from adapter health plus probes (router liveness, the engine
+  containers of the `topology_engines` setting; opt-in engines that are stopped are drawn `off`, not red, and a missing
+  container is `off` "(not deployed)"). They show "plausible path", not observed traffic. The edge label "agent gateway"
   is partly clipped behind a node in the rendered view (cosmetic, known).
 - **`plugins.toml` and `config.toml` (Relay) are read-only by design.** They hold signature-enforcement policy;
   the console shows them and never writes them.

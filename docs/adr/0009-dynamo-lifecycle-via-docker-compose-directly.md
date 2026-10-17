@@ -67,3 +67,14 @@ the container classification uses device-request shapes read from the live conta
 only), but no lifecycle action was run against the live stack for this change. The container names in the settings
 defaults are the author's; another deployment sets the `dynamo_*` settings instead of editing code (the stoppable 27B is
 still a code constant).
+
+## Addendum (2026-10-17): a stack can run from more than one compose file
+
+The author's resident Dynamo stack is now Nemotron 3.5 Super VL, started from `docker-compose.yml` +
+`docker-compose.super-vl.yml` (an nginx gateway at the `dynamo-frontend` service name, the real frontend as
+`dynamo-sv-frontend`, the worker on both GPUs). The decision stands (the console executes only `docker compose`), with one
+change: the compose files are the ones the running containers were started from (their compose label, treated as
+untrusted and confined to the configured compose directory), not always the base file; with no Dynamo container the base
+applies as before. Params and the console override are refused while a repo override file is in use, and the restore fix
+(`default_model_start`) is the switch script without an alias, so no fix tears the running layout down. ARCHITECTURE 9.6
+has the rules.

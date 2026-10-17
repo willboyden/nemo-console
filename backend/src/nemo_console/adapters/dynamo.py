@@ -12,6 +12,15 @@ Contract notes (ctx wiring; every key is optional, defaults in parentheses):
   * ctx.paths["dynamo_compose"]   ABSOLUTE path of inference/dynamo/docker-compose.yml (required for config/actions)
   * ctx.state_dir/dynamo/override.yml   the generated compose override (ADR 8), mode 0600
 
+The compose files IN USE (addendum 9.6): a stack can be started from the base file plus repo override files (the lab's
+Super VL variant: docker-compose.yml + docker-compose.super-vl.yml, measured 2026-10-17: the override keeps the service
+names, puts an nginx gateway at `dynamo-frontend`, adds `dynamo-sv-frontend` (the real Dynamo frontend) and gives the
+worker both GPUs). up/down/restart and the config checks use exactly the files in the running containers' label
+`com.docker.compose.project.config_files`; only with no Dynamo container at all does the configured base apply. The
+label is untrusted input: every file must resolve (symlinks followed) inside the configured compose directory (or be the
+console's own override), and `working_dir` must be that directory, else lifecycle actions are refused. While any repo
+override file is in use, Params and the console override are refused: they restate the BASE worker command.
+
 Threat notes for the hand-editable `override` file (validate_config is a CLOSED allowlist, fail-closed):
   * only `services.dynamo-worker|dynamo-frontend` with `command` / `environment`; command must start with the
     fixed `python3 -m dynamo.{vllm,frontend}` and every token starting `-` (single- or double-dash) must be an
@@ -23,8 +32,9 @@ Threat notes for the hand-editable `override` file (validate_config is a CLOSED 
     base compose for that service, and their values may not hold `$` or look like a secret
   * then `docker compose config -q` as the authoritative parse. The generated (render_override) path satisfies all of it.
 
-Lifecycle is `docker compose` on the repo compose plus the override; `scripts/use-model.sh` is never called. It is
-only SHOWN, as the settings-driven start/restore fix (CardPolicy; addendum 9.4 / ADR-0009 addendum).
+Lifecycle is `docker compose` on the compose files in use (plus the console override on the plain base stack);
+`scripts/use-model.sh` is never called. It is only SHOWN, as the settings-driven start/restore fix (CardPolicy;
+addendum 9.4 / ADR-0009 addendum).
 """
 from __future__ import annotations
 
@@ -79,15 +89,23 @@ PROJECT = "ai-lab-dynamo"
 FRONTEND = "ai-lab-dynamo-dynamo-frontend-1"
 WORKER = "ai-lab-dynamo-dynamo-worker-1"
 MOCKER = "ai-lab-dynamo-dynamo-mocker-1"
+SV_FRONTEND = "ai-lab-dynamo-dynamo-sv-frontend-1"     # docker-compose.super-vl.yml: the real frontend behind a gateway
 SVC_FRONTEND = "dynamo-frontend"
 SVC_WORKER = "dynamo-worker"
 SVC_MOCKER = "dynamo-mocker"
-DYNAMO_NAMES = (FRONTEND, WORKER, MOCKER)
+SVC_SV_FRONTEND = "dynamo-sv-frontend"
+DYNAMO_NAMES = (FRONTEND, WORKER, MOCKER, SV_FRONTEND)
+# (container, component) read for events; a container that does not exist costs one inspect and is skipped
+LOG_SOURCES = ((FRONTEND, "frontend"), (SV_FRONTEND, "frontend"), (WORKER, "worker"), (MOCKER, "mocker"))
+LABEL_FILES = "com.docker.compose.project.config_files"
+LABEL_WORKDIR = "com.docker.compose.project.working_dir"
+MAX_LABEL_FILES = 8
+UUID_TTL = 300.0                                      # the merged-config GPU probe is a subprocess: cache it
 
 # The ONE container `up` may stop (stop_sharing_engine=true): the opt-in 27B, verified by name + compose labels and
 # stopped with a compose `down` in its own project (what scripts/use-model.sh does to it too). Fixed on purpose: a
-# setting must not widen what the console stops, and the default model (flashnext, TP2 on both cards) is never stopped
-# here because its start order belongs to its own script.
+# setting must not widen what the console stops, and every other exclusive engine (Bolt, GLM, flashnext) is never
+# stopped here because its start order belongs to its own script.
 STOPPABLE_ENGINE = "ai-lab-vllm-qwen38-vllm-1"
 STOPPABLE_PROJECT = "ai-lab-vllm-qwen38"
 STOPPABLE_SERVICE = "vllm"
@@ -122,6 +140,27 @@ _FIXED_FLAGS_FRONTEND = {"--http-host", "--http-port", "--discovery-backend", "-
 
 class ParamError(ValueError):
     """A parameter value that is unknown, mistyped or out of range."""
+
+
+@dataclass(frozen=True)
+class ComposeFiles:
+    """The repo compose files the live stack runs from (never the console's own override, which the state dir governs).
+
+    from_label: read from the containers' compose label (False: no Dynamo container, the configured base applies).
+    error: the label could not be trusted (or the containers disagree): lifecycle actions and Params refuse."""
+    files: tuple[Path, ...]
+    base: Path | None
+    from_label: bool = False
+    error: str | None = None
+
+    @property
+    def overrides(self) -> tuple[Path, ...]:
+        """Repo files beyond the configured base (e.g. docker-compose.super-vl.yml)."""
+        base = self.base.resolve() if self.base is not None else None
+        return tuple(f for f in self.files if f != base)
+
+    def names(self) -> str:
+        return ", ".join(f.name for f in self.files) or "none"
 
 
 @dataclass(frozen=True)
@@ -588,6 +627,36 @@ def _load_base_commands(text: str) -> tuple[list[str], list[str]]:
     return out[0], out[1]
 
 
+def _is_dynamo_image(d: dict[str, Any] | None) -> bool:
+    image = str((d or {}).get("Config", {}).get("Image", "") or "").split("@", 1)[0]
+    return "dynamo" in image.rsplit(":", 1)[0].lower() if image else False
+
+
+def image_version(d: dict[str, Any] | None) -> str | None:
+    """The tag of a Dynamo image, never a digest: `repo:tag@sha256:...` -> tag; no tag, or not a Dynamo image -> None."""
+    image = str((d or {}).get("Config", {}).get("Image", "") or "").split("@", 1)[0]
+    repo, _, tag = image.rpartition(":")
+    if not repo or not tag or "/" in tag or not _is_dynamo_image(d):
+        return None
+    return tag
+
+
+def merged_worker_uuids(config_json: str) -> list[str]:
+    """Every GPU UUID the worker reserves in `docker compose ... config --format json` output (order kept, deduped)."""
+    try:
+        doc = json.loads(config_json)
+    except ValueError:
+        return []
+    svc = ((doc if isinstance(doc, dict) else {}).get("services") or {}).get(SVC_WORKER) or {}
+    devices = (((svc.get("deploy") or {}).get("resources") or {}).get("reservations") or {}).get("devices") or []
+    out: list[str] = []
+    for dev in devices if isinstance(devices, list) else []:
+        for u in (dev.get("device_ids") or []) if isinstance(dev, dict) else []:
+            if isinstance(u, str) and _UUID_RE.fullmatch(u) and u not in out:
+                out.append(u)
+    return out
+
+
 def _time_ms(seconds: float | None) -> float | None:
     return None if seconds is None else seconds * 1000.0
 
@@ -613,7 +682,9 @@ class DynamoAdapter(SystemAdapter):
         self.follow_interval = follow_interval
         self.policy = policy or CardPolicy()      # the container replaces it with the one built from Settings
         self._models: list[str] = []
-        self._card_uuid: str | None = None
+        self._card_uuids: list[str] = []
+        self._uuid_cache: tuple[float, tuple[Any, ...], list[str]] | None = None
+        self._last_files: ComposeFiles | None = None
 
     # ── plumbing ────────────────────────────────────────────────────────────────────────────
     @property
@@ -633,16 +704,104 @@ class DynamoAdapter(SystemAdapter):
         except OSError:
             return False
 
-    def _compose_argv(self, *tail: str, profile_mock: bool = False) -> list[str]:
+    def _compose_argv(self, cf: ComposeFiles, *tail: str, profile_mock: bool = False) -> list[str]:
+        """docker compose with exactly the files in use. The console's own override is added only on top of the plain
+        base: it restates the base worker command, so beside a repo override file it would replace that stack."""
         base = self._compose_path()
         if base is None:
             raise FileNotFoundError("ctx.paths['dynamo_compose'] is not configured")
-        argv = ["docker", "compose", "--project-directory", str(base.parent), "-f", str(base)]
-        if self._override_active():
+        if cf.error:
+            raise PermissionError(cf.error)
+        argv = ["docker", "compose", "--project-directory", str(base.parent)]
+        for f in cf.files or (base,):
+            argv += ["-f", str(f)]
+        if not cf.overrides and self._override_active():
             argv += ["-f", str(self._override_path())]
         if profile_mock:
             argv += ["--profile", "mock"]
         return [*argv, *tail]
+
+    def _trusted_files(self, raw: str, workdir: object) -> tuple[tuple[Path, ...], str | None]:
+        """A container's config_files label -> resolved repo files, or an error. The label is untrusted input: absolute
+        paths only, each resolving (symlinks followed) to a regular .yml/.yaml file inside the configured compose
+        directory, or to the console's own override (dropped here: the state dir decides whether it applies)."""
+        base = self._compose_path()
+        if base is None:
+            return (), "ctx.paths['dynamo_compose'] is not configured"
+        base_dir = base.parent.resolve()
+        own = self._override_path().resolve()
+        if isinstance(workdir, str) and workdir:
+            try:
+                if Path(workdir).resolve() != base_dir:
+                    return (), f"the stack's project directory {workdir[:120]!r} is not {base_dir}"
+            except (OSError, RuntimeError):
+                return (), "the stack's project directory cannot be resolved"
+        parts = [x.strip() for x in raw.split(",")]
+        if len(parts) > MAX_LABEL_FILES:
+            return (), f"more than {MAX_LABEL_FILES} compose files in the label"
+        out: list[Path] = []
+        for part in parts:
+            if not part.startswith("/") or "\x00" in part or len(part) > 4096:
+                return (), f"compose file {part[:120]!r} in the label is not an absolute path"
+            try:
+                rp = Path(part).resolve(strict=True)
+            except (OSError, RuntimeError):
+                return (), f"compose file {Path(part).name[:120]!r} from the label does not exist (any more)"
+            if rp == own:
+                continue
+            # A sibling compose file of the base, nothing deeper or differently named (security review 2026-10-17).
+            if (rp.parent != base_dir or not rp.is_file()
+                    or not re.fullmatch(r"(docker-)?compose(\.[A-Za-z0-9_.-]+)?\.ya?ml", rp.name)):
+                return (), (f"compose file {part[:160]!r} from the label is not a compose file inside {base_dir} "
+                            "(a symlink out of it counts as outside)")
+            if rp not in out:
+                out.append(rp)
+        return tuple(out), None
+
+    async def _compose_files(self, insp: dict[str, dict[str, Any]] | None = None) -> ComposeFiles:
+        """The files the live stack was started from (see the module notes); the configured base when no Dynamo
+        container exists. Containers that fail the project-label check are not ours and are ignored."""
+        base = self._compose_path()
+        if base is None:
+            return ComposeFiles((), None, error="ctx.paths['dynamo_compose'] is not configured")
+        if insp is None:
+            insp = await self._inspect([WORKER, FRONTEND, SV_FRONTEND, MOCKER])
+        seen: dict[tuple[Path, ...], list[str]] = {}
+        for name in (WORKER, FRONTEND, SV_FRONTEND, MOCKER):
+            d = insp.get(name)
+            lb = ((d or {}).get("Config") or {}).get("Labels") or {}
+            raw = lb.get(LABEL_FILES)
+            if d is None or lb.get("com.docker.compose.project") != PROJECT or not isinstance(raw, str) or not raw.strip():
+                continue
+            files, err = self._trusted_files(raw, lb.get(LABEL_WORKDIR))
+            if err:
+                cf = ComposeFiles((), base, from_label=True, error=f"{name}: {err}")
+                self._last_files = cf
+                return cf
+            seen.setdefault(files, []).append(name)
+        if len(seen) > 1:
+            why = "; ".join(f"{', '.join(n)} from {', '.join(f.name for f in fs) or 'the console override only'}"
+                            for fs, n in seen.items())
+            cf = ComposeFiles((), base, from_label=True, error=f"the Dynamo containers were started from different "
+                                                                 f"compose files ({why})")
+        elif seen:
+            files = next(iter(seen)) or (base.resolve(),)      # a label naming only the console override = base + it
+            cf = ComposeFiles(files, base, from_label=True)
+        else:
+            cf = ComposeFiles((base.resolve(),), base)
+        self._last_files = cf
+        return cf
+
+    def _refusal(self, cf: ComposeFiles, what: str) -> str | None:
+        """Why `what` (Params / the console override) cannot apply to the stack in use, or None."""
+        if cf.error:
+            return f"refused: {what} needs the compose files in use, and they cannot be trusted: {cf.error}"
+        if cf.overrides:
+            base = cf.base.name if cf.base is not None else "the base compose"
+            return (f"refused: the live Dynamo stack runs from {cf.names()}. {what} would write the worker command "
+                    f"of {base} into the console override, which would replace that stack's worker. Stop it first "
+                    "(console action `down`), or change its compose files in git.")
+        return None
 
     async def _inspect(self, names: list[str]) -> dict[str, dict[str, Any]]:
         """`docker inspect` (rc!=0 when some are absent, stdout still holds the rest). Verified by name."""
@@ -688,24 +847,52 @@ class DynamoAdapter(SystemAdapter):
         return bool(st.get("Running") or st.get("Restarting") or st.get("Status") == "restarting")
 
     @staticmethod
-    def _pinned(d: dict[str, Any], uuid: str | None) -> bool:
-        """The container requests this GPU (by UUID, or all GPUs). Unknown card: any GPU request counts (fail safe)."""
+    def _pinned(d: dict[str, Any], uuids: list[str]) -> bool:
+        """The container requests one of these GPUs (by UUID, or all GPUs). Unknown cards: any GPU request counts."""
         reqs = (d.get("HostConfig") or {}).get("DeviceRequests") or []
-        if uuid is None:
+        if not uuids:
             return bool(reqs)
-        return any(uuid in (r.get("DeviceIDs") or []) or r.get("Count") == -1 for r in reqs)
+        return any(any(u in (r.get("DeviceIDs") or []) for u in uuids) or r.get("Count") == -1 for r in reqs)
 
-    def _compose_uuid(self) -> str | None:
-        """The worker's GPU UUID as pinned in the repo compose (None when unreadable or not a UUID)."""
+    def _base_yaml_uuids(self) -> list[str]:
+        """Every GPU UUID the worker pins in the base compose file (empty when unreadable)."""
         base = self._compose_path()
         if base is None:
-            return None
-        with contextlib.suppress(OSError, yaml.YAMLError, AttributeError, IndexError, KeyError, TypeError):
+            return []
+        with contextlib.suppress(OSError, yaml.YAMLError, AttributeError, KeyError, TypeError):
             doc = yaml.safe_load(base.read_text())
-            ids = doc["services"][SVC_WORKER]["deploy"]["resources"]["reservations"]["devices"][0]["device_ids"]
-            uuid = str(ids[0])
-            return uuid if _UUID_RE.fullmatch(uuid) else None
-        return None
+            devices = doc["services"][SVC_WORKER]["deploy"]["resources"]["reservations"]["devices"]
+            return [str(u) for dev in devices for u in dev.get("device_ids") or [] if _UUID_RE.fullmatch(str(u))]
+        return []
+
+    async def _worker_uuids(self, cf: ComposeFiles, wk: dict[str, Any] | None) -> list[str]:
+        """The worker's GPUs: every device_id in the MERGED config of the files in use (cached per file set and
+        mtimes); else the base file itself (only when no repo override is in use: a variant may pin other cards);
+        else the worker container's own device requests."""
+        if not cf.error and self._compose_path() is not None:
+            files = [*(cf.files or ()), *([self._override_path()] if not cf.overrides and self._override_active() else [])]
+            try:
+                key: tuple[Any, ...] = tuple((str(f), f.stat().st_mtime_ns) for f in files)
+            except OSError:
+                key = ()
+            hit = self._uuid_cache
+            if key and hit and hit[1] == key and time.monotonic() - hit[0] < UUID_TTL:
+                return list(hit[2])
+            res = await self.ctx.runner.run(self._compose_argv(cf, "config", "--format", "json"), timeout=30.0,
+                                            max_bytes=2_000_000)
+            uuids = merged_worker_uuids(res.stdout) if res.returncode == 0 else []
+            if uuids:
+                if key:
+                    self._uuid_cache = (time.monotonic(), key, uuids)
+                return uuids
+            if not cf.overrides and (base_uuids := self._base_yaml_uuids()):
+                return base_uuids
+        out: list[str] = []
+        for req in ((wk or {}).get("HostConfig") or {}).get("DeviceRequests") or []:
+            for u in req.get("DeviceIDs") or []:
+                if isinstance(u, str) and _UUID_RE.fullmatch(u) and u not in out:
+                    out.append(u)
+        return out
 
     async def _get_json(self, path: str) -> Any | None:
         try:
@@ -743,20 +930,21 @@ class DynamoAdapter(SystemAdapter):
     async def _status(self, now: float) -> SystemStatus:
         pol = self.policy
         excl = pol.exclusive_names()
-        insp = await self._inspect([FRONTEND, WORKER, MOCKER, *excl])
-        fe, wk, mk = insp.get(FRONTEND), insp.get(WORKER), insp.get(MOCKER)
+        insp = await self._inspect([FRONTEND, WORKER, MOCKER, SV_FRONTEND, *excl])
+        fe, wk, mk, sv = insp.get(FRONTEND), insp.get(WORKER), insp.get(MOCKER), insp.get(SV_FRONTEND)
         fe_state, wk_state, mk_state = self._state(fe), self._state(wk), self._state(mk)
-        if pol.opt_in and not any(self._active(d) for d in (fe, wk, mk)):
-            return self._off_status(now, fe, wk, mk)
+        if pol.opt_in and not any(self._active(d) for d in (fe, wk, mk, sv)):
+            return self._off_status(now, fe, wk, mk, sv)
         problems: list[Problem] = []
         comps: list[Component] = []
-        uuid = self._compose_uuid()
-        if uuid is None:
-            for req in ((wk or {}).get("HostConfig") or {}).get("DeviceRequests") or []:
-                if req.get("DeviceIDs"):
-                    uuid = str(req["DeviceIDs"][0])
+        cf = await self._compose_files(insp)
+        uuids = await self._worker_uuids(cf, wk)
         excl_running = [n for n in excl if self._state(insp.get(n)) == "running"]
-        excl_on_card = [n for n in excl_running if self._pinned(insp[n], uuid)]
+        excl_on_card = [n for n in excl_running if self._pinned(insp[n], uuids)]
+        # With repo override files in use, the configured start command (it starts the BASE stack) would replace this
+        # stack: every start fix is then the console's own `up`, which uses exactly the files in use.
+        start_fix = (f"run the console action `up` (it uses the files this stack runs from: {cf.names()})"
+                     if cf.overrides else pol.start)
 
         models_doc = health_doc = None
         if fe_state == "running":
@@ -768,10 +956,18 @@ class DynamoAdapter(SystemAdapter):
         fe_http = health_doc is not None
 
         fe_health = ((fe or {}).get("State") or {}).get("Health", {}).get("Status")
+        gateway = sv is not None and fe is not None and not _is_dynamo_image(fe)
         comps.append(Component(kind="container", name=FRONTEND, state=fe_state,
                                image=(fe or {}).get("Config", {}).get("Image"),
-                               detail=(f"docker health: {fe_health}; " if fe_health else "")
+                               detail=(f"gateway to {SVC_SV_FRONTEND}; " if gateway else "")
+                               + (f"docker health: {fe_health}; " if fe_health else "")
                                + ("HTTP ok" if fe_http else "HTTP unreachable" if fe_state == "running" else "")))
+        if sv is not None:
+            sv_health = (sv.get("State") or {}).get("Health", {}).get("Status")
+            comps.append(Component(kind="container", name=SV_FRONTEND, state=self._state(sv),
+                                   image=(sv.get("Config") or {}).get("Image"),
+                                   detail="the Dynamo frontend, on an internal network behind the gateway"
+                                          + (f"; docker health: {sv_health}" if sv_health else "")))
         loading = wk_state == "running" and fe_http and not models
         wk_detail = None
         if wk_state == "running":
@@ -788,9 +984,22 @@ class DynamoAdapter(SystemAdapter):
         # problems --------------------------------------------------------------------------
         # 2026-10-06: every start fix is the configured start command (default: the model-switch script, which frees
         # the card in the right order). A bare `docker compose up -d` beside the default model crash-loops the worker.
+        if cf.error:
+            problems.append(Problem(severity="warn", code="dynamo.compose.untrusted",
+                                    message=f"Lifecycle actions and Params are refused: {cf.error}",
+                                    fix=f"docker inspect --format '{{{{index .Config.Labels \"{LABEL_FILES}\"}}}}' {WORKER}"))
+        elif cf.overrides:
+            problems.append(Problem(severity="info", code="dynamo.compose.override",
+                                    message=f"The stack runs from {cf.names()} (its compose labels). up, down and restart "
+                                            "use exactly these files; Params and the console override are refused "
+                                            "while it does, because they restate the base worker command."))
         if fe_state != "running":
             problems.append(Problem(severity="error", code="dynamo.frontend.down",
-                                    message=f"frontend container {FRONTEND} is {fe_state}", fix=pol.start))
+                                    message=f"frontend container {FRONTEND} is {fe_state}", fix=start_fix))
+        elif sv is not None and self._state(sv) != "running":
+            problems.append(Problem(severity="error", code="dynamo.frontend.down",
+                                    message=f"frontend container {SV_FRONTEND} (behind the gateway) is {self._state(sv)}",
+                                    fix=start_fix))
         elif not fe_http:
             problems.append(Problem(severity="error", code="dynamo.frontend.unreachable",
                                     message=f"{FRONTEND} runs but {self.base_url}/health did not answer",
@@ -798,27 +1007,33 @@ class DynamoAdapter(SystemAdapter):
         if wk_state == "absent" and mk_state != "running":
             problems.append(Problem(severity="warn" if fe_state == "running" else "info", code="dynamo.worker.absent",
                                     message="no Dynamo worker container: the frontend has nothing to route to",
-                                    fix=pol.start))
+                                    fix=start_fix))
         elif wk_state in ("stopped", "failed"):
             problems.append(Problem(severity="error", code="dynamo.worker.stopped",
                                     message=f"worker {WORKER} is {'restarting (crash loop)' if self._active(wk) else wk_state}",
                                     fix=f"docker logs --tail 80 {WORKER}"))
         if self._active(wk) and excl_on_card:
+            keep = ("To keep this Dynamo stack, stop that engine instead" if cf.overrides
+                    else f"To run Dynamo instead, switch with: {pol.start}")
             problems.append(Problem(severity="error", code="dynamo.card.contended",
                                     message=f"{', '.join(excl_on_card)} and the Dynamo worker are both on the worker's "
                                             "card; they cannot share its VRAM (the worker crash-loops or the engine "
-                                            f"fails). To run Dynamo instead, switch with: {pol.start}",
+                                            f"fails). {keep}",
                                     fix="run the console action `down` (stops only Dynamo; the other engine keeps running)"))
-        elif wk_state == "running" and not excl_running:
-            problems.append(Problem(severity="warn", code="dynamo.holds_card",
-                                    message="Dynamo holds the card and no exclusive engine is running, so these are "
-                                            f"dark: {pol.dark_text()}",
+        elif wk_state == "running" and not excl_running and pol.dark:
+            # Informational: Dynamo is opt-in, and holding the card(s) is what it does while it runs (the lab's Super VL
+            # stack is resident). The fix names how to switch away, it does not do it.
+            problems.append(Problem(severity="info", code="dynamo.holds_card",
+                                    message="Dynamo holds the worker's card(s) and no exclusive engine is running, so "
+                                            f"these are dark: {pol.dark_text()}",
                                     fix=pol.restore))
         if mk_state == "running":
             problems.append(Problem(severity="info", code="dynamo.mocker.running",
                                     message="the CPU mocker is registered as the model; its text is gibberish by design",
                                     fix="run the console action `down` to remove it"))
-        if wk_state == "running" and wk is not None:
+        # These two are measured on the base compose's model and fixed through Params, which only applies to the base
+        # stack: a variant's worker command belongs to its own compose file (git), so they are not raised for it.
+        if wk_state == "running" and wk is not None and not cf.overrides:
             cmd = [str(c) for c in ((wk.get("Config") or {}).get("Cmd") or [])]
             if _STRUCTURAL not in cmd:
                 problems.append(Problem(severity="warn", code="dynamo.structural_tag.off",
@@ -830,7 +1045,7 @@ class DynamoAdapter(SystemAdapter):
                                         message="worker was started with vLLM's --tool-call-parser/--reasoning-parser; "
                                                 "Dynamo parses in the Rust frontend via --dyn-* flags, so these do nothing useful",
                                         fix="Params: set tool_call_parser / reasoning_parser (renders --dyn-*)"))
-        if fe_state == "running" and fe is not None:
+        if fe_state == "running" and fe is not None and not cf.overrides:
             fcmd = [str(c) for c in ((fe.get("Config") or {}).get("Cmd") or [])]
             if "--router-mode" in fcmd and fcmd[fcmd.index("--router-mode") + 1:][:1] == ["kv"]:
                 problems.append(Problem(severity="warn", code="dynamo.router.kv",
@@ -848,18 +1063,18 @@ class DynamoAdapter(SystemAdapter):
         else:
             health, summary = "up", f"serving {models[0]}" + (f" (+{len(models) - 1})" if len(models) > 1 else "")
 
-        return SystemStatus(system="dynamo", health=health, version=self._version(fe, wk), summary=summary,
+        return SystemStatus(system="dynamo", health=health, version=self._version(wk, sv, fe), summary=summary,
                             endpoints=self._endpoints(), components=comps, problems=problems, checked_at=now)
 
     def _off_status(self, now: float, fe: dict[str, Any] | None, wk: dict[str, Any] | None,
-                    mk: dict[str, Any] | None) -> SystemStatus:
+                    mk: dict[str, Any] | None, sv: dict[str, Any] | None = None) -> SystemStatus:
         """Opt-in and nothing running or restarting: intentionally off. One info problem, no error-level noise.
 
         A container that exited non-zero long ago (e.g. an old crash loop) is shown as `stopped` with its exit code in
         the detail: it is not failing now, it is off."""
         comps: list[Component] = []
-        for name, d in ((FRONTEND, fe), (WORKER, wk), (MOCKER, mk)):
-            if d is None and name == MOCKER:
+        for name, d in ((FRONTEND, fe), (SV_FRONTEND, sv), (WORKER, wk), (MOCKER, mk)):
+            if d is None and name in (MOCKER, SV_FRONTEND):
                 continue
             code = ((d or {}).get("State") or {}).get("ExitCode")
             comps.append(Component(kind="container", name=name, state="absent" if d is None else "stopped",
@@ -870,14 +1085,15 @@ class DynamoAdapter(SystemAdapter):
                                   "restarting. Start it with the fix: it frees the worker's card first (the console's "
                                   "`up` is refused while an exclusive engine holds the card).",
                           fix=self.policy.start)
-        return SystemStatus(system="dynamo", health="off", version=self._version(fe, wk),
+        return SystemStatus(system="dynamo", health="off", version=self._version(wk, sv, fe),
                             summary="off (opt-in): no Dynamo container is running", endpoints=self._endpoints(),
                             components=comps, problems=[problem], checked_at=now)
 
     @staticmethod
-    def _version(fe: dict[str, Any] | None, wk: dict[str, Any] | None) -> str | None:
-        image = str((fe or wk or {}).get("Config", {}).get("Image", "") or "")
-        return image.rsplit(":", 1)[-1] if ":" in image.rsplit("/", 1)[-1] else None
+    def _version(*docs: dict[str, Any] | None) -> str | None:
+        """The first Dynamo image tag among (worker, real frontend, frontend). The lab's Super VL gateway is nginx and
+        images carry `@sha256:` digests: neither is ever reported as the Dynamo version."""
+        return next((v for d in docs if (v := image_version(d))), None)
 
     def _endpoints(self) -> list[Endpoint]:
         return [
@@ -940,9 +1156,11 @@ class DynamoAdapter(SystemAdapter):
 
     async def _logs(self, name: str, component: str, *, tail: int | None = None, since: float | None = None) -> list[SystemEvent]:
         d = (await self._inspect([name])).get(name)
-        if d is None or not (self._project_ok(d, SVC_FRONTEND) or self._project_ok(d, SVC_WORKER)
-                             or self._project_ok(d, SVC_MOCKER)):
+        if d is None or not any(self._project_ok(d, svc) for svc in (SVC_FRONTEND, SVC_WORKER, SVC_MOCKER,
+                                                                    SVC_SV_FRONTEND)):
             return []
+        if name == FRONTEND and not _is_dynamo_image(d):
+            component = "gateway"                 # the Super VL variant's nginx at the dynamo-frontend service name
         argv = ["docker", "logs", "--timestamps"]
         argv += ["--tail", str(max(1, min(tail, 1000)))] if tail is not None else []
         argv += ["--since", f"{since:.3f}"] if since is not None else []
@@ -953,7 +1171,7 @@ class DynamoAdapter(SystemAdapter):
     async def recent_events(self, limit: int = 100) -> list[SystemEvent]:
         limit = max(1, min(limit, 500))
         evs: list[SystemEvent] = []
-        for name, comp in ((FRONTEND, "frontend"), (WORKER, "worker"), (MOCKER, "mocker")):
+        for name, comp in LOG_SOURCES:
             evs += await self._logs(name, comp, tail=min(1000, limit * 3))
         evs.sort(key=lambda e: e.ts)
         return evs[-limit:]
@@ -963,7 +1181,7 @@ class DynamoAdapter(SystemAdapter):
         seen: dict[tuple[float, str], None] = {}
         while True:
             batch: list[SystemEvent] = []
-            for name, comp in ((FRONTEND, "frontend"), (WORKER, "worker"), (MOCKER, "mocker")):
+            for name, comp in LOG_SOURCES:
                 batch += await self._logs(name, comp, tail=200, since=cursor)
             batch.sort(key=lambda e: e.ts)
             for ev in batch:
@@ -999,8 +1217,9 @@ class DynamoAdapter(SystemAdapter):
                 description="Restates the worker (and optionally frontend) `command` with the console-managed "
                             "tunables. Delete it to fall back to the repo compose.",
                 display_path=self._display(self._override_path()),
-                validators=["allowlist (services/flags/env)", "docker compose config -q"], authoritative=True,
-                apply_effect="recreates dynamo-worker (~4 min cold start); router alias qwen3.8-27b-dynamo and the "
+                validators=["allowlist (services/flags/env)", "docker compose config -q",
+                            "refused while the live stack runs from repo override files"], authoritative=True,
+                apply_effect="recreates dynamo-worker (~4 min cold start); the router aliases Dynamo serves and the "
                              "Dynamo playground are unavailable meanwhile"),
         ]
 
@@ -1140,6 +1359,8 @@ class DynamoAdapter(SystemAdapter):
         if file_id != "override":
             raise KeyError(file_id)
         diags = self._check_override_doc(content)
+        if content.strip() and (why := self._refusal(await self._compose_files(), "Applying the console override")):
+            diags.append(Diagnostic(severity="error", message=why))
         ok = not any(x.severity == "error" for x in diags)
         note: str | None = None
         authoritative = False
@@ -1189,7 +1410,11 @@ class DynamoAdapter(SystemAdapter):
             return {}
 
     def param_warnings(self, values: dict[str, object]) -> list[str]:
-        return param_warnings(validate_values(values))
+        w = param_warnings(validate_values(values))
+        last = self._last_files                    # from the last status/action probe (this method may not await)
+        if last is not None and (why := self._refusal(last, "Applying these Params")):
+            w.insert(0, why)
+        return w
 
     def _base_commands(self) -> tuple[list[str], list[str]]:
         base = self._compose_path()
@@ -1227,14 +1452,17 @@ class DynamoAdapter(SystemAdapter):
             text = await self.preview_params(values)
         except ParamError as e:
             return ApplyResult(ok=False, detail=str(e))
+        cf = await self._compose_files()
+        if why := self._refusal(cf, "Applying Params"):
+            return ApplyResult(ok=False, detail=why)        # nothing written: the live stack is not the base stack
         try:
             previous: str | None = self._override_path().read_text()
         except OSError:
             previous = None
         self._write_override(text)
         try:
-            chk = await self.ctx.runner.run(self._compose_argv("config", "-q"), timeout=30.0)
-        except FileNotFoundError as e:
+            chk = await self.ctx.runner.run(self._compose_argv(cf, "config", "-q"), timeout=30.0)
+        except (FileNotFoundError, PermissionError) as e:
             self._restore_override(previous)
             return ApplyResult(ok=False, detail=str(e))
         if chk.returncode != 0:
@@ -1278,11 +1506,15 @@ class DynamoAdapter(SystemAdapter):
             await asyncio.sleep(self.poll_interval)
 
     async def _recreate_worker_and_check(self, why: str) -> ApplyResult:
+        cf = await self._compose_files()
+        if refused := self._refusal(cf, "Applying the console override"):
+            # re-checked here: the stack may have changed since validation; skipped, so nothing is rolled back blindly
+            return ApplyResult(ok=False, restarted=False, post_check="skipped", detail=f"{why}; {refused}")
         prev = (await self._inspect([WORKER])).get(WORKER)
         prev_started = ((prev or {}).get("State") or {}).get("StartedAt")
         try:
-            argv = self._compose_argv("up", "-d", SVC_FRONTEND, SVC_WORKER)
-        except FileNotFoundError as e:
+            argv = self._compose_argv(cf, "up", "-d", SVC_FRONTEND, SVC_WORKER)
+        except (FileNotFoundError, PermissionError) as e:
             return ApplyResult(ok=False, detail=str(e))
         res = await self.ctx.runner.run(argv, timeout=600.0)
         if res.returncode != 0:
@@ -1298,12 +1530,14 @@ class DynamoAdapter(SystemAdapter):
         excl = ", ".join(pol.exclusive) or "none configured"
         return [
             ActionSpec(id="preflight", label="Preflight (what shares the card)", danger="safe",
-                       description="Lists the running containers pinned to the Dynamo worker's GPU UUID, sorted into "
+                       description="Lists the running containers pinned to any of the Dynamo worker's GPUs, sorted into "
                                    "exclusive (block `up`), coexisting (allowed beside the worker), ignored (monitoring) "
                                    "and unknown (block `up`, never stopped). Dynamo up/down touches no other container "
                                    "and never runs the model-switch script."),
             ActionSpec(id="up", label="Up (frontend + worker)", danger="disruptive",
-                       description=f"docker compose up -d for the frontend and the vLLM worker (cold start ~4 min). "
+                       description=f"docker compose up -d for the frontend and the vLLM worker (cold start ~4 min), with "
+                                   f"the compose files the existing Dynamo containers were started from (with none, the "
+                                   f"configured base compose). "
                                    f"Refused while an exclusive engine runs on the worker's card ({excl}): switch to "
                                    f"Dynamo with `{pol.start}` instead, which stops them in the right order. "
                                    f"stop_sharing_engine=true stops only {STOPPABLE_ENGINE}, never another engine. "
@@ -1316,29 +1550,28 @@ class DynamoAdapter(SystemAdapter):
                                               "other engine: with another exclusive engine on the card `up` stays "
                                               "refused.")]),
             ActionSpec(id="down", label="Down (Dynamo only)", danger="disruptive",
-                       description="docker compose down for the Dynamo project (frontend, worker, mocker); volumes are "
-                                   "kept. Frees the worker's card; touches no other container and does not bring the "
-                                   f"default model back (that is `{pol.restore}`)."),
+                       description="docker compose down for the Dynamo project (frontend, worker, mocker, and the "
+                                   "services of the override files the stack runs from); volumes are kept. Frees the "
+                                   "worker's card(s); touches no other container and starts no other engine (to switch "
+                                   f"to one: `{pol.restore}`)."),
             ActionSpec(id="restart", label="Restart (recreate)", danger="disruptive",
-                       description="up -d --force-recreate of frontend and worker, picking up the override."),
+                       description="up -d --force-recreate of frontend and worker with the compose files in use, picking "
+                                   "up the console override (base stack only)."),
             ActionSpec(id="up_mock", label="Up mock (CPU, no VRAM)", danger="safe",
-                       description="Starts the frontend and the CPU mocker (--profile mock) to test plumbing. Refused "
-                                   "while the real worker runs (same model name)."),
+                       description="Starts the frontend and the CPU mocker (--profile mock) of the base compose to test "
+                                   "plumbing. Refused while the real worker runs (same model name) and while the stack "
+                                   "runs from override files."),
         ]
 
-    async def _sharers(self) -> tuple[list[dict[str, Any]], str | None]:
-        """Running containers (other than Dynamo's) pinned to the worker's GPU UUID. -> (sharers, error).
+    async def _sharers(self, cf: ComposeFiles) -> tuple[list[dict[str, Any]], str | None]:
+        """Running containers (other than Dynamo's) pinned to ANY of the worker's GPUs. -> (sharers, error).
 
         Each sharer carries `kind` from the CardPolicy: exclusive | coexisting | ignored | unknown."""
-        uuid = self._compose_uuid()
-        if uuid is None:
-            wk = (await self._inspect([WORKER])).get(WORKER)
-            for req in ((wk or {}).get("HostConfig") or {}).get("DeviceRequests") or []:
-                if req.get("DeviceIDs"):
-                    uuid = str(req["DeviceIDs"][0])
-        self._card_uuid = uuid
-        if uuid is None or not _UUID_RE.fullmatch(uuid):
-            return [], "cannot determine the worker's GPU UUID from the compose or the container"
+        wk = (await self._inspect([WORKER])).get(WORKER)
+        uuids = await self._worker_uuids(cf, wk)
+        self._card_uuids = uuids
+        if not uuids:
+            return [], "cannot determine the worker's GPU UUID(s) from the compose files in use or the container"
         ps = await self.ctx.runner.run(["docker", "ps", "--format", "{{.Names}}"], timeout=15.0)
         names = [n for n in ps.stdout.split() if _NAME_RE.fullmatch(n) and n not in DYNAMO_NAMES]
         if not names:
@@ -1349,7 +1582,7 @@ class DynamoAdapter(SystemAdapter):
             if self._state(d) != "running":
                 continue
             for req in (d.get("HostConfig") or {}).get("DeviceRequests") or []:
-                if uuid in (req.get("DeviceIDs") or []) or req.get("Count") == -1:
+                if any(u in (req.get("DeviceIDs") or []) for u in uuids) or req.get("Count") == -1:
                     lb = (d.get("Config") or {}).get("Labels") or {}
                     out.append({"name": n, "image": (d.get("Config") or {}).get("Image", ""),
                                 "project": lb.get("com.docker.compose.project", ""),
@@ -1384,27 +1617,38 @@ class DynamoAdapter(SystemAdapter):
         if self._compose_path() is None:
             return ActionResult(ok=False, problems=[Problem(severity="error", code="dynamo.compose.unset",
                                 message="repo compose path is not configured", fix="set ctx.paths['dynamo_compose']")])
+        cf = await self._compose_files()
         if action_id == "preflight":
-            return await self._preflight()
+            return await self._preflight(cf)
+        if cf.error:
+            # never fall back to the base file here: that is exactly how a variant stack gets replaced or orphaned
+            return ActionResult(ok=False, output=f"refused: {cf.error}", problems=[Problem(
+                severity="error", code="dynamo.compose.untrusted",
+                message=f"the compose files of the running Dynamo stack cannot be trusted: {cf.error}",
+                fix=f"docker inspect --format '{{{{index .Config.Labels \"{LABEL_FILES}\"}}}}' {WORKER}")])
         if action_id == "up_mock":
-            return await self._up_mock()
+            return await self._up_mock(cf)
         if action_id == "down":
-            r = await self.ctx.runner.run(self._compose_argv("down", profile_mock=True), timeout=180.0)
+            r = await self.ctx.runner.run(self._compose_argv(cf, "down", profile_mock=True), timeout=180.0)
             return ActionResult(ok=r.returncode == 0, output=redact((r.stdout + r.stderr).strip())[-2000:])
-        return await self._up_or_restart(action_id, params)
+        return await self._up_or_restart(action_id, params, cf)
 
-    async def _preflight(self) -> ActionResult:
+    async def _preflight(self, cf: ComposeFiles) -> ActionResult:
         pol = self.policy
-        sharers, err = await self._sharers()
+        sharers, err = await self._sharers(cf)
         if err:
             return ActionResult(ok=False, output=err)
         blocking, stoppable, unknown, coexisting, ignored = self._split(sharers)
-        lines = [("Dynamo worker GPU: pinned by UUID in the compose; up/down of Dynamo touches no other container "
-                  "and never calls the model-switch script.")]
+        cards = ", ".join(self._card_uuids)
+        lines = [(f"Dynamo worker GPU(s): {cards} (from the compose files in use: {cf.names()}"
+                  f"{'; refused for lifecycle actions: ' + cf.error if cf.error else ''}). up/down of Dynamo touches "
+                  "no other container and never calls the model-switch script.")]
+        # with a variant stack the configured start command (the BASE stack) is not the remedy: name the engines
+        switch = (f"Stop them first (they are exclusive with this stack: {cf.names()})" if cf.overrides
+                  else f"Switch to Dynamo with `{pol.start}` (it stops them in the right order)")
         if blocking:
             lines.append("Exclusive engines running on the card: " + "; ".join(self._describe(s) for s in blocking)
-                         + f". `up` is refused while they run. Switch to Dynamo with `{pol.start}` (it stops them in "
-                         "the right order); the console never stops them.")
+                         + f". `up` is refused while they run. {switch}; the console never stops them.")
         if stoppable:
             lines.append(f"{STOPPABLE_ENGINE} (exclusive) is running on the card. `up` is refused until it stops; "
                          f"stop_sharing_engine=true stops only {STOPPABLE_ENGINE}.")
@@ -1419,9 +1663,10 @@ class DynamoAdapter(SystemAdapter):
             lines.append("Ignored (monitoring): " + ", ".join(s["name"] for s in ignored) + ".")
         if not sharers:
             lines.append("No other container is running on the Dynamo card.")
-        lines.append(f"While Dynamo holds the card these are dark ({pol.dark_text()}). Restore the default model "
-                     f"with `{pol.restore}`.")
-        probs = [Problem(severity="warn", code="dynamo.card.shared", message=self._describe(s), fix=pol.start)
+        lines.append(f"While Dynamo holds the card these are dark ({pol.dark_text()}). To switch to another engine: "
+                     f"`{pol.restore}`.")
+        probs = [Problem(severity="warn", code="dynamo.card.shared", message=self._describe(s),
+                         fix=f"stop {s['name']} first, then run the console action `up`" if cf.overrides else pol.start)
                  for s in blocking]
         probs += [Problem(severity="warn", code="dynamo.card.shared", message=self._describe(s),
                           fix="run `up` with stop_sharing_engine=true") for s in stoppable]
@@ -1443,7 +1688,7 @@ class DynamoAdapter(SystemAdapter):
         cur = await self._inspect([*excl, WORKER])
         for n in excl:
             d = cur.get(n)
-            if d is not None and n not in names and self._card_uuid and self._pinned(d, self._card_uuid):
+            if d is not None and n not in names and self._card_uuids and self._pinned(d, self._card_uuids):
                 names[n] = "running" if self._state(d) == "running" else "stopped"
         out = [f"shares_card: {n} ({st})" for n, st in sorted(names.items())] or ["shares_card: none"]
         stop = any(s["name"] == STOPPABLE_ENGINE and s["kind"] == "exclusive" for s in sharers)
@@ -1454,17 +1699,23 @@ class DynamoAdapter(SystemAdapter):
                    else "router_aliases_dark: none")
         return out
 
-    async def _up_mock(self) -> ActionResult:
+    async def _up_mock(self, cf: ComposeFiles) -> ActionResult:
+        if cf.overrides:
+            return ActionResult(ok=False, output=f"refused: the stack runs from {cf.names()}; the CPU mocker belongs "
+                                "to the base compose", problems=[Problem(
+                                    severity="error", code="dynamo.mock.override_in_use",
+                                    message=f"the live Dynamo stack runs from {cf.names()}",
+                                    fix="run the console action `down` first")])
         cur = await self._inspect([WORKER])
         if WORKER in cur and self._state(cur[WORKER]) == "running":
             return ActionResult(ok=False, output="refused: the real worker is running (same model name as the mocker)",
                                 problems=[Problem(severity="error", code="dynamo.mock.worker_running",
                                                   message="stop the worker first", fix="run the console action `down`")])
-        r = await self.ctx.runner.run(self._compose_argv("up", "-d", SVC_FRONTEND, SVC_MOCKER, profile_mock=True),
+        r = await self.ctx.runner.run(self._compose_argv(cf, "up", "-d", SVC_FRONTEND, SVC_MOCKER, profile_mock=True),
                                       timeout=300.0)
         return ActionResult(ok=r.returncode == 0, output=redact((r.stdout + r.stderr).strip())[-2000:])
 
-    async def _up_or_restart(self, action_id: str, params: dict[str, object]) -> ActionResult:
+    async def _up_or_restart(self, action_id: str, params: dict[str, object], cf: ComposeFiles) -> ActionResult:
         pol = self.policy
         cur = await self._inspect([WORKER, MOCKER])
         worker_running = WORKER in cur and self._state(cur[WORKER]) == "running"
@@ -1475,19 +1726,22 @@ class DynamoAdapter(SystemAdapter):
                                                   message="the mocker must not run alongside the real worker",
                                                   fix="run the console action `down`, then `up`")])
         if not worker_running:
-            sharers, err = await self._sharers()
+            sharers, err = await self._sharers(cf)
             if err:
                 return ActionResult(ok=False, output=err, problems=[Problem(
                     severity="error", code="dynamo.preflight.failed", message=err)])
             blocking, stoppable, unknown, _coexisting, _ignored = self._split(sharers)
             if blocking:
                 # Never `docker stop` here: the default model's start order (and the engines it bounces) belongs to
-                # its own script, so the remedy is the configured switch command, run by the operator.
+                # its own script, so the remedy is the configured switch command, run by the operator. With repo
+                # override files in use that command (it starts the BASE stack) is wrong: name the engines instead.
                 why = "; ".join(self._describe(s) for s in blocking)
+                fix = (f"stop {', '.join(s['name'] for s in blocking)} first (exclusive with this stack), then run "
+                       "the console action `up`" if cf.overrides else pol.start)
                 return ActionResult(ok=False, output=f"refused: exclusive engine(s) on the worker's card: {why}. The "
-                                    f"console never stops them; switch to Dynamo with: {pol.start}",
+                                    f"console never stops them; {'' if cf.overrides else 'switch to Dynamo with: '}{fix}",
                                     problems=[Problem(severity="error", code="dynamo.up.exclusive_engine",
-                                                      message=f"card held by {why}", fix=pol.start)])
+                                                      message=f"card held by {why}", fix=fix)])
             if unknown:
                 why = "; ".join(self._describe(s) for s in unknown)
                 first = unknown[0]["name"]
@@ -1514,7 +1768,7 @@ class DynamoAdapter(SystemAdapter):
         tail = ["up", "-d"] + (["--force-recreate"] if action_id == "restart" else []) + [SVC_FRONTEND, SVC_WORKER]
         prev = cur.get(WORKER)
         prev_started = ((prev or {}).get("State") or {}).get("StartedAt")
-        r = await self.ctx.runner.run(self._compose_argv(*tail), timeout=600.0)
+        r = await self.ctx.runner.run(self._compose_argv(cf, *tail), timeout=600.0)
         out.append(redact((r.stdout + r.stderr).strip())[-1500:])
         if r.returncode != 0:
             return ActionResult(ok=False, output="\n".join(out), problems=[Problem(

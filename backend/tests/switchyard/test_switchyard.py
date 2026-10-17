@@ -401,7 +401,9 @@ async def test_playground(adapter: SwitchyardAdapter) -> None:
     await adapter.status()                        # learns live route ids
     pg = adapter.playground()
     assert pg is not None and pg.wire == "openai_chat" and pg.models == ROUTE_IDS
-    assert pg.default_model == "auto-local"
+    assert pg.default_model == ROUTE_IDS[0]          # this capture predates super-lightning: the first route, no failure
+    adapter._route_ids = [*ROUTE_IDS, "super-lightning"]
+    assert adapter.playground().default_model == "super-lightning"   # type: ignore[union-attr]
     assert "forward" in pg.note.lower() and "secret_env" in pg.note
     assert adapter.playground_url() == "http://127.0.0.1:4010/v1/chat/completions"
 
@@ -409,6 +411,12 @@ async def test_playground(adapter: SwitchyardAdapter) -> None:
 async def test_playground_before_first_status_uses_file(adapter: SwitchyardAdapter) -> None:
     pg = adapter.playground()
     assert pg is not None and pg.models == ROUTE_IDS
+
+
+async def test_playground_without_any_route_never_fails(adapter: SwitchyardAdapter) -> None:
+    adapter.config_path("routes").write_text("")                  # nothing live, nothing in the file
+    pg = adapter.playground()
+    assert pg is not None and pg.models == ["super-lightning"] and pg.default_model == "super-lightning"
 
 
 # ── base_url policy ─────────────────────────────────────────────────────────────────────────

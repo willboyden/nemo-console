@@ -7,9 +7,21 @@ implemented / verified-live / unverified defined in the README.
 
 ### Added
 
+- **SkillEvaluator Tier 3** (live agent evaluation, "Skill Lift"): action `evaluate_live` (`disruptive`: admin and
+  confirm, because it spends router tokens and runs an agent). It runs `skillevaluator-local tier3 SKILL --n-attempts N
+  --agent-model opencode=ALIAS --judge-model ALIAS --dataset auto|existing|generate [--skip-baseline] --results-dir
+  <run dir> --quiet` in the background (one run at a time; a second request is refused), returns at once with the run
+  id, and fills `run.json` from `running` to the verdict (result.json `execution_status`), the Skill Lift per agent and
+  per metric, scored/expected attempts, duration and the first conclusions/recommendations. A console stop marks the run
+  `interrupted` (the runner sends the launcher SIGINT first); a run left `running` by a restarted console reads as
+  `interrupted`. Plain `skillevaluator` is refused for Tier 3 (its stock sandboxes have open network). The runner allows
+  4800 s for this one call; every other command keeps the 600 s cap. New metrics `se.live_running`, `se.last_skill_lift`;
+  `se.runs_by_verdict` gains `succeeded` and `interrupted`; the Skills page shows both. Fakes only, plus a parse-only
+  check that the lab launcher accepts the argv; **a live Tier 3 run through the console is unverified**.
+- `topology_engines` setting (the engine nodes of the topology) and `switchyard.tier.capable_not_deployed`.
 - A fourth system, **NVIDIA SkillEvaluator** (`skillevaluator`): a Skills page that evaluates the agent skills under
   `<repo>/.claude/skills` with SkillEvaluator 0.5.0. Tiers `static` (offline), `tier1` (adds the LLM judge) and `tier1+2`
-  (adds embedding deduplication); Tier 3 is not offered because its stock sandboxes need open internet. Every run keeps its
+  (adds embedding deduplication); Tier 3 came later, through the wrapper only (entry above). Every run keeps its
   JSON + Markdown report in the state dir (newest 200), shows up as a `skilleval.run` event, and feeds `se.*` metrics.
   The console runs `skillevaluator-local` when it is on PATH (a wrapper that reads its own key file, so the console never
   holds a provider key), else `skillevaluator` with `SKILL_EVAL_*` from the console's environment; those variables reach
@@ -18,6 +30,32 @@ implemented / verified-live / unverified defined in the README.
 
 ### Fixed
 
+- Dynamo lifecycle against a stack started from more than one compose file. The live stack on the author's deployment
+  runs from `docker-compose.yml` + `docker-compose.super-vl.yml` (Super VL: nginx gateway at `dynamo-frontend`, the real
+  frontend `dynamo-sv-frontend`, worker on both GPUs), but the console knew only the base file: its `up`/`restart` would
+  have replaced Super VL with the 27B stack, its `down` would have orphaned `dynamo-sv-frontend`, and Params would have
+  rewritten the worker. Up/down/restart/config checks now use exactly the files in the containers' compose label
+  (untrusted input: each must resolve inside the configured compose directory, `working_dir` must match, the containers
+  must agree; otherwise everything refuses, with no fallback to the base). With an override file in use, Params and the
+  console override are refused with the reason. The worker's GPUs come from the merged `docker compose config` (both
+  cards for Super VL). Verified live read-only on 2026-10-17 (status, preflight, the refusals); the lifecycle calls with
+  those files are fakes only.
+- The Dynamo version showed the nginx gateway's image digest; it is now the first Dynamo image tag (worker first), never
+  a digest (`1.6.0-nemotron-3.5-super-vl-dev.1`, read live). The real frontend behind the gateway is a component and a
+  log source.
+- Fixes that would tear down the running layout. `dynamo.holds_card` advised `scripts/use-model.sh qwen3.8-flash-next`
+  (it stops Super VL); it is now info and its fix lists the engines only. Engine start commands say what they stop.
+  A capable tier whose container does not exist (flashnext, on 2026-10-17) no longer degrades Switchyard; it is the info
+  problem `switchyard.tier.capable_not_deployed`. The topology draws missing engines `off` "(not deployed)".
+- The Switchyard and Relay playgrounds defaulted to `auto-local`, which escalates to an engine that is no longer
+  deployed; the default is now `super-lightning` when it exists (what LiteLLM's `switchyard` alias forwards to), else the
+  first route. The Relay playground sent no key (401 from the gateway); `playground_key_env` now maps `relay` to
+  `LITELLM_API_KEY` by default.
+- Relay events skipped gzipped ATOF rotations (`relay-events.jsonl.2.gz`); they are read with size caps (verified on the
+  real file, read-only).
+- SkillEvaluator's install fix suggested an unpinned `git+https://github.com/NVIDIA/SkillEvaluator.git`; it is now the
+  lab's pinned installer when the repo has it, else the same command pinned to `7304d76` (v0.5.0). A `tier1+2` run whose
+  Tier 2 lacked embeddings now says so (`skillevaluator.tier2.no_embeddings`, fix: start the lab's Ollama).
 - The Relay liveness probe no longer floods Langfuse. It polled `GET /v1/models` on the gateway, which forwards
   it to LiteLLM; without a bearer every poll was a 401 that LiteLLM logged to Langfuse as an ERROR trace
   (about 43,000 a day at the 2 s poll, 98% of all traces on the author's deployment). Liveness now uses the
@@ -53,6 +91,12 @@ implemented / verified-live / unverified defined in the README.
 
 ### Changed
 
+- Engine-layout defaults follow the author's deployment of 2026-10-17 (ARCHITECTURE 9.6): exclusive with Dynamo = Bolt,
+  GLM, flashnext, the 27B; coexisting = lightning, ollama, chatterbox-tts; new engine probes for Super VL, Bolt and GLM.
+  All are settings.
+- The runner stops a cancelled command's whole process group (it used to leave it to asyncio), with SIGINT and a 5 s
+  grace first for the two SkillEvaluator launchers.
+- `dynamo.structural_tag.off`, `dynamo.parser.dialect` and `dynamo.router.kv` are raised for the base stack only.
 - `Health` gains the value `"off"` (additive; ARCHITECTURE 9.4). The UI shows it as a neutral badge (○, dashed tile and
   node), never red; the topology legend says so.
 - Dynamo card model is settings-driven: `dynamo_exclusive_engines`, `dynamo_coexisting_engines`,

@@ -30,10 +30,9 @@ added when upstream sends one of a set of candidate header names.
   would not be caught. Upstreams are not expected to echo the bearer; this is a defence-in-depth gap.
 - The served-by header names are guesses; real Switchyard responses did not carry them, so the badges are
   normally empty.
-- Only `switchyard` has a default credential mapping. Relay's gateway answers 401 without a bearer, and Dynamo's
-  frontend needs none. To use the Relay playground, add a `relay` entry (Settings, or
-  `NEMO_CONSOLE_PLAYGROUND_KEY_ENV`). Note the contract text says the gateway takes no caller bearer; the adapter
-  says it does. Not verified live either way.
+- `switchyard` and (since 2026-10-17) `relay` have a default credential mapping, both `LITELLM_API_KEY`: Relay's gateway
+  answers 401 without a bearer (opencode sends that variable to it), and Dynamo's frontend needs none. Change either in
+  Settings or `NEMO_CONSOLE_PLAYGROUND_KEY_ENV`. The Relay playground is not verified live.
 - Verified live (maintainer): a chat request through a Switchyard route returned 200. The Relay and Dynamo playgrounds
   are not verified live. Requests carry `Accept-Encoding: identity` so the stream redaction sees plain bytes.
 

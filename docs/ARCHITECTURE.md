@@ -191,3 +191,60 @@ row: "shares the Workstation card with `vllm-qwen38`") and §7 where they differ
   Runs live in `<state>/skillevaluator/runs/<UTC stamp>-<skill>/` (0700; `run.json` 0600, metadata + redacted error text only),
   newest 200 kept. Events: kind `skilleval.run`, one per run. Metric keys: `se.skills`, `se.runs`, `se.last_quality_score`,
   `se.last_judge_score`, `se.runs_by_verdict{verdict=passed|failed|incomplete|error}`. No config files (configuration is the launcher's environment).
+
+**9.6 (2026-10-17): SkillEvaluator Tier 3; the Dynamo compose files in use; the engine layout of 2026-10-17.** Supersedes
+§7 and 9.4/9.5 where they differ. Premise change on the author's deployment: the resident layout is Nemotron 3.5 Super
+VL on Dynamo (started from `inference/dynamo/docker-compose.yml` + `docker-compose.super-vl.yml`, worker on BOTH cards),
+`nemotron-lightning` (vLLM TP2, both cards) and `chatterbox-tts` (Workstation card). The flashnext and 27B containers no
+longer exist there; Bolt and GLM (`lil-glm53-tp2`) are opt-in and exclusive with Super VL.
+* SkillEvaluator action `evaluate_live` ("Tier 3: live agent evaluation"), danger `disruptive` (it spends tokens and runs
+  an agent, so it needs `confirm:true`), admin. Params: `skill` (the evaluate enum), `attempts` int 1-5 (default 1),
+  `agent_model` and `judge_model` strings (default `nemotron-lightning` / `nemotron-lightning-judge`; adapter-checked
+  against the playground's model-id shape), `dataset` enum `auto|existing|generate`, `skip_baseline` bool. Only with the
+  `skillevaluator-local` launcher (its runner container is the containment); plain `skillevaluator` is refused with
+  `skillevaluator.live.needs_wrapper`. argv (no shell): `skillevaluator-local tier3 <resolved skill dir> --n-attempts N
+  --agent-model opencode=<agent_model> --judge-model <judge_model> --dataset <d> [--skip-baseline] --results-dir <run dir>
+  --quiet` (`--quiet` keeps stdout to the final summary JSON so an hour of progress lines cannot trip the output cap).
+* It never runs inside the HTTP request: the action writes `<run dir>/run.json` (`verdict: "running"`) and starts ONE
+  asyncio task owned by the adapter, then returns ok with the run id. A second request while it runs is refused
+  (`skillevaluator.live.busy`). On completion the task writes the verdict (result.json `execution_status`:
+  `succeeded|failed|unknown|skipped|not_applicable`; `error` when no result.json), Skill Lift per agent
+  (`agents.X.lift.overall.delta` plus the per-metric deltas), scored/expected attempts, duration, and at most 8
+  conclusions/recommendations (redacted, capped; kept out of event data). result.json is read no-follow, regular file,
+  8 MiB cap. Cancelled (console stopping): `verdict: "interrupted"`. A run.json at `running` that no task of this process
+  owns (the console restarted) READS as `interrupted`; the report then also shows a result.json that landed later.
+* Runner: the cap stays 600 s except `skillevaluator`/`skillevaluator-local` with subcommand `tier3`: 4800 s
+  (`MAX_LIVE_EVAL_TIMEOUT`; the launcher stops a job by 120 + 900 + 3600 s). On a timeout or a cancellation the runner
+  stops the child's whole process group; for the two SkillEvaluator launchers it sends SIGINT first and waits up to 5 s
+  (the lab launcher `docker kill`s its job container on SIGINT), then SIGKILL. Allowlist unchanged.
+* Metrics gain `se.live_running` (0/1, emitted once any run exists) and `se.last_skill_lift`; `se.runs_by_verdict` gains
+  `succeeded` and `interrupted`. Events: a live run is one `skilleval.run` event per (run, verdict), so its start and its
+  end both stream. Problem `skillevaluator.tier2.no_embeddings` (warn; fix: the lab's `inference/ollama` compose up, else
+  "start the embeddings model ...") when a `tier1+2` run's Tier 2 lacked embeddings. The install fix is the lab's pinned
+  `clients/skillevaluator/install.sh` when the repo has it, else `uv tool install ... @7304d76...` (v0.5.0), never unpinned.
+* Dynamo: up/down/restart/up_mock/`config -q`/Params use exactly the compose files of the running containers' label
+  `com.docker.compose.project.config_files` (project label `ai-lab-dynamo` only), plus the console override only on the
+  plain base. Only with no Dynamo container does the configured base apply. The label is untrusted: absolute paths,
+  each resolving (symlinks followed) to a `.yml`/`.yaml` regular file inside the configured compose directory or to the
+  console's own override, at most 8, `working_dir` equal to that directory, and all Dynamo containers agreeing; else
+  lifecycle actions and Params are refused (`dynamo.compose.untrusted`), never answered with the base file.
+* With any repo override file in use (`dynamo.compose.override`, info): Params apply, the console override's validation
+  (so its apply and rollback) and `up_mock` are refused with the reason; start fixes become the console's own `up`;
+  `dynamo.structural_tag.off` / `parser.dialect` / `router.kv` are not raised (measured on the base model, fixed via
+  Params). The version is the first Dynamo image tag (worker, then `ai-lab-dynamo-dynamo-sv-frontend-1`, then the
+  frontend); a digest or a non-Dynamo image (the nginx gateway) is never a version. The sv-frontend is a component and a
+  log source (component `frontend`; a non-Dynamo `dynamo-frontend` logs as `gateway`). The worker's GPUs are every
+  `device_ids` entry of `dynamo-worker` in `docker compose <files> config --format json` (cached per file set + mtimes,
+  300 s), else the base file (base stack only), else the container's DeviceRequests; sharers are checked on ANY of them.
+  `dynamo.holds_card` is info, raised only when `dynamo_dark_while_held` is non-empty.
+* Defaults (all settings): `dynamo_exclusive_engines` Bolt, GLM, flashnext, 27B; `dynamo_coexisting_engines` lightning,
+  ollama, chatterbox; `default_model_start` is the switch script WITHOUT an alias (it only lists engines);
+  `engine_probes` add `nemotron-3.5-super-vl` (the Dynamo worker), `nemotron-3.5-bolt`, `glm-5.3-flash-next-local`;
+  every `engine_start` command says what it stops. `EngineProbe` gains state `absent` (no such container): a capable
+  target that is absent is `switchyard.tier.capable_not_deployed` (info, does not degrade Switchyard); only a stopped one
+  is `capable_dark`. New setting `topology_engines` (list of `{id,label,container,opt_in}`, replaces the default) drives
+  the engine nodes; an absent container is drawn `off` with "(not deployed)".
+* Playgrounds: Switchyard and Relay default to route `super-lightning` when it exists (what LiteLLM's `switchyard` alias
+  forwards to), else the first route. `playground_key_env` defaults to `LITELLM_API_KEY` for `relay` as well.
+* Relay ATOF: gzipped rotations (`<file>.N.gz`) are read for `recent_events` (no-follow, regular, 64 MiB compressed and
+  64 MiB decompressed caps; over a cap the file is skipped); `follow_events` tails plain files only.

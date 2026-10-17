@@ -13,6 +13,8 @@ from .conftest import Env
 FN = "ai-lab-sglang-flashnext-flashnext-1"
 QWEN = "ai-lab-vllm-qwen38-vllm-1"
 LIGHTNING = "ai-lab-vllm-nemotron-lightning-nemotron-lightning-1"
+BOLT = "ai-lab-vllm-nemotron-bolt-nemotron-bolt-1"
+GLM = "lil-glm53-tp2"
 
 
 def _states(env: Env, states: dict[str, str]) -> None:
@@ -27,9 +29,10 @@ def test_defaults_describe_the_lab_and_lists_replace(monkeypatch: pytest.MonkeyP
     s = Settings()
     assert s.dynamo_opt_in is True
     assert s.dynamo_start == "scripts/use-model.sh qwen3.8-27b-dynamo"
-    assert s.default_model_start == "scripts/use-model.sh qwen3.8-flash-next"
-    assert s.dynamo_exclusive_engines == [FN, QWEN]
-    assert s.dynamo_coexisting_engines == [LIGHTNING, "ai-lab-ollama-ollama-1"]
+    # neutral: without an alias the script only lists the engines (2026-10-17: no fix may tear down Super VL)
+    assert s.default_model_start.startswith("scripts/use-model.sh   # lists the engines")
+    assert s.dynamo_exclusive_engines == [BOLT, GLM, FN, QWEN]
+    assert s.dynamo_coexisting_engines == [LIGHTNING, "ai-lab-ollama-ollama-1", "ai-lab-chatterbox-tts-tts-1"]
     assert s.dynamo_ignored_containers == ["ai-lab-observability-dcgm-exporter-1"]
     assert CardPolicy() == CardPolicy(start=s.dynamo_start, restore=s.default_model_start,
                                       exclusive=tuple(s.dynamo_exclusive_engines),
@@ -73,11 +76,44 @@ async def test_topology_draws_opt_in_engines_off_and_shows_lightning(env: Env) -
     assert edges[("litellm", "vllm-qwen38")]["active"] is False and edges[("litellm", "dynamo-frontend")]["active"] is False
     sy = edges[("clients", "switchyard")]
     assert sy["label"] == "default" and sy["active"] is True and len(sy["label"]) <= 9   # short: longer chips are clipped
-    # the always-on engines stopped are faults, not "off"
+    # the always-on engine stopped is a fault; the opt-in ones (flashnext since 2026-10-17) are only off
     env.container.topology._cache = None
     env.container.topology.probe._cache.clear()
     _states(env, {FN: "exited", QWEN: "exited", LIGHTNING: "exited"})
     async with env.client() as c:
         nodes = {n["id"]: n for n in (await c.get("/api/v1/topology")).json()["nodes"]}
-    assert nodes["sglang-flashnext"]["health"] == "down" and nodes["vllm-lightning"]["health"] == "down"
-    assert nodes["vllm-qwen38"]["health"] == "off"
+    assert nodes["vllm-lightning"]["health"] == "down"
+    assert nodes["sglang-flashnext"]["health"] == "off" and nodes["vllm-qwen38"]["health"] == "off"
+
+
+async def test_topology_shows_missing_containers_as_not_deployed_never_red(env: Env) -> None:
+    # 2026-10-17: flashnext and the 27B containers do not exist on the author's host; lightning missing is not red either
+    async def run(argv: list[str], **_k: object) -> CommandResult:
+        env.runner.calls.append(argv)
+        if argv[-1] in (FN, QWEN, LIGHTNING):
+            return CommandResult(1, "", f"Error: No such object: {argv[-1]}\n")
+        return CommandResult(0, "running\n", "")
+    env.runner.run = run  # type: ignore[method-assign]
+    async with env.client() as c:
+        topo = (await c.get("/api/v1/topology")).json()
+    nodes = {n["id"]: n for n in topo["nodes"]}
+    for nid in ("sglang-flashnext", "vllm-qwen38", "vllm-lightning"):
+        assert nodes[nid]["health"] == "off" and nodes[nid]["label"].endswith("(not deployed)"), nid
+    assert nodes["vllm-bolt"]["health"] == "up" and "not deployed" not in nodes["vllm-bolt"]["label"]
+    edges = {(e["src"], e["dst"]): e for e in topo["edges"]}
+    assert edges[("litellm", "vllm-lightning")]["active"] is False and edges[("litellm", "vllm-bolt")]["active"] is True
+
+
+def test_topology_engines_are_a_setting(monkeypatch: pytest.MonkeyPatch) -> None:
+    from nemo_console.services.topology import TopologyService
+    monkeypatch.setenv("NEMO_CONSOLE_TOPOLOGY_ENGINES",
+                       '[{"id": "my-engine", "label": "My engine", "container": "my-engine-1", "opt_in": false},'
+                       ' {"id": "litellm", "label": "shadow", "container": "x-1"},'
+                       ' {"id": "my-engine", "label": "dup", "container": "y-1"}]')
+    s = Settings()
+    assert [e.id for e in s.topology_engines] == ["my-engine", "litellm", "my-engine"]       # replaced, not merged
+    t = TopologyService(None, None, None, "http://127.0.0.1:4000", s.topology_engines)  # type: ignore[arg-type]
+    assert [(e.id, e.container, e.opt_in) for e in t.engines] == [("my-engine", "my-engine-1", False)]
+    monkeypatch.setenv("NEMO_CONSOLE_TOPOLOGY_ENGINES", '[{"id": "Bad Id", "label": "x", "container": "c-1"}]')
+    with pytest.raises(ValueError):
+        Settings()

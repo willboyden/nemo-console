@@ -10,6 +10,7 @@ import { eventsPanel } from '../components/events-panel.js';
 import { actionsPanel } from '../components/actions-panel.js';
 
 const score = (x) => (x == null ? '–' : Number(x).toFixed(1));
+const lift = (x) => (x == null ? '–' : `${x >= 0 ? '+' : ''}${Number(x).toFixed(3)}`);
 
 function statusTab(scope, ctx) {
   const compHost = h('div'), statsHost = h('div', { class: 'stats' });
@@ -23,7 +24,8 @@ function statusTab(scope, ctx) {
       if (!m.available) { clear(statsHost).append(h('p', { class: 'note warn' }, m.error || t('se.metrics_unavailable'))); return; }
       const v = (k) => valueOf(m, k);
       clear(statsHost).append(stat(t('se.skills'), fmtInt(v('se.skills'))), stat(t('se.runs'), fmtInt(v('se.runs'))),
-        stat(t('se.last_quality'), score(v('se.last_quality_score'))), stat(t('se.last_judge'), score(v('se.last_judge_score'))));
+        stat(t('se.last_quality'), score(v('se.last_quality_score'))), stat(t('se.last_judge'), score(v('se.last_judge_score'))),
+        stat(t('se.last_lift'), lift(v('se.last_skill_lift'))), stat(t('se.live_running'), v('se.live_running') == null ? '–' : t(v('se.live_running') ? 'common.yes' : 'common.no')));
     } catch (e) { if (scope.alive) clear(statsHost).append(errorBox(e, loadStats)); }
   }
   loadStats(); scope.every(10000, loadStats);

@@ -12,11 +12,13 @@ import respx
 
 from nemo_console.adapters.base import CommandResult
 from nemo_console.adapters.dynamo import CardPolicy
+from nemo_console.config import DEFAULT_MODEL_START
 
 from .conftest import BASE_URL
 from .helpers import FakeRunner, fail, frontend_doc, fx, fxj, inspect_json, is_docker, ok, worker_doc
 
 FE, WK, ENG = "ai-lab-dynamo-dynamo-frontend-1", "ai-lab-dynamo-dynamo-worker-1", "ai-lab-vllm-qwen38-vllm-1"
+RESTORE = DEFAULT_MODEL_START                                     # neutral since 2026-10-17 (lists engines only)
 UUID = "GPU-00000000-0000-0000-0000-000000000001"
 
 
@@ -86,14 +88,14 @@ async def test_status_up_real_fixtures(make, runner, mock) -> None:  # type: ign
     assert st.health == "up" and st.version == "1.5.0"
     assert "unsloth/Qwen3.8-27B-NVFP4" in st.summary
     assert [c.name for c in st.components] == [FE, WK] and all(c.state == "running" for c in st.components)
-    # no exclusive engine runs while Dynamo holds the card -> the DEFAULT model's aliases and routes are named dark
+    # no exclusive engine runs while Dynamo holds the card -> the exclusive engines' aliases and routes are named dark
     p = next(p for p in st.problems if p.code == "dynamo.holds_card")
-    for dark in ("qwen3.8-flash-next", "qwen3.8-flash-next-quick", "auto-local capable tier", "auto-flashnext capable tier",
-                 "direct-flashnext (Switchyard and Relay)"):
+    assert p.severity == "info"                                    # holding the card is what Dynamo does while it runs
+    for dark in ("nemotron-3.5-bolt (route bolt)", "glm-5.3-flash-next-local", "qwen3.8-flash-next and -quick",
+                 "qwen3.8-27b-1m (direct-27b)"):
         assert dark in p.message, dark
-    assert "qwen3.8-27b-1m" not in p.message                      # the 27B is opt-in: it is not what goes dark
-    # restoring = the default model through the switch script (it also takes Dynamo down), never a bare compose up
-    assert p.fix == "scripts/use-model.sh qwen3.8-flash-next"
+    # neutral: the switch script without an alias only lists engines; it never tears the running stack down
+    assert p.fix == RESTORE and "qwen3.8-flash-next" not in (p.fix or "")
     assert "dynamo.structural_tag.off" not in codes(st)          # the live worker has the flag
     assert {e.role for e in st.endpoints} == {"api", "health", "metrics"}
 
@@ -293,7 +295,7 @@ async def test_validate_uses_compose_config_and_reports_failure(make, runner) ->
     runner.on(is_docker("compose"), fail("services.dynamo-worker.command must be a list"))
     r = await make().validate_config("override", fx("golden_override.yml"))
     assert not r.ok and "docker compose config" in r.diagnostics[-1].message
-    argv = runner.argvs()[0]
+    argv = compose_calls(runner)[0]                         # after the inspect that finds the compose files in use
     assert argv[:2] == ["docker", "compose"] and argv[-2:] == ["config", "-q"] and argv.count("-f") == 2
 
 
@@ -373,7 +375,8 @@ async def test_post_apply(make, runner) -> None:  # type: ignore[no-untyped-def]
 
 # ── actions ─────────────────────────────────────────────────────────────────────────────────────
 def compose_calls(runner: FakeRunner) -> list[list[str]]:
-    return [a for a in runner.argvs() if a[:2] == ["docker", "compose"]]
+    """Lifecycle and validation compose calls; the read-only GPU probe (`config --format json`) is not one."""
+    return [a for a in runner.argvs() if a[:2] == ["docker", "compose"] and a[-3:] != ["config", "--format", "json"]]
 
 
 async def test_action_catalog_matches_contract(make) -> None:  # type: ignore[no-untyped-def]
@@ -388,7 +391,7 @@ async def test_preflight_lists_sharers_by_uuid_and_ignores_other_card(make, runn
          ps=f"{WK}\n{FE}\n{ENG}\nai-lab-sglang-flashnext-flashnext-1\n")
     res = await make().run_action("preflight", {})
     assert res.ok and ENG in res.output and "ai-lab-sglang-flashnext-flashnext-1 (" not in res.output   # other card
-    assert "touches no other container" in res.output and "scripts/use-model.sh qwen3.8-flash-next" in res.output
+    assert "touches no other container" in res.output and RESTORE in res.output
     assert not compose_calls(runner)                                        # safe: nothing was started/stopped
 
 
@@ -432,8 +435,8 @@ async def test_up_with_stop_sharing_engine_stops_exactly_that_container(make, ru
     assert cwd == Path("/repo/inference/vllm-qwen38")
     assert not any(a[:2] == ["docker", "stop"] or "-v" in a or "rm" in a for a in runner.argvs())
     assert not any("use-model" in " ".join(a) for a in runner.argvs())
-    order = [i for i, a in enumerate(runner.argvs()) if a[:2] == ["docker", "compose"]]
-    assert runner.argvs()[order[0]][-1] == "down" and "up" in runner.argvs()[order[1]]     # stop first, then up
+    calls = compose_calls(runner)
+    assert calls[0][-1] == "down" and "up" in calls[1]                                       # stop first, then up
     assert eng["Name"]
 
 
@@ -523,8 +526,8 @@ async def test_preflight_machine_readable_tail(make, runner) -> None:  # type: i
     # Dynamo holds the card, the 27B is stopped and nothing exclusive runs -> listed as stopped, the default's aliases dark
     wire(runner, [worker_doc(), engine_doc(running=False)], ps=f"{WK}\n")
     out = (await make().run_action("preflight", {})).output.splitlines()
-    dark = ("router_aliases_dark: qwen3.8-flash-next, qwen3.8-flash-next-quick, auto-local capable tier "
-            "(Switchyard and Relay), auto-flashnext capable tier, direct-flashnext (Switchyard and Relay)")
+    dark = ("router_aliases_dark: nemotron-3.5-bolt (route bolt), glm-5.3-flash-next-local, qwen3.8-flash-next and "
+            "-quick (auto-local and auto-flashnext capable tier), qwen3.8-27b-1m (direct-27b)")
     assert out[-3:] == [f"shares_card: {ENG} (stopped)", "stoppable: none", dark]
     assert "No other container is running" in "\n".join(out)          # prose kept
     # the 27B running, Dynamo not the holder -> it is the one stop_sharing_engine may stop
@@ -541,7 +544,7 @@ async def test_preflight_machine_readable_tail(make, runner) -> None:  # type: i
     runner.rules.clear()
     wire(runner, [worker_doc()], ps=f"{WK}\n")
     out = (await make().run_action("preflight", {})).output.splitlines()
-    assert out[-3:][:2] == ["shares_card: none", "stoppable: none"] and out[-1].startswith("router_aliases_dark: qwen3.8")
+    assert out[-3:][:2] == ["shares_card: none", "stoppable: none"] and out[-1].startswith("router_aliases_dark: nemotron")
     runner.rules.clear()
     wire(runner, [], ps="")
     out = (await make().run_action("preflight", {})).output.splitlines()
@@ -665,7 +668,7 @@ async def test_stray_positional_tokens_rejected(make, runner) -> None:  # type: 
 
 
 # ── card model (addendum 9.4): Dynamo is opt-in; exclusive / coexisting / ignored / unknown sharers ──────────────
-START, RESTORE = "scripts/use-model.sh qwen3.8-27b-dynamo", "scripts/use-model.sh qwen3.8-flash-next"
+START = "scripts/use-model.sh qwen3.8-27b-dynamo"
 
 
 def stopped(doc: dict[str, Any], code: int) -> dict[str, Any]:

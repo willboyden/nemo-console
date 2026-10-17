@@ -53,8 +53,11 @@ export function actionsPanel(scope, systemId, { only = null, exclude = [], onRes
     const exec = async () => {
       const params = p.read();
       if (a.danger !== 'safe') {
+        // An action may carry its own confirm line (act.note.<system>.<action>) when the generic danger text would be
+        // wrong: a Tier 3 evaluation interrupts nothing, it spends tokens.
+        const noteKey = `act.note.${systemId}.${a.id}`, note = t(noteKey);
         const ok = await confirmEffect({ title: t('act.confirm_title', { name: a.label }), effect: a.description, danger: a.danger === 'destructive', confirmLabel: a.label,
-          lines: [t(`act.danger_${a.danger}`), ...Object.entries(params).map(([k, v]) => `${k} = ${JSON.stringify(v)}`)] });
+          lines: [note !== noteKey ? note : t(`act.danger_${a.danger}`), ...Object.entries(params).map(([k, v]) => `${k} = ${JSON.stringify(v)}`)] });
         if (!ok) return;
       }
       run.disabled = true; clear(out).append(skeleton(1));

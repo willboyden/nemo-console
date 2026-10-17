@@ -3,28 +3,36 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Sequence
 
 import httpx
 
+from nemo_console.config import DEFAULT_TOPOLOGY_ENGINES, TopologyEngine
 from nemo_console.domain.models import Health, Topology, TopologyEdge, TopologyNode
 from nemo_console.services.engines import EngineProbe
 from nemo_console.services.status import StatusService
 
-# Fixed literals (the author's deployment; addendum 9.4). OPT-IN engines are off by default: stopped = "off", not red.
-SHARED_ENGINE = "ai-lab-vllm-qwen38-vllm-1"     # opt-in 27B; exclusive with flashnext and with the Dynamo worker
-# the lab's default engine since 2026-09-26 (SGLang TP2, one rank on EACH card) and the capable tier: stopped = down
-FLASHNEXT_ENGINE = "ai-lab-sglang-flashnext-flashnext-1"
-# always-on efficient tier of every route (and the classifier judge); stopped = down
-LIGHTNING_ENGINE = "ai-lab-vllm-nemotron-lightning-nemotron-lightning-1"
+# Engine nodes come from the setting `topology_engines` (addendum 9.6; defaults describe the author's deployment).
+# OPT-IN engines stopped = "off", not red; a container that does not exist at all = "off" labelled "not deployed".
 TTL = 5.0
+NOT_DEPLOYED = " (not deployed)"
+FIXED_IDS = ("clients", "relay", "litellm", "switchyard", "dynamo-frontend")
 
 
 class TopologyService:
-    def __init__(self, status: StatusService, http: httpx.AsyncClient, probe: EngineProbe, litellm_url: str) -> None:
+    def __init__(self, status: StatusService, http: httpx.AsyncClient, probe: EngineProbe, litellm_url: str,
+                 engines: Sequence[TopologyEngine] | None = None) -> None:
         self.status = status
         self.http = http
         self.probe = probe
         self.litellm_url = litellm_url.rstrip("/")
+        listed = list(engines) if engines is not None else [TopologyEngine(**e) for e in DEFAULT_TOPOLOGY_ENGINES]
+        seen = set(FIXED_IDS)                   # a configured engine may not shadow a fixed node or repeat an id
+        self.engines: list[TopologyEngine] = []
+        for e in listed:
+            if e.id not in seen:
+                seen.add(e.id)
+                self.engines.append(e)
         self._cache: tuple[float, Topology] | None = None
 
     async def _litellm(self) -> Health:
@@ -34,20 +42,23 @@ class TopologyService:
         except httpx.HTTPError:
             return "down"
 
-    async def _engine(self, container: str, *, opt_in: bool = False) -> Health:
+    async def _engine(self, container: str, *, opt_in: bool = False) -> tuple[Health, bool]:
+        """(health, deployed). Not deployed (no such container) is "off" for every engine, never red."""
         st = await self.probe.state(container)
         if st == "running":
-            return "up"
+            return "up", True
         if st == "stopped":
-            return "off" if opt_in else "down"
-        return "unknown"
+            return ("off" if opt_in else "down"), True
+        if st == "absent":
+            return "off", False
+        return "unknown", True
 
     async def get(self) -> Topology:
         if self._cache and time.monotonic() - self._cache[0] < TTL:
             return self._cache[1]
-        statuses, litellm, engine, flashnext, lightning = await asyncio.gather(
-            self.status.all(), self._litellm(), self._engine(SHARED_ENGINE, opt_in=True),
-            self._engine(FLASHNEXT_ENGINE), self._engine(LIGHTNING_ENGINE))
+        statuses, litellm, engines = await asyncio.gather(
+            self.status.all(), self._litellm(),
+            asyncio.gather(*(self._engine(e.container, opt_in=e.opt_in) for e in self.engines)))
         h = {s.system: s.health for s in statuses}
         dyn = h.get("dynamo", "unknown")
         nodes = [
@@ -57,9 +68,8 @@ class TopologyService:
             TopologyNode(id="switchyard", label="NeMo Switchyard", kind="router", health=h.get("switchyard", "unknown"),
                          system="switchyard"),
             TopologyNode(id="dynamo-frontend", label="Dynamo frontend (opt-in)", kind="engine", health=dyn, system="dynamo"),
-            TopologyNode(id="sglang-flashnext", label="SGLang FlashNext (TP2, both cards)", kind="engine", health=flashnext),
-            TopologyNode(id="vllm-lightning", label="vLLM Lightning (efficient tier)", kind="engine", health=lightning),
-            TopologyNode(id="vllm-qwen38", label="vLLM Qwen3.8 27B (opt-in)", kind="engine", health=engine),
+            *(TopologyNode(id=e.id, label=e.label + ("" if deployed else NOT_DEPLOYED), kind="engine", health=health)
+              for e, (health, deployed) in zip(self.engines, engines, strict=True)),
         ]
         edges = [
             TopologyEdge(src="clients", dst="litellm", label="/v1"),
@@ -71,9 +81,8 @@ class TopologyService:
                          active=h.get("switchyard") in ("up", "degraded")),
             TopologyEdge(src="switchyard", dst="litellm", label="targets"),
             TopologyEdge(src="litellm", dst="dynamo-frontend", label="alias", active=dyn == "up"),
-            TopologyEdge(src="litellm", dst="sglang-flashnext", label="alias", active=flashnext == "up"),
-            TopologyEdge(src="litellm", dst="vllm-lightning", label="alias", active=lightning == "up"),
-            TopologyEdge(src="litellm", dst="vllm-qwen38", label="alias", active=engine == "up"),
+            *(TopologyEdge(src="litellm", dst=e.id, label="alias", active=health == "up")
+              for e, (health, _deployed) in zip(self.engines, engines, strict=True)),
         ]
         topo = Topology(nodes=nodes, edges=edges, ts=time.time())
         self._cache = (time.monotonic(), topo)

@@ -56,6 +56,7 @@ LOG_PATH = "/var/log/switchyard/routing.jsonl"
 MAX_CONFIG_BYTES = 256 * 1024
 ROUTE_COUNT_WINDOW = 2000            # newest routing records used for sy.route.calls
 DRY_RUN_VALIDATOR = "switchyard-server --dry-run"
+PLAYGROUND_DEFAULT_ROUTE = "super-lightning"   # the route LiteLLM's `switchyard` alias forwards to (2026-10-16)
 SEMANTIC_VALIDATOR = "tomllib + route/target/client cross-check"
 
 _LABEL_RE = re.compile(r'(\w+)="((?:[^"\\]|\\.)*)"')
@@ -820,11 +821,13 @@ class SwitchyardAdapter(SystemAdapter):
             cfg = self._read_routes_file() or {}
             ids = sorted(str(r.get("id", k)) for k, r in (cfg.get("routes") or {}).items() if isinstance(r, dict))
         if not ids:
-            ids = ["auto-local"]
-        default = "auto-local" if "auto-local" in ids else ids[0]
+            ids = [PLAYGROUND_DEFAULT_ROUTE]
+        # 2026-10-17: auto-local escalates to an engine that is not deployed any more; LiteLLM's own `switchyard` alias
+        # forwards to super-lightning. Prefer that route when it exists, else the first one (never a hard failure).
+        default = PLAYGROUND_DEFAULT_ROUTE if PLAYGROUND_DEFAULT_ROUTE in ids else ids[0]
         return PlaygroundSpec(
             wire="openai_chat", models=ids, default_model=default,
-            note=("Models are Switchyard route ids (auto-* route by tier, direct-* are fixed passthroughs). "
+            note=("Models are Switchyard route ids (auto-*/super-* route by tier, direct-* are fixed passthroughs). "
                   "Switchyard uses forward_auth: it forwards the caller's bearer to LiteLLM, so the console "
                   "sends its own key, resolved server-side from the env var named in secret_env['switchyard']."))
 

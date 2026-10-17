@@ -246,3 +246,48 @@ def test_runner_passes_skill_eval_env_only_to_skillevaluator(monkeypatch) -> Non
     # the allowlist still gates by bare name, never a path
     with pytest.raises(Exception, match="not allowed"):
         r.resolve("/usr/bin/skillevaluator")
+
+
+# ── install fix and the Tier 2 embeddings hint ─────────────────────────────────────────────────
+async def test_install_fix_is_pinned_or_the_lab_installer(make_adapter, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    a, _ = make_adapter(FakeRunner())
+    [p] = [p for p in (await a.status()).problems if p.code == "skillevaluator.not_installed"]
+    assert p.fix and f"SkillEvaluator.git@{se.PINNED_SHA}" in p.fix and "git+https://github.com/NVIDIA/SkillEvaluator.git\"" not in p.fix
+    res = await a.run_action("evaluate", {"skill": "robust-scripts", "tiers": "static"})
+    assert res.problems[0].fix == p.fix
+    repo = tmp_path / "lab"
+    (repo / "clients" / "skillevaluator").mkdir(parents=True)
+    (repo / "clients" / "skillevaluator" / "install.sh").write_text("#!/bin/sh\n")
+    b, _ = make_adapter(FakeRunner(), repo=repo)
+    [q] = [p for p in (await b.status()).problems if p.code == "skillevaluator.not_installed"]
+    assert q.fix and q.fix.startswith(f"{repo}/clients/skillevaluator/install.sh   # pinned SkillEvaluator 7304d76 (v0.5.0)")
+
+
+async def test_tier2_without_embeddings_says_so_with_the_ollama_fix(make_adapter, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    # Shape from SkillEvaluator 0.5.0 (intra_skill_validator.py): the embeddings call failed, the report is still
+    # written, `embedding-provider` is in incomplete_scans and the status is incomplete.
+    t2 = json.loads((Path(__file__).parent / "fixtures" / "tier2_passed.json").read_text())
+    t2.update(overall_status="incomplete", overall_passed=False, incomplete_scans=["embedding-provider"])
+
+    def tier2(argv: list[str]):  # type: ignore[no-untyped-def]
+        Path(argv[argv.index("-o") + 1], "skillevaluator-tier2.json").write_text(json.dumps(t2))
+        return ok("", rc=1)
+    run = standard_runner()
+    run.on(["skillevaluator-local", "tier2"], tier2)
+    repo = tmp_path / "lab"
+    (repo / "inference" / "ollama").mkdir(parents=True)
+    a, _ = make_adapter(run, repo=repo)
+    res = await a.run_action("evaluate", {"skill": "serve-model", "tiers": "tier1+2"})
+    [p] = res.problems
+    assert p.code == "skillevaluator.tier2.no_embeddings" and "embeddings" in p.message
+    assert p.fix == f"cd {repo}/inference/ollama && docker compose up -d"
+    assert "Tier 2 could not get embeddings" in res.output and p.fix in res.output
+    # a run that wrote no report at all (embeddings not configured) gets the same hint
+    run.on(["skillevaluator-local", "tier2"], ok("", rc=1, stderr="Error: SKILL_EVAL_EMBEDDING_PROVIDER is required"))
+    b, _ = make_adapter(run)
+    res2 = await b.run_action("evaluate", {"skill": "serve-model", "tiers": "tier1+2"})
+    assert [p.code for p in res2.problems] == ["skillevaluator.tier2.no_embeddings"]
+    assert "SKILL_EVAL_EMBEDDING_MODEL" in (res2.problems[0].fix or "")
+    # a passing Tier 2 carries no such hint
+    c, _ = make_adapter()
+    assert (await c.run_action("evaluate", {"skill": "serve-model", "tiers": "tier1+2"})).problems == []

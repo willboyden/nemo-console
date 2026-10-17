@@ -1,0 +1,182 @@
+{
+ "execution_status": "succeeded",
+ "execution_errors": [],
+ "expected_attempts": 4,
+ "scored_attempts": 4,
+ "skill_name": "calculator",
+ "run_id": "20261017_091635_7_46d5ccd742f5",
+ "evaluated_at": "2026-10-17T09:16:48.325277+00:00",
+ "evaluator_version": "0.5.0",
+ "metric_set": "skill-evaluator-default-v2",
+ "metrics": [
+  "security",
+  "skill_execution",
+  "skill_efficiency",
+  "accuracy",
+  "goal_accuracy",
+  "behavior_check"
+ ],
+ "dataset_summary": {
+  "total_tasks": 2,
+  "positive_tasks": 2,
+  "negative_tasks": 0,
+  "unclassified_tasks": 0,
+  "source": "dataset"
+ },
+ "report_status": "complete",
+ "duration_seconds": 16.571,
+ "agents": {
+  "opencode": {
+   "model": "openai/nemotron-lightning",
+   "model_source": "CLI",
+   "with_skill": {
+    "security": 1.0,
+    "skill_execution": 0.625,
+    "skill_efficiency": 0.6667,
+    "accuracy": 0.5,
+    "goal_accuracy": 1.0,
+    "behavior_check": 0.5
+   },
+   "without_skill": {
+    "security": 1.0,
+    "skill_execution": 0.0,
+    "skill_efficiency": 0.0,
+    "accuracy": 1.0,
+    "goal_accuracy": 1.0,
+    "behavior_check": 0.3333
+   },
+   "lift": {
+    "security": {
+     "with_skill": 1.0,
+     "without_skill": 1.0,
+     "delta": 0.0,
+     "direction": "flat"
+    },
+    "skill_execution": {
+     "with_skill": 0.625,
+     "without_skill": 0.0,
+     "delta": 0.625,
+     "direction": "up"
+    },
+    "skill_efficiency": {
+     "with_skill": 0.6667,
+     "without_skill": 0.0,
+     "delta": 0.6667,
+     "direction": "up"
+    },
+    "accuracy": {
+     "with_skill": 0.5,
+     "without_skill": 1.0,
+     "delta": -0.5,
+     "direction": "down"
+    },
+    "goal_accuracy": {
+     "with_skill": 1.0,
+     "without_skill": 1.0,
+     "delta": 0.0,
+     "direction": "flat"
+    },
+    "behavior_check": {
+     "with_skill": 0.5,
+     "without_skill": 0.3333,
+     "delta": 0.1667,
+     "direction": "up"
+    },
+    "overall": {
+     "with_skill": 0.7153,
+     "without_skill": 0.5555,
+     "delta": 0.1597
+    }
+   },
+   "execution_status": "succeeded",
+   "execution_errors": [],
+   "expected_attempts": 4,
+   "scored_attempts": 4,
+   "num_trials_with": 2,
+   "num_trials_without": 2
+  }
+ },
+ "run_config": {
+  "judge": {
+   "enabled": true,
+   "provider": "openai-compatible",
+   "model": "nemotron-lightning-judge",
+   "source": "SKILL_EVAL_JUDGE_MODEL",
+   "override_applied": true,
+   "catalog_verification": "degraded"
+  }
+ },
+ "tier3_feedback": {
+  "schema_version": "1.0",
+  "conclusions": [
+   {
+    "severity": "pass",
+    "title": "Best performing agent",
+    "message": "opencode leads with overall score 0.71 and lift +0.17."
+   },
+   {
+    "severity": "warn",
+    "title": "Weakest dimension",
+    "message": "Correctness is lowest at 0.50. Scored 0.50 — PASS, at or above the 0.50 pass threshold. -0.50 regression versus baseline 1.00. Strongest signal: accuracy 0.50."
+   },
+   {
+    "claim_type": "general",
+    "title": "Inconsistent invocation in skill activation cases",
+    "message": "Case calculator-002 flagged skill_invoked=false despite skill_expected_to_activate=true, while calculator-001 correctly invoked the skill. The lift_scores show calculator-002 had 0.25 skill_execution lift versus calculator-001's 1.0 lift, suggesting conditional routing failures on Celsius conversion queries.",
+    "severity": "warn",
+    "source": "llm",
+    "evidence_case_ids": [
+     "calculator-001",
+     "calculator-002"
+    ]
+   },
+   {
+    "claim_type": "general",
+    "title": "Correctness dimension regression from accuracy drop",
+    "message": "The correctness dimension scored 0.50 with -0.50 lift versus baseline 1.00, driven by accuracy 0.50 in calculator-002 where goal_accuracy was 1.0 but behavior_check was 0.3333, indicating the agent answered correctly but failed behavioral expectations.",
+    "severity": "fail",
+    "source": "llm",
+    "evidence_case_ids": [
+     "calculator-002"
+    ]
+   }
+  ],
+  "recommendations": [
+   {
+    "title": "Skill performance is healthy across all evaluated dimensions; consider expanding eval cove",
+    "message": "Skill performance is healthy across all evaluated dimensions; consider expanding eval coverage.",
+    "category": "Action",
+    "severity": "warn",
+    "source": "deterministic"
+   },
+   {
+    "claim_type": "general",
+    "title": "Fix routing to ensure consistent skill invocation",
+    "message": "Investigate and fix the conditional routing that causes calculator-002 to not invoke the skill despite expected activation, aligning invocation rates with calculator-001's 1.0 invocation rate.",
+    "category": "Improve",
+    "severity": "warn",
+    "source": "llm",
+    "evidence_case_ids": [
+     "calculator-001",
+     "calculator-002"
+    ]
+   },
+   {
+    "claim_type": "general",
+    "title": "Resolve behavior_check failures in correctness",
+    "message": "Address the behavioral expectation gaps causing calculator-002's behavior_check score of 0.3333 to drop the correctness dimension below the baseline 1.00 threshold.",
+    "category": "Fix",
+    "severity": "fail",
+    "source": "llm",
+    "evidence_case_ids": [
+     "calculator-002"
+    ]
+   }
+  ],
+  "suggestions": [
+   "Skill performance is healthy across all evaluated dimensions; consider expanding eval coverage.",
+   "Investigate and fix the conditional routing that causes calculator-002 to not invoke the skill despite expected activation, aligning invocation rates with calculator-001's 1.0 invocation rate.",
+   "Address the behavioral expectation gaps causing calculator-002's behavior_check score of 0.3333 to drop the correctness dimension below the baseline 1.00 threshold."
+  ]
+ }
+}

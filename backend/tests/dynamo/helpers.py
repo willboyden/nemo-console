@@ -12,6 +12,9 @@ from nemo_console.adapters.base import CommandResult
 FIX = Path(__file__).parent / "fixtures"
 WORKER = "ai-lab-dynamo-dynamo-worker-1"
 FRONTEND = "ai-lab-dynamo-dynamo-frontend-1"
+# The captured containers' compose labels name this directory (the capture host's checkout, anonymised). The adapter
+# trusts a label only inside its configured compose directory, so the fake runner maps it to the test's copy.
+CAPTURED_DIR = "/home/user/lab/inference/dynamo"
 
 
 def fx(name: str) -> str:
@@ -23,11 +26,13 @@ def fxj(name: str) -> Any:
 
 
 class FakeRunner:
-    """Matches argv by predicate (first match wins); records every call as (argv, cwd)."""
+    """Matches argv by predicate (first match wins); records every call as (argv, cwd). `compose_dir`: where the
+    captured labels' CAPTURED_DIR points in this test (rewritten in `docker inspect` output only)."""
 
-    def __init__(self) -> None:
+    def __init__(self, compose_dir: Path | None = None) -> None:
         self.calls: list[tuple[list[str], Path | None]] = []
         self.rules: list[tuple[Callable[[list[str]], bool], Callable[[list[str]], CommandResult]]] = []
+        self.compose_dir = compose_dir
 
     def on(self, pred: Callable[[list[str]], bool], result: CommandResult | Callable[[list[str]], CommandResult]) -> None:
         fn = result if callable(result) else (lambda _a, r=result: r)
@@ -38,7 +43,11 @@ class FakeRunner:
         self.calls.append((list(argv), cwd))
         for pred, fn in self.rules:
             if pred(argv):
-                return fn(argv)
+                res = fn(argv)
+                if self.compose_dir is not None and argv[:2] == ["docker", "inspect"]:
+                    res = CommandResult(res.returncode, res.stdout.replace(CAPTURED_DIR, str(self.compose_dir)),
+                                        res.stderr, res.timed_out, res.duration_ms)
+                return res
         return CommandResult(returncode=127, stdout="", stderr="no rule")
 
     def argvs(self) -> list[list[str]]:

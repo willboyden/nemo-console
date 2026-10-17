@@ -33,28 +33,29 @@ Names read by `backend/src/nemo_console/config.py` (each is `NEMO_CONSOLE_<NAME>
 | `ALLOWED_HOSTS` | `[]` | Extra `Host` header values (JSON list). |
 | `URLS` | four loopback URLs (below) | JSON object. Keys: `switchyard`, `relay`, `dynamo`, `dynamo_worker_metrics`, `litellm`. |
 | `ALLOWED_URL_HOSTS` | `["127.0.0.1","localhost","::1"]` | Hosts the Settings page may point URLs at. |
-| `PLAYGROUND_KEY_ENV` | `{"switchyard":"LITELLM_API_KEY"}` | JSON: logical system -> **name** of the env var holding its playground credential. |
+| `PLAYGROUND_KEY_ENV` | `{"switchyard":"LITELLM_API_KEY","relay":"LITELLM_API_KEY"}` | JSON: logical system -> **name** of the env var holding its playground credential. Relay's gateway answers 401 without a bearer, so it has a default too (2026-10-17); `NEMO_CONSOLE_PLAYGROUND_KEY_ENV__RELAY=OTHER_API_KEY` points it elsewhere. |
 | `TRUST_LOOPBACK` | `false` | Opt in to treating key-less loopback callers as admin. Forced off when `HOST` is not loopback or `ALLOWED_HOSTS` is set (see `trust_notice` in `/health`). |
 | `BACKGROUND_TASKS` | `true` | Run the metrics poller. |
 | `POLL_INTERVAL_S` | `2.0` | Poll cadence (Settings accepts 0.5 to 60). |
 | `RING_SECONDS` | `900` | In-memory metric window. |
 | `STATUS_TTL_S`, `ADAPTER_TIMEOUT_S`, `ACTION_TIMEOUT_S` | `2.0`, `8.0`, `900.0` | Status cache, per-probe timeout, default per-action timeout. |
 | `ACTION_TIMEOUTS` | `{}` | JSON object of per-action overrides keyed `system.action`, e.g. `{"dynamo.up": 1200}`. |
-| `ENGINE_PROBES` | two default aliases to containers | JSON object alias -> engine container name. If the alias is the `capable_target` model of a `stage_router` route in Switchyard's `routes.toml` (parsed; `direct-*` passthroughs do not count) and its container is not running, Switchyard is `degraded` with the problem `switchyard.tier.capable_dark`. The default entries name containers from the author's deployment: replace them for yours. |
-| `ENGINE_START` | two default containers to commands | JSON object engine container name -> the command (run from the repo root) shown as the `capable_dark` fix. Display only: the console never runs it. A container without an entry gets `cd <compose dir> && docker compose up -d`. The defaults use the author's start scripts because a bare compose up is wrong for both of those engines. |
+| `ENGINE_PROBES` | five aliases to containers (Super VL = the Dynamo worker, Bolt, GLM, flashnext, the 27B) | JSON object alias -> engine container name. If the alias is the `capable_target` model of a `stage_router` route in Switchyard's `routes.toml` (parsed; `direct-*` passthroughs do not count) and its container exists but is not running, Switchyard is `degraded` with the problem `switchyard.tier.capable_dark`; a container that does not exist is the info problem `switchyard.tier.capable_not_deployed` and changes nothing. The default entries name containers from the author's deployment: replace them for yours. |
+| `ENGINE_START` | one command per default probe container | JSON object engine container name -> the command (run from the repo root) shown as the `capable_dark` fix. Display only: the console never runs it. A container without an entry gets `cd <compose dir> && docker compose up -d`. Each default says in a `#` comment what it stops or needs (starting one of these engines tears down whatever holds its cards). |
+| `TOPOLOGY_ENGINES` | lightning (always on), Bolt, GLM, flashnext, the 27B (opt-in) | JSON list of `{"id","label","container","opt_in"}`; REPLACES the default. Engine nodes of the topology: running = up, stopped = `off` (opt-in) or `down`, no such container = `off` labelled "(not deployed)". An id that repeats or shadows a fixed node is dropped. |
 | `DYNAMO_OPT_IN` | `true` | Dynamo is opt-in: with no frontend, worker or mocker container running or restarting it is `health=off` with one info problem `dynamo.off` (not `down`), and `/health` ignores it. `false` restores the error-level report. |
-| `DYNAMO_START` | `scripts/use-model.sh qwen3.8-27b-dynamo` | Command (run from the repo root) shown as the fix wherever Dynamo should be started: `dynamo.off`, `dynamo.frontend.down`, `dynamo.worker.absent`, and `up` refused by an exclusive engine. Display only. The default frees the card in the right order (the default model spans both cards and must start before lightning); a bare `docker compose up -d` beside it crash-loops the worker. |
-| `DEFAULT_MODEL_START` | `scripts/use-model.sh qwen3.8-flash-next` | Command shown as the `dynamo.holds_card` fix (restores the default model; the script also takes Dynamo down). Display only. |
-| `DYNAMO_EXCLUSIVE_ENGINES` | flashnext and vllm-qwen38 containers | JSON list. Running on the worker's card they cannot coexist with it: `up` is refused (fix `DYNAMO_START`) and, beside a running or restarting worker, `dynamo.card.contended`. Only `ai-lab-vllm-qwen38-vllm-1` can ever be stopped by the console (`stop_sharing_engine`). |
-| `DYNAMO_COEXISTING_ENGINES` | lightning and ollama containers | JSON list. Allowed on the worker's card; never block `up`. |
+| `DYNAMO_START` | `scripts/use-model.sh qwen3.8-27b-dynamo` | Command (run from the repo root) shown as the fix wherever the BASE Dynamo stack should be started: `dynamo.off`, and on the base stack `dynamo.frontend.down`, `dynamo.worker.absent` and `up` refused by an exclusive engine. Display only. While the stack runs from a repo override file (e.g. Super VL) those fixes are the console's own `up` instead, which uses the files in use. |
+| `DEFAULT_MODEL_START` | `scripts/use-model.sh   # lists the engines; ...` | Command shown as the `dynamo.holds_card` fix and in preflight. Neutral on purpose: without an alias the script only lists the engines; switching away from Dynamo (which stops it) is your choice of alias. Display only. |
+| `DYNAMO_EXCLUSIVE_ENGINES` | Bolt, GLM (`lil-glm53-tp2`), flashnext and vllm-qwen38 containers | JSON list. Running on any of the worker's cards they cannot coexist with it: `up` is refused and, beside a running or restarting worker, `dynamo.card.contended`. Only `ai-lab-vllm-qwen38-vllm-1` can ever be stopped by the console (`stop_sharing_engine`). |
+| `DYNAMO_COEXISTING_ENGINES` | lightning, ollama and chatterbox-tts containers | JSON list. Allowed on the worker's cards; never block `up`. |
 | `DYNAMO_IGNORED_CONTAINERS` | the dcgm-exporter container | JSON list. GPU-visible monitoring; never blocks `up`. Any running container on the card that is in none of the three lists blocks `up` and is named (never stopped). |
-| `DYNAMO_DARK_WHILE_HELD` | the flashnext aliases and routes | JSON list of what stops answering while Dynamo holds the card; shown in `dynamo.holds_card` and the preflight `router_aliases_dark:` line. |
+| `DYNAMO_DARK_WHILE_HELD` | the exclusive engines' aliases and routes (Bolt, GLM, flashnext, the 27B) | JSON list of what cannot answer while Dynamo holds the card(s); shown in `dynamo.holds_card` (info; `[]` turns it off) and the preflight `router_aliases_dark:` line. |
 | `BODY_CAP_BYTES`, `CONFIG_CAP_BYTES` | `1048576`, `262144` | Request and config size limits. |
 | `SSE_MAX_CONNECTIONS`, `SSE_IDLE_TIMEOUT_S`, `SSE_HEARTBEAT_S` | `8`, `300`, `15` | Event stream limits. |
 | `PLAYGROUND_MAX_TOKENS` | `4096` | Clamp for chat `max_tokens`. |
 | `REVISIONS_KEEP` | `50` | Config revisions kept per file. |
 | `OTLP_ENDPOINT` | unset | e.g. `http://localhost:4317`; needs the optional `opentelemetry` packages (not installed by default; otherwise one warning is logged). Unverified. |
-| `EXTRA_BIN_DIRS` | `["~/.local/bin"]` | Extra directories searched for the three allowed binaries. |
+| `EXTRA_BIN_DIRS` | `["~/.local/bin"]` | Extra directories searched for the five allowed binaries. |
 
 Default URLs: `switchyard http://127.0.0.1:4010`, `relay http://127.0.0.1:4040`, `dynamo http://127.0.0.1:8020`,
 `dynamo_worker_metrics http://127.0.0.1:8081`, `litellm http://127.0.0.1:4000`.
@@ -68,15 +69,18 @@ process environment. Names set through the Settings page or API must be `LITELLM
 
 Nested variables such as `NEMO_CONSOLE_URLS__SWITCHYARD=http://127.0.0.1:14010` are merged over the built-in
 defaults (a validator in `config.py`; an earlier revision replaced the whole object, so re-check if you use an old
-checkout). The same merge applies to `ENGINE_PROBES`, `ENGINE_START` and `PLAYGROUND_KEY_ENV`.
+checkout). The same merge applies to `ENGINE_PROBES`, `ENGINE_START` and `PLAYGROUND_KEY_ENV`. Lists (`DYNAMO_*`,
+`TOPOLOGY_ENGINES`) replace their default.
 
 URLs changed at runtime on the Settings page are stored in the database, validated (plain `http`, host in
 `ALLOWED_URL_HOSTS`, no credentials or query) and take effect for adapters only **after a restart**
 (the page shows "restart required").
 
 Adapter constants that are not settings: container names, compose project and service names, the systemd unit name
-and the router liveness path (`/health/liveliness`). They live at the top of `adapters/*.py` and
-`services/topology.py`. Edit them if your deployment differs.
+and the router liveness path (`/health/liveliness`). They live at the top of `adapters/*.py`. Edit them if your
+deployment differs. The Dynamo compose FILES are not a constant: up/down/restart use the files the running containers
+were started from (their compose labels, checked to lie inside the configured compose directory), and the configured
+`inference/dynamo/docker-compose.yml` only when no Dynamo container exists (ARCHITECTURE 9.6).
 
 ## 3. Run
 
@@ -205,7 +209,13 @@ history and keys; managed systems are unaffected.
    the system yourself.
 
 Dynamo parameters: delete `<STATE_DIR>/dynamo/override.yml` and run the `restart` action to fall back to the
-reviewed compose file.
+reviewed compose file. While the stack runs from a repo override file (e.g. Super VL) the console override is not used
+at all and Params are refused.
+
+SkillEvaluator runs: `<STATE_DIR>/skillevaluator/runs/<UTC stamp>-<skill>/` (0700), newest 200 kept. Each holds
+`run.json` (0600, metadata), the Tier 1/2 reports, and for a Tier 3 run SkillEvaluator's tree
+`<skill>/<run>/result.json`, `report.html` and `trials/` (the agents' transcripts: treat as sensitive). Delete a run
+directory to forget it; the console never serves these files.
 
 **Roll back the console itself:** `git checkout <tag>` then `make setup`. Database migrations are forward-only and
 only `0001` exists at v0.1.0, so no downgrade path has been exercised.
@@ -217,7 +227,7 @@ only `0001` exists at v0.1.0, so no downgrade path has been exercised.
 | Switchyard | container running as the compose service the adapter expects, HTTP on the configured URL; `docker` on PATH | `/health`, `/v1/models`, `/v1/stats`, `/metrics`, `routing.jsonl` via `docker exec ... tail`, `routes.toml` |
 | Relay | user unit `nemo-relay-gateway.service`, `systemctl` and `nemo-relay` on PATH, gateway on the configured URL | `systemctl --user show`, the gateway's own `GET /health` (any HTTP answer under 500 means up; 404 is expected), LiteLLM's `GET /health/liveliness` for the upstream, `plugins list --json`, ATOF directory listing and tail, `plugins.toml`, `config.toml`, `routes.toml` |
 | Dynamo | compose project with `dynamo-frontend`, `dynamo-worker` (and optional `--profile mock` mocker); `docker` on PATH | frontend `/health`, `/v1/models`, `/metrics`; worker metrics read through `docker exec` (the worker port is not reachable from the host under rootless Docker); `docker logs` |
-| SkillEvaluator | `skillevaluator-local` (a wrapper that sets the provider and reads its own key file) or `skillevaluator` on PATH (`~/.local/bin` is searched); with plain `skillevaluator`, `SKILL_EVAL_LLM_PROVIDER`, `SKILL_EVAL_LLM_BASE_URL`, `SKILL_EVAL_LLM_API_KEY`, `SKILL_EVAL_LLM_MODEL` and, for Tier 2, `SKILL_EVAL_EMBEDDING_MODEL` in the console's environment (e.g. the systemd EnvironmentFile, 0600); skills under `<repo>/.claude/skills/<name>/SKILL.md` | `--version` (cached), the LiteLLM URL's `/health/liveliness`, the skills directory listing, its own run directories under `<state>/skillevaluator/runs/` |
+| SkillEvaluator | `skillevaluator-local` (a wrapper that sets the provider and reads its own key file) or `skillevaluator` on PATH (`~/.local/bin` is searched); with plain `skillevaluator`, `SKILL_EVAL_LLM_PROVIDER`, `SKILL_EVAL_LLM_BASE_URL`, `SKILL_EVAL_LLM_API_KEY`, `SKILL_EVAL_LLM_MODEL` and, for Tier 2, `SKILL_EVAL_EMBEDDING_MODEL` in the console's environment (e.g. the systemd EnvironmentFile, 0600); skills under `<repo>/.claude/skills/<name>/SKILL.md`. **Tier 3** needs `skillevaluator-local` and the lab's runner (image, `ai-lab-skilleval` network, broker and egress containers: `clients/skillevaluator/runner/launch.py check`) | `--version` (cached), the LiteLLM URL's `/health/liveliness`, the skills directory listing, its own run directories under `<state>/skillevaluator/runs/` (for Tier 3: `<skill>/<run>/result.json`, read no-follow and size-capped) |
 
 ## 7. Troubleshooting
 
@@ -263,7 +273,10 @@ shows is prefixed with the code words for security rejections.
 | Dynamo `refused: exclusive engine(s) on the worker's card: ...` (`dynamo.up.exclusive_engine`) | The default model (or another exclusive engine) holds the card. Dynamo is opt-in. | Run the fix, `DYNAMO_START` (default `scripts/use-model.sh qwen3.8-27b-dynamo`), from the repo root: it stops the default model in the right order. The console never stops it, and `stop_sharing_engine` does not apply. |
 | Dynamo `refused: the worker's card is in use by ...` (`dynamo.up.card_in_use`) | The opt-in 27B runs on the card, or a container the console does not know (not in any `DYNAMO_*` list). | For the 27B: re-run `up` with "stop" ticked (stops that one label-verified container). For an unknown container: identify it first (`docker inspect`); stop it with its own tooling, or add it to `DYNAMO_COEXISTING_ENGINES` if it fits beside the worker. |
 | Dynamo `refused: the CPU mocker is running` / `refused: the real worker is running (same model name as the mocker)` | Mocker and worker cannot coexist. | Run `down` first. |
-| Dynamo `cannot determine the worker's GPU UUID from the compose or the container` (`dynamo.preflight.failed`) | Compose path wrong (`REPO_ROOT`) or the worker has no device pin. | Fix `REPO_ROOT`; check the compose pins a UUID. |
+| Dynamo `cannot determine the worker's GPU UUID(s) from the compose files in use or the container` (`dynamo.preflight.failed`) | Compose path wrong (`REPO_ROOT`), `docker compose ... config` failed, or the worker has no device pin. A variant stack never falls back to the base file's card. | Fix `REPO_ROOT`; run the files' `docker compose ... config` by hand; check the compose pins UUIDs. |
+| Dynamo `refused: ...` with `dynamo.compose.untrusted` | The running containers' compose label names a file outside the configured compose directory (also through a symlink), a missing file, another project directory, or the containers disagree. Nothing ran; there is no fallback to the base file. | `docker inspect --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}' ai-lab-dynamo-dynamo-worker-1`; take that stack down with the files it was started from, or set `REPO_ROOT` to the checkout it came from. |
+| Params apply / override apply `refused: the live Dynamo stack runs from docker-compose.yml, docker-compose.super-vl.yml ...` | A repo override file is in use (`dynamo.compose.override`, info); the console override restates the base worker command and would replace that stack's worker. | Change the variant's compose file in git, or `down` it first. |
+| `up_mock` refused (`dynamo.mock.override_in_use`) | The mocker belongs to the base compose. | `down` first. |
 | `dynamo.up.unhealthy` | Worker recreated but `/v1/models` stayed empty for 600 s. | `docker logs --tail 80 <worker>`; check VRAM. |
 
 ### Playground
@@ -272,7 +285,7 @@ shows is prefixed with the code words for security rejections.
 |---|---|---|
 | 503 `credential_missing` "env var <NAME> is not set in the console process" | The named variable is not in the console's environment. | Export it before starting (or `Environment=` in the unit); Settings shows `[unset]`. |
 | 502 `upstream_unreachable` "could not reach the system: <ExceptionName>" | System down, wrong URL, or stopped engine. | Check that system's tab. |
-| 502 `upstream_error` "system answered 401: ..." | The credential is wrong, or (Relay) no credential is configured for that system: only `switchyard` has a default mapping. | Add a `relay` entry to `PLAYGROUND_KEY_ENV` / Settings pointing at a variable that holds a valid key. |
+| 502 `upstream_error` "system answered 401: ..." | The credential is wrong (Switchyard and Relay both default to `LITELLM_API_KEY`). | Point `PLAYGROUND_KEY_ENV` (per system) / Settings at a variable that holds a valid key. |
 | 502 `upstream_error` "system answered 4xx/5xx" | The system rejected the request (e.g. a model alias whose engine is stopped, a "capable" tier that is dark). | Choose a `direct-*` route or start the engine. |
 | Playground/event stream fails with an HTTP error | The frontend now parses the `{error:{code,message}}` envelope (`parseErrorBody` in `frontend/js/sse.js`); 4xx is final, no auto-retry (the UI offers Retry). Not exercised against every error in a browser. | If the message is unclear, reproduce with `curl` to read the body. |
 | 429 `too_many_streams` "at most 8 concurrent event streams" | Too many open event panels/tabs. | Close tabs; idle streams end after 5 minutes. |
@@ -284,7 +297,8 @@ shows is prefixed with the code words for security rejections.
 |---|---|
 | `switchyard.down` | `/health` did not answer. Run the shown `docker compose up -d --no-build`. |
 | `switchyard.config.drift` | `routes.toml` differs from the running server's routes; recreate the container (shown command). |
-| `switchyard.tier.capable_dark` | A container listed in `ENGINE_PROBES` is not running (or absent) and its alias is the capable-tier model of a `stage_router` route (the message names the routes). Switchyard turns `degraded` with a summary starting "capable tier dark". The fix is the container's `ENGINE_START` command, else the compose directory to `up`. It shares one cached `docker inspect` probe with the topology view; a probe error or an unparseable `routes.toml` yields no problem. |
+| `switchyard.tier.capable_not_deployed` (info) | The capable-tier model of a `stage_router` route maps to a container that does not exist on this host. Switchyard stays `up`. The fix names both options: point the route at a deployed engine, or deploy that one (its start command says what it stops). |
+| `switchyard.tier.capable_dark` | A container listed in `ENGINE_PROBES` exists but is not running and its alias is the capable-tier model of a `stage_router` route (the message names the routes). Switchyard turns `degraded` with a summary starting "capable tier dark". The fix is the container's `ENGINE_START` command, else the compose directory to `up`. It shares one cached `docker inspect` probe with the topology view; a probe error or an unparseable `routes.toml` yields no problem. |
 | `switchyard.capable_tier.upstream_errors` | Inferred from `/v1/stats` that the capable-tier engine is failing. `calls` there counts successes (calls + errors = attempts), so it fires when errors >= successes (errors > 0) or errors rose since the last poll with no new success; the message reads "N errors, M successes". **Heuristic:** no active probe, so it appears only after traffic hit the failing tier and never for an idle one. |
 | `switchyard.routing.fallback_unavailable` | Requests were re-routed because a target was unavailable. |
 | `relay.gateway.down` | Gateway URL does not answer; run `systemctl --user restart nemo-relay-gateway.service`. A 404 from `/health` is **up**, not a failure. |
@@ -294,11 +308,18 @@ shows is prefixed with the code words for security rejections.
 | `relay.config.newer_than_gateway` | `plugins.toml` changed after the gateway started; restart the gateway. |
 | `relay.atof.large` | ATOF directory over 1 GiB; Relay has no retention. Prune rotated files by hand. |
 | `dynamo.off` (info, health `off`) | Dynamo is opt-in and no container of it is running or restarting. Normal. To start it, run the fix (`DYNAMO_START`). |
-| `dynamo.frontend.down` / `dynamo.worker.absent` / `dynamo.worker.stopped` | Some Dynamo container runs or restarts but not all (or `DYNAMO_OPT_IN=false`). The start fix is `DYNAMO_START`; `dynamo.worker.stopped` says "restarting (crash loop)" for a looping worker. |
-| `dynamo.card.contended` | The worker runs or restarts while an exclusive engine runs on its card: they cannot share its VRAM (on 2026-09-28 the worker crash-looped beside the default model). Fix: the console `down`; to run Dynamo instead, `DYNAMO_START`. |
-| `dynamo.holds_card` | Dynamo is up and no exclusive engine runs, so the `DYNAMO_DARK_WHILE_HELD` aliases and routes are dark. Fix: `DEFAULT_MODEL_START`. |
+| `dynamo.frontend.down` / `dynamo.worker.absent` / `dynamo.worker.stopped` | Some Dynamo container runs or restarts but not all (or `DYNAMO_OPT_IN=false`); `dynamo.frontend.down` also covers a variant's real frontend (`ai-lab-dynamo-dynamo-sv-frontend-1`) behind its gateway. The start fix is `DYNAMO_START` on the base stack and the console's `up` for a variant; `dynamo.worker.stopped` says "restarting (crash loop)" for a looping worker. |
+| `dynamo.compose.override` (info) | The stack runs from repo override files (named); up/down/restart use exactly those files, Params and the console override are refused. Normal for the lab's Super VL. |
+| `dynamo.compose.untrusted` | See the action row above: the compose label failed the checks; lifecycle actions and Params refuse. |
+| `dynamo.card.contended` | The worker runs or restarts while an exclusive engine runs on one of its cards: they cannot share VRAM (on 2026-09-28 the worker crash-looped beside the default model). Fix: the console `down`; to run Dynamo instead, stop that engine first. |
+| `dynamo.holds_card` (info) | Dynamo is up and no exclusive engine runs, so the `DYNAMO_DARK_WHILE_HELD` aliases and routes cannot answer. Information, not a fault; the fix only names how to switch away (`DEFAULT_MODEL_START`). |
 | `dynamo.card.shared` / `dynamo.card.unknown` (preflight) | An exclusive engine, or a container the console does not know, runs on the worker's card; `up` is refused until it stops. |
-| `dynamo.structural_tag.off`, `dynamo.parser.dialect`, `dynamo.router.kv` | Worker/frontend flags likely wrong for this model; use the Params tab. |
+| `dynamo.structural_tag.off`, `dynamo.parser.dialect`, `dynamo.router.kv` | Worker/frontend flags likely wrong for the base compose's model; use the Params tab. Not raised for a variant stack (its flags live in its own compose file). |
+| `skillevaluator.live.busy` | A Tier 3 run is in progress; one runs at a time. Watch it in the runs list; `report` with its id shows its progress. |
+| `skillevaluator.live.needs_wrapper` | Tier 3 was asked for with plain `skillevaluator`. Install the lab wrapper (`clients/skillevaluator/install.sh`). |
+| Tier 3 run `error` "launch: NOT READY: ..." in its report | The runner is not ready (image, network, broker or egress missing). `clients/skillevaluator/runner/launch.py check` in the lab repo says which. |
+| Tier 3 run `interrupted` | The console stopped (the launcher gets SIGINT; the lab launcher then stops its job container: read from its code, unverified live) or restarted while it ran. Start it again; the report shows a result.json that landed later anyway. After a hard kill of the console, check `docker ps --filter label=ai-lab.skilleval.job`. |
+| `skillevaluator.tier2.no_embeddings` | Tier 2 could not get embeddings (the lab serves `nomic-embed` through the router from Ollama). Fix: `cd <repo>/inference/ollama && docker compose up -d`. |
 | `console.adapter.error` / health `unknown` "status check failed" | An adapter raised. Check the console log (JSON, exception class only) and fix that system's paths (`REPO_ROOT`). |
 
 ### The console itself
@@ -309,7 +330,7 @@ shows is prefixed with the code words for security rejections.
 | Docker-based checks fail under systemd but work in a shell | The runner passes only `PATH HOME XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS DOCKER_HOST DOCKER_CONTEXT DOCKER_CONFIG LANG LC_ALL`. Add `DOCKER_HOST` / `DOCKER_CONTEXT` to the unit. Unverified under systemd. |
 | `binary 'nemo-relay' not found on PATH` in a problem text | Binary outside `PATH`; add its directory to `EXTRA_BIN_DIRS`. |
 | History charts empty after a restart | The 15 minute ring is in memory; 1h/24h use rollups written once a minute. Wait a minute. |
-| Topology shows an engine `down` although you never run it | The topology probe checks one hard-coded container name (`SHARED_ENGINE` in `services/topology.py`). Edit it. |
+| Topology shows an engine you never run | The engine nodes come from `TOPOLOGY_ENGINES` (default: the author's engines). A missing container is drawn `off` "(not deployed)"; only an always-on (`opt_in: false`) engine that exists and is stopped is `down`. Set the list for your deployment. |
 | Live smoke tests skipped | Gating differs per adapter: Switchyard `NEMO_LIVE=1`, Relay `NEMO_CONSOLE_LIVE=1`, Dynamo automatic when `:8020/health` answers. |
 
 ## 8. Verification you can repeat

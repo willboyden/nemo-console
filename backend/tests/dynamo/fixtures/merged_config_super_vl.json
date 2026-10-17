@@ -1,0 +1,42 @@
+{
+ "name": "ai-lab-dynamo",
+ "services": {
+  "dynamo-frontend": {
+   "image": "nginx:1.31.6-alpine@sha256:df221db836e1754089190208cee7eeda94f233197056426eda74a43ab1abeac2"
+  },
+  "dynamo-sv-frontend": {
+   "image": "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0-nemotron-3.5-super-vl-dev.1@sha256:3a55cf2d16db5ffc026326a70bf0c56ac09661fdca5508404520382a49403e4d",
+   "command": [
+    "python3",
+    "-m",
+    "dynamo.frontend"
+   ]
+  },
+  "dynamo-worker": {
+   "image": "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.6.0-nemotron-3.5-super-vl-dev.1@sha256:3a55cf2d16db5ffc026326a70bf0c56ac09661fdca5508404520382a49403e4d",
+   "command": [
+    "python3",
+    "-m",
+    "dynamo.vllm"
+   ],
+   "deploy": {
+    "resources": {
+     "reservations": {
+      "devices": [
+       {
+        "capabilities": [
+         "gpu"
+        ],
+        "driver": "nvidia",
+        "device_ids": [
+         "GPU-00000000-0000-0000-0000-000000000002",
+         "GPU-00000000-0000-0000-0000-000000000001"
+        ]
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+}

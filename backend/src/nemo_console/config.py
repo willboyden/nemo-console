@@ -5,7 +5,7 @@ import os
 from importlib import metadata
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 try:
@@ -31,38 +31,79 @@ DEFAULT_URLS = {
     "dynamo_worker_metrics": "http://127.0.0.1:8081",
     "litellm": "http://127.0.0.1:4000",
 }
-# router alias -> engine container (the author's deployment). 2026-09-26: the lab's default engine and capable tier
-# moved to qwen3.8-flash-next (SGLang TP2 across both cards). The 27B entry stays: direct-27b still targets it and
-# it can still be selected, it is just dark by default (only a stage_router capable target raises capable_dark).
+# Engine containers of the author's deployment (2026-10-17, addendum 9.6). Resident: Nemotron 3.5 Super VL on Dynamo
+# (inference/dynamo/docker-compose.yml + docker-compose.super-vl.yml, worker on BOTH cards), nemotron-lightning (vLLM
+# TP2, both cards) and chatterbox-tts (Workstation card). Opt-in and exclusive with Super VL: Bolt (one card) and GLM
+# (both cards). The flashnext and 27B containers no longer exist there: a container that does not exist is "not
+# deployed", never red. Every name below is a setting; nothing here is a fixed identity.
+LIGHTNING = "ai-lab-vllm-nemotron-lightning-nemotron-lightning-1"
+FLASHNEXT = "ai-lab-sglang-flashnext-flashnext-1"
+QWEN38 = "ai-lab-vllm-qwen38-vllm-1"
+BOLT = "ai-lab-vllm-nemotron-bolt-nemotron-bolt-1"
+GLM = "lil-glm53-tp2"
+CHATTERBOX = "ai-lab-chatterbox-tts-tts-1"
+DYNAMO_WORKER = "ai-lab-dynamo-dynamo-worker-1"
+# router alias -> engine container. Only aliases a stage_router route escalates to (capable_target) are checked: a
+# stopped container raises switchyard.tier.capable_dark, a missing one only an info "not deployed". The Dynamo worker
+# is the same container for the 27B stack and the Super VL stack: a running worker is taken as "answering" (R-11).
 DEFAULT_ENGINE_PROBES = {
-    "qwen3.8-flash-next": "ai-lab-sglang-flashnext-flashnext-1",
-    "qwen3.8-27b-1m": "ai-lab-vllm-qwen38-vllm-1",
+    "nemotron-3.5-super-vl": DYNAMO_WORKER,
+    "nemotron-3.5-bolt": BOLT,
+    "glm-5.3-flash-next-local": GLM,
+    "qwen3.8-flash-next": FLASHNEXT,
+    "qwen3.8-27b-1m": QWEN38,
 }
-# engine container -> the ONE command, run from the repo root, that starts it correctly. A bare `docker compose up -d`
-# is wrong for both of these: flashnext must start BEFORE lightning (flashnext.sh orders it; next to a running
-# lightning the compose up fails "memory capacity is unbalanced"), and the 27B needs Workstation-card VRAM that
-# flashnext holds (use-model.sh stops flashnext first). A container not listed gets the generic compose-dir hint.
+# engine container -> the command, run from the repo root, that starts it correctly (DISPLAY ONLY). Each says what it
+# stops or needs, because starting one of these tears down whatever holds its cards: none of them is "the" default.
+# A container not listed gets the generic compose-dir hint.
 DEFAULT_ENGINE_START = {
-    "ai-lab-sglang-flashnext-flashnext-1": "inference/sglang-flashnext/flashnext.sh up",
-    "ai-lab-vllm-qwen38-vllm-1": "scripts/use-model.sh qwen3.8-27b-1m   # exclusive: this also stops flashnext",
+    DYNAMO_WORKER: ("docker compose -f inference/dynamo/docker-compose.yml -f inference/dynamo/docker-compose.super-vl.yml "
+                    "up -d dynamo-frontend dynamo-worker   # Super VL, both cards: start lightning (TP2) first"),
+    BOLT: "scripts/use-model.sh nemotron-3.5-bolt   # exclusive: this stops Super VL",
+    GLM: "scripts/use-model.sh glm53-flash-next   # exclusive, both cards: this stops Super VL",
+    FLASHNEXT: "inference/sglang-flashnext/flashnext.sh up   # only if flashnext should be resident: it takes BOTH cards",
+    QWEN38: "scripts/use-model.sh qwen3.8-27b-1m   # exclusive: this stops the engine on its card",
 }
-# Dynamo card model (2026-10-06, addendum 9.4). In the author's deployment Dynamo is OPT-IN and off by default: the
-# default model (qwen3.8-flash-next, SGLang TP2) holds ~60 GB of BOTH cards, so the worker (0.5 x the Workstation card)
-# cannot start beside it. Commands run from the repo root and are DISPLAY ONLY (problem fixes); the console never runs
-# them. Lists REPLACE the defaults when set (NEMO_CONSOLE_DYNAMO_EXCLUSIVE_ENGINES='["a","b"]').
-DEFAULT_DYNAMO_START = "scripts/use-model.sh qwen3.8-27b-dynamo"      # frees the card in the right order, starts Dynamo
-DEFAULT_MODEL_START = "scripts/use-model.sh qwen3.8-flash-next"       # stops Dynamo, restores the default model
-# running on the worker's card, these cannot coexist with it (VRAM): `up` is refused while one runs
-DEFAULT_DYNAMO_EXCLUSIVE = ["ai-lab-sglang-flashnext-flashnext-1", "ai-lab-vllm-qwen38-vllm-1"]
-# allowed beside the worker on its card (ollama holds no VRAM until a model loads)
-DEFAULT_DYNAMO_COEXISTING = ["ai-lab-vllm-nemotron-lightning-nemotron-lightning-1", "ai-lab-ollama-ollama-1"]
+# Dynamo card model (addendum 9.4, defaults updated by 9.6). Commands run from the repo root and are DISPLAY ONLY
+# (problem fixes); the console never runs them. Lists REPLACE the defaults when set
+# (NEMO_CONSOLE_DYNAMO_EXCLUSIVE_ENGINES='["a","b"]').
+DEFAULT_DYNAMO_START = "scripts/use-model.sh qwen3.8-27b-dynamo"      # the BASE stack: what the console's `up` starts
+# with no Dynamo container. Neutral on purpose: without an alias the script only lists the engines; switching away from
+# Dynamo (which stops it) is the operator's choice of alias.
+DEFAULT_MODEL_START = "scripts/use-model.sh   # lists the engines; `scripts/use-model.sh <alias>` switches away from Dynamo"
+# running on one of the worker's cards, these cannot coexist with it (VRAM): `up` is refused while one runs
+DEFAULT_DYNAMO_EXCLUSIVE = [BOLT, GLM, FLASHNEXT, QWEN38]
+# allowed beside the worker (lightning TP2 at 0.20 per card beside Super VL at 0.55; ollama holds no VRAM until a model
+# loads; chatterbox-tts on the Workstation card)
+DEFAULT_DYNAMO_COEXISTING = [LIGHTNING, "ai-lab-ollama-ollama-1", CHATTERBOX]
 # GPU-visible but holding no meaningful VRAM (monitoring)
 DEFAULT_DYNAMO_IGNORED = ["ai-lab-observability-dcgm-exporter-1"]
-# what stops answering while Dynamo holds the card (the exclusive engines are stopped then); named in dynamo.holds_card
-DEFAULT_DYNAMO_DARK = ["qwen3.8-flash-next", "qwen3.8-flash-next-quick", "auto-local capable tier (Switchyard and Relay)",
-                       "auto-flashnext capable tier", "direct-flashnext (Switchyard and Relay)"]
-DEFAULT_KEY_ENV = {"switchyard": "LITELLM_API_KEY"}
+# what cannot answer while Dynamo holds the card(s), because its engine is exclusive (dynamo.holds_card, info)
+DEFAULT_DYNAMO_DARK = ["nemotron-3.5-bolt (route bolt)", "glm-5.3-flash-next-local",
+                       "qwen3.8-flash-next and -quick (auto-local and auto-flashnext capable tier)",
+                       "qwen3.8-27b-1m (direct-27b)"]
+# Engine nodes of the topology (litellm -> engine "alias" edges). opt_in: stopped = "off" (else "down"); a container
+# that does not exist is drawn "off" and labelled "not deployed". REPLACES the default when set, e.g.
+# NEMO_CONSOLE_TOPOLOGY_ENGINES='[{"id": "my-engine", "label": "My engine", "container": "c-1", "opt_in": true}]'.
+DEFAULT_TOPOLOGY_ENGINES = [
+    {"id": "vllm-lightning", "label": "vLLM Lightning (efficient tier, judge)", "container": LIGHTNING, "opt_in": False},
+    {"id": "vllm-bolt", "label": "vLLM Nemotron Bolt (opt-in, one card)", "container": BOLT, "opt_in": True},
+    {"id": "vllm-glm53", "label": "vLLM GLM-5.3-Flash-Next (opt-in, both cards)", "container": GLM, "opt_in": True},
+    {"id": "sglang-flashnext", "label": "SGLang FlashNext (opt-in, both cards)", "container": FLASHNEXT, "opt_in": True},
+    {"id": "vllm-qwen38", "label": "vLLM Qwen3.8 27B (opt-in)", "container": QWEN38, "opt_in": True},
+]
+# Both gateways want a bearer: Switchyard forwards it to LiteLLM (forward_auth), Relay's /v1/* answers 401 without one
+# (opencode sends LITELLM_API_KEY to :4040). Override per system: NEMO_CONSOLE_PLAYGROUND_KEY_ENV__RELAY=OTHER_API_KEY.
+DEFAULT_KEY_ENV = {"switchyard": "LITELLM_API_KEY", "relay": "LITELLM_API_KEY"}
 REPO_MARKER = Path("inference") / "dynamo" / "docker-compose.yml"
+
+
+class TopologyEngine(BaseModel):
+    """One engine node of the topology. `id` and `container` are identifiers; `label` is display text."""
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9_.\-]{0,63}$")
+    label: str = Field(min_length=1, max_length=80)
+    container: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_.\-]{0,127}$")
+    opt_in: bool = True
 
 
 def default_repo_root() -> Path:
@@ -101,6 +142,10 @@ class Settings(BaseSettings):
     engine_probes: dict[str, str] = dict(DEFAULT_ENGINE_PROBES)
     # engine container -> start command shown as the capable_dark fix (display only; the console never runs it)
     engine_start: dict[str, str] = dict(DEFAULT_ENGINE_START)
+
+    # engine nodes drawn on the topology (see DEFAULT_TOPOLOGY_ENGINES); a list REPLACES the default
+    topology_engines: list[TopologyEngine] = Field(
+        default_factory=lambda: [TopologyEngine(**e) for e in DEFAULT_TOPOLOGY_ENGINES])
 
     # Dynamo card model (see DEFAULT_DYNAMO_* above). opt_in: no running Dynamo container = health "off", not "down"
     dynamo_opt_in: bool = True

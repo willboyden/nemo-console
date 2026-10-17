@@ -22,6 +22,13 @@ SKILLEVAL_BINARIES = frozenset({"skillevaluator", "skillevaluator-local"})
 SKILLEVAL_ENV_PREFIXES = ("SKILL_EVAL_", "SKILLEVAL_")
 SKILLEVAL_ENV_KEYS = ("LOCAL_AI_LAB", "LITELLM_URL")
 MAX_TIMEOUT = 600.0
+# SkillEvaluator Tier 3 (live agent runs in the lab's per-job runner container) may run as long as the launcher's own
+# limit: 120 s + dataset generation 900 s + tier3 3600 s (clients/skillevaluator/runner/launch.py, container_timeout).
+# ONLY `skillevaluator[-local] tier3 ...` gets this cap; every other command keeps MAX_TIMEOUT.
+MAX_LIVE_EVAL_TIMEOUT = 4800.0
+# SkillEvaluator launchers are stopped with SIGINT first (the lab launcher `docker kill`s its job container on SIGINT,
+# so its tokens stop being spent), then SIGKILL after this grace. Every other binary gets SIGKILL straight away.
+STOP_GRACE = 5.0        # short enough for `nemo-console stop`, which waits 10 s for the console to exit
 MAX_ARGS = 64
 MAX_ARG_LEN = 8192
 
@@ -30,12 +37,31 @@ class RunnerError(Exception):
     """Refused before spawning (bad binary / argv)."""
 
 
+def max_timeout(argv: list[str]) -> float:
+    """The cap for this argv: the long one only for a SkillEvaluator launcher's `tier3` subcommand."""
+    return MAX_LIVE_EVAL_TIMEOUT if argv[:1] and argv[0] in SKILLEVAL_BINARIES and argv[1:2] == ["tier3"] else MAX_TIMEOUT
+
+
 def _kill_group(proc: asyncio.subprocess.Process) -> None:
     """The child leads its own session/process group: kill the whole group so grandchildren cannot hold pipes open."""
     with contextlib.suppress(ProcessLookupError, PermissionError):
         os.killpg(proc.pid, signal.SIGKILL)
     with contextlib.suppress(ProcessLookupError):
         proc.kill()
+
+
+async def _stop(proc: asyncio.subprocess.Process, *, graceful: bool) -> None:
+    """Stop the child's whole group: SIGINT and a grace period first when `graceful`, SIGKILL in every case."""
+    try:
+        if graceful and proc.returncode is None:
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(proc.pid, signal.SIGINT)
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(proc.wait(), timeout=STOP_GRACE)
+    finally:
+        _kill_group(proc)           # also reaps grandchildren that outlived the leader (and runs on a second cancel)
+    with contextlib.suppress(Exception):
+        await asyncio.wait_for(proc.wait(), timeout=5)
 
 
 class SubprocessRunner:
@@ -71,7 +97,8 @@ class SubprocessRunner:
                   stdin: bytes | None = None, cwd: Path | None = None) -> CommandResult:
         self._check(argv)
         exe = self.resolve(argv[0])
-        timeout = max(0.1, min(float(timeout), MAX_TIMEOUT))
+        timeout = max(0.1, min(float(timeout), max_timeout(argv)))
+        graceful = argv[0] in SKILLEVAL_BINARIES
         start = time.monotonic()
         proc = await asyncio.create_subprocess_exec(
             exe, *argv[1:], stdin=asyncio.subprocess.PIPE if stdin is not None else asyncio.subprocess.DEVNULL,
@@ -105,10 +132,12 @@ class SubprocessRunner:
             await asyncio.wait_for(proc.wait(), timeout=5)
         except TimeoutError:
             timed_out = True
-            _kill_group(proc)
-            with contextlib.suppress(Exception):
-                await asyncio.wait_for(proc.wait(), timeout=5)
+            await _stop(proc, graceful=graceful)
             out, err = b"", b""
+        except asyncio.CancelledError:
+            # The caller gave up (console shutdown, an action timeout): never leave the child's group running behind it.
+            await _stop(proc, graceful=graceful)
+            raise
         return CommandResult(
             returncode=proc.returncode if proc.returncode is not None else -1,
             stdout=redact(out.decode("utf-8", "replace")), stderr=redact(err.decode("utf-8", "replace")),

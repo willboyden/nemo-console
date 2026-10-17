@@ -18,7 +18,8 @@ Facts this adapter is built on (source in brackets; see backend/tests/relay/fixt
     plugins.toml.example, routes.toml header]. Those caveats are attached to every validation result.
   * ATOF is JSONL, one event per line: {atof_version, kind: scope|mark, name, scope_category:
     start|end (scope only), category, timestamp (RFC 3339, ns), uuid, parent_uuid, metadata, data}
-    [captured from ~/.local/share/nemo-relay/atof]. It rotates to `<file>.N` [live]. Lines contain
+    [captured from ~/.local/share/nemo-relay/atof]. It rotates to `<file>.N`, older ones gzipped as `<file>.N.gz`
+    [live 2026-10-17: relay-events.jsonl, .1, .2.gz]; a .gz is decompressed with caps, never followed. Lines contain
     prompts and completions, so events are built from an explicit allowlist and every string that
     is copied must look like an identifier; free text can never reach an event.
 
@@ -30,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import errno
+import gzip
 import hashlib
 import ipaddress
 import json
@@ -67,16 +69,22 @@ from nemo_console.domain.models import (
 UNIT = "nemo-relay-gateway.service"
 DEFAULT_URL = "http://127.0.0.1:4040"
 DEFAULT_LITELLM_URL = "http://127.0.0.1:4000"   # the gateway's upstream; ctx.urls["litellm"] overrides it
-# Fallback only (the playground reads route ids from clients/nemo-relay/routes.toml when it can); mirrors that file.
-DEFAULT_ROUTE_IDS = ["auto-local", "direct-27b", "direct-flashnext", "direct-lightning"]
+# Fallback only (the playground reads route ids from clients/nemo-relay/routes.toml when it can); mirrors that file
+# (2026-10-17). The default is the route LiteLLM's `switchyard` alias forwards to; auto-local escalates to an engine
+# that is no longer deployed.
+DEFAULT_ROUTE_IDS = ["super-lightning", "super-glm", "super-vl", "bolt", "direct-lightning", "auto-local", "direct-27b",
+                     "direct-flashnext"]
+PLAYGROUND_DEFAULT_ROUTE = "super-lightning"
 
 MAX_CONFIG_BYTES = 256 * 1024
 TAIL_WINDOW_BYTES = 4 * 1024 * 1024          # max bytes read from the end of an ATOF file per call
 FOLLOW_CHUNK_BYTES = 1024 * 1024             # max bytes consumed per follow poll
 MAX_LINE_BYTES = 1024 * 1024                 # longer ATOF lines are skipped, never buffered
 MAX_SCAN_ENTRIES = 50_000                    # directory listing bound
-ATOF_NAME = re.compile(r"^.+\.jsonl(\.\d+)?$")
-ATOF_ROTATION = re.compile(r"\.(\d+)$")
+ATOF_NAME = re.compile(r"^.+\.jsonl(\.\d+)?(\.gz)?$")
+ATOF_ROTATION = re.compile(r"\.(\d+)(?:\.gz)?$")
+MAX_GZ_FILE_BYTES = 64 * 1024 * 1024         # a larger compressed rotation is skipped, not read
+MAX_GZ_BYTES = 64 * 1024 * 1024              # decompressed bytes read from one .gz rotation (bomb guard); over = skipped
 IDENT = re.compile(r"^[A-Za-z0-9_.:/@+\-]{1,120}$")   # the only shape of string an event may copy
 PLUGIN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/@+\-]{0,119}$")   # never starts with '-'
 ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
@@ -205,6 +213,31 @@ def tail_bytes(path: Path, root: Path, window: int = TAIL_WINDOW_BYTES) -> tuple
         return data, start > 0
     finally:
         os.close(fd)
+
+
+def gz_tail_bytes(path: Path, root: Path, window: int = TAIL_WINDOW_BYTES) -> tuple[bytes, bool]:
+    """Last <= window DECOMPRESSED bytes of a gzipped rotation (a gzip stream cannot be read from the end, so it is
+    decompressed in chunks, keeping only the window). Same no-follow / regular-file / containment rules as tail_bytes;
+    a file over MAX_GZ_FILE_BYTES, or one that decompresses past MAX_GZ_BYTES, raises instead of being read."""
+    if not _contained(path, root):
+        raise PermissionError("path escapes its allowed root")
+    fd, _st = _open_regular(path, MAX_GZ_FILE_BYTES)
+    buf = bytearray()
+    total = 0
+    try:
+        with os.fdopen(fd, "rb", closefd=False) as raw, gzip.GzipFile(fileobj=raw) as gz:
+            while chunk := gz.read(1 << 20):
+                total += len(chunk)
+                if total > MAX_GZ_BYTES:
+                    raise PermissionError(f"{path.name} decompresses past the {MAX_GZ_BYTES} byte cap")
+                buf += chunk
+                if len(buf) > window:
+                    del buf[: len(buf) - window]
+    except (EOFError, gzip.BadGzipFile) as e:
+        raise OSError(f"{path.name}: not a readable gzip file") from e
+    finally:
+        os.close(fd)
+    return bytes(buf), total > window
 
 
 def _human_bytes(n: int) -> str:
@@ -954,7 +987,7 @@ class RelayAdapter(SystemAdapter):
         collected: list[list[SystemEvent]] = []
         for p in self._atof_files_newest_first()[:4]:
             try:
-                buf, partial = tail_bytes(p, root)
+                buf, partial = gz_tail_bytes(p, root) if p.name.endswith(".gz") else tail_bytes(p, root)
             except OSError:
                 continue
             lines = buf.split(b"\n")
@@ -981,7 +1014,7 @@ class RelayAdapter(SystemAdapter):
     def _follow_step(self, state: dict[str, Any]) -> list[SystemEvent]:
         """Read whatever was appended since the last poll. `state` holds ino/offset/remainder for THIS iterator."""
         root = self._path("relay_atof_dir")
-        files = self._atof_files_newest_first()
+        files = [f for f in self._atof_files_newest_first() if not f.name.endswith(".gz")]   # only plain files grow
         active = files[0] if files else None
         if active is None:
             return []
@@ -1227,12 +1260,13 @@ class RelayAdapter(SystemAdapter):
             found = [r["id"] for r in parsed.values() if isinstance(r, dict) and isinstance(r.get("id"), str) and IDENT.fullmatch(r["id"])]
             if found:
                 ids = found
-        default = "auto-local" if "auto-local" in ids else ids[0]
+        default = PLAYGROUND_DEFAULT_ROUTE if PLAYGROUND_DEFAULT_ROUTE in ids else ids[0]
         return PlaygroundSpec(
             wire="openai_chat", models=ids, default_model=default,
             note="Chat goes through the Relay gateway on :4040 (Switchyard plugin routes) and is recorded to ATOF/ATIF (PII-redacted, "
-                 "if enabled). /v1/* answers 401 without a bearer, so the core must attach a LiteLLM virtual key by env NAME "
-                 "(opencode uses LITELLM_API_KEY). Route ids come from routes.toml; engines behind them may be down.")
+                 "if enabled). /v1/* answers 401 without a bearer, so the core attaches a LiteLLM virtual key by env NAME: "
+                 "playground_key_env['relay'] (default LITELLM_API_KEY, what opencode sends). Route ids come from "
+                 "routes.toml; engines behind them may be down.")
 
     def playground_url(self) -> str | None:
         return f"{self._base}/v1/chat/completions"

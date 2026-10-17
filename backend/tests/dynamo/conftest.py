@@ -16,16 +16,16 @@ BASE_URL = "http://127.0.0.1:8020"
 
 
 @pytest.fixture
-def runner() -> FakeRunner:
-    return FakeRunner()
-
-
-@pytest.fixture
 def compose(tmp_path: Path) -> Path:
     p = tmp_path / "repo" / "docker-compose.yml"
     p.parent.mkdir()
     p.write_text((FIX / "base_compose.yml").read_text())
     return p
+
+
+@pytest.fixture
+def runner(compose: Path) -> FakeRunner:
+    return FakeRunner(compose_dir=compose.parent)
 
 
 @pytest.fixture

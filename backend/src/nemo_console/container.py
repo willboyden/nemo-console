@@ -108,8 +108,10 @@ def build_container(cfg: Settings, *, adapters: dict[SystemId, SystemAdapter] | 
         problems = await capable_tier_problems(probe, cfg.engine_probes, text, cfg.repo_root, cfg.engine_start)
         if not problems:
             return st
-        health = "degraded" if st.health == "up" else st.health
-        return st.model_copy(update={"health": health, "summary": f"capable tier dark: {st.summary}",
+        # only a capable tier that exists and is stopped degrades Switchyard; "not deployed" is information
+        dark = any(p.severity != "info" for p in problems)
+        health = "degraded" if dark and st.health == "up" else st.health
+        return st.model_copy(update={"health": health, "summary": f"capable tier dark: {st.summary}" if dark else st.summary,
                                      "problems": [*st.problems, *problems]})
 
     status = StatusService(ordered, cfg.status_ttl_s, cfg.adapter_timeout_s, global_problems,
@@ -121,6 +123,7 @@ def build_container(cfg: Settings, *, adapters: dict[SystemId, SystemAdapter] | 
         runner=runner, http=http, adapters=ordered, settings=settings, status=status,
         metrics=MetricsPoller(status, store, settings.effective_poll_interval(), cfg.ring_seconds),
         config_store=config_store,
-        topology=TopologyService(status, http, probe, settings.effective_urls().get("litellm", "http://127.0.0.1:4000")),
+        topology=TopologyService(status, http, probe, settings.effective_urls().get("litellm", "http://127.0.0.1:4000"),
+                                 cfg.topology_engines),
         sse=SseLimiter(cfg.sse_max_connections), telemetry=telemetry, trust_notice=trust_notice,
         validate_sem=validate_sem)

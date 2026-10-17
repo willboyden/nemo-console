@@ -1,7 +1,9 @@
 """Test helpers for the SkillEvaluator adapter: a fake runner that writes real-shaped reports, and a skills tree."""
 from __future__ import annotations
 
-from collections.abc import Callable
+import inspect
+import json
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -16,7 +18,7 @@ def fx(name: str) -> str:
     return (FIXTURES / name).read_text()
 
 
-Responder = CommandResult | Callable[[list[str]], CommandResult]
+Responder = CommandResult | Callable[[list[str]], CommandResult | Awaitable[CommandResult]]
 
 
 @dataclass
@@ -37,7 +39,8 @@ class FakeRunner:
         self.cwds.append(cwd)
         for prefix, res in sorted(self.rules, key=lambda r: -len(r[0])):
             if argv[: len(prefix)] == prefix:
-                return res(argv) if callable(res) else res
+                out = res(argv) if callable(res) else res
+                return await out if inspect.isawaitable(out) else out     # an async responder can block (live runs)
         return CommandResult(returncode=127, stdout="", stderr=f"no fake for {argv}")
 
 
@@ -56,17 +59,49 @@ def writes_report(name: str, fixture: str, rc: int = 1) -> Callable[[list[str]],
     return respond
 
 
+T3_SKILL, T3_RUN, T3_JOB = "calculator", "20261017_091635_7_46d5ccd742f5", "20261017-051633-16fc9065"
+
+
+def tier3_stdout(execution_status: str | None = "succeeded", error: str | None = None, rc: int = 0) -> str:
+    """The launcher's final stdout with --quiet: one indent=2 JSON object (shape from launch.py main(); the summary is the
+    captured summary.json of the same 2026-10-17 run, trimmed; job_dir is a placeholder path)."""
+    t3: dict[str, object] = {"execution_status": execution_status, "scored_attempts": 4, "expected_attempts": 4}
+    if error:
+        t3 = {"execution_status": "error", "error": error}
+    return json.dumps({"job": T3_JOB, "job_dir": f"/home/user/.local/share/skilleval-mcp/jobs/cli/{T3_JOB}",
+                       "container_exit": rc, "summary": {"skill": T3_SKILL, "tiers": {"3": t3}}}, indent=2)
+
+
+def writes_tier3(fixture: str | None = "tier3_result.json", rc: int = 0, stderr: str = "") -> Callable[[list[str]], CommandResult]:
+    """Like `skillevaluator-local tier3 SKILL ... --results-dir D --quiet`: SkillEvaluator's tree lands in
+    D/<skill>/<run>/ (result.json + report.html) and stdout is the final summary JSON."""
+    def respond(argv: list[str]) -> CommandResult:
+        out = Path(argv[argv.index("--results-dir") + 1])
+        if fixture is not None:
+            run = out / T3_SKILL / T3_RUN
+            run.mkdir(parents=True)
+            (run / "result.json").write_text(fx(fixture))
+            (run / "report.html").write_text("<!doctype html><title>report</title>\n")
+        return ok(tier3_stdout(None if fixture is None else "succeeded"), rc=rc,
+                  stderr=stderr or f"launch: job {T3_JOB} ({T3_SKILL}, tier3)")
+    return respond
+
+
 def standard_runner(launcher: str = "skillevaluator-local") -> FakeRunner:
     r = FakeRunner()
     r.on([launcher, "--version"], ok("skillevaluator, version 0.5.0\n"))
     r.on([launcher, "tier1"], writes_report("tier1", "tier1_incomplete.json"))
     r.on([launcher, "tier2"], writes_report("tier2", "tier2_passed.json", rc=0))
+    r.on([launcher, "tier3"], writes_tier3())
     r.on([launcher, "doctor"], ok("CLI package pass skillevaluator 0.5.0\nPublic LLM provider pass openai-compatible\n"))
     return r
 
 
 def build_skills(tmp: Path) -> Path:
+    """Idempotent: a second adapter in the same test (a "restarted console") reuses the same tree and state dir."""
     root = tmp / "repo" / ".claude" / "skills"
+    if root.is_dir():
+        return root
     for name in ("robust-scripts", "serve-model"):
         (root / name).mkdir(parents=True)
         (root / name / "SKILL.md").write_text(f"---\nname: {name}\ndescription: test\n---\n# {name}\n")
@@ -79,7 +114,10 @@ def build_skills(tmp: Path) -> Path:
     return root
 
 
-def make_ctx(tmp: Path, runner: object, http: httpx.AsyncClient, *, skills: bool = True) -> AdapterContext:
+def make_ctx(tmp: Path, runner: object, http: httpx.AsyncClient, *, skills: bool = True,
+             repo: Path | None = None) -> AdapterContext:
     paths = {"skills_dir": build_skills(tmp)} if skills else {}
+    if repo is not None:
+        paths["repo"] = repo
     return AdapterContext(runner=runner, http=http, urls={"litellm": "http://127.0.0.1:4000"},  # type: ignore[arg-type]
                           paths=paths, state_dir=tmp / "state")

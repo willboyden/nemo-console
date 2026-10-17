@@ -67,7 +67,7 @@ These are currently constants; move them into `Settings` (with the current value
 - `adapters/dynamo.py`: `PROJECT`, `FRONTEND`, `WORKER`, `MOCKER`, service names, `STOPPABLE_ENGINE`, `STOPPABLE_PROJECT`,
   `STOPPABLE_SERVICE`, `DEFAULT_MODEL`. (The card model is already in `Settings` since 2026-10-06: `dynamo_*`.)
 - `adapters/relay.py`: `UNIT`, `DEFAULT_ROUTE_IDS`.
-- `services/topology.py` (`SHARED_ENGINE`, `FLASHNEXT_ENGINE`, `LIGHTNING_ENGINE`, node labels), `services/engines.py` (`compose_dir_hint`
+- `services/topology.py` (fixed node labels; the engine nodes are the `topology_engines` setting since 2026-10-17), `services/engines.py` (`compose_dir_hint`
   assumes a name prefix and layout), `config.py` (`DEFAULT_ENGINE_PROBES`, `DEFAULT_ENGINE_START`, `DEFAULT_URLS`).
 - Optional: an `allowed_service_names` setting for the routes validators (single-label hostnames are currently accepted;
   see THREAT-MODEL R-14).

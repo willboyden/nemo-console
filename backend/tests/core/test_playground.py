@@ -84,3 +84,15 @@ async def test_viewer_cannot_chat(env: Env) -> None:
     _, key = env.container.auth.mint("viewer")
     async with env.client(client_host="10.0.0.2", token=key) as c:
         assert (await c.post(CHAT, json={"model": "m1", "messages": MSG})).status_code == 403
+
+
+async def test_relay_playground_sends_the_key_named_for_relay(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
+    # 2026-10-17: the Relay gateway's /v1/* answers 401 without a bearer. The default names LITELLM_API_KEY for relay too,
+    # resolved server-side like Switchyard's; a missing variable is a clear 503, never an anonymous upstream call.
+    route = env.mock.post(URL).respond(200, json={"ok": True})
+    async with env.client() as c:
+        r = await c.post("/api/v1/systems/relay/playground/chat", json={"model": "m1", "messages": MSG, "stream": False})
+        assert r.status_code == 503 and "LITELLM_API_KEY" in r.json()["error"]["message"] and not route.called
+        monkeypatch.setenv("LITELLM_API_KEY", FAKE_SECRET)
+        r = await c.post("/api/v1/systems/relay/playground/chat", json={"model": "m1", "messages": MSG, "stream": False})
+    assert r.status_code == 200 and route.calls[0].request.headers["authorization"] == f"Bearer {FAKE_SECRET}"
