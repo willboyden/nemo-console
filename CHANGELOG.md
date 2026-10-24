@@ -49,6 +49,8 @@ implemented / verified-live / unverified defined in the README.
   OpenShell 0.0.77 mounts the gateway's client certificate and private key into every sandbox container (root-only;
   verified unreadable by the workload), and that key authenticates as the operator. E-7's "the wrapper injects its
   own credentials from 0600 files" was stale: the runner wrapper holds no key.
+- **certifi 2026.7.22 → 2026.10.19** (backend lock, transitive) for PYSEC-2026-4320, which turned CI's dependency
+  audit red from `86626c3` on. `pip-audit --strict`: no known vulnerabilities.
 
 ## [0.2.0] - 2026-10-17
 
