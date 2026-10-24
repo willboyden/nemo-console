@@ -27,4 +27,10 @@ export const DEMOS = {
   'dyn-lifecycle-confirm': W + `await until(()=>$('.preflight-hero')); const up=btn('Up'); up.click(); await until(()=>$('dialog[open]')); await sleep(300);`,
   'dyn-lifecycle-down-confirm': W + `await until(()=>$('.preflight-hero')); btn('Down').click(); await until(()=>$('dialog[open]')); await sleep(300);`,
   'audit-fill': W + `for (const p of [['/api/v1/systems/switchyard/actions/dry_run_config',{params:{},confirm:false}],['/api/v1/systems/switchyard/actions/reset_stats',{params:{},confirm:true}],['/api/v1/systems/relay/actions/doctor_offline',{params:{},confirm:false}]]) await fetch(p[0],{method:'POST',headers:{'X-Console':'1','Content-Type':'application/json'},body:JSON.stringify(p[1])}); location.hash='#/audit?x=1'; await sleep(300); location.hash='#/audit';`,
+  'dd-status': W + `await until(()=>$('nc-datadesigner .stats')); await sleep(600);`,
+  'dd-scripts': W + `location.hash='#/datadesigner?tab=scripts'; await until(()=>$('textarea.code-edit')); await sleep(500);`,
+  'dd-actions': W + `location.hash='#/datadesigner?tab=actions'; await until(()=>$$('.card')[1]); await sleep(500);`,
+  'dd-runs': W + `location.hash='#/datadesigner?tab=runs'; const b=await until(()=>$('table button.link')); await sleep(400); b.click(); await until(()=>$('table.compact[aria-label]')); await sleep(700);`,
+  'dd-runs-page2': W + `location.hash='#/datadesigner?tab=runs'; const b=await until(()=>$('table button.link')); b.click(); await until(()=>$('table.compact[aria-label]')); await sleep(500); const nx=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Next page'); nx.click(); await until(()=>[...document.querySelectorAll('.num.small')].some(x=>/51–/.test(x.textContent))); await sleep(600); const raw=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='JSON'); raw.click(); await sleep(500);`,
+  'dd-live': W + `await fetch('/__dev/dd?do=start',{headers:{'X-Console':'1'}}); location.hash='#/datadesigner?tab=runs'; await until(()=>$('table button.link')); await sleep(800);`,
 };

@@ -1,0 +1,44 @@
+                                                                                
+ Usage: data-designer check-models [OPTIONS] {config_source} [script_args]...   
+                                                                                
+ Check that every model and MCP tool referenced by the configuration is         
+ reachable.                                                                     
+                                                                                
+ Runs the same readiness probes performed at the start of ``preview`` and       
+ ``create``: a tiny generation against each referenced model alias, plus a      
+ connectivity probe to each referenced MCP tool. Models with                    
+ ``skip_health_check=True`` are skipped.                                        
+                                                                                
+ Complements ``validate``: ``validate`` checks the configuration is             
+ well-formed (internal readiness); ``check-models`` checks the providers        
+ it depends on are responsive (external readiness).                             
+                                                                                
+ Examples:                                                                      
+     # Check models referenced by a YAML config                                 
+     data-designer check-models my_config.yaml                                  
+                                                                                
+     # Check models referenced by a remote config URL                           
+     data-designer check-models https://example.com/my_config.yaml              
+                                                                                
+     # Check models referenced by a Python module                               
+     data-designer check-models my_config.py                                    
+                                                                                
+     # Forward arguments to a Python config module                              
+     data-designer check-models workflow.py -- --seed-path seed.parquet         
+                                                                                
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    config_source      <str>  Path or URL to a config file                  │
+│                                (.yaml/.yml/.json), or a local Python module  │
+│                                (.py) that defines a load_config_builder()    │
+│                                function.                                     │
+│                                [required]                                    │
+│      script_args        <str>  Arguments forwarded to a local Python config  │
+│                                module after '--'.                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --install-completion          Install completion for the current shell.      │
+│ --show-completion             Show completion for the current shell, to copy │
+│                               it or customize the installation.              │
+│ --help                        Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

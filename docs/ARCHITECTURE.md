@@ -248,3 +248,55 @@ longer exist there; Bolt and GLM (`lil-glm53-tp2`) are opt-in and exclusive with
   forwards to), else the first route. `playground_key_env` defaults to `LITELLM_API_KEY` for `relay` as well.
 * Relay ATOF: gzipped rotations (`<file>.N.gz`) are read for `recent_events` (no-follow, regular, 64 MiB compressed and
   64 MiB decompressed caps; over a cap the file is skipped); `follow_events` tails plain files only.
+
+**9.7 (2026-10-23): a fifth system, `datadesigner` (NVIDIA NeMo Data Designer, the CLI as a managed system).** Additive;
+nothing above changes. Contract: feature "datadesigner" (2026-10-23).
+* `SystemId` gains `"datadesigner"`; the adapter is `adapters/datadesigner.py` (`DataDesignerAdapter`, label
+  "Data Designer"), registered in `adapters/__init__.py`. It follows the SkillEvaluator adapter structure: `_run`
+  wrapper (runner exceptions → `CommandResult(127)`), TTL-cached launcher probe (`data-designer-local --version`,
+  300 s), run dirs `<state_dir>/datadesigner/runs/<run_id>/run.json` (0700 dirs, 0600 run.json), `follow_events`
+  polling 2 s keyed (run_id, verdict), `KEEP_RUNS=100`, redaction everywhere, failure is data.
+* Runner: allowlist gains `data-designer-local` and `data-designer-export`. ONLY `data-designer-local create ...`
+  gets the long cap `DD_CREATE = 3600 s` (`max_timeout`); preview/validate/check-models/export stay at 600 s.
+  `data-designer-local` joins the SIGINT-first graceful stop set (the wrapper cleans up its own children). The
+  wrapper needs NO env of ours: it injects its own credentials from its own 0600 key files (the console never sees
+  a key), so no env prefixes are forwarded to it.
+* Settings/paths: `dd_scripts_dir` (default `~/Datasets/data-designer/scripts`), `dd_datasets_root` (default
+  `~/Datasets`) — both created 0700 at startup (`ensure_user_dirs`, lifespan + `run()`); `dd_config_dir`
+  (`~/.data-designer`) is the TOOL's own dir and is never created by the console (the adapter reports
+  `dd.no_config_dir` when missing). `dd_key_file` (`~/.config/data-designer/litellm.key`) is checked for
+  EXISTENCE only (`dd.no_key` warn, fix: `clients/data-designer/mint-key.sh`); its contents are never read.
+* status(): launcher component (version or "absent", health down when absent), router component
+  (`GET <litellm>/health/liveliness`, degraded when down), a live create component while one runs. Problems:
+  `dd.not_installed` (error; fix: `clients/data-designer/install.sh` by repo path when available, else the
+  pinned-command text), `dd.router_down` (warn), `dd.no_scripts` (warn: dir missing or empty), `dd.no_key` (warn),
+  `dd.no_config_dir` (warn). The tool's `model_providers.yaml` / `model_configs.yaml` are parsed read-only with a
+  never-raising reader (missing/broken → zero entries); `api_key` fields are NEVER surfaced. Endpoints:
+  `router (generation)` (bearer). Metrics: `dd.scripts`, `dd.runs`, `dd.live_running`, `dd.last_records`,
+  `dd.runs_by_verdict{verdict=succeeded|failed|error|interrupted}`. Events: one `dd.run` per (run, verdict),
+  metadata only (script, mode, verdict, num_records, dataset_name, destination, format, duration_ms).
+* Configure: one ConfigFileSpec per script file in `scripts_dir` (id = filename; cap 200; regular files, no
+  symlinks; extension allowlist .py/.yaml/.yml/.json and, because the core's `valid_id` caps ids at 64 lowercase
+  chars, the allowlist regex is the intersection: `[a-z0-9][a-z0-9._-]{0,52}\.(py|yaml|yml|json)`). The core's
+  CAS/backup/revision machinery applies unchanged. `validate_config` writes the candidate to
+  `<state_dir>/datadesigner/tmp/<file_id>.<rand>` (deleted in `finally`), runs `data-designer-local validate`
+  (540 s), and is authoritative; its note says that validation EXECUTES the script locally (the tool's design).
+  `post_apply` is always healthy (nothing to restart).
+* Actions: `preview` (safe; `data-designer-local preview <script> -n N --save-results -o <run_dir>`; then the
+  newest `preview_results_*`'s dataset.parquet is converted via `data-designer-export` and the first 2000 lines
+  are kept as `<run_dir>/records.jsonl`), `create` (disruptive, ONE background run at a time, the SkillEvaluator
+  Tier 3 `_LiveRun` pattern; `data-designer-local create <script> --num-records N --dataset-name NAME
+  --artifact-path <run_dir> --no-tui`, 4 MiB stdout cap; afterwards metadata.json → parquet batches are converted
+  to `<run_dir>/records.jsonl` (2000-line cap) and the user copy is written under `<datasets_root>/<subdir>`
+  — parquet: the batch files copied; csv/jsonl: streams; json: jsonl lines framed into one array. All destination
+  paths are resolved + containment-checked under the datasets root BEFORE the run starts. Cancel on console stop →
+  verdict `interrupted`), `report` (safe; bounded text + a ≤5-row markdown table, cells ≤120 chars, redacted),
+  `check_models` (safe; `data-designer-local check-models <script>` — the CLI's own --help requires a config
+  source argument, so the action takes the script enum), `show_config` (safe; read-only provider/alias dump).
+* API (additive, viewer GET, headers/auth identical to the other observe endpoints):
+  `GET /api/v1/systems/datadesigner/runs/{run_id}/records?limit=50&offset=0` → `{run_id, total, columns, rows,
+  truncated}` — reads records.jsonl ONLY (never parquet); values pass through as-is, no string over 2 KiB
+  (truncated, no marker fields); total from run.json's records when present, else the counted lines. A live create
+  run answers an empty records page (not 404). `GET /api/v1/systems/datadesigner/runs/{run_id}/files` →
+  `{run_id, files: [{path, bytes}]}` (rel paths, regular files only) — nothing is served in v1: the UI shows
+  paths; the user opens them on disk. Other systems → 404 on both.

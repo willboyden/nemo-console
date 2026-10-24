@@ -12,7 +12,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { DEMOS } from './demos.mjs';
-import { SWITCHYARD_ROUTES, RELAY_ROUTES, RELAY_PLUGINS, RELAY_CONFIG, DYNAMO_CATALOG } from './mock-data.mjs';
+import { SWITCHYARD_ROUTES, RELAY_ROUTES, RELAY_PLUGINS, RELAY_CONFIG, DYNAMO_CATALOG, DD_SCRIPTS, DD_SCRIPT, DD_COLS, ddRows, DD_RUNS, DD_PREVIEW_FILES, DD_CREATE_FILES } from './mock-data.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -51,6 +51,7 @@ const files = {
 };
 files['switchyard/routes'].history.push({ id: 'rev_0001', ts: now() - 5 * 86400, actor: 'loopback-admin', content: SWITCHYARD_ROUTES.replace('confidence_threshold = 0.5\nrecent_turn_window = 3', 'confidence_threshold = 0.6\nrecent_turn_window = 3'), note: 'before: threshold 0.6 -> 0.5' });
 files['switchyard/routes'].history.push({ id: 'rev_0002', ts: now() - 86400, actor: 'loopback-admin', content: SWITCHYARD_ROUTES.replace('picker = "efficient_first"', 'picker = "capable_first"'), note: 'before: picker efficient_first' });
+for (const s of DD_SCRIPTS) files[`datadesigner/${s}`] = { content: `# ${s} — Data Designer config script (mock copy)\n` + DD_SCRIPT, mtime: now() - 2 * 86400, history: [] };
 const specs = {
   switchyard: [{ id: 'routes', label: 'routes.toml', description: 'Routing table for the Switchyard container: llm clients, targets and routes (stage routers and passthroughs).', display_path: 'inference/switchyard/routes.toml', format: 'toml', editable: true, validators: ['switchyard-server --dry-run'], authoritative: true, apply_effect: 'Recreates the switchyard container; about 5 s of dropped requests on :4010. LiteLLM on :4000 is unaffected.' }],
   relay: [
@@ -59,6 +60,12 @@ const specs = {
     { id: 'config', label: 'config.toml', description: 'Gateway and attestation configuration.', display_path: '~/.config/nemo-relay/config.toml', format: 'toml', editable: false, why_readonly: 'It sets the attestation mode. Edit it by hand, then restart the gateway.', validators: [], authoritative: true, apply_effect: '' },
   ],
   dynamo: [],
+  datadesigner: DD_SCRIPTS.map((s) => ({
+    id: s, label: s, description: 'Data Designer config script: build the dataset generator (providers, models, columns). It lives in the scripts dir the console validates and applies it to.',
+    display_path: `~/Datasets/data-designer/scripts/${s}`, format: 'text', editable: true,
+    validators: ['data-designer-local validate (executes the script)'], authoritative: true,
+    apply_effect: 'Writes the script file. Nothing is restarted; validate and apply EXECUTE the script locally with the console user\'s privileges.',
+  })),
 };
 
 // ---------------------------------------------------------------- helpers
@@ -89,6 +96,23 @@ function status(id) {
     endpoints: [{ name: 'gateway', url: 'http://127.0.0.1:4040', role: 'api', auth: 'none' }],
     components: [{ kind: 'systemd', name: 'nemo-relay-gateway.service', state: 'running', detail: 'active (running) since 2026-09-24 03:10' }, { kind: 'process', name: 'switchyard plugin', state: 'running', detail: 'loaded, signature verified' }, { kind: 'process', name: 'attestation', state: 'running', detail: 'mode=enforce, key present, last check 4 min ago' }],
     problems: [{ severity: 'warn', code: 'relay.exporter.disabled', message: 'The OTLP exporter is disabled, so Relay traces are not reaching Phoenix.', fix: 'nemo-relay config set exporters.otlp.enabled true && systemctl --user restart nemo-relay-gateway.service' }], checked_at };
+  if (id === 'datadesigner') {
+    const comps = [
+      { kind: 'process', name: 'data-designer-local', state: 'running', detail: 'data-designer-local 0.9.3 (wrapper: injects its own key files, telemetry off)' },
+      { kind: 'http', name: 'router http://127.0.0.1:4000', state: 'running', detail: '200 on GET /health/liveliness (generation calls go through it)' },
+    ];
+    if (dd.live) comps.push({ kind: 'process', name: `create ${dd.live.dataset_name}`, state: 'running', detail: `create run ${dd.live.run_id}, running for ${Math.max(0, Math.round((now() - dd.live.started) / 60))} min (one at a time; it shows in the runs list)` });
+    const last = DD_RUNS[0];
+    return { system: id, health: 'up', version: '0.9.3',
+      summary: `${DD_SCRIPTS.length} scripts · 5 aliases · last run: ${last ? `${last.mode} ${last.dataset_name || last.script} (${last.verdict})` : 'none'}`,
+      endpoints: [{ name: 'router (generation)', url: 'http://127.0.0.1:4000/v1', role: 'api', auth: 'bearer' }],
+      components: comps,
+      problems: [
+        { severity: 'warn', code: 'dd.no_key', message: 'The LiteLLM key file the wrapper injects (~/.config/data-designer/litellm.key) does not exist; generation calls would fail. (mock: always shown)', fix: 'clients/data-designer/mint-key.sh' },
+        { severity: 'info', code: 'dd.nvidia_providers', message: 'The stock nvidia-* providers need NVIDIA_API_KEY and send data to NVIDIA; the lab aliases on lab-router stay local.' },
+      ],
+      checked_at };
+  }
   const s = dynState();
   const base = { system: 'dynamo', version: '1.5.0', endpoints: [{ name: 'frontend', url: 'http://127.0.0.1:8020/v1', role: 'api', auth: 'none' }, { name: 'worker metrics', url: 'http://ai-lab-dynamo-dynamo-worker-1:8081/metrics', role: 'metrics', auth: 'none' }], checked_at };
   if (s === 'up') return { ...base, health: 'up', summary: 'Serving unsloth/Qwen3.8-27B-NVFP4 on :8020 (worker up 1h30m)', components: [{ kind: 'container', name: 'ai-lab-dynamo-dynamo-frontend-1', state: 'running', image: 'nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0', detail: 'healthy' }, { kind: 'container', name: 'ai-lab-dynamo-dynamo-worker-1', state: 'running', image: 'nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0', detail: 'healthy, registered 1 model' }], problems: [{ severity: 'info', code: 'dynamo.shares_card', message: 'Dynamo holds the Workstation card: router alias qwen3.8-27b-1m is dark until Dynamo is down.', fix: 'cd inference/dynamo && docker compose down' }] };
@@ -96,8 +120,9 @@ function status(id) {
   if (s === 'off') return { ...base, health: 'off', summary: 'off (opt-in): no Dynamo container is running', components: [{ kind: 'container', name: 'ai-lab-dynamo-dynamo-frontend-1', state: 'stopped' }, { kind: 'container', name: 'ai-lab-dynamo-dynamo-worker-1', state: 'stopped', detail: 'exited (code 1)' }], problems: [{ severity: 'info', code: 'dynamo.off', message: 'Dynamo is opt-in and off: no frontend, worker or mocker container is running or restarting.', fix: 'scripts/use-model.sh qwen3.8-27b-dynamo' }] };
   return { ...base, health: 'down', summary: 'Dynamo is not running', components: [{ kind: 'container', name: 'ai-lab-dynamo-dynamo-frontend-1', state: 'stopped', detail: 'exited 12 min ago' }, { kind: 'container', name: 'ai-lab-dynamo-dynamo-worker-1', state: 'absent' }], problems: [{ severity: 'error', code: 'dynamo.down', message: 'The frontend on :8020 does not answer and no worker container exists.', fix: 'cd inference/dynamo && docker compose up -d' }] };
 }
-const SYSTEMS = ['switchyard', 'relay', 'dynamo'];
-const LABEL = { switchyard: 'NeMo Switchyard', relay: 'NeMo Relay', dynamo: 'NVIDIA Dynamo' };
+const SYSTEMS = ['switchyard', 'relay', 'dynamo', 'datadesigner'];
+const EVENTED = ['switchyard', 'relay', 'dynamo'];   // systems with a periodic event feed (datadesigner emits dd.run on runs only)
+const LABEL = { switchyard: 'NeMo Switchyard', relay: 'NeMo Relay', dynamo: 'NVIDIA Dynamo', datadesigner: 'NVIDIA Data Designer' };
 function topology() {
   const dh = health('dynamo');
   return { ts: now(), nodes: [
@@ -120,6 +145,14 @@ function metrics(id) {
   const wob = (b, a) => b + Math.sin(ts / 7) * a + rnd() * a * 0.4;
   if (id === 'switchyard') return { system: id, ts, available: true, points: [P('sy.requests_total', 1200 + (ts - T0) * 0.4), P('sy.errors_total', 3), P('sy.in_flight', Math.round(wob(2, 2))), P('sy.tokens', 3.1e6, 'tok', { kind: 'prompt' }), P('sy.tokens', 41200, 'tok', { kind: 'completion' }), P('sy.tokens', 9800, 'tok', { kind: 'reasoning' }), P('sy.tokens', 120000, 'tok', { kind: 'cached' }), P('sy.route.calls', 812, '', { route: 'auto-local' }), P('sy.model.calls', 700, '', { model: 'nemotron-lightning' })] };
   if (id === 'relay') return { system: id, ts, available: true, points: [P('relay.gateway_up', 1), P('relay.plugin_loaded', 1), P('relay.atof_files', 214), P('relay.atof_bytes', 48e6, 'B'), P('relay.atif_trajectories', 37), P('relay.exporters_enabled', 0)] };
+  if (id === 'datadesigner') {
+    const by = {};
+    for (const r of DD_RUNS) by[r.verdict] = (by[r.verdict] || 0) + 1;
+    if (dd.live) by.running = (by.running || 0) + 1;
+    const points = [P('dd.scripts', DD_SCRIPTS.length), P('dd.runs', DD_RUNS.length + (dd.live ? 1 : 0)), P('dd.live_running', dd.live ? 1 : 0), P('dd.last_records', DD_RUNS[0]?.num_records ?? 0)];
+    for (const [v, n] of Object.entries(by)) points.push(P(`dd.runs_by_verdict{verdict=${v}}`, n, '1'));
+    return { system: id, ts, available: true, points };
+  }
   if (!upDyn()) return { system: id, ts, available: false, points: [], error: dynState() === 'loading' ? 'Worker is loading; metrics start when it registers.' : 'Dynamo is not running.' };
   return { system: id, ts, available: true, points: [P('dyn.up', 1), P('dyn.models', 1), P('dyn.requests_total', 640 + (ts - T0) * 0.2), P('dyn.in_flight', Math.round(wob(2, 2))), P('dyn.ttft_ms', wob(230, 30), 'ms', { q: 'p50' }), P('dyn.ttft_ms', wob(520, 80), 'ms', { q: 'p95' }), P('dyn.itl_ms', wob(19, 2), 'ms', { q: 'p50' }), P('dyn.itl_ms', wob(34, 5), 'ms', { q: 'p95' }), P('dyn.kv_cache_usage', wob(0.22, 0.05), 'ratio'), P('dyn.worker_up', 1)] };
 }
@@ -152,7 +185,7 @@ function routingSummary(window) {
 }
 
 // ---------------------------------------------------------------- events + SSE
-const ring = { switchyard: [], relay: [], dynamo: [] };
+const ring = { switchyard: [], relay: [], dynamo: [], datadesigner: [] };
 const streams = new Set();
 function makeEvent(system) {
   const ts = now();
@@ -167,9 +200,11 @@ function makeEvent(system) {
   }
   return { ts, system, kind: 'dynamo.log', summary: pick(['request 200 ttft 231 ms', 'kv cache 21% used', 'router: worker 0 selected', 'prefix cache hit 8192 tokens']), data: { level: 'info' } };
 }
-for (const s of SYSTEMS) for (let i = 25; i > 0; i--) { const e = makeEvent(s); e.ts -= i * 7; ring[s].unshift(e); }
+for (const s of EVENTED) for (let i = 25; i > 0; i--) { const e = makeEvent(s); e.ts -= i * 7; ring[s].unshift(e); }
+// Data Designer has no periodic feed: one dd.run event per stored run (metadata only).
+for (const r of DD_RUNS) ring.datadesigner.unshift(ddEvent(r));
 setInterval(() => {
-  for (const s of SYSTEMS) {
+  for (const s of EVENTED) {
     if (s === 'dynamo' && !upDyn()) continue;
     if (rnd() > (s === 'switchyard' ? 0.7 : 0.35)) continue;
     const e = makeEvent(s); ring[s].unshift(e); ring[s].length = Math.min(ring[s].length, 200);
@@ -178,9 +213,47 @@ setInterval(() => {
 }, 2200).unref();
 setInterval(() => { for (const c of streams) if (!c.res.writableEnded) c.res.write(': ping\n\n'); }, 15000).unref();
 
+// ── Data Designer run events / live-run simulation ─────────────────────────────────────────
+function ddEvent(run) {
+  return { ts: run.ts ?? now(), system: 'datadesigner', kind: 'dd.run',
+    summary: `${run.mode} ${run.dataset_name || run.script} → ${run.verdict}${run.num_records != null ? ` (${run.num_records} records)` : ''}`,
+    data: { run_id: run.run_id, script: run.script, mode: run.mode, verdict: run.verdict, num_records: run.num_records,
+      dataset_name: run.dataset_name, destination: run.destination, format: run.format, duration_ms: run.duration_ms } };
+}
+function ddEmit(run) {
+  const ev = ddEvent(run);
+  ring.datadesigner.unshift(ev); ring.datadesigner.length = Math.min(ring.datadesigner.length, 200);
+  for (const c of streams) if (c.system === 'datadesigner') sseWrite(c.res, ev);
+  return ev;
+}
+const ddRunId = (name) => {
+  const d = new Date(), p = (n, w = 2) => String(n).padStart(w, '0');
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}T${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}-${String(d.getUTCMilliseconds()).padStart(3, '0')}-${name}`;
+};
+function ddFinish(runId) {
+  const live = dd.live;
+  if (!live || live.run_id !== runId) return;
+  dd.live = null;
+  if (dd.timer) { clearTimeout(dd.timer); dd.timer = null; }
+  const run = { run_id: runId, script: live.script, mode: 'create', verdict: 'succeeded', num_records: live.num_records,
+    dataset_name: live.dataset_name, destination: live.destination, format: live.format,
+    duration_ms: Math.max(1000, Math.round((now() - live.started) * 1000)), ts: now(),
+    columns: DD_COLS, rows: ddRows(Math.min(live.num_records, 500)), files: DD_CREATE_FILES(live) };
+  DD_RUNS.unshift(run); DD_RUNS.length = Math.min(DD_RUNS.length, 20);
+  ddEmit(run);
+}
+const dd = { live: null, timer: null };
+
 // ---------------------------------------------------------------- config engine
 function validate(system, file, content) {
   const spec = specs[system].find((s) => s.id === file);
+  if (system === 'datadesigner') {
+    // The CLI is the real validator and it EXECUTES the script (load_config_builder). The mock only checks the shape.
+    const ok = /def\s+load_config_builder/.test(content);
+    return { ok, validator: spec.validators[0] || 'data-designer-local validate', authoritative: true,
+      diagnostics: ok ? [] : [{ severity: 'error', message: 'the script does not define load_config_builder(); the CLI could not build a config', line: 1 }],
+      note: 'Validation executes this script locally (it calls load_config_builder) with the console user\'s privileges.' };
+  }
   const diags = [], lines = content.split('\n'), targets = new Set();
   lines.forEach((l) => { const m = /^\[targets\.([\w-]+)\]/.exec(l); if (m) targets.add(m[1]); });
   lines.forEach((l, i) => {
@@ -194,7 +267,7 @@ function validate(system, file, content) {
   const ok = !diags.some((d) => d.severity === 'error');
   return { ok, validator: spec.validators[0] || 'toml', authoritative: spec.authoritative, diagnostics: diags, note: spec.authoritative ? null : 'The proxy validator does not load the Relay plugin schema; only starting the gateway proves the file loads.' };
 }
-async function applyFile(system, file, content, base, restart, note) {
+async function applyFile(system, file, content, base, restart, note, postCheck) {
   const f = files[`${system}/${file}`];
   const backup = { id: `rev_${String(f.history.length + 1).padStart(4, '0')}`, ts: now(), actor: 'loopback-admin', content: f.content, note: note || 'before apply' };
   f.history.push(backup);
@@ -206,7 +279,7 @@ async function applyFile(system, file, content, base, restart, note) {
     f.content = prev; f.mtime = now();
     return { ok: false, new_sha256: sha(prev), revision_id: backup.id, restarted: true, post_check: 'unhealthy', detail: 'health check failed 3/3: GET :4010/health -> connection refused\nrestoring revision ' + backup.id + '\nservice restarted on the previous file; health check passed', rolled_back: true };
   }
-  return { ok: true, new_sha256: sha(content), revision_id: backup.id, restarted: !!restart, post_check: restart ? 'healthy' : 'skipped', detail: restart ? 'container recreated; /health 200 after 2.1 s' : 'file written; not restarted', rolled_back: false };
+  return { ok: true, new_sha256: sha(content), revision_id: backup.id, restarted: !!restart, post_check: postCheck || (restart ? 'healthy' : 'skipped'), detail: restart ? 'container recreated; /health 200 after 2.1 s' : 'file written; not restarted', rolled_back: false };
 }
 
 // ---------------------------------------------------------------- actions
@@ -230,10 +303,72 @@ const ACTIONS = {
     { id: 'restart', label: 'Restart', description: 'Recreates the Dynamo worker and frontend; the model reloads (about 4 minutes).', danger: 'disruptive', params: [] },
     { id: 'up_mock', label: 'Up (mock worker)', description: 'Starts the CPU-only mocker profile. Safe: uses no GPU.', danger: 'safe', params: [] },
   ],
+  datadesigner: [
+    { id: 'preview', label: 'Preview records', danger: 'safe',
+      description: 'Runs data-designer-local preview on one script (it EXECUTES the script locally) and keeps the sample dataset, report and record browser in the run dir. The console also converts the parquet to records.jsonl (first 2,000 rows kept).',
+      params: [
+        { key: 'script', label: 'Script', type: 'enum', choices: DD_SCRIPTS, default: DD_SCRIPTS[0], requires_restart: false, help: 'A config script in the scripts dir.' },
+        { key: 'num_records', label: 'Number of records', type: 'int', default: 5, min: 1, max: 100, requires_restart: false, help: 'Sample size. Spends router tokens.' },
+      ] },
+    { id: 'create', label: 'Create a dataset', danger: 'disruptive',
+      description: 'Runs data-designer-local create in the background (it EXECUTES the script locally): spends router tokens and takes minutes. One create at a time. The dataset lands in ~/Datasets/<destination>; the console also keeps records.jsonl (first 2,000 rows) for the runs view.',
+      params: [
+        { key: 'script', label: 'Script', type: 'enum', choices: DD_SCRIPTS, default: DD_SCRIPTS[0], requires_restart: false, help: 'A config script in the scripts dir.' },
+        { key: 'num_records', label: 'Number of records', type: 'int', default: 100, min: 1, max: 100000, requires_restart: false, help: 'Dataset size. Minutes, and router tokens, scale with it.' },
+        { key: 'dataset_name', label: 'Dataset name', type: 'string', default: null, requires_restart: false, help: 'Letters, digits, dashes and underscores. Empty = derived from the script name.' },
+        { key: 'destination_subdir', label: 'Destination subdirectory', type: 'string', default: null, requires_restart: false, help: 'Relative path under ~/Datasets (no ".."). Empty = the dataset name.' },
+        { key: 'format', label: 'User copy format', type: 'enum', choices: ['parquet', 'csv', 'jsonl', 'json'], default: 'parquet', requires_restart: false, help: 'The user copy written to ~/Datasets; parquet files are always kept in the run dir.' },
+      ] },
+    { id: 'report', label: 'Show a run report', danger: 'safe',
+      description: 'A bounded text summary of one stored run (empty = the newest): mode, verdict, counts and up to five sample records.',
+      params: [{ key: 'run_id', label: 'Run', type: 'string', default: null, requires_restart: false, help: 'A run id from the runs list; empty = the newest run.' }] },
+    { id: 'check_models', label: 'Check models', danger: 'safe', params: [],
+      description: 'data-designer-local check-models: verifies every model and MCP tool the scripts reference is reachable through the router.' },
+    { id: 'show_config', label: 'Show provider config', danger: 'safe', params: [],
+      description: 'Read-only dump of ~/.data-designer/model_providers.yaml and model_configs.yaml: providers, aliases and inference parameters. Key fields hold env NAMES, never values.' },
+  ],
 };
 function goLoading() { state.dynamo = 'loading'; setTimeout(() => { if (state.dynamo === 'loading') { state.dynamo = 'up'; state.dynamoSince = now(); } }, 12000).unref(); }
 function runAction(system, id, params) {
   const t0 = Date.now(), R = (ok, output, problems = []) => ({ ok, output, duration_ms: Date.now() - t0 + Math.round(rnd() * 400), problems });
+  if (system === 'datadesigner') {
+    const script = DD_SCRIPTS.includes(params.script) ? params.script : DD_SCRIPTS[0];
+    if (id === 'preview') {
+      const n = Math.max(1, Math.min(100, Number(params.num_records) || 5));
+      const run = { run_id: ddRunId(`preview-${script.replace(/\.py$/, '')}`), script, mode: 'preview', verdict: 'succeeded',
+        num_records: n, dataset_name: null, destination: null, format: 'parquet', duration_ms: 4000 + Math.round(rnd() * 6000), ts: now(),
+        columns: DD_COLS, rows: ddRows(n), files: DD_PREVIEW_FILES(n) };
+      DD_RUNS.unshift(run); DD_RUNS.length = Math.min(DD_RUNS.length, 20);
+      ddEmit(run);
+      return R(true, `preview: wrote ${n} records to <run_dir>/preview_results_20261023_091512/dataset.parquet\nreport: <run_dir>/preview_results_20261023_091512/report.html\nsample records browser: <run_dir>/preview_results_20261023_091512/sample_records/sample_records_browser.html\nconverted dataset.parquet -> records.jsonl (first 2,000 lines kept)`);
+    }
+    if (id === 'create') {
+      if (dd.live) return R(false, `refused: create run ${dd.live.run_id} is already running (one at a time)`, [{ severity: 'error', code: 'dd.create.busy', message: 'One create run at a time. Wait for the current run to end (it shows in Runs).', fix: null }]);
+      const n = Math.max(1, Math.min(100000, Number(params.num_records) || 100));
+      const stem = script.replace(/\.py$/, '');
+      const name = String(params.dataset_name || '').replace(/[^\w-]+/g, '_') || `dataset_${stem}`;
+      const dest = String(params.destination_subdir || '').replace(/\.\./g, '_').replace(/[^\w/.-]+/g, '_').replace(/^\/+|\/+$/g, '') || name;
+      const fmt = ['parquet', 'csv', 'jsonl', 'json'].includes(params.format) ? params.format : 'parquet';
+      const runId = ddRunId(`create-${stem}`);
+      dd.live = { run_id: runId, started: now(), script, mode: 'create', num_records: n, dataset_name: name, destination: dest, format: fmt };
+      ddEmit({ run_id: runId, script, mode: 'create', verdict: 'running', num_records: n, dataset_name: name, destination: dest, format: fmt, duration_ms: null, ts: now() });
+      dd.timer = setTimeout(() => ddFinish(runId), 12000);
+      dd.timer.unref();
+      return R(true, `create started in the background: run ${runId}\nscript: ${script}  records: ${n}  dataset: ${name}  destination: ~/Datasets/${dest}  format: ${fmt}\nit shows as running in Runs and fills in when it ends; one create at a time`);
+    }
+    if (id === 'report') {
+      const rid = String(params.run_id || '');
+      const run = (rid ? DD_RUNS.find((r) => r.run_id === rid) : DD_RUNS[0]);
+      if (!run) return R(false, `unknown run ${rid || '(newest)'}`);
+      const lines = [`run: ${run.run_id}`, `mode: ${run.mode}  verdict: ${run.verdict}  records: ${run.num_records ?? 0}`,
+        run.error ? `error: ${run.error}` : `dataset: ${run.dataset_name ?? '–'}  destination: ${run.destination ?? '–'}  format: ${run.format}`, '',
+        '| # | subject | priority |', '|---|---|---|'];
+      for (const [i, r] of (run.rows || []).slice(0, 5).entries()) lines.push(`| ${i + 1} | ${String(r.subject).slice(0, 120)} | ${r.priority} |`);
+      return R(true, lines.join('\n'));
+    }
+    if (id === 'check_models') return R(true, 'lab-text glm-5.3-flash-next-local: reachable (lab-router)\nlab-lightning nemotron-lightning: reachable (lab-router)\nlab-embed nomic-embed-text: reachable (lab-router)\nnvidia/*: not checked (NVIDIA_API_KEY not set; those providers send data to NVIDIA)');
+    if (id === 'show_config') return R(true, 'providers (~/.data-designer/model_providers.yaml)\n  lab-router    http://127.0.0.1:4000/v1   openai   api_key=LITELLM_DD_KEY (env name)\n\naliases (~/.data-designer/model_configs.yaml)\n  lab-text       glm-5.3-flash-next-local   lab-router   temp 0.2  top_p 0.9\n  lab-lightning  nemotron-lightning         lab-router   temp 0.2\n  lab-embed      nomic-embed-text           lab-router   -\n  nvidia-*       ...                        nvidia       api_key=NVIDIA_API_KEY (sends data to NVIDIA)');
+  }
   if (system === 'switchyard') {
     if (id === 'restart') return R(true, 'container ai-lab-switchyard-switchyard-1 recreated\n/health 200 after 2.4 s');
     if (id === 'reset_stats') return R(true, 'POST /v1/stats/reset -> 200\ncounters zeroed');
@@ -364,8 +499,21 @@ async function api(req, res, url) {
       res.write(': ok\n\n'); const c = { res, system: id }; streams.add(c); req.on('close', () => streams.delete(c)); return;
     }
     if (sub === '/config') return json(res, 200, specs[id]);
+    let rm;
+    if (id === 'datadesigner' && (rm = sub.match(/^\/runs\/([^/]+)\/(records|files)$/))) {
+      const rid = decodeURIComponent(rm[1]);
+      // A live create run has no records.jsonl yet: an empty (not a missing) records response.
+      const run = DD_RUNS.find((r) => r.run_id === rid) || (dd.live?.run_id === rid ? { rows: [], columns: [], files: [], run_id: rid } : null);
+      if (!run) return err(res, 404, 'not_found', `unknown run ${rm[1]}`);
+      if (rm[2] === 'files') return json(res, 200, { run_id: run.run_id, files: run.files || [] });
+      const limit = Math.max(1, Math.min(200, Number(url.searchParams.get('limit')) || 50));
+      const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
+      const all = run.rows || [];
+      return json(res, 200, { run_id: run.run_id, total: all.length, columns: run.columns || (all[0] ? Object.keys(all[0]) : []),
+        rows: all.slice(offset, offset + limit), truncated: all.length > 2000 });
+    }
     let mm;
-    if ((mm = sub.match(/^\/config\/(\w+)(\/(validate|apply|history|rollback))?$/))) {
+    if ((mm = sub.match(/^\/config\/([\w.]+)(\/(validate|apply|history|rollback))?$/))) {
       const spec = specs[id].find((s) => s.id === mm[1]);
       if (!spec) return err(res, 404, 'not_found', `unknown config file ${mm[1]}`);
       const f = files[`${id}/${spec.id}`], act = mm[3];
@@ -378,7 +526,8 @@ async function api(req, res, url) {
         if (typeof body.content !== 'string' || body.content.length > 262144) return err(res, body.content ? 413 : 422, body.content ? 'too_large' : 'invalid_request', 'content missing or over 256 KiB');
         if (looksSecret(body.content)) return err(res, 422, 'secret_in_content', 'content looks like it contains a secret; reference an env var name instead');
         if (body.base_sha256 !== sha(f.content)) return err(res, 409, 'stale_base', 'the file changed on disk since it was read (base_sha256 mismatch)');
-        const r = await applyFile(id, spec.id, body.content, body.base_sha256, body.restart !== false);
+        const restart = body.restart !== false && id !== 'datadesigner';   // a script has nothing to restart
+        const r = await applyFile(id, spec.id, body.content, body.base_sha256, restart, undefined, id === 'datadesigner' ? 'healthy' : undefined);
         audit(id, 'POST', `config.apply ${spec.id}`, { restart: body.restart, content: body.content, base_sha256: body.base_sha256 }, r.ok ? 200 : 200); return json(res, 200, r);
       }
       if (act === 'rollback' && M === 'POST') {
@@ -431,6 +580,12 @@ function dev(req, res, url) {
   if (p === '/__dev/role') { state.role = ['viewer', 'public'].includes(q.get('set')) ? q.get('set') : 'admin'; return json(res, 200, { role: state.role }); }
   if (p === '/__dev/touch') { const f = files['switchyard/routes']; f.content += `\n# edited on disk by another process at ${new Date().toISOString()}\n`; f.mtime = now(); return json(res, 200, { sha256: sha(f.content) }); }
   if (p === '/__dev/fail') { state.failNext = { status: Number(q.get('status') || 503), n: Number(q.get('n') || 1) }; return json(res, 200, state.failNext); }
+  if (p === '/__dev/dd') {
+    const do_ = q.get('do');
+    if (do_ === 'start' && !dd.live) runAction('datadesigner', 'create', { script: DD_SCRIPTS[0], num_records: 500, dataset_name: 'support_tickets_v2', destination_subdir: 'support_tickets_v2', format: 'parquet' });
+    if (do_ === 'finish' && dd.live) ddFinish(dd.live.run_id);
+    return json(res, 200, { live: dd.live?.run_id || null });
+  }
   return json(res, 404, { error: { code: 'not_found', message: 'unknown dev helper' } });
 }
 // /__shot serves index.html plus a slow 1x1 image so the browser `load` event (when screenshot tools fire) is held until the SPA has rendered.

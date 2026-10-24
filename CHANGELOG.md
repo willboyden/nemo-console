@@ -3,6 +3,35 @@
 Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Claims use the labels
 implemented / verified-live / unverified defined in the README.
 
+## [Unreleased]
+
+### Added
+
+- **NVIDIA Data Designer** (`datadesigner`) as a fifth system: the console drives the pinned
+  `data-designer-local` CLI (0.9.3, installed by the lab's `clients/data-designer/install.sh`) the way it drives
+  SkillEvaluator — on demand, keeping the reports. Status shows the launcher version, the LiteLLM router the
+  generation goes through, the tool's own model providers/aliases (parsed read-only from `~/.data-designer/*.yaml`,
+  `api_key` fields never surfaced) and one live create run at a time. Dataset config scripts (`.py/.yaml/.yml/.json`
+  under the scripts dir, default `~/Datasets/data-designer/scripts`) are config files: edit, validate, diff, apply,
+  revision history and rollback through the core's compare-and-swap machinery — validation runs
+  `data-designer-local validate` and **executes the script locally** (the tool's design; stated in the UI). Actions:
+  `preview` (sync, sample records + `records.jsonl` capped at 2,000), `create` (background, one at a time; full dataset
+  plus a converted copy — parquet/csv/jsonl/json — under the datasets root, destination resolved and
+  containment-checked before the run starts), `report`, `check_models`, `show_config`. Runs land in the state dir
+  (newest 100) as `dd.run` metadata-only events feeding `dd.*` metrics; two additive viewer endpoints
+  (`GET .../runs/{id}/records`, `GET .../runs/{id}/files`) power the UI's paginated records table. The runner
+  allowlist gains `data-designer-local` and `data-designer-export` (a fixed-script conversion wrapper); only
+  `data-designer-local create` gets the long timeout (3,600 s), everything else keeps 600 s. The wrapper injects its
+  own credentials (`LITELLM_DD_KEY` from a 0600 key file), so the console never sees a key.
+  Verified live on 2026-10-24 against the real CLI: status (0.9.3, 15 aliases), script validate through the API,
+  `preview` (2 records through the router on `glm-5.3-flash-next-local`), `create` with a csv copy under the datasets
+  root, the records/files endpoints, and the UI page (status, actions, runs list) screenshotted at 1440/884 px.
+  Unverified live: run detail's records table in the browser (mock-verified only), console-stop cancel of a create.
+- New lab client `clients/data-designer/` in the parent repo: pinned install (`uv venv` 3.13 +
+  `data-designer==0.9.3`), the policy wrapper (`data-designer-local`, telemetry forced off), the `data-designer-export`
+  converter, a router key minter (key_alias `data-designer`), and the vendored NVIDIA agent skill at
+  `.claude/skills/data-designer` (see the parent repo).
+
 ## [0.2.0] - 2026-10-17
 
 ### Added

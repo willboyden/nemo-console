@@ -1,0 +1,8 @@
+- name: lab-router
+  endpoint: http://127.0.0.1:4000/v1
+  provider_type: openai
+  api_key: LITELLM_DD_KEY
+- name: nvidia
+  endpoint: https://integrate.api.nvidia.com/v1
+  provider_type: nvidia
+  api_key: NVIDIA_API_KEY

@@ -133,3 +133,85 @@ export const DYNAMO_CATALOG = [
   { key: 'hf_token', flag: 'env:HF_TOKEN', label: 'Hugging Face token', help: 'Only needed for gated models. Referenced by env name on the server; never shown.', type: 'string', group: 'advanced', advanced: true, requires_restart: true },
   { key: 'extra_worker_args', flag: null, label: 'Extra worker arguments', help: 'Passed through verbatim after the flags above.', type: 'string_list', group: 'advanced', advanced: true, requires_restart: true },
 ];
+
+// ── Data Designer (mock) ────────────────────────────────────────────────────────────────────
+// Canned fixtures shaped like the contract addendum: config scripts in scripts_dir, run metadata
+// (never record text in events) and records for the /runs/{id}/records|files endpoints.
+export const DD_SCRIPTS = ['support_tickets.py', 'code_review_prs.py', 'release_notes.py'];
+export const DD_COLS = ['id', 'subject', 'priority', 'assignee', 'created_at', 'body'];
+
+export const DD_SCRIPT = `# Generate a synthetic support-ticket dataset through the lab router.
+# Every generation call goes to LiteLLM on 127.0.0.1:4000 (alias lab-text).
+from data_designer.config import DataDesignerConfigBuilder
+from data_designer.config.models import ModelProvider, ModelConfig
+
+PROVIDER_NAME = "lab-router"
+PROVIDER_ENDPOINT = "http://127.0.0.1:4000/v1"
+API_KEY_ENV = "LITELLM_DD_KEY"      # env NAME only; the wrapper injects the value
+
+PROVIDER = ModelProvider(
+    name=PROVIDER_NAME,
+    endpoint=PROVIDER_ENDPOINT,
+    provider_type="openai",
+    api_key=API_KEY_ENV,
+)
+
+def load_config_builder() -> DataDesignerConfigBuilder:
+    builder = DataDesignerConfigBuilder(model_providers=[PROVIDER])
+    builder.add_model_config(ModelConfig(alias="lab-text", model="glm-5.3-flash-next-local", provider=PROVIDER_NAME))
+    builder.add_column(name="subject", prompt="One-line summary of a plausible support ticket.", info_type="text")
+    builder.add_column(name="body", prompt="Three sentences describing the ticket in detail.", info_type="text")
+    return builder
+`;
+
+const SUBJECTS = ['Login loop after SSO change', 'Export produces empty CSV', 'Webhook retries flood the inbox', 'Rate limit on the bulk API', 'Dark mode contrast too low', 'Search misses accented terms', 'Billing page shows stale totals', 'Mobile app crashes on upload'];
+const PRIO = ['low', 'medium', 'high', 'urgent'];
+const AGENTS = ['ana', 'kwame', 'priya', 'tom'];
+
+/** n deterministic canned records (mock only). `body` is deliberately long so the UI truncation shows. */
+export function ddRows(n) {
+  const rows = [];
+  for (let i = 1; i <= n; i++) {
+    const day = String((i % 28) + 1).padStart(2, '0');
+    rows.push({
+      id: i,
+      subject: `${SUBJECTS[i % SUBJECTS.length]} (#${1000 + i})`,
+      priority: PRIO[i % PRIO.length],
+      assignee: AGENTS[i % AGENTS.length],
+      created_at: `2026-10-${day}T09:${String(i % 60).padStart(2, '0')}:00Z`,
+      body: `Customer reports ${SUBJECTS[i % SUBJECTS.length].toLowerCase()} after the 2026-10-${day} update. Reproduced twice on the staging tenant; support asked for the tenant id and the last audit entry before escalating to engineering. Ticket synthesized by Data Designer for evaluation use only.`,
+    });
+  }
+  return rows;
+}
+
+export const DD_PREVIEW_FILES = (n) => [
+  { path: 'preview_results_20261023_091512/dataset.parquet', bytes: 8000 + n * 300 },
+  { path: 'preview_results_20261023_091512/report.html', bytes: 42000 },
+  { path: 'preview_results_20261023_091512/sample_records/record_00000.html', bytes: 5100 },
+  { path: 'preview_results_20261023_091512/sample_records/sample_records_browser.html', bytes: 9800 },
+  { path: 'records.jsonl', bytes: 900 + n * 320 },
+];
+
+export const DD_CREATE_FILES = (live) => [
+  { path: `${live.dataset_name}/metadata.json`, bytes: 2400 },
+  { path: `${live.dataset_name}/parquet-files/batch_00000.parquet`, bytes: 6000 + live.num_records * 300 },
+  { path: `${live.dataset_name}/builder_config.json`, bytes: 7800 },
+  { path: 'records.jsonl', bytes: 900 + Math.min(live.num_records, 2000) * 320 },
+];
+
+const CREATE_LIVE = { num_records: 120, dataset_name: 'support_tickets', destination: 'support_tickets', format: 'parquet' };
+
+// Newest first, like the backend's run-dir listing. rows are the records the mock "records.jsonl" holds.
+export const DD_RUNS = [
+  { run_id: '20261023T091512-104-create-support_tickets', script: 'support_tickets.py', mode: 'create', verdict: 'succeeded',
+    num_records: 120, dataset_name: 'support_tickets', destination: 'support_tickets', format: 'parquet',
+    duration_ms: 742000, ts: Date.now() / 1000 - 5400, columns: DD_COLS, rows: ddRows(120), files: DD_CREATE_FILES(CREATE_LIVE) },
+  { run_id: '20261023T084500-011-preview-code_review_prs', script: 'code_review_prs.py', mode: 'preview', verdict: 'succeeded',
+    num_records: 5, dataset_name: null, destination: null, format: 'parquet',
+    duration_ms: 6100, ts: Date.now() / 1000 - 9600, columns: DD_COLS, rows: ddRows(5), files: DD_PREVIEW_FILES(5) },
+  { run_id: '20261022T170001-900-create-release_notes', script: 'release_notes.py', mode: 'create', verdict: 'failed',
+    num_records: 0, dataset_name: 'release_notes', destination: 'release_notes', format: 'csv',
+    duration_ms: 91000, ts: Date.now() / 1000 - 86400, columns: DD_COLS, rows: [],
+    error: 'lab-lightning answered 429 for 3 consecutive retries (records: 0 written)', files: [] },
+];

@@ -176,6 +176,13 @@ class Settings(BaseSettings):
     otlp_endpoint: str | None = None          # e.g. http://localhost:4317 ; needs the optional opentelemetry packages
     extra_bin_dirs: list[str] = ["~/.local/bin"]   # searched for allowlisted binaries (nemo-relay)
 
+    # Data Designer (addendum 9.7): the console OWNS and creates (0700, at startup) the scripts dir and the datasets
+    # root; ~/.data-designer is the TOOL's own config dir — never created by the console (the adapter reports it when
+    # missing). The key file is checked for EXISTENCE only, never read (the wrapper injects the key itself).
+    dd_scripts_dir: Path = Field(default_factory=lambda: Path.home() / "Datasets" / "data-designer" / "scripts")
+    dd_datasets_root: Path = Field(default_factory=lambda: Path.home() / "Datasets")
+    dd_config_dir: Path = Field(default_factory=lambda: Path.home() / ".data-designer")
+
     @field_validator("urls")
     @classmethod
     def _merge_urls(cls, v: dict[str, str]) -> dict[str, str]:
@@ -231,4 +238,8 @@ class Settings(BaseSettings):
             "dynamo_dir": r / "inference" / "dynamo",
             "dynamo_compose": r / "inference" / "dynamo" / "docker-compose.yml",
             "skills_dir": r / ".claude" / "skills",          # SkillEvaluator: one sub-directory per skill (SKILL.md)
+            "scripts_dir": self.dd_scripts_dir,              # Data Designer dataset config scripts (console-owned)
+            "datasets_root": self.dd_datasets_root,          # where `create` writes the user's dataset copies
+            "dd_config_dir": self.dd_config_dir,             # the tool's own dir (model_providers/model_configs.yaml)
+            "dd_key_file": home / ".config" / "data-designer" / "litellm.key",   # LITELLM_DD_KEY source; EXISTENCE only
         }

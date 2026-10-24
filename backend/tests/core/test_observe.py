@@ -15,14 +15,15 @@ from .conftest import Env
 async def test_health_overview_systems_topology(env: Env) -> None:
     async with env.client() as c:
         h = (await c.get("/api/v1/health")).json()
-        assert h["status"] == "ok" and h["trust"] == "loopback-admin" and set(h["systems"]) == {"switchyard", "relay", "dynamo", "skillevaluator"}
+        assert h["status"] == "ok" and h["trust"] == "loopback-admin" and set(h["systems"]) == {"switchyard", "relay", "dynamo", "skillevaluator", "datadesigner"}
         o = (await c.get("/api/v1/overview")).json()
-        assert len(o["systems"]) == 4 and {n["id"] for n in o["topology"]["nodes"]} >= {"litellm", "switchyard", "relay"}
-        assert len((await c.get("/api/v1/systems")).json()) == 4
+        assert len(o["systems"]) == 5 and {n["id"] for n in o["topology"]["nodes"]} >= {"litellm", "switchyard", "relay"}
+        assert len((await c.get("/api/v1/systems")).json()) == 5
         assert (await c.get("/api/v1/systems/dynamo/status")).json()["system"] == "dynamo"
         t = (await c.get("/api/v1/topology")).json()
         assert next(n for n in t["nodes"] if n["id"] == "litellm")["health"] == "up"
-        assert env.runner.calls and env.runner.calls[0][:2] == ["docker", "inspect"]
+        # the datadesigner adapter's version probe may run first; a docker inspect (engine probes) must be among the calls
+        assert env.runner.calls and any(c[:2] == ["docker", "inspect"] for c in env.runner.calls)
 
 
 async def test_down_system_is_200_not_5xx(env: Env) -> None:

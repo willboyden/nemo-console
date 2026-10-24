@@ -1,0 +1,13 @@
+lab-text:
+  alias: lab-text
+  model: glm-5.3-flash-next-local
+  provider: lab-router
+  inference_parameters:
+    generation_type: chat
+    temperature: 0.7
+    top_p: 0.9
+    max_tokens: 1024
+lab-embed:
+  alias: lab-embed
+  model: nomic-embed
+  provider: lab-router

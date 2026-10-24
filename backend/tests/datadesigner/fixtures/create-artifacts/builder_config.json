@@ -1,0 +1,279 @@
+{
+  "data_designer": {
+    "columns": [
+      {
+        "name": "product_category",
+        "drop": false,
+        "column_type": "sampler",
+        "skip": null,
+        "propagate_skip": true,
+        "sampler_type": "category",
+        "params": {
+          "values": [
+            "Electronics",
+            "Books"
+          ],
+          "weights": null,
+          "sampler_type": "category"
+        },
+        "conditional_params": {},
+        "convert_to": null
+      },
+      {
+        "name": "review",
+        "drop": false,
+        "column_type": "llm-text",
+        "skip": null,
+        "propagate_skip": true,
+        "prompt": "Write one short product review (max 2 sentences) for a {{ product_category }} item.",
+        "model_alias": "lab-text",
+        "system_prompt": null,
+        "multi_modal_context": null,
+        "tool_alias": null,
+        "with_trace": "none",
+        "extract_reasoning_content": false
+      }
+    ],
+    "model_configs": [
+      {
+        "alias": "nvidia-text",
+        "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+        "inference_parameters": {
+          "generation_type": "chat-completion",
+          "max_parallel_requests": 4,
+          "timeout": null,
+          "extra_body": {
+            "chat_template_kwargs": {
+              "enable_thinking": false
+            }
+          },
+          "temperature": 1.0,
+          "top_p": 0.95,
+          "max_tokens": null
+        },
+        "provider": "nvidia",
+        "skip_health_check": false
+      },
+      {
+        "alias": "nvidia-reasoning",
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "inference_parameters": {
+          "generation_type": "chat-completion",
+          "max_parallel_requests": 4,
+          "timeout": null,
+          "extra_body": {
+            "reasoning_effort": "medium"
+          },
+          "temperature": 1.0,
+          "top_p": 0.95,
+          "max_tokens": null
+        },
+        "provider": "nvidia",
+        "skip_health_check": false
+      },
+      {
+        "alias": "nvidia-vision",
+        "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        "inference_parameters": {
+          "generation_type": "chat-completion",
+          "max_parallel_requests": 4,
+          "timeout": null,
+          "extra_body": null,
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "max_tokens": null
+        },
+        "provider": "nvidia",
+        "skip_health_check": false
+      },
+      {
+        "alias": "nvidia-embedding",
+        "model": "nvidia/nemotron-3-embed-1b",
+        "inference_parameters": {
+          "generation_type": "embedding",
+          "max_parallel_requests": 4,
+          "timeout": null,
+          "extra_body": {
+            "input_type": "query"
+          },
+          "encoding_format": "float",
+          "dimensions": null
+        },
+        "provider": "nvidia",
+        "skip_health_check": false
+      },
+      {
+        "alias": "openai-text",
+        "model": "gpt-4.1",
+        "inference_parameters": {
+          "generation_type": "chat-completion",
+          "max_parallel_requests": 4,
+          "timeout": null,
+          "extra_body": null,
+          "temperature": 0.85,
+          "top_p": 0.95,
+          "max_tokens": null
+        },
+        "provider": "openai",
+        "skip_health_check": false
+      },
+      {
+        "alias": "openai-reasoning",
+        "model": "gpt-5",
+        "inference_parameters": {
+          "generation_type": "chat-completion",
+          "max_parallel_requests": 4,
+          "timeout": null,
+          "extra_body": {
+            "reasoning_effort": "medium"
+          },
+          "temperature": null,
+          "top_p": null,
+          "max_tokens": null
+        },
+        "provider": "openai",
+        "skip_health_check": false
+      },
+      {
+        "alias": "openai-vision",
+        "model": "gpt-5",
+        "inference_parameters": {
+          "generation_type": "chat-completion",
+          "max_parallel_requests": 4,
+          "timeout": null,
+          "extra_body": {
+            "reasoning_effort": "medium"
+          },
+          "temperature": null,
+          "top_p": null,
+          "max_tokens": null
+        },
+        "provider": "openai",
+        "skip_health_check": false
+      },
+      {
+        "alias": "openai-embedding",
+        "model": "text-embedding-3-large",
+        "inference_parameters": {
+          "generation_type": "embedding",
+          "max_parallel_requests": 4,
+          "timeout": null,
+          "extra_body": null,
+          "encoding_format": "float",
+          "dimensions": null
+        },
+        "provider": "openai",
+        "skip_health_check": false
+      },
+      {
+        "alias": "openrouter-text",
+        "model": "nvidia/nemotron-3-nano-30b-a3b",
+        "inference_parameters": {
+          "generation_type": "chat-completion",
+          "max_parallel_requests": 4,
+          "timeout": null,
+          "extra_body": null,
+          "temperature": 1.0,
+          "top_p": 1.0,
+          "max_tokens": null
+        },
+        "provider": "openrouter",
+        "skip_health_check": false
+      },
+      {
+        "alias": "openrouter-reasoning",
+        "model": "openai/gpt-oss-20b",
+        "inference_parameters": {
+          "generation_type": "chat-completion",
+          "max_parallel_requests": 4,
+          "timeout": null,
+          "extra_body": null,
+          "temperature": 0.35,
+          "top_p": 0.95,
+          "max_tokens": null
+        },
+        "provider": "openrouter",
+        "skip_health_check": false
+      },
+      {
+        "alias": "openrouter-vision",
+        "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "inference_parameters": {
+          "generation_type": "chat-completion",
+          "max_parallel_requests": 4,
+          "timeout": null,
+          "extra_body": null,
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "max_tokens": null
+        },
+        "provider": "openrouter",
+        "skip_health_check": false
+      },
+      {
+        "alias": "openrouter-embedding",
+        "model": "openai/text-embedding-3-large",
+        "inference_parameters": {
+          "generation_type": "embedding",
+          "max_parallel_requests": 4,
+          "timeout": null,
+          "extra_body": null,
+          "encoding_format": "float",
+          "dimensions": null
+        },
+        "provider": "openrouter",
+        "skip_health_check": false
+      },
+      {
+        "alias": "lab-text",
+        "model": "glm-5.3-flash-next-local",
+        "inference_parameters": {
+          "generation_type": "chat-completion",
+          "max_parallel_requests": 4,
+          "timeout": null,
+          "extra_body": null,
+          "temperature": 1.0,
+          "top_p": 0.95,
+          "max_tokens": 4096
+        },
+        "provider": "lab-router",
+        "skip_health_check": false
+      },
+      {
+        "alias": "lab-lightning",
+        "model": "nemotron-lightning",
+        "inference_parameters": {
+          "generation_type": "chat-completion",
+          "max_parallel_requests": 4,
+          "timeout": null,
+          "extra_body": null,
+          "temperature": 1.0,
+          "top_p": 0.95,
+          "max_tokens": 4096
+        },
+        "provider": "lab-router",
+        "skip_health_check": false
+      },
+      {
+        "alias": "lab-embed",
+        "model": "nomic-embed",
+        "inference_parameters": {
+          "generation_type": "embedding",
+          "max_parallel_requests": 4,
+          "timeout": null,
+          "extra_body": null,
+          "encoding_format": "float",
+          "dimensions": null
+        },
+        "provider": "lab-router",
+        "skip_health_check": false
+      }
+    ],
+    "tool_configs": [],
+    "seed_config": null,
+    "constraints": null,
+    "profilers": null,
+    "processors": null
+  },
+  "library_version": "0.9.3"
+}

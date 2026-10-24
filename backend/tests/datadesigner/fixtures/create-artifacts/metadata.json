@@ -1,0 +1,60 @@
+{
+  "actual_num_records": 2,
+  "buffer_size": 1000,
+  "column_statistics": [
+    {
+      "column_name": "product_category",
+      "column_type": "sampler",
+      "distribution": {
+        "histogram": {
+          "categories": [
+            "Books",
+            "Electronics"
+          ],
+          "counts": [
+            1,
+            1
+          ]
+        },
+        "least_common_value": "Electronics",
+        "most_common_value": "Books"
+      },
+      "distribution_type": "categorical",
+      "num_null": 0,
+      "num_records": 2,
+      "num_unique": 2,
+      "pyarrow_dtype": "string",
+      "sampler_type": "category",
+      "simple_dtype": "string"
+    },
+    {
+      "column_name": "review",
+      "column_type": "llm-text",
+      "input_tokens_mean": 17.0,
+      "input_tokens_median": 17.0,
+      "input_tokens_stddev": 0.0,
+      "num_null": 0,
+      "num_records": 2,
+      "num_unique": 2,
+      "output_tokens_mean": 61.5,
+      "output_tokens_median": 61.5,
+      "output_tokens_stddev": 17.68,
+      "pyarrow_dtype": "string",
+      "simple_dtype": "string"
+    }
+  ],
+  "config_hash": "sha256:a9cf4f58f538a7525d770de1c20e8f4263eaf3713fd3e2011bc16fc641aa6fb3",
+  "config_hash_algo": "sha256",
+  "config_hash_version": 2,
+  "dataset_name": "dd_smoke",
+  "file_paths": {
+    "parquet-files": [
+      "parquet-files/batch_00000.parquet"
+    ]
+  },
+  "num_completed_batches": 1,
+  "original_target_num_records": 2,
+  "preserve_dropped_columns": true,
+  "target_num_records": 2,
+  "total_num_batches": 1
+}

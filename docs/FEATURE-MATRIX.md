@@ -146,6 +146,19 @@ Dynamo `restart`, assistive technology, browsers other than headless Firefox.
 | Tier 2 without embeddings | Implemented | fakes only | `skillevaluator.tier2.no_embeddings` with the lab fix `cd <repo>/inference/ollama && docker compose up -d`. |
 | Install fix | Implemented | read live (2026-10-17: names the lab's pinned installer) | The lab's `clients/skillevaluator/install.sh` when present, else `uv tool install` pinned to `7304d76` (v0.5.0). |
 
+## Data Designer
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| Status: launcher version, router liveness, providers/aliases from the tool's yaml, one live create run | Implemented | verified live (maintainer, 2026-10-24: `data-designer-local` 0.9.3, router 200, 4 providers / 15 aliases parsed from the real `~/.data-designer`); fakes in `tests/datadesigner/` | `api_key` fields (env names) are never surfaced; `~/.data-designer` is never created by the console. |
+| Config scripts as config files (edit/validate/diff/apply/history/rollback) | Implemented | script listing, spec, apply `post_check=healthy` and 409 stale-base verified live (2026-10-24); validate with the real CLI verified live (2026-10-24: ok + the temp-file extension fix); revision history/rollback fakes only | Validation EXECUTES the script locally (`load_config_builder()`); the UI states it. Temp copy keeps the script's extension (the CLI rejects anything else). |
+| Preview action (sync, sample records + records.jsonl capped 2,000) | Implemented | verified live (2026-10-24: 2 records through the router on `glm-5.3-flash-next-local`, 6.6 s, report + sample_records HTML + records.jsonl kept) | Verdict from the CLI result; export failures carry the exporter's redacted stderr. |
+| Create action (background, one at a time, converted copy under the datasets root) | Implemented | verified live (2026-10-24: 2 records, csv copy at `~/Datasets/smoke_reviews_v2/smoke_reviews_v2.csv`, records.jsonl stays jsonl, destination containment fakes) | `data-designer-local create` is the one long-timeout call (3,600 s); cancel on console stop → `interrupted` (fakes only). |
+| Records/files endpoints + records table | Implemented | endpoints verified live (pagination, columns, files list); the browser records table verified against the dev mock only (headless Firefox screenshots) | `records.jsonl` is the only dataset artifact the API reads; 2 KiB per-cell cap, `truncated` flag. |
+| Report / check_models / show_config actions | Implemented | report and show_config verified live (2026-10-24: report after a real run; show_config lists providers/aliases without key fields); check_models fakes only (the CLI requires a config_source argument — the action takes the script enum) | |
+| Runner policy (allowlist, long timeout for create only) | Implemented | fakes + live (real CLI runs through the real runner during the live smoke) | `data-designer-local` joins the SIGINT-first graceful set; `data-designer-export` is the conversion wrapper. |
+| Data Designer page (status, scripts, actions, runs tabs) | Implemented | headless Firefox screenshots at 1440 and 884 px against the live backend (2026-10-24: status/actions/runs with a real run); run-detail records table mock only | Deep-linked tabs (`?tab=`); SSE live-run banner. |
+
 ## Not planned for v1
 
 Editing Relay `plugins.toml` / `config.toml`; multi-user or per-user audit identity beyond the key

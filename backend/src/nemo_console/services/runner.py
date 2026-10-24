@@ -12,7 +12,8 @@ from pathlib import Path
 from nemo_console.adapters.base import CommandResult
 from nemo_console.services.common import redact
 
-ALLOWED_BINARIES = frozenset({"docker", "systemctl", "nemo-relay", "skillevaluator", "skillevaluator-local"})
+ALLOWED_BINARIES = frozenset({"docker", "systemctl", "nemo-relay", "skillevaluator", "skillevaluator-local",
+                              "data-designer-local", "data-designer-export"})
 CHILD_ENV_KEYS = ("PATH", "HOME", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "DOCKER_HOST", "DOCKER_CONTEXT",
                   "DOCKER_CONFIG", "LANG", "LC_ALL")
 # SkillEvaluator is configured by environment only (SKILL_EVAL_*, no config file). Those variables reach ITS children
@@ -26,8 +27,15 @@ MAX_TIMEOUT = 600.0
 # limit: 120 s + dataset generation 900 s + tier3 3600 s (clients/skillevaluator/runner/launch.py, container_timeout).
 # ONLY `skillevaluator[-local] tier3 ...` gets this cap; every other command keeps MAX_TIMEOUT.
 MAX_LIVE_EVAL_TIMEOUT = 4800.0
-# SkillEvaluator launchers are stopped with SIGINT first (the lab launcher `docker kill`s its job container on SIGINT,
-# so its tokens stop being spent), then SIGKILL after this grace. Every other binary gets SIGKILL straight away.
+# Data Designer: ONLY `data-designer-local create ...` gets the long cap (a dataset build runs minutes to an hour,
+# 3600 s, same ceiling as a skilleval tier3 job); preview/validate/check-models/export stay at MAX_TIMEOUT. The
+# `data-designer-local` wrapper injects its own credentials from its own 0600 key files, so it needs NO env of ours
+# (never pass secrets on its behalf); `data-designer-export` is a fixed parquet converter.
+DD_BINARIES = frozenset({"data-designer-local"})
+DD_CREATE = 3600.0
+# SkillEvaluator launchers and the Data Designer wrapper are stopped with SIGINT first (the lab launchers clean up
+# their own children/jobs on SIGINT), then SIGKILL after this grace. Every other binary gets SIGKILL straight away.
+GRACEFUL_BINARIES = SKILLEVAL_BINARIES | DD_BINARIES
 STOP_GRACE = 5.0        # short enough for `nemo-console stop`, which waits 10 s for the console to exit
 MAX_ARGS = 64
 MAX_ARG_LEN = 8192
@@ -38,8 +46,13 @@ class RunnerError(Exception):
 
 
 def max_timeout(argv: list[str]) -> float:
-    """The cap for this argv: the long one only for a SkillEvaluator launcher's `tier3` subcommand."""
-    return MAX_LIVE_EVAL_TIMEOUT if argv[:1] and argv[0] in SKILLEVAL_BINARIES and argv[1:2] == ["tier3"] else MAX_TIMEOUT
+    """The cap for this argv: the long one only for a SkillEvaluator launcher's `tier3` subcommand and for
+    `data-designer-local create` (DD_CREATE); everything else keeps MAX_TIMEOUT."""
+    if argv[:1] and argv[0] in SKILLEVAL_BINARIES and argv[1:2] == ["tier3"]:
+        return MAX_LIVE_EVAL_TIMEOUT
+    if argv[:1] and argv[0] in DD_BINARIES and argv[1:2] == ["create"]:
+        return DD_CREATE
+    return MAX_TIMEOUT
 
 
 def _kill_group(proc: asyncio.subprocess.Process) -> None:
@@ -98,7 +111,7 @@ class SubprocessRunner:
         self._check(argv)
         exe = self.resolve(argv[0])
         timeout = max(0.1, min(float(timeout), max_timeout(argv)))
-        graceful = argv[0] in SKILLEVAL_BINARIES
+        graceful = argv[0] in GRACEFUL_BINARIES
         start = time.monotonic()
         proc = await asyncio.create_subprocess_exec(
             exe, *argv[1:], stdin=asyncio.subprocess.PIPE if stdin is not None else asyncio.subprocess.DEVNULL,

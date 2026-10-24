@@ -1,6 +1,6 @@
 # Nemo Console
 
-A local, single-user web console to **monitor, configure and interact with** four NVIDIA-ecosystem systems
+A local, single-user web console to **monitor, configure and interact with** five NVIDIA-ecosystem systems
 running on one workstation:
 
 - **NeMo Switchyard**: tier-based request routing (an HTTP server in a container).
@@ -9,6 +9,9 @@ running on one workstation:
 - **NVIDIA Dynamo**: an LLM serving frontend plus a vLLM worker (docker compose).
 - **NVIDIA SkillEvaluator** (new in 0.2.0): scores agent skills (`SKILL.md` folders) for quality, security and
   duplication. A CLI, not a service: the console runs it on demand and keeps the reports.
+- **NVIDIA Data Designer** (unreleased): generates synthetic datasets from config scripts through the lab router
+  (validate → preview → create, record review, parquet/csv/jsonl/json copies under `~/Datasets`). Also a CLI, not a
+  service, driven the same way (install: the lab's `clients/data-designer/install.sh`).
 
 It is a host-run FastAPI process bound to loopback, with a zero-build, zero-npm browser UI. One adapter per
 system plugs into a system-agnostic core; the UI renders from descriptors (status, metrics, config files,

@@ -1,6 +1,7 @@
 """Health, overview, topology and per-system observation (status, metrics, events)."""
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Annotated, Any
 
@@ -79,5 +80,34 @@ async def events_stream(a: Adapter, c: C, _: Viewer) -> StreamingResponse:
         raise ApiError(429, "too_many_streams", f"at most {c.cfg.sse_max_connections} concurrent event streams")
     return StreamingResponse(event_stream(a, c.sse, c.cfg.sse_idle_timeout_s, c.cfg.sse_heartbeat_s),
                              media_type="text/event-stream", headers={"X-Accel-Buffering": "no"})
+
+
+# ── Data Designer run artifacts (addendum 9.7; viewer GET only, no file serving in v1) ──────
+@router.get("/systems/{system_id}/runs/{run_id}/records")
+async def dd_run_records(a: Adapter, _: Viewer, run_id: str,
+                         limit: Annotated[int, Query(ge=1, le=200)] = 50,
+                         offset: Annotated[int, Query(ge=0)] = 0) -> dict[str, Any]:
+    """The records of one run, read from records.jsonl ONLY (never parquet); values pass through as-is with no
+    string over 2 KiB. `total` comes from run.json when it has one, else the counted lines."""
+    from nemo_console.adapters.datadesigner import DataDesignerAdapter
+    if not isinstance(a, DataDesignerAdapter):
+        raise ApiError(404, "not_found", "no such endpoint for this system")
+    try:
+        return await asyncio.to_thread(a.records_page, run_id, limit, offset)
+    except KeyError:
+        raise ApiError(404, "not_found", "unknown run") from None
+
+
+@router.get("/systems/{system_id}/runs/{run_id}/files")
+async def dd_run_files(a: Adapter, _: Viewer, run_id: str) -> dict[str, Any]:
+    """Paths + sizes of a run's artifacts (for the UI's download links); nothing is served here in v1: the UI shows
+    paths and the user opens them on disk."""
+    from nemo_console.adapters.datadesigner import DataDesignerAdapter
+    if not isinstance(a, DataDesignerAdapter):
+        raise ApiError(404, "not_found", "no such endpoint for this system")
+    try:
+        return await asyncio.to_thread(a.run_files, run_id)
+    except KeyError:
+        raise ApiError(404, "not_found", "unknown run") from None
 
 

@@ -15,6 +15,7 @@ export const ROUTES = [
   { path: '/relay', tag: 'nc-relay', mod: 'relay', nav: 'relay', icon: 'relay' },
   { path: '/dynamo', tag: 'nc-dynamo', mod: 'dynamo', nav: 'dynamo', icon: 'dynamo' },
   { path: '/skillevaluator', tag: 'nc-skillevaluator', mod: 'skillevaluator', nav: 'skillevaluator', icon: 'skills' },
+  { path: '/datadesigner', tag: 'nc-datadesigner', mod: 'datadesigner', nav: 'datadesigner', icon: 'skills' },
   { path: '/audit', tag: 'nc-audit', mod: 'audit', nav: 'audit', icon: 'audit', admin: true },
   { path: '/settings', tag: 'nc-settings', mod: 'settings', nav: 'settings', icon: 'settings' },
 ];

@@ -33,12 +33,21 @@ STATIC_FILES = {"index.html", "favicon.svg", "favicon.ico"}
 STATIC_DIRS = ("css", "js", "assets", "img", "fonts", "i18n")
 
 
+def ensure_user_dirs(cfg: Settings) -> None:
+    """Create the Data Designer dirs the console owns (0700; addendum 9.7). ~/.data-designer is deliberately NOT
+    created: it is the tool's own config dir and the adapter reports it when missing. Never raises."""
+    for p in (cfg.dd_scripts_dir, cfg.dd_datasets_root):
+        with contextlib.suppress(OSError):
+            p.mkdir(mode=0o700, parents=True, exist_ok=True)
+
+
 def create_app(cfg: Settings | None = None, container: Container | None = None) -> FastAPI:
     cfg = cfg or Settings(_env_file=user_env_file())
     c = container or build_container(cfg)
 
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        ensure_user_dirs(cfg)
         key_file = c.auth.ensure_bootstrap_key()
         if key_file:
             log.info("first start: admin API key written to %s (0600); copy it, then delete the file", key_file)
@@ -124,6 +133,7 @@ def run() -> None:
         raise SystemExit(stop_console(sys.argv[2:]))
     cfg = Settings(_env_file=user_env_file())
     configure_logging()
+    ensure_user_dirs(cfg)
     uvicorn.run(create_app(cfg), host=cfg.host, port=cfg.port, log_config=None, access_log=False)
 
 
