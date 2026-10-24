@@ -244,6 +244,16 @@ async def test_post_apply_is_healthy_without_restart(make_adapter) -> None:  # t
     assert res.ok and res.post_check == "healthy" and not res.restarted
 
 
+async def test_script_executing_actions_are_disruptive_admin(make_adapter) -> None:  # type: ignore[no-untyped-def]
+    """preview/create/check_models execute the config script locally: they must never be confirm-free."""
+    a, _ = make_adapter()
+    by_id = {s.id: s for s in a.actions()}
+    assert by_id["preview"].danger == "disruptive"
+    assert by_id["create"].danger == "disruptive"
+    assert by_id["check_models"].danger == "disruptive"
+    assert all(s.role == "admin" for s in by_id.values())
+
+
 # ── preview ─────────────────────────────────────────────────────────────────────────────────────
 async def test_preview_runs_the_cli_keeps_the_report_and_exports_records(make_adapter, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     a, run = make_adapter()

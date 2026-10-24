@@ -17,7 +17,10 @@ implemented / verified-live / unverified defined in the README.
   `data-designer-local validate` and **executes the script locally** (the tool's design; stated in the UI). Actions:
   `preview` (sync, sample records + `records.jsonl` capped at 2,000), `create` (background, one at a time; full dataset
   plus a converted copy — parquet/csv/jsonl/json — under the datasets root, destination resolved and
-  containment-checked before the run starts), `report`, `check_models`, `show_config`. Runs land in the state dir
+  containment-checked before the run starts), `report`, `check_models`, `show_config`. Every script-executing action
+  (`preview`, `create`, `check_models`) is `disruptive` — admin and `confirm:true`, because validate/preview/create
+  EXECUTE the config script locally (the tool's design; stated in the UI and the threat model, E-7/R-19). Runs land in
+  the state dir
   (newest 100) as `dd.run` metadata-only events feeding `dd.*` metrics; two additive viewer endpoints
   (`GET .../runs/{id}/records`, `GET .../runs/{id}/files`) power the UI's paginated records table. The runner
   allowlist gains `data-designer-local` and `data-designer-export` (a fixed-script conversion wrapper); only

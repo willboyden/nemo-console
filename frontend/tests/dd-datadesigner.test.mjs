@@ -89,12 +89,16 @@ test('actions: create is disruptive (confirm required), refused while a run is l
   assert.equal(rep.ok, true); assert.match(rep.output, /verdict: succeeded/);
   const repBad = await (await post('/systems/datadesigner/actions/report', { params: { run_id: 'ghost' }, confirm: false })).json();
   assert.equal(repBad.ok, false);
-  const cm = await (await post('/systems/datadesigner/actions/check_models', { params: {}, confirm: false })).json();
-  assert.equal(cm.ok, true); assert.match(cm.output, /lab-text/);
+  const cm = await post('/systems/datadesigner/actions/check_models', { params: {}, confirm: false });
+  assert.equal(cm.status, 422, 'check_models is disruptive: confirm required');
+  const cmOk = await (await post('/systems/datadesigner/actions/check_models', { params: {}, confirm: true })).json();
+  assert.equal(cmOk.ok, true); assert.match(cmOk.output, /lab-text/);
   const sc = await (await post('/systems/datadesigner/actions/show_config', { params: {}, confirm: false })).json();
   assert.match(sc.output, /model_providers\.yaml/); assert.match(sc.output, /LITELLM_DD_KEY/);
-  const pv = await (await post('/systems/datadesigner/actions/preview', { params: { script: 'support_tickets.py', num_records: 3 }, confirm: false })).json();
-  assert.equal(pv.ok, true); assert.match(pv.output, /sample_records_browser\.html/);
+  const pv = await post('/systems/datadesigner/actions/preview', { params: { script: 'support_tickets.py', num_records: 3 }, confirm: false });
+  assert.equal(pv.status, 422, 'preview is disruptive: confirm required');
+  const pvOk = await (await post('/systems/datadesigner/actions/preview', { params: { script: 'support_tickets.py', num_records: 3 }, confirm: true })).json();
+  assert.equal(pvOk.ok, true); assert.match(pvOk.output, /sample_records_browser\.html/);
   // preview registered a run with its records
   const evs = await (await get('/systems/datadesigner/events?limit=50')).json();
   const last = evs.find((e) => e.kind === 'dd.run' && e.data.mode === 'preview');

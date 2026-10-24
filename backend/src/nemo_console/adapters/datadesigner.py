@@ -604,10 +604,11 @@ class DataDesignerAdapter(SystemAdapter):
 
         return [
             ActionSpec(
-                id="preview", label="Preview records", danger="safe",
+                id="preview", label="Preview records", danger="disruptive",
                 description="Runs `data-designer-local preview <script> -n N --save-results`: N sample records "
                             "through the configured models (spends router tokens), keeping report.html, the "
-                            "per-record HTML and records.jsonl in the console's state dir (newest 100 runs).",
+                            "per-record HTML and records.jsonl in the console's state dir (newest 100 runs). "
+                            "disruptive: it EXECUTES the config script locally and spends router tokens.",
                 params=[script_param(),
                         ParamSpec(key="num_records", label="Records", type="int", default=5, min=1, max=100,
                                   requires_restart=False, help="Sample records to generate (1–100).")]),
@@ -639,9 +640,10 @@ class DataDesignerAdapter(SystemAdapter):
                 params=[ParamSpec(key="run_id", label="Run", type="string", requires_restart=False,
                                   help="A run id from the runs list; empty = the newest run.")]),
             ActionSpec(
-                id="check_models", label="Check models", danger="safe",
+                id="check_models", label="Check models", danger="disruptive",
                 description="`data-designer-local check-models <script>`: a tiny generation against every model the "
-                            "config references, plus a connectivity probe to each referenced MCP tool.",
+                            "config references, plus a connectivity probe to each referenced MCP tool. "
+                            "disruptive: it EXECUTES the config script locally and makes real model calls.",
                 params=[script_param()]),
             ActionSpec(
                 id="show_config", label="Show provider config", danger="safe",

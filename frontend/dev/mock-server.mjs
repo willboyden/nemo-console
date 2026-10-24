@@ -304,7 +304,7 @@ const ACTIONS = {
     { id: 'up_mock', label: 'Up (mock worker)', description: 'Starts the CPU-only mocker profile. Safe: uses no GPU.', danger: 'safe', params: [] },
   ],
   datadesigner: [
-    { id: 'preview', label: 'Preview records', danger: 'safe',
+    { id: 'preview', label: 'Preview records', danger: 'disruptive',
       description: 'Runs data-designer-local preview on one script (it EXECUTES the script locally) and keeps the sample dataset, report and record browser in the run dir. The console also converts the parquet to records.jsonl (first 2,000 rows kept).',
       params: [
         { key: 'script', label: 'Script', type: 'enum', choices: DD_SCRIPTS, default: DD_SCRIPTS[0], requires_restart: false, help: 'A config script in the scripts dir.' },
@@ -322,7 +322,7 @@ const ACTIONS = {
     { id: 'report', label: 'Show a run report', danger: 'safe',
       description: 'A bounded text summary of one stored run (empty = the newest): mode, verdict, counts and up to five sample records.',
       params: [{ key: 'run_id', label: 'Run', type: 'string', default: null, requires_restart: false, help: 'A run id from the runs list; empty = the newest run.' }] },
-    { id: 'check_models', label: 'Check models', danger: 'safe', params: [],
+    { id: 'check_models', label: 'Check models', danger: 'disruptive', params: [],
       description: 'data-designer-local check-models: verifies every model and MCP tool the scripts reference is reachable through the router.' },
     { id: 'show_config', label: 'Show provider config', danger: 'safe', params: [],
       description: 'Read-only dump of ~/.data-designer/model_providers.yaml and model_configs.yaml: providers, aliases and inference parameters. Key fields hold env NAMES, never values.' },

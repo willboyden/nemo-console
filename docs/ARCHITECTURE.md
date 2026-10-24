@@ -282,7 +282,8 @@ nothing above changes. Contract: feature "datadesigner" (2026-10-23).
   `<state_dir>/datadesigner/tmp/<file_id>.<rand>` (deleted in `finally`), runs `data-designer-local validate`
   (540 s), and is authoritative; its note says that validation EXECUTES the script locally (the tool's design).
   `post_apply` is always healthy (nothing to restart).
-* Actions: `preview` (safe; `data-designer-local preview <script> -n N --save-results -o <run_dir>`; then the
+* Actions: `preview` (disruptive — it executes the config script and spends router tokens, so it needs
+  `confirm:true`; admin; `data-designer-local preview <script> -n N --save-results -o <run_dir>`; then the
   newest `preview_results_*`'s dataset.parquet is converted via `data-designer-export` and the first 2000 lines
   are kept as `<run_dir>/records.jsonl`), `create` (disruptive, ONE background run at a time, the SkillEvaluator
   Tier 3 `_LiveRun` pattern; `data-designer-local create <script> --num-records N --dataset-name NAME
@@ -291,7 +292,8 @@ nothing above changes. Contract: feature "datadesigner" (2026-10-23).
   — parquet: the batch files copied; csv/jsonl: streams; json: jsonl lines framed into one array. All destination
   paths are resolved + containment-checked under the datasets root BEFORE the run starts. Cancel on console stop →
   verdict `interrupted`), `report` (safe; bounded text + a ≤5-row markdown table, cells ≤120 chars, redacted),
-  `check_models` (safe; `data-designer-local check-models <script>` — the CLI's own --help requires a config
+  `check_models` (disruptive — it executes the config script and makes real model calls, so it needs
+  `confirm:true`; admin; `data-designer-local check-models <script>` — the CLI's own --help requires a config
   source argument, so the action takes the script enum), `show_config` (safe; read-only provider/alias dump).
 * API (additive, viewer GET, headers/auth identical to the other observe endpoints):
   `GET /api/v1/systems/datadesigner/runs/{run_id}/records?limit=50&offset=0` → `{run_id, total, columns, rows,
