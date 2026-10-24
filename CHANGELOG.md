@@ -18,14 +18,19 @@ implemented / verified-live / unverified defined in the README.
   provide an export named 'fmtUnit'"); the fix is covered by a backend test and the new browser suite. A browser
   that still holds files from before 0.3.1 needs one reload with Ctrl+Shift+R.
 - A page whose code fails to load now says how to recover (reload with Ctrl+Shift+R) next to the error.
+- Found by the new browser suite on a fresh clone: the Dynamo Params preview answered 500 when the repo compose was
+  missing (the adapter's `ParamError` was not caught); a refusal by the adapter is now a 422 with its reason.
+- Config tabs of a system that is not deployed showed "Something went wrong: config file does not exist"; a 404
+  now reads "This file is not on this machine" with the reason and a Retry button.
 
 ### Added
 
 - **Browser end-to-end suite** (`frontend/e2e/run.mjs`, `make e2e`): the real backend (throwaway HOME and state,
   loopback not trusted, signed in with the bootstrap key the way a person does) and a real headless Chrome driven
-  over the DevTools protocol with Node 22's built-in WebSocket (no npm, ADR 0013). It opens every route and every tab
-  and fails on an error or not-found state, an uncaught exception, a console error, or a frontend file without
-  `Cache-Control: no-cache`. Part of `make all` and a new CI job `e2e`.
+  over the DevTools protocol with Node 22's built-in WebSocket (no npm, ADR 0013). The backend gets an empty repo
+  root, so every run sees what CI sees (no system deployed). It opens every route and every tab and fails on an
+  error or not-found state, an uncaught exception, a console error, an API 5xx, or a frontend file that does not
+  load or lacks `Cache-Control: no-cache`. Part of `make all` and a new CI job `e2e`.
 - **Ship gate**: a versioned git `pre-push` hook (`.githooks/pre-push`, enabled by `make hooks`, which `make setup`
   now runs) refuses to push a commit or tag unless the e2e suite passed on its exact `backend/` and `frontend/`
   trees (`scripts/e2e-gate.sh`, record kept in `.git`); when the pushed commit is the clean HEAD it runs the suite

@@ -44,11 +44,12 @@ Every feature claim in this repo is one of:
 | **verified-live** | Exercised against a real Switchyard 0.3.0, Relay 0.9.2 and Dynamo 1.5.0 on one workstation (evidence is stated in [`docs/FEATURE-MATRIX.md`](docs/FEATURE-MATRIX.md)). |
 | **unverified** | Only fakes have run it. It may work; nobody has watched it work. |
 
-Gate results (re-run on 2026-10-24 against the release tree): `pytest -q` 876 passed / 2 skipped in the author's
+Gate results (re-run on 2026-10-24 against the 0.3.1 release tree): `pytest -q` 878 passed / 2 skipped in the author's
 deployment checkout (the skips are opt-in or environment-gated live smoke tests; the Dynamo live smoke enables itself
 when a frontend answers on 127.0.0.1:8020), `ruff check` clean, `mypy --strict src` clean (48 files), `node --test` 121
-passed. From a clean copy of the release tree outside that checkout (`make setup && make all`): 835 passed / 43 skipped,
-ruff and mypy clean, frontend 121 passed; the extra skips are the tests that need the deployment's repository layout
+passed, browser suite (`make e2e`, headless Chrome 151) 13 routes and 46 pages and tabs with no error state. From a
+literal `git clone` outside that checkout (`make setup && make all`): 837 passed / 43 skipped, ruff and mypy clean,
+frontend 121 passed, browser suite passed; the extra skips are the tests that need the deployment's repository layout
 (the lab wrappers next to it) or a live system. Mermaid diagrams in these docs were **not
 rendered**; treat them as unvalidated.
 

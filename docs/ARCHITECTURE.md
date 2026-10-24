@@ -376,8 +376,9 @@ frontend response carries `Cache-Control: no-cache` and an ETag; a matching `If-
 API responses keep `no-store`. Reason: without the header browsers cached the ES modules heuristically and, after
 0.3.0, paired new views with old shared modules (a missing export fails the whole import). `frontend/e2e/run.mjs`
 (zero dependencies: Node 22's WebSocket speaks the DevTools protocol to a headless Chrome) starts the real backend
-with a throwaway HOME and state, signs in with the bootstrap key through `sessionStorage`, opens every route parsed
+with a throwaway HOME, state and an empty repo root (what CI sees), signs in with the bootstrap key through `sessionStorage`, opens every route parsed
 from `js/routes.js` and every `[role=tab]`, and fails on an error or not-found state, an uncaught exception, a
-console error, or a frontend file without `no-cache`. It runs in `make all`, in the CI job `e2e`, and in the git
+console error, an API 5xx, or a frontend file that does not load or lacks `no-cache`. A 404 for a config file is a
+state ("not on this machine"), not an error, and an adapter's `ValueError` in a params preview is a 422. It runs in `make all`, in the CI job `e2e`, and in the git
 `pre-push` hook through `scripts/e2e-gate.sh`, which records a pass as the git tree ids of `backend/` and `frontend/`
 inside `.git` and refuses a pushed commit or tag without one.

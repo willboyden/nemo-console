@@ -78,6 +78,10 @@ export function configEditor(scope, systemId) {
   root.append(pickerHost, bodyHost);
 
   const dirty = () => st.file && st.draft !== st.file.content;
+  // 404 = the file is not on this machine (system not deployed here, or its path not configured): a state, not a failure.
+  const loadFailed = (e, retry) => (e.status === 404
+    ? emptyBox(t('cfg.missing'), describeError(e), btn(t('common.retry'), { icon: 'restart', onClick: retry }))
+    : errorBox(e, retry));
   const editable = () => st.file?.spec.editable && isAdmin();
 
   async function loadList() {
@@ -93,7 +97,7 @@ export function configEditor(scope, systemId) {
         pickerHost.append(sel);
       }
       await loadFile((st.file?.spec.id) || st.specs[0].id);
-    } catch (e) { if (scope.alive) clear(bodyHost).append(errorBox(e, loadList)); }
+    } catch (e) { if (scope.alive) clear(bodyHost).append(loadFailed(e, loadList)); }
   }
   const discardOk = () => confirmEffect({ title: t('cfg.discard_title'), effect: t('cfg.discard_effect'), danger: true, confirmLabel: t('cfg.discard') });
   async function loadFile(id, { keepDraft = false, keepOutcome = false } = {}) {
@@ -107,7 +111,7 @@ export function configEditor(scope, systemId) {
       if (!keepDraft) st.conflict = null;
       pickerHost.querySelectorAll('button[data-file]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.file === id)));
       renderBody();
-    } catch (e) { if (scope.alive) clear(bodyHost).append(errorBox(e, () => loadFile(id))); }
+    } catch (e) { if (scope.alive) clear(bodyHost).append(loadFailed(e, () => loadFile(id))); }
   }
 
   const statusEl = () => h('span', { class: 'row gap' }, dirty() ? badge(t('cfg.unsaved'), 'warn') : badge(t('cfg.in_sync'), 'muted'), h('span', { class: 'muted small num', title: st.file.sha256 }, t('cfg.sha', { sha: shortSha(st.file.sha256) })));

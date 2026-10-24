@@ -105,6 +105,8 @@ async def params_preview(a: Adapter, body: ParamsBody, _: Admin) -> dict[str, An
         rendered = await a.preview_params(values)
     except NotImplementedError:
         raise ApiError(404, "unsupported", "this system cannot preview parameters") from None
+    except ValueError as e:     # the adapter's own refusal (Dynamo: no repo compose to render from, a bad combination)
+        raise ApiError(422, "params_invalid", redact(str(e))[:500]) from None
     warn_fn = getattr(a, "param_warnings", None)      # optional adapter extra (Dynamo)
     warnings: list[str] = []
     if callable(warn_fn):

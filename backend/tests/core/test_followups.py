@@ -87,6 +87,18 @@ async def test_preview_warning_hook_crash_is_ignored(env: Env) -> None:
     assert r.status_code == 200 and r.json()["warnings"] == []
 
 
+async def test_preview_refused_by_the_adapter_is_422_not_500(env: Env) -> None:
+    # Dynamo raises ParamError (a ValueError) when the repo compose is missing: a fresh clone's Params tab got a 500.
+    async def refuse(_v: dict[str, object]) -> str:
+        raise ValueError("cannot read the repo compose: FileNotFoundError")
+
+    env.adapters["dynamo"].preview_params = refuse  # type: ignore[method-assign]
+    async with env.client() as c:
+        r = await c.post("/api/v1/systems/dynamo/params/preview", json={"values": {"n": 2}})
+    assert r.status_code == 422
+    assert r.json()["error"] == {"code": "params_invalid", "message": "cannot read the repo compose: FileNotFoundError"}
+
+
 # (4) config file that does not exist yet -------------------------------------------------------
 class PlaceholderAdapter(FakeAdapter):
     async def read_config(self, file_id: str) -> ConfigFile:

@@ -9,11 +9,13 @@
 // else google-chrome / chromium / chrome-headless-shell on PATH. Every page of the nav and every tab of every system
 // page is opened; the run FAILS on:
 //   * the error state ("Something went wrong", class `state error`) or the not-found state anywhere in the page,
-//   * an uncaught exception or a console error,
+//   * an uncaught exception, a console error, an API answer of 5xx, or a frontend file that does not load,
 //   * a frontend file (html, js, css, json) served without `Cache-Control: no-cache` — a browser that reuses a stale
 //     module next to a new one breaks the new pages (2026-10-24: five new views failed for a user that way).
 // Systems that are not running are FINE: a down system must still render its page. The backend runs with a
-// throwaway HOME and state dir, so nothing of the developer's config or keys is read.
+// throwaway HOME, state dir and an EMPTY repo root, so nothing of the developer's config, keys or lab is read and a
+// run in a deployment checkout sees what CI and a fresh clone see (no system deployed). An API 4xx is judged by
+// what the page shows, not by the browser's network log line.
 import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, existsSync, mkdirSync, chmodSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -72,12 +74,13 @@ export class Cdp {
 export async function startBackend(tmp, { port, frontendDir } = {}) {
   if (!existsSync(PY)) throw new Error(`${PY} missing: run \`make setup\` first`);
   port ||= await freePort();
-  const home = join(tmp, 'home'); const state = join(tmp, 'state');
-  mkdirSync(home, { recursive: true }); mkdirSync(state, { recursive: true }); chmodSync(state, 0o700);
+  const home = join(tmp, 'home'); const state = join(tmp, 'state'); const repo = join(tmp, 'repo');
+  for (const d of [home, state, repo]) mkdirSync(d, { recursive: true });
+  chmodSync(state, 0o700);
   const env = {
     PATH: process.env.PATH || '/usr/bin:/bin', HOME: home, LANG: 'C.UTF-8',
     NEMO_CONSOLE_PORT: String(port), NEMO_CONSOLE_STATE_DIR: state, NEMO_CONSOLE_NO_USER_ENV: '1',
-    NEMO_CONSOLE_TRUST_LOOPBACK: 'false',
+    NEMO_CONSOLE_TRUST_LOOPBACK: 'false', NEMO_CONSOLE_REPO_ROOT: repo,
     ...(frontendDir ? { NEMO_CONSOLE_FRONTEND_DIR: frontendDir } : {}),
   };
   const proc = spawn(PY, ['-I', '-m', 'nemo_console.main'], { cwd: BACKEND, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -136,14 +139,14 @@ export async function main(argv = process.argv.slice(2)) {
         const d = m.params.exceptionDetails; problems(`uncaught exception: ${d.exception?.description || d.text}`);
       } else if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') {
         problems(`console.error: ${m.params.args.map((a) => a.value ?? a.description ?? '').join(' ').slice(0, 300)}`);
-      } else if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error') {
-        problems(`browser error: ${m.params.entry.text.slice(0, 300)} ${m.params.entry.url || ''}`);
+      } else if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error' && m.params.entry.source !== 'network') {
+        problems(`browser error: ${m.params.entry.text.slice(0, 300)} ${m.params.entry.url || ''}`);    // network: below
       } else if (m.method === 'Network.responseReceived') {
         const r = m.params.response; const u = new URL(r.url);
-        if (u.origin === backend.base && !u.pathname.startsWith('/api/')) {
-          const cc = Object.entries(r.headers).find(([k]) => k.toLowerCase() === 'cache-control')?.[1] || '';
-          seenHeaders.set(u.pathname, cc);
-        }
+        if (u.origin !== backend.base) return;
+        if (u.pathname.startsWith('/api/')) { if (r.status >= 500) problems(`HTTP ${r.status} from ${u.pathname}`); return; }
+        if (r.status >= 400) problems(`frontend file ${u.pathname} answered ${r.status}`);
+        seenHeaders.set(u.pathname, Object.entries(r.headers).find(([k]) => k.toLowerCase() === 'cache-control')?.[1] || '');
       }
     });
 

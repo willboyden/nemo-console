@@ -164,6 +164,7 @@
   "ev.resumed_announce": "Live events resumed",
   "cfg.files": "Configuration files",
   "cfg.no_files": "This system has no configuration files.",
+  "cfg.missing": "This file is not on this machine. The system is not deployed here, or its path is not configured (docs/OPERATIONS.md, section 2).",
   "cfg.readonly": "read-only",
   "cfg.readonly_why": "Read-only in this console.",
   "cfg.readonly_default": "Editing this file is a human security decision made outside the console.",
