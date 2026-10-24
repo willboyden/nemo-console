@@ -189,7 +189,7 @@ Dynamo `restart`, assistive technology, browsers other than headless Firefox.
 | Feature | Status | Verification | Notes |
 |---|---|---|---|
 | Status: wrapper version, router, key file, presets, newest run | Implemented | verified live (2026-10-24: 0.13.0) | Lab install `clients/aiperf/` (pinned to the scanned commit, venv-local; only `aiperf-local` on PATH). |
-| `profile` action (background, one at a time) and `report` | Implemented | verified live against `aitop/nemotron-lightning` (smoke preset; TTFT p50 25–34 ms; a second start refused; a bad model reported with the router's 400 text; console cancel → `interrupted`) | Disruptive: loads a live engine. The `aiperf` router key has `max_parallel_requests` 64, `rpm_limit` 2200, `tpm_limit` 600000. `aiperf-local` accepts an exact-token flag allowlist. Tokenizer `builtin` (tiktoken o200k, cached once by the installer): prompt sizes are o200k tokens, so compare runs with each other. |
+| `profile` action (background, one at a time) and `report` | Implemented | verified live against `aitop/nemotron-lightning` (smoke preset; TTFT p50 25–34 ms; a second start refused; a bad model reported with the router's 400 text; console cancel → `interrupted`) | Disruptive: loads a live engine. The `aiperf` router key has `max_parallel_requests` 64, `rpm_limit` 2200, `tpm_limit` 600000. `aiperf-local` accepts an exact-token flag allowlist. Tokenizer `builtin`: tiktoken o200k VENDORED in the lab repo (sha256-pinned, installed into the cache by the wrapper before every run — never downloaded); prompt sizes are o200k tokens, so compare runs with each other. |
 | Presets `profiles.yaml` edit | Implemented | validate fakes + live read | Own schema, authoritative; nothing to restart. |
 
 ## NeMo Guardrails (addendum 9.8)

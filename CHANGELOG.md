@@ -19,6 +19,8 @@ implemented / verified-live / unverified defined in the README.
     2, both disruptive) and `discovery` in a hardened throwaway `--network none` container from the full DCGM image.
   - **AIPerf** (`aiperf`): load-test presets (`clients/aiperf/profiles.yaml`, editable), one background `profile`
     run at a time through the lab wrapper `aiperf-local`, `ap.*` metrics (TTFT, ITL, latency, throughput, errors).
+    The tokenizer vocabulary is vendored in the lab (hash-pinned); `ap.no_tokenizer` points at restoring it, never
+    at a download.
   - **NeMo Guardrails** (`guardrails`): a rails server in the lab (`security/nemo-guardrails`, internal network,
     key held by a broker), rails configs editable (validated in a `--network none` container; restart and
     served-check, rollback; a candidate that removes rails needs an explicit marker, ADR 0015), a `check` action

@@ -4,8 +4,9 @@ Facts this adapter is built on (contract 9.8, 2026-10-24; evidence in tests/aipe
 against aitop/nemotron-lightning through the lab router):
   * `aiperf-local` is the lab wrapper (clients/aiperf/install.sh): AIPerf 0.13.0 pinned to the scanned commit 794f8bb.
     `--version` prints "0.13.0" [fixture version.txt]. The wrapper owns the target (router, loopback only), the router
-    key (its own 0600 file, handed to AIPerf by environment variable) and the no-internet policy (builtin tokenizer read
-    from clients/aiperf/.tiktoken-cache, HF libraries offline). The console passes NO env and never sees a key.
+    key (its own 0600 file, handed to AIPerf by environment variable) and the no-internet policy (builtin tokenizer: the
+    VENDORED clients/aiperf/vendor/o200k_base.tiktoken, hash-checked and copied into clients/aiperf/.tiktoken-cache
+    before every run, never downloaded; HF libraries offline). The console passes NO env and never sees a key.
   * `aiperf-local profile --model M --endpoint-type chat --streaming --concurrency C --request-count N
     --prompt-input-tokens-mean I --prompt-output-tokens-mean O ... --artifact-dir DIR` writes DIR/profile_export_aiperf.json
     [fixture profile_export_aiperf.json]: top-level metric objects `{unit, avg, p1..p99, min, max, std, count, sum}`
@@ -364,7 +365,7 @@ class AiPerfAdapter(SystemAdapter):
 
     def _install_fix(self) -> str:
         lab = self._lab_file(LAB_INSTALLER)
-        return (f"{lab}   # pinned AIPerf {PINNED_VERSION} + the aiperf-local wrapper + the tokenizer prefetch" if lab else
+        return (f"{lab}   # pinned AIPerf {PINNED_VERSION} + the aiperf-local wrapper + the vendored tokenizer" if lab else
                 f"run clients/aiperf/install.sh in the lab repository (pinned AIPerf {PINNED_VERSION}; it links the "
                 "aiperf-local wrapper onto PATH)")
 
@@ -373,17 +374,23 @@ class AiPerfAdapter(SystemAdapter):
         return (f"{lab}   # mints AIPerf's own router key (key_alias 'aiperf')" if lab else
                 "run clients/aiperf/mint-key.sh in the lab repository (it writes ~/.config/aiperf/litellm.key, 0600)")
 
-    def _prefetch_fix(self) -> str:
+    def _tokenizer_fix(self) -> str:
         aiperf_dir = self.ctx.paths.get("aiperf_dir")
-        return (f"{aiperf_dir / LAUNCHER} prefetch   # one-time download of the tokenizer vocabulary (the only step "
-                "with egress)" if aiperf_dir is not None else "aiperf-local prefetch   # one-time tokenizer download")
+        where = aiperf_dir if aiperf_dir is not None else Path("clients/aiperf")
+        # No download: the vocabulary is vendored in the lab repo; the wrapper verifies its sha256 and installs it.
+        return (f"git -C {where} checkout -- vendor/o200k_base.tiktoken && {where / LAUNCHER} install-tokenizer"
+                "   # the vendored, hash-pinned tokenizer; nothing is downloaded")
 
     def _has_tokenizer(self) -> bool:
+        """Ready when the runtime cache holds a file OR the vendored vocabulary exists (the wrapper verifies its hash
+        and installs it before every run)."""
         aiperf_dir = self.ctx.paths.get("aiperf_dir")
         if aiperf_dir is None:
             return True                      # no path configured: do not guess, the wrapper checks itself
         cache = aiperf_dir / ".tiktoken-cache"
         try:
+            if (aiperf_dir / "vendor" / "o200k_base.tiktoken").is_file():
+                return True
             return cache.is_dir() and any(p.is_file() for p in cache.iterdir())
         except OSError:
             return False
@@ -558,8 +565,9 @@ class AiPerfAdapter(SystemAdapter):
                                             "be refused.", fix=self._key_fix()))
         if launcher is not None and not has_tok:
             problems.append(Problem(severity="warn", code="ap.no_tokenizer",
-                                    message="The offline tokenizer cache (clients/aiperf/.tiktoken-cache) is empty; "
-                                            "profile runs will be refused.", fix=self._prefetch_fix()))
+                                    message="Neither the vendored tokenizer (clients/aiperf/vendor/o200k_base.tiktoken) "
+                                            "nor the runtime cache is present; profile runs will be refused.",
+                                    fix=self._tokenizer_fix()))
         if not found:
             problems.append(Problem(severity="warn", code="ap.no_profiles",
                                     message=f"No profiles file at {self._profiles_path}: there is no preset to run.",
@@ -734,8 +742,9 @@ class AiPerfAdapter(SystemAdapter):
             return done(False, "AIPerf's router key file is missing.", self._problem(
                 "ap.no_key", f"{self._key_file} is absent.", self._key_fix()))
         if not await asyncio.to_thread(self._has_tokenizer):
-            return done(False, "The offline tokenizer cache is empty.", self._problem(
-                "ap.no_tokenizer", "clients/aiperf/.tiktoken-cache is empty.", self._prefetch_fix()))
+            return done(False, "The offline tokenizer is missing.", self._problem(
+                "ap.no_tokenizer", "clients/aiperf/vendor/o200k_base.tiktoken and the cache are both absent.",
+                self._tokenizer_fix()))
         router_ok, router_detail = await self._router_up()
         if not router_ok:
             return done(False, f"The router ({self._litellm}) is not answering ({router_detail}).", self._problem(

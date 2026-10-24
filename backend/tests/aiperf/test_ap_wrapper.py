@@ -35,8 +35,10 @@ def env(tmp_path: Path) -> Iterator[dict[str, str]]:
     stub = lab / ".venv" / "bin" / "aiperf"
     stub.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$STUB_OUT"\nprintf "%s" "$AIPERF_ROUTER_KEY" > "$STUB_OUT.key"\n')
     stub.chmod(0o755)
-    (lab / ".tiktoken-cache").mkdir()
-    (lab / ".tiktoken-cache" / "x").write_text("x")
+    # The wrapper verifies the VENDORED tokenizer's sha256 and installs it into the cache before a run (no download):
+    # give the copy the real vendored file (symlinked; the wrapper hashes the content).
+    (lab / "vendor").mkdir()
+    (lab / "vendor" / "o200k_base.tiktoken").symlink_to(WRAPPER_SRC.parent / "vendor" / "o200k_base.tiktoken")
     home = tmp_path / "home"
     (home / ".config" / "aiperf").mkdir(parents=True)
     key = home / ".config" / "aiperf" / "litellm.key"
@@ -107,3 +109,16 @@ def test_artifact_dir_is_required_and_the_key_file_too(env: dict[str, str]) -> N
     Path(env["HOME"], ".config", "aiperf", "litellm.key").unlink()
     r = run(env, "--model", "m", "--artifact-dir", env["ART"])
     assert r.returncode == 3 and "mint-key.sh" in r.stderr
+
+
+def test_a_tampered_vendored_tokenizer_is_refused(tmp_path: Path) -> None:
+    """The vocabulary is vendored instead of downloaded (2026-10-24): a file that fails its pinned sha256 is never used,
+    because tiktoken would otherwise delete a mismatching cache entry and fetch a fresh copy from the internet."""
+    lab = tmp_path / "lab"
+    (lab / "vendor").mkdir(parents=True)
+    shutil.copy(WRAPPER_SRC, lab / "aiperf-local")
+    (lab / "vendor" / "o200k_base.tiktoken").write_bytes(b"not the vocabulary\n")
+    r = subprocess.run([str(lab / "aiperf-local"), "install-tokenizer"], capture_output=True, text=True, timeout=30, check=False,
+                       env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)})
+    assert r.returncode == 3 and "does not match its pinned sha256" in r.stderr
+    assert not (lab / ".tiktoken-cache").exists() or not any((lab / ".tiktoken-cache").iterdir())

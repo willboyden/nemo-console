@@ -87,11 +87,20 @@ async def test_status_never_reads_the_key_file(make_adapter) -> None:  # type: i
         key.chmod(0o600)
 
 
-async def test_status_missing_tokenizer_cache_warns_with_the_prefetch_fix(make_adapter) -> None:  # type: ignore[no-untyped-def]
+async def test_status_missing_tokenizer_warns_with_the_vendored_fix(make_adapter) -> None:  # type: ignore[no-untyped-def]
     a, _ = make_adapter(tokenizer=False)
     st = await a.status()
     p = next(p for p in st.problems if p.code == "ap.no_tokenizer")
-    assert st.health == "degraded" and p.fix is not None and "prefetch" in p.fix
+    # The fix restores the vendored file and installs it: never a download (the old "prefetch" step is gone).
+    assert st.health == "degraded" and p.fix is not None and "install-tokenizer" in p.fix and "prefetch" not in p.fix
+
+
+async def test_status_vendored_tokenizer_alone_is_ready(make_adapter) -> None:  # type: ignore[no-untyped-def]
+    a, _ = make_adapter(tokenizer=False)
+    vendor = a.ctx.paths["aiperf_dir"] / "vendor"
+    vendor.mkdir()
+    (vendor / "o200k_base.tiktoken").write_bytes(b"x")
+    assert "ap.no_tokenizer" not in codes(await a.status())
 
 
 async def test_status_profiles_missing_and_invalid(make_adapter) -> None:  # type: ignore[no-untyped-def]
