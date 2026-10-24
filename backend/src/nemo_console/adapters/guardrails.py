@@ -55,6 +55,9 @@ from nemo_console.domain.models import (
 )
 from nemo_console.services.common import redact
 
+# A cache stamped NEVER is always stale. time.monotonic() counts from boot, so a 0.0 stamp looked FRESH for the
+# first TTL seconds after a reboot (a just-booted CI runner served the empty initial value and skipped the check).
+NEVER = float("-inf")
 WRAPPER = "guardrails-local"
 CONTAINER = "ai-lab-nemo-guardrails"
 COMPOSE_PROJECT = "ai-lab-nemo-guardrails"
@@ -116,7 +119,7 @@ class GuardrailsAdapter(SystemAdapter):
     def __init__(self, ctx: AdapterContext) -> None:
         super().__init__(ctx)
         self._version_cache: tuple[float, str | None] = (0.0, None)
-        self._isolation_cache: tuple[float, list[Problem]] = (0.0, [])
+        self._isolation_cache: tuple[float, list[Problem]] = (NEVER, [])   # NEVER, not 0.0: monotonic() counts from boot
         self._sink_lock = asyncio.Lock()
 
     # ── paths / urls ────────────────────────────────────────────────────────────────────────

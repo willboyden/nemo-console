@@ -258,3 +258,14 @@ async def test_every_metric_point_forms_a_history_key_the_api_accepts(adapter: D
     assert [series_name(p) for p in snap.points if not KEY_RE.fullmatch(series_name(p))] == []
     models = {p.labels["model"] for p in snap.points if "model" in p.labels}
     assert models and all(" " not in m for m in models)
+
+
+async def test_diag_image_is_checked_right_after_boot(make_adapter: Callable[..., DcgmAdapter], runner: FakeRunner,
+                                                      monkeypatch: pytest.MonkeyPatch) -> None:
+    """CI 2026-10-24: a cache stamped 0.0 looked fresh while time.monotonic() (seconds since boot) was small, so the
+    'image missing' check was skipped on a just-booted runner. A never-filled cache must be stale at any clock value."""
+    import nemo_console.adapters.dcgm as mod
+    monkeypatch.setattr(mod.time, "monotonic", lambda: 5.0)
+    runner.rules.insert(0, (is_image_inspect, lambda _a: bad("Error: No such image")))
+    st = await make_adapter().status()
+    assert any(p.code == "dcgm.diag.image_missing" for p in st.problems)

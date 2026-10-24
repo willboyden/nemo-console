@@ -54,6 +54,9 @@ from nemo_console.domain.models import (
 )
 from nemo_console.services.common import redact, sha256_hex
 
+# A cache stamped NEVER is always stale. time.monotonic() counts from boot, so a 0.0 stamp looked FRESH for the
+# first TTL seconds after a reboot (a just-booted CI runner served the empty initial value and skipped the check).
+NEVER = float("-inf")
 FIXED_EXPORTER = (4, 8, 3)                  # first version without the unauthenticated /debug/pprof (NVD: 4.8.3)
 FIXED_TAG = "4.6.1-4.8.4"                   # the tag observability/.env.example pins (digest: see that file)
 KEEP_RUNS = 100
@@ -328,7 +331,7 @@ class DcgmAdapter(SystemAdapter):
         self._xid_seen: dict[str, float] = {}
         self._events: deque[tuple[int, SystemEvent]] = deque(maxlen=200)
         self._seq = 0
-        self._image_cache: tuple[float, bool] = (0.0, True)
+        self._image_cache: tuple[float, bool] = (NEVER, True)   # NEVER, not 0.0: monotonic() counts from boot
         self._diag_lock = asyncio.Lock()
 
     def configure(self, *, exporter_container: str, diag_image: str, prometheus_jobs: list[str]) -> None:
@@ -1014,7 +1017,7 @@ class DcgmAdapter(SystemAdapter):
                 if doc is not None:
                     await asyncio.to_thread(self._write_json, run_dir / "output.json", _strip_serials(doc))
                 await asyncio.to_thread(self._prune)
-            self._image_cache = (0.0, True)
+            self._image_cache = (NEVER, True)
             where = f"GPU {gpu} ({model})" if model else f"GPU {gpu}"
             lines = [f"DCGM diagnostic level {level} on {where}: {verdict.upper()} in {duration / 1000:.1f} s",
                      f"run: {run_id}"]

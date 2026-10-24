@@ -60,6 +60,9 @@ from nemo_console.domain.models import (
 )
 from nemo_console.services.common import redact
 
+# A cache stamped NEVER is always stale. time.monotonic() counts from boot, so a 0.0 stamp looked FRESH for the
+# first TTL seconds after a reboot (a just-booted CI runner served the empty initial value and skipped the check).
+NEVER = float("-inf")
 CLI = "openshell"
 DEFAULT_CONTAINERS = ("ai-lab-dd-gateway", "ai-lab-dd-cli-fwd")      # = Settings.openshell_containers default
 DEFAULT_ENDPOINT = "https://127.0.0.1:17670"
@@ -173,7 +176,7 @@ class OpenShellAdapter(SystemAdapter):
         self._snap_lock = asyncio.Lock()
         self._known: dict[str, tuple[str, str]] = {}          # name -> (id, phase); bounded by MAX_SANDBOXES
         self._baselined = False
-        self._gw_cache: tuple[float, bool] = (0.0, False)
+        self._gw_cache: tuple[float, bool] = (NEVER, False)   # NEVER, not 0.0: monotonic() counts from boot
         self._ring: deque[tuple[int, SystemEvent]] = deque(maxlen=RING)
         self._seq = 0
 

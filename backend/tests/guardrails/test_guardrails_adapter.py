@@ -458,3 +458,13 @@ async def test_validation_copy_skips_symlinks_and_caps(make_adapter: Any) -> Non
     big.write_bytes(b"x" * (3 * 1024 * 1024))
     capped = await a.validate_config(CFG, fx("config-tree/lab-input-output/config.yml"))
     assert not capped.ok and "exceeds" in capped.diagnostics[0].message
+
+
+async def test_isolation_is_checked_right_after_boot(make_adapter: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """CI 2026-10-24: time.monotonic() counts from boot, so a cache stamped 0.0 looked fresh on a runner booted under
+    60 s ago and the isolation check was silently skipped. A never-filled cache must be stale at any clock value."""
+    import nemo_console.adapters.guardrails as mod
+    monkeypatch.setattr(mod.time, "monotonic", lambda: 5.0)
+    a, runner = make_adapter()
+    await a.status()
+    assert runner.called(["docker", "network", "inspect", "--format", "{{.Internal}}", "ai-lab-guardrails"])

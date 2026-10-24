@@ -618,3 +618,13 @@ async def test_configured_container_names(make_adapter) -> None:  # type: ignore
 def test_runner_factory_roundtrip() -> None:
     r, _ = make_runner()
     assert isinstance(r, FakeRunner)
+
+
+async def test_gateway_state_is_read_right_after_boot(make_adapter, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """CI 2026-10-24: a cache stamped 0.0 looked fresh while time.monotonic() (seconds since boot) was small, so the
+    events poll trusted the initial 'gateway not running' without asking docker. A never-filled cache must be stale."""
+    import nemo_console.adapters.openshell as mod
+    monkeypatch.setattr(mod.time, "monotonic", lambda: 5.0)
+    a = make_adapter()
+    a = a[0] if isinstance(a, tuple) else a
+    assert await a._gateway_running() is True
