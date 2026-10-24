@@ -165,9 +165,11 @@ class DataDesignerAdapter(SystemAdapter):
 
     def _key_fix(self) -> str:
         lab = self._lab_file(LAB_MINT_KEY)
-        return (f"{lab}   # mints the router key file the wrapper injects as LITELLM_DD_KEY" if lab else
+        return (f"{lab}   # mints the router key file the OpenShell provider (lab-router-dd) stores"
+                if lab else
                 "run clients/data-designer/mint-key.sh in the lab repository (it writes "
-                "~/.config/data-designer/litellm.key, 0600)")
+                "~/.config/data-designer/litellm.key, 0600; the OpenShell provider lab-router-dd "
+                "stores its value)")
 
     # ── scripts ─────────────────────────────────────────────────────────────────────────────
     def scripts(self) -> list[str]:
@@ -430,8 +432,9 @@ class DataDesignerAdapter(SystemAdapter):
         problems: list[Problem] = []
         components = [
             Component(kind="process", name=launcher or "data-designer-local", state="running" if launcher else "absent",
-                      detail=(f"{launcher} {version or ''} (wrapper: injects its own credentials; the console never "
-                              "sees a key)") if launcher else
+                      detail=(f"{launcher} {version or ''} (OpenShell-contained: every run executes in a sandboxed "
+                              "runner; the router key lives in the OpenShell credential store — never in the console "
+                              "or the sandbox)") if launcher else
                       "data-designer-local is not on PATH (installed by clients/data-designer/install.sh)"),
             Component(kind="http", name="router " + self._litellm, state="running" if router_ok else "stopped",
                       detail=f"{router_detail} on GET /health/liveliness (generation goes through it)"),

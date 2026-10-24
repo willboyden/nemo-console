@@ -42,7 +42,7 @@ async def test_status_up_with_wrapper_and_yaml_config(make_adapter) -> None:  # 
     a, run = make_adapter()
     st = await a.status()
     assert st.system == "datadesigner" and st.health == "up" and st.version == "0.9.3"
-    assert st.components[0].name == LAUNCHER and "never sees a key" in (st.components[0].detail or "")
+    assert st.components[0].name == LAUNCHER and "OpenShell-contained" in (st.components[0].detail or "")
     assert "2 scripts · 2 aliases" in st.summary
     assert st.problems == []
     assert st.endpoints[0].name == "router (generation)" and st.endpoints[0].auth == "bearer"

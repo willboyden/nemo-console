@@ -148,6 +148,12 @@ Dynamo `restart`, assistive technology, browsers other than headless Firefox.
 
 ## Data Designer
 
+> Runner (2026-10-24): every script-executing invocation (validate/preview/create/check-models) runs
+> inside an OpenShell sandbox — Landlock FS (run dir writable, baked tool config read-only), default-deny
+> network (only the lab router's /v1/**), router key held by the OpenShell credential store and injected
+> per-request. Proven live in the sandbox: validate + preview (2 records through the router on
+> `glm-5.3-flash-next-local`) + create with a downloaded artifact tree.
+
 | Feature | Status | Verification | Notes |
 |---|---|---|---|
 | Status: launcher version, router liveness, providers/aliases from the tool's yaml, one live create run | Implemented | verified live (maintainer, 2026-10-24: `data-designer-local` 0.9.3, router 200, 4 providers / 15 aliases parsed from the real `~/.data-designer`); fakes in `tests/datadesigner/` | `api_key` fields (env names) are never surfaced; `~/.data-designer` is never created by the console. |

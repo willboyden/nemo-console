@@ -292,6 +292,11 @@ nothing above changes. Contract: feature "datadesigner" (2026-10-23).
   — parquet: the batch files copied; csv/jsonl: streams; json: jsonl lines framed into one array. All destination
   paths are resolved + containment-checked under the datasets root BEFORE the run starts. Cancel on console stop →
   verdict `interrupted`), `report` (safe; bounded text + a ≤5-row markdown table, cells ≤120 chars, redacted),
+  Runner (2026-10-24, lab): every script-executing invocation runs INSIDE an OpenShell sandbox
+  (one throwaway sandbox per run; Landlock FS — only the run dir writable, the baked tool config
+  read-only; network default-deny, only the lab router's /v1/**; the router key held by the
+  OpenShell gateway credential store and injected per-request — the wrapper is key-free). The
+  wrapper's CLI surface is unchanged, so this adapter needed no behavioral change.
   `check_models` (disruptive — it executes the config script and makes real model calls, so it needs
   `confirm:true`; admin; `data-designer-local check-models <script>` — the CLI's own --help requires a config
   source argument, so the action takes the script enum), `show_config` (safe; read-only provider/alias dump).
