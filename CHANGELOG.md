@@ -5,6 +5,8 @@ implemented / verified-live / unverified defined in the README.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-24
+
 ### Added
 
 - **Five more systems** (ARCHITECTURE addendum 9.8), each one adapter file plus a registry line, a generic
@@ -61,6 +63,20 @@ implemented / verified-live / unverified defined in the README.
   `data-designer==0.9.3`), the policy wrapper (`data-designer-local`, telemetry forced off), the `data-designer-export`
   converter, a router key minter (key_alias `data-designer`), and the vendored NVIDIA agent skill at
   `.claude/skills/data-designer` (see the parent repo).
+
+### Fixed
+
+- **`nemo-console stop` could not stop a console with a browser open.** uvicorn waits for open connections on
+  SIGTERM and an SSE stream never closes on its own, so the process lingered until killed and `stop` gave up after
+  10 s. The server's exit hook now ends every open stream at once with a final `event: shutdown` (the UI reconnects
+  when the console is back), and uvicorn gets a bounded graceful shutdown (`shutdown_grace_s`, default 5 s) as a
+  backstop. Verified live: exit in 0.27 s with two streams open, no error logged.
+- **TTL caches that looked fresh right after boot.** Three caches (Guardrails isolation, DCGM diag image, OpenShell
+  gateway) were stamped 0.0 and compared with `time.monotonic()`, which counts from boot: on a machine up for less
+  than the TTL the empty initial value was served and the check skipped. Now stamped `-inf`; regression tests pin
+  the clock (CI on a fresh runner caught it).
+- **DCGM per-GPU charts were empty**: the `model` label held spaces, which the history API's series keys do not
+  allow; labels are slugs now, and the frontend sorts label keys like the backend.
 
 ### Security
 

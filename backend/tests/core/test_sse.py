@@ -64,3 +64,26 @@ async def test_cancelled_consumer_releases_slot(env: Env) -> None:
     await asyncio.gather(task, return_exceptions=True)
     await gen.aclose()
     assert lim.active == 0
+
+
+async def test_server_shutdown_ends_open_streams_cleanly(env: Env) -> None:
+    """2026-10-24: a browser's stream kept the process alive on SIGTERM until uvicorn's graceful timeout cancelled it
+    (and logged an error); `nemo-console stop` gave up first. begin_shutdown() (the server's exit hook) must end every
+    open stream at once with `event: shutdown` and free its slot."""
+    from nemo_console.services.events import begin_shutdown
+
+    env.adapters["switchyard"].follow_block = True
+    lim = SseLimiter(1)
+    chunks: list[bytes] = []
+
+    async def consume() -> None:
+        async for c in event_stream(env.adapters["switchyard"], lim, idle_timeout=60, heartbeat=30):
+            chunks.append(c)
+
+    task = asyncio.create_task(consume())
+    await asyncio.sleep(0.1)                           # connected, waiting on a 30 s heartbeat
+    t0 = time.monotonic()
+    begin_shutdown()
+    await asyncio.wait_for(task, timeout=2)
+    assert time.monotonic() - t0 < 1
+    assert chunks[-1].startswith(b"event: shutdown") and lim.active == 0

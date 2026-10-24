@@ -2,20 +2,33 @@
 
 Notes for the most recent release only; history lives in CHANGELOG.md.
 
-## 0.2.0 — 2026-10-17
+## 0.3.0 — 2026-10-24
 
-Nemo Console 0.2.0 adds NVIDIA SkillEvaluator as a fourth managed system and, with it, live agent
-evaluation: a console page that scores agent skills (`SKILL.md` folders) for quality, security and
-duplication, including Tier 3 "Skill Lift" runs (an agent runs the skill's eval cases with and
-without the skill in a sandboxed runner container; the difference is the lift).
+Nemo Console 0.3.0 grows from four managed systems to ten. Every new system is one adapter plus a
+generic, descriptor-driven page; the sidebar is grouped into Routing, Engines and load, Safety and
+sandboxing, and Evaluation and data.
 
-- **SkillEvaluator**: tiers `static` / `tier1` (LLM judge) / `tier1+2` (embedding dedup), every run
-  kept as JSON + Markdown in the state dir (newest 200), `se.*` metrics and `skilleval.run` events.
-- **Tier 3 live evaluation** (one at a time, background, up to ~1 h): `skillevaluator-local tier3`
-  through the lab wrapper only — plain `skillevaluator` is refused because its stock sandboxes have
-  open network. Verified live 2026-10-17 (+0.240 lift, 2/2 attempts scored); the HTTP-API and UI
-  paths of Tier 3 were mock-tested only.
-- **Dynamo** lifecycle now uses the stack's own compose files (never `scripts/use-model.sh`), with a
-  preflight that names what shares the GPU.
-- Known limitations: Relay's config validator is a proxy (stated in the UI); trust/policy files are
-  read-only by design; the topology diagram's Mermaid sources in the docs are unvalidated.
+- **NVIDIA Data Designer**: dataset config scripts as editable config files, `preview` and `create`
+  runs (one at a time, OpenShell-contained in the lab), record review, parquet/csv/jsonl/json copies.
+- **NVIDIA OpenShell**: the sandbox gateway behind Data Designer. Health, sandboxes, logs, policy
+  proofs; security checks raised as problems (the sandbox network must be internal, no non-loopback
+  port). Its trust files are read-only (ADR 0007).
+- **NVIDIA DCGM**: this host's dcgm-exporter plus every DCGM host the lab's Prometheus scrapes;
+  per-GPU charts; per-GPU `dcgmi diag` in a hardened throwaway container; the exporter's field list
+  editable with automatic rollback; flags an exporter older than 4.8.3 (CVE-2026-47483) and probes
+  `/debug/pprof`.
+- **NVIDIA AIPerf**: load-test presets (TTFT, ITL, latency, throughput) through a lab wrapper with
+  its own router key and no network beyond the router.
+- **NVIDIA NeMo Guardrails**: an isolated rails server; rails configs editable with validation and
+  rollback, but a change that removes rails needs an explicit marker (ADR 0015); probe checks and a
+  playground through the rails.
+- **NVIDIA NeMo Evaluator**: offline benchmark suites (rule-scored only) against router models,
+  scores per benchmark and model.
+- **Fixed**: `nemo-console stop` now works with a browser open (open event streams end with
+  `event: shutdown`); three status caches no longer skip their check right after a reboot; DCGM
+  per-GPU charts render.
+- An independent security review of the new code found no high-severity issue; every finding was
+  fixed (THREAT-MODEL E-8..E-11, R-20..R-23).
+- Known limitations: verified on one workstation only; several disruptive actions (OpenShell gateway
+  start/stop and sandbox delete, DCGM level-2 diagnostics, a Guardrails config apply through the HTTP
+  API) are covered by tests with fakes, not run live — `docs/FEATURE-MATRIX.md` says which.

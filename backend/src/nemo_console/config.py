@@ -12,7 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 try:
     __version__ = metadata.version("nemo-console")
 except metadata.PackageNotFoundError:  # pragma: no cover
-    __version__ = "0.2.0"
+    __version__ = "0.3.0"
 
 ENV_PREFIX = "NEMO_CONSOLE_"
 NO_USER_ENV = "NEMO_CONSOLE_NO_USER_ENV"
@@ -186,6 +186,9 @@ class Settings(BaseSettings):
     sse_max_connections: int = 8
     sse_idle_timeout_s: float = 300.0
     sse_heartbeat_s: float = 15.0
+    # On SIGTERM uvicorn waits for open connections; a browser's SSE stream never closes on its own, so without a bound
+    # `nemo-console stop` (10 s) gave up while the process lingered. After this grace the remaining streams are closed.
+    shutdown_grace_s: int = Field(default=5, ge=1, le=60)       # seconds; uvicorn takes whole seconds
     playground_max_tokens: int = 4096
     revisions_keep: int = 50
 

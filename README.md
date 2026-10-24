@@ -9,28 +9,30 @@ running on one workstation:
 - **NVIDIA Dynamo**: an LLM serving frontend plus a vLLM worker (docker compose).
 - **NVIDIA SkillEvaluator** (new in 0.2.0): scores agent skills (`SKILL.md` folders) for quality, security and
   duplication. A CLI, not a service: the console runs it on demand and keeps the reports.
-- **NVIDIA Data Designer** (unreleased): generates synthetic datasets from config scripts through the lab router
+- **NVIDIA Data Designer** (new in 0.3.0): generates synthetic datasets from config scripts through the lab router
   (validate → preview → create, record review, parquet/csv/jsonl/json copies under `~/Datasets`). Also a CLI, not a
   service, driven the same way (install: the lab's `clients/data-designer/install.sh`).
-- **NVIDIA OpenShell** (unreleased): the sandbox gateway that contains Data Designer runs. Status, sandbox list,
+- **NVIDIA OpenShell** (new in 0.3.0): the sandbox gateway that contains Data Designer runs. Status, sandbox list,
   logs and policy proofs; its trust files are shown read-only.
-- **NVIDIA DCGM** (unreleased): GPU telemetry from this host's dcgm-exporter plus every DCGM host the lab's
+- **NVIDIA DCGM** (new in 0.3.0): GPU telemetry from this host's dcgm-exporter plus every DCGM host the lab's
   Prometheus scrapes; per-GPU diagnostics in a throwaway container; the exporter's field list is editable with
   rollback. Flags an exporter older than 4.8.3 (CVE-2026-47483).
-- **NVIDIA AIPerf** (unreleased): load tests against router models from named presets, one run at a time, with
+- **NVIDIA AIPerf** (new in 0.3.0): load tests against router models from named presets, one run at a time, with
   TTFT/ITL/throughput from each run.
-- **NVIDIA NeMo Guardrails** (unreleased): a rails server (input and output self-checks) in an internal-network
+- **NVIDIA NeMo Guardrails** (new in 0.3.0): a rails server (input and output self-checks) in an internal-network
   container; rails configs editable with validation and rollback; probe checks and a playground through the rails.
-- **NVIDIA NeMo Evaluator** (unreleased): offline benchmark suites (GSM8K, MMLU, ...) against router models, scores
+- **NVIDIA NeMo Evaluator** (new in 0.3.0): offline benchmark suites (GSM8K, MMLU, ...) against router models, scores
   per benchmark and model.
 
 It is a host-run FastAPI process bound to loopback, with a zero-build, zero-npm browser UI. One adapter per
 system plugs into a system-agnostic core; the UI renders from descriptors (status, metrics, config files,
 parameters, actions, playground), so adding a system is one adapter file (SkillEvaluator was added that way).
 
-> **Status: v0.2.0.** Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
+> **Status: v0.3.0.** Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
 > Nothing here has been used by anyone other than its author, on one workstation, against one set of pinned
-> versions (Switchyard 0.3.0, Relay 0.9.2, Dynamo 1.5.0 and a 1.6.0 dev build, SkillEvaluator 0.5.0).
+> versions (Switchyard 0.3.0, Relay 0.9.2, Dynamo 1.5.0 and a 1.6.0 dev build, SkillEvaluator 0.5.0, Data Designer
+> 0.9.3, OpenShell CLI 0.0.71 / gateway 0.0.77, dcgm-exporter 4.8.4 with DCGM 4.6.1, AIPerf 0.13.0, NeMo Guardrails
+> 0.24.1, NeMo Evaluator 0.3.0).
 
 ## Status vocabulary
 
@@ -42,11 +44,12 @@ Every feature claim in this repo is one of:
 | **verified-live** | Exercised against a real Switchyard 0.3.0, Relay 0.9.2 and Dynamo 1.5.0 on one workstation (evidence is stated in [`docs/FEATURE-MATRIX.md`](docs/FEATURE-MATRIX.md)). |
 | **unverified** | Only fakes have run it. It may work; nobody has watched it work. |
 
-Gate results (re-run on 2026-10-17 against the release tree): `pytest -q` 470 passed / 2 skipped in the author's
+Gate results (re-run on 2026-10-24 against the release tree): `pytest -q` 876 passed / 2 skipped in the author's
 deployment checkout (the skips are opt-in or environment-gated live smoke tests; the Dynamo live smoke enables itself
-when a frontend answers on 127.0.0.1:8020), `ruff check` clean, `mypy --strict src` clean (42 files), `node --test` 96
-passed. From a clean copy of the release tree outside that checkout (`make setup && make all`): 467 passed / 5 skipped,
-ruff and mypy clean, frontend 96 passed; the extra skips are the tests that need the deployment's repository layout. Mermaid diagrams in these docs were **not
+when a frontend answers on 127.0.0.1:8020), `ruff check` clean, `mypy --strict src` clean (48 files), `node --test` 121
+passed. From a clean copy of the release tree outside that checkout (`make setup && make all`): 835 passed / 43 skipped,
+ruff and mypy clean, frontend 121 passed; the extra skips are the tests that need the deployment's repository layout
+(the lab wrappers next to it) or a live system. Mermaid diagrams in these docs were **not
 rendered**; treat them as unvalidated.
 
 ## What it does

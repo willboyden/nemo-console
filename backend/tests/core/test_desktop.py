@@ -273,3 +273,27 @@ def test_stop_never_signals_a_process_it_did_not_start(stopper: dict[str, Any],
 def test_stop_reports_a_console_that_is_already_gone(stopper: dict[str, Any]) -> None:
     assert desktop.stop_console([], stopper["cfg"]) == 1
     assert stopper["signals"] == [] and not (stopper["cfg"].state_dir / "console.pid").exists()
+
+
+def test_server_shutdown_grace_is_bounded_below_the_stop_timeout(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """2026-10-24: with a browser holding an SSE stream, uvicorn waited forever for the connection on SIGTERM and
+    `nemo-console stop` gave up after STOP_TIMEOUT_S. The server must start with a graceful-shutdown bound below it."""
+    import sys
+
+    import nemo_console.main as main_mod
+    from nemo_console.desktop import STOP_TIMEOUT_S
+
+    seen: dict[str, object] = {}
+
+    def fake_run(self: main_mod.ConsoleServer, sockets: object = None) -> None:
+        seen["grace"] = self.config.timeout_graceful_shutdown
+        self.started = True
+
+    monkeypatch.setattr(main_mod.ConsoleServer, "run", fake_run)
+    monkeypatch.setattr(sys, "argv", ["nemo-console"])
+    monkeypatch.setenv("NEMO_CONSOLE_STATE_DIR", str(tmp_path / "state"))
+    main_mod.run()
+    grace = seen.get("grace")
+    assert isinstance(grace, int) and 0 < grace < STOP_TIMEOUT_S
+    # and the exit hook wakes the SSE streams before uvicorn starts waiting for connections
+    assert main_mod.ConsoleServer.handle_exit is not main_mod.uvicorn.Server.handle_exit

@@ -7,6 +7,7 @@ import logging
 import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
+from types import FrameType
 from typing import Annotated
 from urllib.parse import unquote
 
@@ -23,6 +24,7 @@ from nemo_console.container import Container, build_container
 from nemo_console.desktop import open_console, stop_console
 from nemo_console.services.auth import Principal, write_private_file
 from nemo_console.services.common import KNOWN
+from nemo_console.services.events import begin_shutdown
 from nemo_console.services.playground import resolve_secret
 from nemo_console.services.telemetry import configure_logging
 
@@ -134,7 +136,22 @@ def run() -> None:
     cfg = Settings(_env_file=user_env_file())
     configure_logging()
     ensure_user_dirs(cfg)
-    uvicorn.run(create_app(cfg), host=cfg.host, port=cfg.port, log_config=None, access_log=False)
+    config = uvicorn.Config(create_app(cfg), host=cfg.host, port=cfg.port, log_config=None, access_log=False,
+                            timeout_graceful_shutdown=cfg.shutdown_grace_s)
+    server = ConsoleServer(config)
+    with contextlib.suppress(KeyboardInterrupt):
+        server.run()
+    if not server.started:
+        raise SystemExit(3)                               # what uvicorn.run does when startup fails (STARTUP_FAILURE)
+
+
+class ConsoleServer(uvicorn.Server):
+    """uvicorn's server, plus: on SIGTERM/SIGINT every open SSE stream ends cleanly first (`event: shutdown`), so the
+    process exits at once instead of waiting `shutdown_grace_s` for a browser that never closes its stream."""
+
+    def handle_exit(self, sig: int, frame: FrameType | None) -> None:
+        begin_shutdown()
+        super().handle_exit(sig, frame)
 
 
 if __name__ == "__main__":

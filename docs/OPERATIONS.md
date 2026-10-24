@@ -52,6 +52,7 @@ Names read by `backend/src/nemo_console/config.py` (each is `NEMO_CONSOLE_<NAME>
 | `DYNAMO_DARK_WHILE_HELD` | the exclusive engines' aliases and routes (Bolt, GLM, flashnext, the 27B) | JSON list of what cannot answer while Dynamo holds the card(s); shown in `dynamo.holds_card` (info; `[]` turns it off) and the preflight `router_aliases_dark:` line. |
 | `BODY_CAP_BYTES`, `CONFIG_CAP_BYTES` | `1048576`, `262144` | Request and config size limits. |
 | `SSE_MAX_CONNECTIONS`, `SSE_IDLE_TIMEOUT_S`, `SSE_HEARTBEAT_S` | `8`, `300`, `15` | Event stream limits. |
+| `SHUTDOWN_GRACE_S` | `5` | Seconds uvicorn waits for open connections on SIGTERM before closing them. Open event streams already end at once (`event: shutdown`); keep it below `nemo-console stop`'s 10 s. |
 | `PLAYGROUND_MAX_TOKENS` | `4096` | Clamp for chat `max_tokens`. |
 | `REVISIONS_KEEP` | `50` | Config revisions kept per file. |
 | `OTLP_ENDPOINT` | unset | e.g. `http://localhost:4317`; needs the optional `opentelemetry` packages (not installed by default; otherwise one warning is logged). Unverified. |

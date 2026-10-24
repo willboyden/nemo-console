@@ -362,3 +362,10 @@ above changes. Contract: feature "nvidia-five" (2026-10-24).
   and its lab directory (`clients/aiperf/`, `security/nemo-guardrails/`, `clients/nemo-evaluator/`; openshell and dcgm own
   no lab directory — `observability/dcgm/counters.csv` and the exporter bump are the orchestrator's). The frontend agent
   owns `frontend/` (one view per system, routes, i18n, mock data). Core files, docs and every other path: orchestrator.
+
+**9.9 (2026-10-24): shutdown ends SSE streams.** Additive. On SIGTERM/SIGINT the server (`main.ConsoleServer`, a
+`uvicorn.Server` subclass) calls `services.events.begin_shutdown()` before uvicorn's own exit handling: every open
+event stream sends `event: shutdown` (`data: {}`) and ends, releasing its slot, so the process exits at once (a
+browser's stream would otherwise hold it). `shutdown_grace_s` (setting, int, default 5, below `nemo-console stop`'s
+10 s) is passed to uvicorn as `timeout_graceful_shutdown` as a backstop. Clients treat the end like any other stream
+end and reconnect with backoff.
