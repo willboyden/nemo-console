@@ -445,6 +445,7 @@
   "settings.token_of": "{name} credential",
   "settings.tokens_hint": "Credentials are referenced by environment variable name on the server. Only their status is shown; values are never sent to the browser.",
   "settings.saved": "Settings saved",
+  "err.module": "This page's code did not load. If the console was just updated, your browser may still hold older files: reload with Ctrl+Shift+R (Cmd+Shift+R on a Mac).",
   "err.network": "Cannot reach the console backend. Check that it is running on 127.0.0.1:8793 and that this page is served from it.",
   "err.401": "Authentication is required. Set a bearer token with the key button in the top bar.",
   "err.403": "Not allowed. Either your role is viewer, or the request was rejected as cross-origin. Open the console from its own address.",

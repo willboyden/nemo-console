@@ -31,7 +31,7 @@ read paths for all three; security headers/Host/Origin/CSRF/X-Forwarded-For; fro
 backend. **Also verified live (2026-09-24, later pass):** Relay `gateway_restart` (PID changed, three consecutive healthy checks, 400 without `confirm`),
 the viewer role (reads 200; audit, validate, playground and every action 403; nothing executed), and a playground chat routed
 through Switchyard `auto-local`. **Still not live:** config auto-rollback, Dynamo parameter apply, `stop_sharing_engine`,
-Dynamo `restart`, assistive technology, browsers other than headless Firefox.
+Dynamo `restart`, assistive technology, browsers other than headless Firefox and headless Chrome.
 
 ## Observe
 
@@ -119,7 +119,9 @@ Dynamo `restart`, assistive technology, browsers other than headless Firefox.
 |---|---|---|---|
 | Views: Overview, Switchyard, Relay, Dynamo, Audit (admin), Settings | Implemented | frontend rendered against the real backend: verified live (headless Firefox) | Dynamo tabs: Status, Params, Lifecycle, Playground. Switchyard: Routing, Config, Playground, Actions. Relay: Status, Config, Diagnostics, Playground (if offered). |
 | Pure-logic unit tests | Implemented | 96 passed (re-run 2026-10-06) | Router, SSE parser, API client, formatting, diff, metrics, share, topology, param form, static guards. |
-| Browsers other than headless Firefox | Implemented (untested) | **unverified** | |
+| Browser end-to-end suite (`make e2e`, CI job `e2e`, pre-push hook) | Implemented | run locally 2026-10-24 (headless Chrome 151): 13 routes, 47 pages and tabs, 58 frontend files | Real backend with every system down, signed in with the bootstrap key. Fails on an error or not-found state, an uncaught exception, a console error, or a frontend file without `Cache-Control: no-cache`. It checks that pages render, not what they say about a live system. |
+| Frontend files revalidated on every load (`Cache-Control: no-cache`, ETag 304) | Implemented | backend test + the browser suite; the stale-module failure it fixes reproduced in headless Chrome (0.3.1) | A browser holding files from before 0.3.1 needs one Ctrl+Shift+R. |
+| Browsers other than headless Firefox and headless Chrome | Implemented (untested) | **unverified** | |
 | Assistive technology (screen readers, keyboard-only walk-through) | Partial | **unverified** | ARIA tabs, live regions, skip link, focus styles, reduced-motion CSS exist; none was tested with real AT. |
 | Dark/light theme, English only | Implemented | unverified beyond the frontend render | Other locales: Not planned. |
 | Mock server for UI development | Implemented | frontend test exists | Canned data only; default port 8796 (the real backend is 8793). |

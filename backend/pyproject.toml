@@ -1,6 +1,6 @@
 [project]
 name = "nemo-console"
-version = "0.3.0"
+version = "0.3.1"
 description = "Nemo Console: monitor, configure and interact with NeMo Switchyard, NeMo Relay and NVIDIA Dynamo"
 requires-python = ">=3.13,<3.14"
 license = "MIT"

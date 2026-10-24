@@ -5,13 +5,17 @@ SHELL := /bin/bash
 BACKEND  := backend
 FRONTEND := frontend
 
-.PHONY: help setup run test lint typecheck frontend-test all install-desktop uninstall-desktop
+.PHONY: help setup hooks run test lint typecheck frontend-test e2e all install-desktop uninstall-desktop
 
 help:  ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*## /\t/'
 
-setup:  ## create the backend venv and install runtime + dev deps from uv.lock
+setup:  ## create the backend venv and install runtime + dev deps from uv.lock; enable the git hooks
 	cd $(BACKEND) && uv venv --python 3.13 && uv sync --frozen
+	if git rev-parse --git-dir >/dev/null 2>&1; then $(MAKE) --no-print-directory hooks; fi
+
+hooks:  ## use the versioned git hooks in .githooks (pre-push refuses code without a recorded e2e pass)
+	git config core.hooksPath .githooks
 
 run:  ## serve API + UI on 127.0.0.1:8793 (foreground)
 	cd $(BACKEND) && uv run nemo-console
@@ -28,7 +32,10 @@ typecheck:  ## mypy --strict
 frontend-test:  ## node --test on the pure-logic modules (no npm install needed)
 	cd $(FRONTEND) && node --test tests/*.test.mjs
 
-all: lint typecheck test frontend-test  ## every gate
+e2e:  ## browser end-to-end: real backend + headless Chrome, every page and tab; records a pass for the pre-push hook
+	scripts/e2e-gate.sh run
+
+all: lint typecheck test frontend-test e2e  ## every gate
 
 # Paths go into a .desktop Exec line and a sed replacement, so the checkout path is limited to a safe character set.
 install-desktop:  ## add "Nemo Console" to your app menu (starts the console if needed, then opens the UI)

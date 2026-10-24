@@ -337,12 +337,14 @@ shows is prefixed with the code words for security rejections.
 | `binary 'nemo-relay' not found on PATH` in a problem text | Binary outside `PATH`; add its directory to `EXTRA_BIN_DIRS`. |
 | History charts empty after a restart | The 15 minute ring is in memory; 1h/24h use rollups written once a minute. Wait a minute. |
 | Topology shows an engine you never run | The engine nodes come from `TOPOLOGY_ENGINES` (default: the author's engines). A missing container is drawn `off` "(not deployed)"; only an always-on (`opt_in: false`) engine that exists and is stopped is `down`. Set the list for your deployment. |
+| A page shows "Something went wrong: The requested module ... does not provide an export named ..." right after an upgrade | The browser kept console files from before 0.3.1, which were served without `Cache-Control`, and mixed them with new ones. Reload once with Ctrl+Shift+R. Since 0.3.1 every frontend file is revalidated on each load (`no-cache`, ETag), so this cannot recur. |
 | Live smoke tests skipped | Gating differs per adapter: Switchyard `NEMO_LIVE=1`, Relay `NEMO_CONSOLE_LIVE=1`, Dynamo automatic when `:8020/health` answers. |
 
 ## 8. Verification you can repeat
 
 ```bash
-make all                                   # offline gates
+make all                                   # offline gates, including the browser e2e suite (needs Chrome)
+make e2e                                   # only the browser suite: every page and tab, real backend, headless Chrome
 cd backend && NEMO_LIVE=1 NEMO_CONSOLE_LIVE=1 uv run pytest -q -rs   # read-only live smoke, needs the real stack
 ```
 

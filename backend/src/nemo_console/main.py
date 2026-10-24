@@ -12,7 +12,7 @@ from typing import Annotated
 from urllib.parse import unquote
 
 import uvicorn
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, Response
 
 from nemo_console.api.deps import public
@@ -33,6 +33,7 @@ API = "/api/v1"
 ROUTERS = (observe.router, configure.router, act.router, admin.router)   # all mounted under /api/v1
 STATIC_FILES = {"index.html", "favicon.svg", "favicon.ico"}
 STATIC_DIRS = ("css", "js", "assets", "img", "fonts", "i18n")
+STATIC_CACHE = "no-cache"   # every frontend file is revalidated on each load (ETag -> 304), see _file_response
 
 
 def ensure_user_dirs(cfg: Settings) -> None:
@@ -93,7 +94,7 @@ def _mount_frontend(app: FastAPI, root: Path) -> None:
     base_root = root.resolve()
 
     @app.get("/{path:path}", include_in_schema=False)
-    async def static(path: str, _: Annotated[Principal, Depends(public)]) -> Response:
+    async def static(path: str, request: Request, _: Annotated[Principal, Depends(public)]) -> Response:
         if _unsafe_static_path(path):
             return problem(404, "not_found", "no such file")
         rel = "index.html" if path == "" else path
@@ -107,8 +108,24 @@ def _mount_frontend(app: FastAPI, root: Path) -> None:
             except (ValueError, OSError):
                 ok = False
             if ok:      # defeats ../ and symlink escapes
-                return FileResponse(target)
+                return _file_response(request, target)
         return problem(404, "not_found", "no such file")
+
+
+def _file_response(request: Request, target: Path) -> Response:
+    """The file with `Cache-Control: no-cache`: the browser revalidates it on every load and gets a 304 while it is
+    unchanged. Without the header browsers cache the ES modules heuristically for days, so after an update a page
+    could pair a new view with an old shared module and fail its import (the 0.3.0 "Something went wrong" pages)."""
+    try:
+        st = target.stat()
+    except OSError:
+        return problem(404, "not_found", "no such file")
+    resp = FileResponse(target, stat_result=st, headers={"Cache-Control": STATIC_CACHE})
+    etag = resp.headers["etag"]
+    sent = {tag.strip().removeprefix("W/") for tag in request.headers.get("if-none-match", "").split(",")}
+    if etag in sent:
+        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": STATIC_CACHE})
+    return resp
 
 
 def mint_key(argv: list[str]) -> int:

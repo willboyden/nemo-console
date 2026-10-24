@@ -28,7 +28,7 @@ It is a host-run FastAPI process bound to loopback, with a zero-build, zero-npm 
 system plugs into a system-agnostic core; the UI renders from descriptors (status, metrics, config files,
 parameters, actions, playground), so adding a system is one adapter file (SkillEvaluator was added that way).
 
-> **Status: v0.3.0.** Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
+> **Status: v0.3.1.** Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
 > Nothing here has been used by anyone other than its author, on one workstation, against one set of pinned
 > versions (Switchyard 0.3.0, Relay 0.9.2, Dynamo 1.5.0 and a 1.6.0 dev build, SkillEvaluator 0.5.0, Data Designer
 > 0.9.3, OpenShell CLI 0.0.71 / gateway 0.0.77, dcgm-exporter 4.8.4 with DCGM 4.6.1, AIPerf 0.13.0, NeMo Guardrails
@@ -86,12 +86,13 @@ flowchart LR
 
 Prerequisites: Linux, Python 3.13 (`uv` recommended; newer interpreters may lack wheels), Docker (rootless
 works and is what the author used), the three systems deployed the way the adapters expect (see
-[Deployment assumptions](#deployment-assumptions)), Node 22 only if you run the frontend tests.
+[Deployment assumptions](#deployment-assumptions)), Node 22 and a Chrome or Chromium only if you run the frontend tests
+and the browser end-to-end suite.
 
 ```bash
 make setup          # uv venv --python 3.13 && uv sync --frozen
 make run            # serves API + UI on http://127.0.0.1:8793
-make all            # ruff + mypy --strict + pytest + node --test (all offline)
+make all            # ruff + mypy --strict + pytest + node --test + browser e2e (all offline)
 make install-desktop  # optional (Linux): "Nemo Console" in your app menu; see docs/OPERATIONS.md section 3
 ```
 
@@ -205,11 +206,16 @@ docs/           ARCHITECTURE.md, adr/, THREAT-MODEL.md, OPERATIONS.md, FEATURE-M
 
 | Target | Does |
 |---|---|
-| `make setup` | create the venv, install locked dependencies |
+| `make setup` | create the venv, install locked dependencies, enable the git hooks (`make hooks`) |
 | `make run` | serve on 127.0.0.1:8793 |
 | `make test` / `lint` / `typecheck` | pytest, ruff, `mypy --strict` |
 | `make frontend-test` | `node --test` on the pure-logic modules |
+| `make e2e` | every page and tab in headless Chrome against the real backend; records a pass for the pre-push hook |
 | `make all` | all of the above |
+
+Pushing is gated: the `pre-push` hook (`.githooks/pre-push`) refuses a commit or tag that `make e2e` has not passed
+on (exact `backend/` and `frontend/` trees; docs-only commits after a pass need no rerun). If your Chrome is not on
+PATH, name it once: `git config nemo-console.chrome /path/to/chrome`. CI runs the same suite (job `e2e`).
 
 Live smoke tests are read-only against real systems and need the deployment described above. They are gated
 inconsistently: Switchyard by `NEMO_LIVE=1`, Relay by `NEMO_CONSOLE_LIVE=1`, Dynamo automatically when

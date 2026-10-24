@@ -175,3 +175,26 @@ async def test_static_allowlist_and_traversal(env: Env, tmp_path: Path) -> None:
             assert r.status_code == code, path
             assert_secure(r)
         assert "secret-dev" not in (await c.get("/dev/mock.js")).text
+
+
+async def test_static_files_are_revalidated_on_every_load(env: Env) -> None:
+    # Without Cache-Control the browser kept 0.2 modules for days and the five 0.3.0 views failed their imports.
+    front = env.settings.frontend_dir
+    (front / "js").mkdir(parents=True)
+    (front / "index.html").write_text("<html>ok</html>")
+    (front / "js" / "format.js").write_text("export const a = 1;")
+    async with env.client() as c:
+        for path in ("/", "/index.html", "/js/format.js"):
+            r = await c.get(path)
+            assert r.status_code == 200, path
+            assert r.headers["cache-control"] == "no-cache", path
+            etag = r.headers["etag"]
+            again = await c.get(path, headers={"If-None-Match": f'W/{etag}, "other"'})
+            assert again.status_code == 304, path
+            assert again.content == b""
+            assert again.headers["etag"] == etag and again.headers["cache-control"] == "no-cache"
+            assert_secure(again)
+        (front / "js" / "format.js").write_text("export const a = 1, fmtUnit = 2;")   # changed: new size -> new etag
+        r = await c.get("/js/format.js", headers={"If-None-Match": etag})
+        assert r.status_code == 200 and "fmtUnit" in r.text
+        assert (await c.get("/api/v1/health")).headers["cache-control"] == "no-store"   # API stays uncached

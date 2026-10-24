@@ -121,7 +121,8 @@ Prefix is the adapter's; the core stores whatever it returns (bounded label card
 ## 8. Quality bar / gates
 
 Backend: `uv sync --frozen`, `ruff check`, `mypy --strict src`, `pytest -q` fully offline (fakes for runner + http; adapter fixtures are **captured real output**, not invented).
-Frontend: `node --test tests/*.test.mjs` + headless-Firefox screenshots of every view (see `headless-ui-verify`).
+Frontend: `node --test tests/*.test.mjs` + headless-Firefox screenshots of every view (see `headless-ui-verify`), and since
+addendum 9.10 the browser suite `frontend/e2e/run.mjs` (`make e2e`).
 Ship gate: literal clean clone outside the tree, all of the above, added-lines leak scan, then CI. Every agent reports what it did **not** verify.
 Docs mark each claim implemented / verified-live / unverified.
 
@@ -369,3 +370,14 @@ event stream sends `event: shutdown` (`data: {}`) and ends, releasing its slot, 
 browser's stream would otherwise hold it). `shutdown_grace_s` (setting, int, default 5, below `nemo-console stop`'s
 10 s) is passed to uvicorn as `timeout_graceful_shutdown` as a backstop. Clients treat the end like any other stream
 end and reconnect with backoff.
+
+**9.10 (2026-10-24): frontend files are revalidated; a browser suite gates every push.** Additive. Every static
+frontend response carries `Cache-Control: no-cache` and an ETag; a matching `If-None-Match` gets 304 (`main._file_response`).
+API responses keep `no-store`. Reason: without the header browsers cached the ES modules heuristically and, after
+0.3.0, paired new views with old shared modules (a missing export fails the whole import). `frontend/e2e/run.mjs`
+(zero dependencies: Node 22's WebSocket speaks the DevTools protocol to a headless Chrome) starts the real backend
+with a throwaway HOME and state, signs in with the bootstrap key through `sessionStorage`, opens every route parsed
+from `js/routes.js` and every `[role=tab]`, and fails on an error or not-found state, an uncaught exception, a
+console error, or a frontend file without `no-cache`. It runs in `make all`, in the CI job `e2e`, and in the git
+`pre-push` hook through `scripts/e2e-gate.sh`, which records a pass as the git tree ids of `backend/` and `frontend/`
+inside `.git` and refuses a pushed commit or tag without one.

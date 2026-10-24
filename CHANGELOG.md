@@ -5,6 +5,32 @@ implemented / verified-live / unverified defined in the README.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-24
+
+### Fixed
+
+- **The five 0.3.0 pages showed "Something went wrong" in a browser that had used 0.2.x.** Frontend files were served
+  without `Cache-Control`, so browsers kept the old ES modules heuristically (for days, going by their Last-Modified
+  date) and paired them with the new views; the old `format.js` has no `fmtUnit`, so GPU telemetry, AIPerf,
+  Guardrails, OpenShell and Evaluator failed their import while every older page worked. Every frontend file is now
+  served with `Cache-Control: no-cache` and answers a matching `If-None-Match` with 304. Reproduced in headless
+  Chrome with the 0.2 `format.js` and the 0.3.0 views (exact error: "The requested module '../format.js' does not
+  provide an export named 'fmtUnit'"); the fix is covered by a backend test and the new browser suite. A browser
+  that still holds files from before 0.3.1 needs one reload with Ctrl+Shift+R.
+- A page whose code fails to load now says how to recover (reload with Ctrl+Shift+R) next to the error.
+
+### Added
+
+- **Browser end-to-end suite** (`frontend/e2e/run.mjs`, `make e2e`): the real backend (throwaway HOME and state,
+  loopback not trusted, signed in with the bootstrap key the way a person does) and a real headless Chrome driven
+  over the DevTools protocol with Node 22's built-in WebSocket (no npm, ADR 0013). It opens every route and every tab
+  and fails on an error or not-found state, an uncaught exception, a console error, or a frontend file without
+  `Cache-Control: no-cache`. Part of `make all` and a new CI job `e2e`.
+- **Ship gate**: a versioned git `pre-push` hook (`.githooks/pre-push`, enabled by `make hooks`, which `make setup`
+  now runs) refuses to push a commit or tag unless the e2e suite passed on its exact `backend/` and `frontend/`
+  trees (`scripts/e2e-gate.sh`, record kept in `.git`); when the pushed commit is the clean HEAD it runs the suite
+  first. A Chrome that is not on PATH is named once per checkout with `git config nemo-console.chrome <path>`.
+
 ## [0.3.0] - 2026-10-24
 
 ### Added
