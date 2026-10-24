@@ -27,8 +27,8 @@ implemented / verified-live / unverified defined in the README.
   (newest 100) as `dd.run` metadata-only events feeding `dd.*` metrics; two additive viewer endpoints
   (`GET .../runs/{id}/records`, `GET .../runs/{id}/files`) power the UI's paginated records table. The runner
   allowlist gains `data-designer-local` and `data-designer-export` (a fixed-script conversion wrapper); only
-  `data-designer-local create` gets the long timeout (3,600 s), everything else keeps 600 s. The wrapper injects its
-  own credentials (`LITELLM_DD_KEY` from a 0600 key file), so the console never sees a key.
+  `data-designer-local create` gets the long timeout (3,600 s), everything else keeps 600 s. The router key lives
+  in the OpenShell gateway's credential store (the wrapper reads no key file), so the console never sees a key.
   Verified live on 2026-10-24 against the real CLI: status (0.9.3, 15 aliases), script validate through the API,
   `preview` (2 records through the router on `glm-5.3-flash-next-local`), `create` with a csv copy under the datasets
   root, the records/files endpoints, and the UI page (status, actions, runs list) screenshotted at 1440/884 px.
@@ -37,6 +37,18 @@ implemented / verified-live / unverified defined in the README.
   `data-designer==0.9.3`), the policy wrapper (`data-designer-local`, telemetry forced off), the `data-designer-export`
   converter, a router key minter (key_alias `data-designer`), and the vendored NVIDIA agent skill at
   `.claude/skills/data-designer` (see the parent repo).
+
+### Security
+
+- **Threat model E-7/R-19 corrected** (docs only; no console code changed). The R-19 residual published in
+  `4448a94` was incomplete. An independent review of the lab's OpenShell runner found two gaps, both fixed in the
+  parent repo's runner the same day (verified-live): the sandbox network had open internet egress (now an internal
+  Docker network; the wrapper refuses to run otherwise), and the artifact copy-back trusted sandbox-supplied paths,
+  so a planted filename could make the host write outside the run dir (now NUL-delimited, symlink-free,
+  traversal-refusing and confined to the run dir, with offline tests). R-19 now also states a residual that remains:
+  OpenShell 0.0.77 mounts the gateway's client certificate and private key into every sandbox container (root-only;
+  verified unreadable by the workload), and that key authenticates as the operator. E-7's "the wrapper injects its
+  own credentials from 0600 files" was stale: the runner wrapper holds no key.
 
 ## [0.2.0] - 2026-10-17
 
