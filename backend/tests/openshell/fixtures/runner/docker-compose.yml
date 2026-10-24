@@ -1,0 +1,108 @@
+# ai-lab-dd — the OpenShell gateway for the Data Designer sandbox runner (and future lab runners).
+#
+# Topology (rootless Docker, see IMPLEMENTATION.md §3):
+#   * `openshell-docker` (172.16.0.0/24) is an INTERNAL network: no route off the box. On it: the
+#     gateway (static 172.16.0.2), every sandbox container, and the LiteLLM router (172.16.0.5,
+#     attached by data-designer-local's ensure_gateway(); see the note at the bottom). The driver
+#     pins host.openshell.internal -> 172.16.0.2 in each sandbox's /etc/hosts (config/gateway.toml).
+#   * `openshell-cli` is a normal user-defined network that exists ONLY so the CLI forwarder can
+#     publish 127.0.0.1:17670 (an internal network cannot publish ports). Nothing else joins it.
+#   Recreate the internal network (one-time, or after `docker network rm`):
+#     docker network create --internal --subnet 172.16.0.0/24 openshell-docker
+#   data-designer-local refuses to run if it is not internal.
+#
+#   Started on demand by clients/data-designer/data-designer-local (ensure_gateway()).
+#
+# Auth: mTLS. The CLI connects over https with the client bundle; sandbox supervisors present
+# their per-sandbox JWTs. RESIDUAL (OpenShell 0.0.77 design, cannot be changed by config): the
+# Docker driver bind-mounts the SAME client cert+key the CLI uses into every sandbox container at
+# /etc/openshell/tls/client/. They are root-only (0600) there and the workload runs as uid 1000
+# under Landlock — verified 2026-10-24 that the workload cannot read tls.key or sandbox.jwt — so
+# using them needs a root escalation inside the sandbox container first. Per-sandbox credentials
+# need OIDC (no IdP in the lab) or a newer OpenShell.
+#
+# Pins (digest = what was scanned; bump = re-scan per clients/ADDING-PACKAGES.md, then update the
+# scan record in ../README.md):
+#   gateway     ghcr.io/nvidia/openshell/gateway:0.0.77 @sha256:ba6f6537…63e8
+#   supervisor  ghcr.io/nvidia/openshell/supervisor:31807d68… @sha256:e796ba93…a0a0a (same 2026-07-06
+#               build as the gateway; pinned in config/gateway.toml with pull policy Never)
+#   forwarder   alpine/socat:1.8.0.1 @sha256:87d88ff7…99e7
+name: ai-lab-dd
+
+services:
+  gateway:
+    image: ghcr.io/nvidia/openshell/gateway@sha256:ba6f6537544d5dcb949ebb926cece206c01ca4546552934d91ebb9d8ea7363e8
+    container_name: ai-lab-dd-gateway
+    # Container root maps to host uid 1000 in rootless Docker; the image's own uid 1000 maps into
+    # the subordinate range and could not read the state dir or the Docker socket. Root here means
+    # "your uid", so it holds no more than you do — but it does hold the Docker socket, which is why
+    # it gets no capabilities, no privilege escalation and no network route off the box.
+    user: "0"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      openshell-docker:
+        ipv4_address: 172.16.0.2
+    restart: unless-stopped
+    volumes:
+      # The 0.0.77 Docker driver hardcodes the REAL home paths for what it bind-mounts into sandbox
+      # containers (tokens + TLS under ~/.local/state/openshell, the supervisor store under
+      # ~/.local/share/openshell) and the HOST daemon resolves those sources on the host fs, so the
+      # gateway's state is mounted at identical paths. Both dirs are 0700.
+      - /home/USER/.local/state/openshell:/home/USER/.local/state/openshell
+      - /home/USER/.local/share/openshell:/home/USER/.local/share/openshell
+      # The gateway's own config dir (does not touch the host's ~/.config/openshell).
+      - ./config:/home/USER/.config/openshell
+      # The rootless Docker socket: the gateway creates/destroys the sandbox containers.
+      - /run/user/1000/docker.sock:/var/run/docker.sock
+    environment:
+      OPENSHELL_COMPUTE_DRIVER: docker
+      OPENSHELL_GRPC_ENDPOINT: https://host.openshell.internal:8080
+      OPENSHELL_DB_URL: sqlite:/home/USER/.local/state/openshell/openshell.db
+      OPENSHELL_LOCAL_TLS_DIR: /home/USER/.local/state/openshell/tls
+      OPENSHELL_TLS_CERT: /home/USER/.local/state/openshell/tls/server/tls.crt
+      OPENSHELL_TLS_KEY: /home/USER/.local/state/openshell/tls/server/tls.key
+      OPENSHELL_TLS_CLIENT_CA: /home/USER/.local/state/openshell/tls/ca.crt
+      OPENSHELL_ENABLE_MTLS_AUTH: "true"
+      # OpenShell's own telemetry off (the driver passes this into every sandbox; the internal
+      # network means it has nowhere to go anyway).
+      OPENSHELL_TELEMETRY_ENABLED: "false"
+      HOME: /home/USER
+      NEMO_TELEMETRY_ENABLED: "false"
+
+  cli-forwarder:
+    image: alpine/socat@sha256:87d88ff79bf42ca723fb360e9585c40e2923a2f4df9b9d148b127568ef6b99e7
+    container_name: ai-lab-dd-cli-fwd
+    restart: unless-stopped
+    # A fixed TCP forward and nothing else: no root, no capabilities, read-only filesystem.
+    user: "65534:65534"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      # openshell-cli is the network the published port rides on (gw_priority makes it the default
+      # route); openshell-docker is how it reaches the gateway.
+      openshell-cli:
+        gw_priority: 1
+      openshell-docker: {}
+    ports:
+      - "127.0.0.1:17670:8080"
+    command: "TCP-LISTEN:8080,fork,reuseaddr TCP:172.16.0.2:8080"
+
+networks:
+  openshell-docker:
+    external: true
+  openshell-cli:
+    name: openshell-cli
+    # Explicit subnet: the lab's ~50 networks have exhausted Docker's default address pools.
+    # 172.16.1.0/29 sits next to openshell-docker (172.16.0.0/24) and collides with no route here.
+    ipam:
+      config:
+        - subnet: 172.16.1.0/29
+
+# Why the router's attachment to openshell-docker is NOT in inference/litellm/docker-compose.yml:
+# an external network there would make the router (the mesh's single chokepoint) fail to start
+# whenever this OpenShell network is absent. data-designer-local re-pins it before every run
+# instead, and the network is internal, so the router gains no route off the box from it.

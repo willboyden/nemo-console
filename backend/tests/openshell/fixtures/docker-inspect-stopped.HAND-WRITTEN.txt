@@ -1,0 +1,2 @@
+/ai-lab-dd-gateway|exited|137|false|2026-10-24T07:47:51.919656462Z|0|ghcr.io/nvidia/openshell/gateway@sha256:ba6f6537544d5dcb949ebb926cece206c01ca4546552934d91ebb9d8ea7363e8|{"8080/tcp":null}
+/ai-lab-dd-cli-fwd|exited|137|false|2026-10-24T07:47:51.91914851Z|0|alpine/socat@sha256:87d88ff79bf42ca723fb360e9585c40e2923a2f4df9b9d148b127568ef6b99e7|{}

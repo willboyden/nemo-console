@@ -4,25 +4,26 @@ import { normalizeRole } from './status-util.js';
 import { store, api, setApiKey, applyTheme, isAdmin } from './app-context.js';
 import { createRouter } from './router.js';
 import { h, icon, clear, $ } from './dom.js';
+import { ROUTES } from './routes.js';
 import { toast } from './components/toast.js';
 import { openModal } from './components/dialog.js';
 import './components/toast.js';
 
-export const ROUTES = [
-  { path: '/', tag: 'nc-overview', mod: 'overview', nav: 'overview', icon: 'overview', hidden: true },
-  { path: '/overview', tag: 'nc-overview', mod: 'overview', nav: 'overview', icon: 'overview' },
-  { path: '/switchyard', tag: 'nc-switchyard', mod: 'switchyard', nav: 'switchyard', icon: 'switchyard' },
-  { path: '/relay', tag: 'nc-relay', mod: 'relay', nav: 'relay', icon: 'relay' },
-  { path: '/dynamo', tag: 'nc-dynamo', mod: 'dynamo', nav: 'dynamo', icon: 'dynamo' },
-  { path: '/skillevaluator', tag: 'nc-skillevaluator', mod: 'skillevaluator', nav: 'skillevaluator', icon: 'skills' },
-  { path: '/datadesigner', tag: 'nc-datadesigner', mod: 'datadesigner', nav: 'datadesigner', icon: 'skills' },
-  { path: '/audit', tag: 'nc-audit', mod: 'audit', nav: 'audit', icon: 'audit', admin: true },
-  { path: '/settings', tag: 'nc-settings', mod: 'settings', nav: 'settings', icon: 'settings' },
-];
+export { ROUTES };
 const navRoutes = () => ROUTES.filter((r) => !r.hidden && (!r.admin || isAdmin()));
 
+// Flat links with a small section label whenever the group changes (labels are hidden in the one-column tiers).
+function navItems() {
+  const out = []; let last;
+  for (const r of navRoutes()) {
+    if (r.group !== last) { last = r.group; if (r.group) out.push(h('div', { class: 'nav-label' }, t(`group.${r.group}`))); }
+    out.push(h('a', { href: `#${r.path}`, 'data-route': r.path }, icon(r.icon), h('span', t(`nav.${r.nav}`))));
+  }
+  return out;
+}
+
 function buildShell(root) {
-  const nav = h('nav', { class: 'nav', 'aria-label': t('nav.primary') }, navRoutes().map((r) => h('a', { href: `#${r.path}`, 'data-route': r.path }, icon(r.icon), h('span', t(`nav.${r.nav}`)))));
+  const nav = h('nav', { class: 'nav', 'aria-label': t('nav.primary') }, navItems());
   const themeBtn = h('button', { type: 'button', class: 'btn ghost', id: 'theme-btn', 'aria-label': t('topbar.theme'), onClick: toggleTheme });
   const keyBtn = h('button', { type: 'button', class: 'btn ghost', 'aria-label': t('topbar.bearer'), title: t('topbar.bearer'), onClick: () => promptKey() }, icon('key'));
   const s = store.get();

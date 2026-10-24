@@ -3,13 +3,14 @@ import { h, clear } from '../dom.js';
 import { t } from '../i18n.js';
 import { fmtDate } from '../format.js';
 import { auditLabel } from '../status-util.js';
+import { SYSTEM_IDS } from '../systems.js';
 import { isAdmin } from '../app-context.js';
 import { badge, card, select, btn, emptyBox, errorBox, skeleton } from '../components/ui.js';
 
 class NcAudit extends NcView {
   setup() {
     this.sys = ''; this.host = h('div', {}, skeleton(4));
-    const sel = select([{ value: '', label: t('audit.all') }, ...['switchyard', 'relay', 'dynamo', 'skillevaluator'].map((s) => ({ value: s, label: t(`sys.${s}`) }))], '', (v) => { this.sys = v; this.load(); }, { 'aria-label': t('audit.system') });
+    const sel = select([{ value: '', label: t('audit.all') }, ...SYSTEM_IDS.map((s) => ({ value: s, label: t(`sys.${s}`) }))], '', (v) => { this.sys = v; this.load(); }, { 'aria-label': t('audit.system') });
     this.append(h('h1', t('nav.audit')), h('p', { class: 'muted' }, t('audit.explain')),
       card(t('audit.title'), this.host, h('div', { class: 'row gap' }, sel, btn(t('common.refresh'), { size: 'sm', icon: 'restart', onClick: () => this.load() }))));
     if (!isAdmin()) { clear(this.host).append(emptyBox(t('audit.admin_only'), t('audit.admin_only_hint'))); return; }

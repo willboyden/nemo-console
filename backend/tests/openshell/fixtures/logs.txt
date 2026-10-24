@@ -1,0 +1,5 @@
+[1792841081.496] [sandbox] [OCSF ] [ocsf] SSH:OPEN [INFO] ALLOWED
+[1792841081.587] [sandbox] [OCSF ] [ocsf] CONFIG:APPLYING [INFO] Applying Landlock filesystem sandbox [abi:V2 compat:BestEffort ro:8 rw:2]
+[1792841081.587] [sandbox] [OCSF ] [ocsf] CONFIG:BUILT [INFO] Landlock ruleset built [rules_applied:10 skipped:0]
+[1792841081.993] [sandbox] [INFO ] [openshell_supervisor_network::run] Container filesystem accessible, resolving policy binary symlinks attempt=1 pid=87
+[1792841081.995] [sandbox] [INFO ] [openshell_supervisor_network::run] Policy binary symlink resolution complete (check logs above for per-binary results) pid=87

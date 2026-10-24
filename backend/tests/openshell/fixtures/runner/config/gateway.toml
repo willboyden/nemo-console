@@ -1,0 +1,20 @@
+# Gateway config for the containerized gateway (mounted at ~/.config/openshell in the container).
+# schema v1 (this build). host_gateway_ip: the driver pins host.openshell.internal -> this IP in
+# every sandbox's /etc/hosts; it must be the gateway container's static IP on openshell-docker
+# (the default discovery would pick the bridge gateway 172.16.0.1, which nothing can bind in the
+# detached-netns rootless setup).
+[openshell]
+version = 1
+
+[openshell.gateway]
+compute_drivers = ["docker"]
+host_gateway_ip = "172.16.0.2"
+
+[openshell.drivers.docker]
+network_name = "openshell-docker"
+# The supervisor the driver injects into every sandbox, pinned by digest (the 2026-07-06 build
+# that matches gateway 0.0.77). Without this the driver resolves its own default tag at runtime.
+supervisor_image = "ghcr.io/nvidia/openshell/supervisor@sha256:e796ba938255a059a041733e28a81f73e19e9cdc7c691b1f18a3230f9ded0a0a"
+# Never pull at runtime: every image this gateway uses is already local and digest-pinned, and a
+# runtime pull would be egress by the Docker daemon itself (outside the lab allowlist).
+image_pull_policy = "Never"

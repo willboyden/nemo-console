@@ -1,0 +1,1 @@
+   [42m[1m[37m PASS [39m[0m[49m  no findings

@@ -24,9 +24,11 @@ export function counterRate(points) {
   }
   return out;
 }
-/** Canonical history key with an optional label selector, e.g. keyWith('dyn.ttft_ms', {q:'p95'}) -> 'dyn.ttft_ms{q=p95}'. */
+/** Canonical history key with an optional label selector, e.g. keyWith('dyn.ttft_ms', {q:'p95'}) -> 'dyn.ttft_ms{q=p95}'.
+ * Labels are sorted by name, exactly like the backend's series_name(), so the order an adapter emits them in never
+ * matters. */
 export function keyWith(key, labels) {
-  const e = Object.entries(labels || {});
+  const e = Object.entries(labels || {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   return e.length ? `${key}{${e.map(([k, v]) => `${k}=${v}`).join(',')}}` : key;
 }
 /** Convert ts seconds to minutes-ago so chart x axes read "-15m .. now". */

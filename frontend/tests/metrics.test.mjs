@@ -54,3 +54,9 @@ test('lineChart: the top y tick always covers the data maximum (no points drawn 
   assert.ok(ys.length === 2 && ys.every((y) => y >= 10 - 0.01), `points must lie inside the plot, got ${ys}`);
   assert.match(svg, />60</);
 });
+
+test('keyWith sorts labels like the backend series_name()', async () => {
+  const { keyWith } = await import('../js/metrics.js');
+  assert.equal(keyWith('dcgm.gpu_temp_c', { model: 'RTX-PRO-6000', gpu: '0' }), 'dcgm.gpu_temp_c{gpu=0,model=RTX-PRO-6000}');
+  assert.equal(keyWith('sy.requests_total', {}), 'sy.requests_total');
+});

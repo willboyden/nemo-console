@@ -1,0 +1,11 @@
+[
+  {
+    "created_at": "2026-10-24 11:24:40",
+    "current_policy_version": 0,
+    "id": "690dc867-9b95-4a9a-9f98-f6ed6a5f384f",
+    "labels": {},
+    "name": "nc-adapter-probe",
+    "phase": "Ready",
+    "resource_version": 5
+  }
+]

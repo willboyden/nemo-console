@@ -1,0 +1,45 @@
+[1m[36mSandbox:[39m[0m
+
+  [2mId:[0m 690dc867-9b95-4a9a-9f98-f6ed6a5f384f
+  [2mName:[0m nc-adapter-probe
+  [2mPhase:[0m Ready
+  [2mResource version:[0m 5
+  [2mPolicy source:[0m sandbox
+  [2mRevision:[0m 2
+
+[1m[36mPolicy:[39m[0m
+
+  [2mversion[0m[2m:[0m 1
+  [2mfilesystem_policy[0m[2m:[0m
+    [2minclude_workdir[0m[2m:[0m true
+    [2mread_only[0m[2m:[0m
+    [2m- [0m/opt/dd-config
+    [2m- [0m/home/sandbox
+    [2m- [0m/usr
+    [2m- [0m/lib
+    [2m- [0m/proc
+    [2m- [0m/dev/urandom
+    [2m- [0m/etc
+    [2m- [0m/var/log
+    [2mread_write[0m[2m:[0m
+    [2m- [0m/sandbox
+    [2m- [0m/tmp
+  [2mprocess[0m[2m:[0m
+    [2mrun_as_user[0m[2m:[0m sandbox
+    [2mrun_as_group[0m[2m:[0m sandbox
+  [2mnetwork_policies[0m[2m:[0m
+    [2mlab_router[0m[2m:[0m
+      [2mname[0m[2m:[0m lab_router
+      [2mendpoints[0m[2m:[0m
+      [2m- [0mhost: '172.16.0.5'
+        [2mport[0m[2m:[0m 4000
+        [2mprotocol[0m[2m:[0m rest
+        [2menforcement[0m[2m:[0m enforce
+        [2mrules[0m[2m:[0m
+        [2m- [0mallow:
+            [2mmethod[0m[2m:[0m '*'
+            [2mpath[0m[2m:[0m /v1/**
+        [2mallowed_ips[0m[2m:[0m
+        [2m- [0m'172.16.0.5/32'
+      [2mbinaries[0m[2m:[0m
+      [2m- [0mpath: /usr/local/bin/python3.13

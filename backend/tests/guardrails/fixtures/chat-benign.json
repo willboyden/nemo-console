@@ -1,0 +1,1 @@
+{"id":"chatcmpl-869c4601-891a-41f9-9fed-89f4316416c9","choices":[{"finish_reason":"stop","index":0,"message":{"content":"Paris","role":"assistant"}}],"created":1792841402,"model":"aitop/nemotron-lightning","object":"chat.completion","guardrails":{"config_id":"lab-input-output"}}

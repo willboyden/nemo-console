@@ -1,0 +1,6 @@
+Checking system prerequisites...
+
+  Docker ............. ok (version 29.9.1)
+  DOCKER_HOST ........ unix:///run/user/1000/docker.sock
+
+All checks passed.

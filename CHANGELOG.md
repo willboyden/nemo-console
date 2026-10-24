@@ -7,6 +7,28 @@ implemented / verified-live / unverified defined in the README.
 
 ### Added
 
+- **Five more systems** (ARCHITECTURE addendum 9.8), each one adapter file plus a registry line, a generic
+  descriptor-driven view and a nav group (Routing · Engines and load · Safety and sandboxing · Evaluation and data):
+  - **OpenShell** (`openshell`): the sandbox gateway behind Data Designer. Status (CLI, gateway, forwarder,
+    connection, version skew), security checks as problems (`openshell-docker` must be `--internal`, no
+    non-loopback published port), `os.*` metrics, sandbox events; trust files read-only (ADR 0007); actions
+    `doctor`, sandbox list/get/logs, gateway logs, `prove_policy`, `gateway_up`/`gateway_stop`, `delete_sandbox`.
+  - **DCGM** (`dcgm`): this host's dcgm-exporter plus every DCGM host Prometheus scrapes; `dcgm.*` metrics per GPU
+    and host; `dcgm.exporter.vulnerable` below 4.8.3 and a live `/debug/pprof` probe (CVE-2026-47483); the
+    exporter's `counters.csv` editable with a field-name validator and rollback; per-GPU `dcgmi diag` (levels 1 and
+    2, both disruptive) and `discovery` in a hardened throwaway `--network none` container from the full DCGM image.
+  - **AIPerf** (`aiperf`): load-test presets (`clients/aiperf/profiles.yaml`, editable), one background `profile`
+    run at a time through the lab wrapper `aiperf-local`, `ap.*` metrics (TTFT, ITL, latency, throughput, errors).
+  - **NeMo Guardrails** (`guardrails`): a rails server in the lab (`security/nemo-guardrails`, internal network,
+    key held by a broker), rails configs editable (validated in a `--network none` container; restart and
+    served-check, rollback; a candidate that removes rails needs an explicit marker, ADR 0015), a `check` action
+    with fixed probe prompts and a playground through the rails.
+  - **NeMo Evaluator** (`evaluator`): offline benchmark suites (`clients/nemo-evaluator/suites.yaml`, editable;
+    rule-scored benchmarks only) run in the background through `evaluator-local`, `ev.score{bench,model}`.
+  The runner allowlist gains `openshell`, `aiperf-local`, `guardrails-local`, `evaluator-local`; only
+  `aiperf-local profile` (3,600 s) and `evaluator-local run` (4,800 s) get long caps. No env reaches any of them:
+  each lab wrapper reads its own 0600 router key file. Verification per feature: `docs/FEATURE-MATRIX.md`.
+
 - **NVIDIA Data Designer** (`datadesigner`) as a fifth system: the console drives the pinned
   `data-designer-local` CLI (0.9.3, installed by the lab's `clients/data-designer/install.sh`) the way it drives
   SkillEvaluator — on demand, keeping the reports. Status shows the launcher version, the LiteLLM router the

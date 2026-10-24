@@ -10,7 +10,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-SystemId = Literal["switchyard", "relay", "dynamo", "skillevaluator", "datadesigner"]   # "datadesigner": addendum 9.7
+SystemId = Literal["switchyard", "relay", "dynamo", "skillevaluator", "datadesigner",   # "datadesigner": addendum 9.7
+                   "openshell", "dcgm", "aiperf", "guardrails", "evaluator"]          # addendum 9.8
 Health = Literal["up", "degraded", "down", "unknown", "off"]   # "off": opt-in and stopped on purpose (addendum 9.4)
 Severity = Literal["info", "warn", "error"]
 Role = Literal["admin", "viewer"]

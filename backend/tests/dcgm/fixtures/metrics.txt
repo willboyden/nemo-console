@@ -1,0 +1,92 @@
+# HELP DCGM_FI_DEV_CORRECTABLE_REMAPPED_ROWS Number of remapped rows for correctable errors
+# TYPE DCGM_FI_DEV_CORRECTABLE_REMAPPED_ROWS counter
+DCGM_FI_DEV_CORRECTABLE_REMAPPED_ROWS{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+DCGM_FI_DEV_CORRECTABLE_REMAPPED_ROWS{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+# HELP DCGM_FI_DEV_DEC_UTIL Decoder utilization (in %).
+# TYPE DCGM_FI_DEV_DEC_UTIL gauge
+DCGM_FI_DEV_DEC_UTIL{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+DCGM_FI_DEV_DEC_UTIL{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+# HELP DCGM_FI_DEV_ENC_UTIL Encoder utilization (in %).
+# TYPE DCGM_FI_DEV_ENC_UTIL gauge
+DCGM_FI_DEV_ENC_UTIL{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+DCGM_FI_DEV_ENC_UTIL{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+# HELP DCGM_FI_DEV_FB_FREE Framebuffer memory free (in MiB).
+# TYPE DCGM_FI_DEV_FB_FREE gauge
+DCGM_FI_DEV_FB_FREE{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 3569
+DCGM_FI_DEV_FB_FREE{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 298
+# HELP DCGM_FI_DEV_FB_RESERVED Framebuffer memory reserved (in MiB).
+# TYPE DCGM_FI_DEV_FB_RESERVED gauge
+DCGM_FI_DEV_FB_RESERVED{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 637
+DCGM_FI_DEV_FB_RESERVED{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 639
+# HELP DCGM_FI_DEV_FB_USED Framebuffer memory used (in MiB).
+# TYPE DCGM_FI_DEV_FB_USED gauge
+DCGM_FI_DEV_FB_USED{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 93680
+DCGM_FI_DEV_FB_USED{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 96949
+# HELP DCGM_FI_DEV_GPU_TEMP GPU temperature (in C).
+# TYPE DCGM_FI_DEV_GPU_TEMP gauge
+DCGM_FI_DEV_GPU_TEMP{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 32
+DCGM_FI_DEV_GPU_TEMP{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 39
+# HELP DCGM_FI_DEV_GPU_UTIL GPU utilization (in %).
+# TYPE DCGM_FI_DEV_GPU_UTIL gauge
+DCGM_FI_DEV_GPU_UTIL{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 3
+DCGM_FI_DEV_GPU_UTIL{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 8
+# HELP DCGM_FI_DEV_MEMORY_TEMP Memory temperature (in C).
+# TYPE DCGM_FI_DEV_MEMORY_TEMP gauge
+DCGM_FI_DEV_MEMORY_TEMP{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+DCGM_FI_DEV_MEMORY_TEMP{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+# HELP DCGM_FI_DEV_MEM_CLOCK Memory clock frequency (in MHz).
+# TYPE DCGM_FI_DEV_MEM_CLOCK gauge
+DCGM_FI_DEV_MEM_CLOCK{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 13365
+DCGM_FI_DEV_MEM_CLOCK{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 7001
+# HELP DCGM_FI_DEV_MEM_COPY_UTIL Memory utilization (in %).
+# TYPE DCGM_FI_DEV_MEM_COPY_UTIL gauge
+DCGM_FI_DEV_MEM_COPY_UTIL{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+DCGM_FI_DEV_MEM_COPY_UTIL{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 2
+# HELP DCGM_FI_DEV_PCIE_REPLAY_COUNTER Total number of PCIe retries.
+# TYPE DCGM_FI_DEV_PCIE_REPLAY_COUNTER counter
+DCGM_FI_DEV_PCIE_REPLAY_COUNTER{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+DCGM_FI_DEV_PCIE_REPLAY_COUNTER{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+# HELP DCGM_FI_DEV_POWER_USAGE Power draw (in W).
+# TYPE DCGM_FI_DEV_POWER_USAGE gauge
+DCGM_FI_DEV_POWER_USAGE{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 48.396
+DCGM_FI_DEV_POWER_USAGE{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 57.148
+# HELP DCGM_FI_DEV_ROW_REMAP_FAILURE Whether remapping of rows has failed
+# TYPE DCGM_FI_DEV_ROW_REMAP_FAILURE gauge
+DCGM_FI_DEV_ROW_REMAP_FAILURE{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+DCGM_FI_DEV_ROW_REMAP_FAILURE{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+# HELP DCGM_FI_DEV_SM_CLOCK SM clock frequency (in MHz).
+# TYPE DCGM_FI_DEV_SM_CLOCK gauge
+DCGM_FI_DEV_SM_CLOCK{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 517
+DCGM_FI_DEV_SM_CLOCK{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 1455
+# HELP DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION Total energy consumption since the driver was last reloaded (in mJ).
+# TYPE DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION counter
+DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 6.849681072e+09
+DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 7.493425318e+09
+# HELP DCGM_FI_DEV_UNCORRECTABLE_REMAPPED_ROWS Number of remapped rows for uncorrectable errors
+# TYPE DCGM_FI_DEV_UNCORRECTABLE_REMAPPED_ROWS counter
+DCGM_FI_DEV_UNCORRECTABLE_REMAPPED_ROWS{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+DCGM_FI_DEV_UNCORRECTABLE_REMAPPED_ROWS{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+# HELP DCGM_FI_DEV_VGPU_LICENSE_STATUS vGPU License status
+# TYPE DCGM_FI_DEV_VGPU_LICENSE_STATUS gauge
+DCGM_FI_DEV_VGPU_LICENSE_STATUS{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+DCGM_FI_DEV_VGPU_LICENSE_STATUS{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+# HELP DCGM_FI_PROF_DRAM_ACTIVE Ratio of cycles the device memory interface is active sending or receiving data.
+# TYPE DCGM_FI_PROF_DRAM_ACTIVE gauge
+DCGM_FI_PROF_DRAM_ACTIVE{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0.00011
+DCGM_FI_PROF_DRAM_ACTIVE{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0.003956
+# HELP DCGM_FI_PROF_GR_ENGINE_ACTIVE Ratio of time the graphics engine is active.
+# TYPE DCGM_FI_PROF_GR_ENGINE_ACTIVE gauge
+DCGM_FI_PROF_GR_ENGINE_ACTIVE{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0.068005
+DCGM_FI_PROF_GR_ENGINE_ACTIVE{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0.169625
+# HELP DCGM_FI_PROF_PCIE_RX_BYTES The rate of data received over the PCIe bus - including both protocol headers and data payloads - in bytes per second.
+# TYPE DCGM_FI_PROF_PCIE_RX_BYTES gauge
+DCGM_FI_PROF_PCIE_RX_BYTES{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 2.12277951e+08
+DCGM_FI_PROF_PCIE_RX_BYTES{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 3.7981865e+08
+# HELP DCGM_FI_PROF_PCIE_TX_BYTES The rate of data transmitted over the PCIe bus - including both protocol headers and data payloads - in bytes per second.
+# TYPE DCGM_FI_PROF_PCIE_TX_BYTES gauge
+DCGM_FI_PROF_PCIE_TX_BYTES{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 7.7763774e+07
+DCGM_FI_PROF_PCIE_TX_BYTES{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 8.7033846e+08
+# HELP DCGM_FI_PROF_PIPE_TENSOR_ACTIVE Ratio of cycles the tensor (HMMA) pipe is active.
+# TYPE DCGM_FI_PROF_PIPE_TENSOR_ACTIVE gauge
+DCGM_FI_PROF_PIPE_TENSOR_ACTIVE{gpu="1",UUID="GPU-00000000-0000-0000-0000-000000000001",pci_bus_id="00000000:F1:00.0",device="nvidia1",modelName="NVIDIA RTX PRO 6000 Blackwell Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0
+DCGM_FI_PROF_PIPE_TENSOR_ACTIVE{gpu="0",UUID="GPU-00000000-0000-0000-0000-000000000000",pci_bus_id="00000000:D1:00.0",device="nvidia0",modelName="NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",hostname="exporter",DCGM_FI_DRIVER_VERSION="595.99.02"} 0

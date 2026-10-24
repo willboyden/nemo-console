@@ -186,7 +186,13 @@ class Env:
             "switchyard": FakeAdapter(ctx, "switchyard", self.cfg_file),
             "relay": FakeAdapter(ctx, "relay"),
             "dynamo": FakeAdapter(ctx, "dynamo"),
-            "skillevaluator": FakeAdapter(ctx, "skillevaluator")}
+            "skillevaluator": FakeAdapter(ctx, "skillevaluator"),
+            # addendum 9.8: the core tests fake the five new systems too (their own suites test the real adapters)
+            "openshell": FakeAdapter(ctx, "openshell"),
+            "dcgm": FakeAdapter(ctx, "dcgm"),
+            "aiperf": FakeAdapter(ctx, "aiperf"),
+            "guardrails": FakeAdapter(ctx, "guardrails"),
+            "evaluator": FakeAdapter(ctx, "evaluator")}
         self.container: Container = build_container(self.settings, adapters=dict(self.adapters), runner=self.runner,  # type: ignore[arg-type]
                                                     http=self.http)
         self.app = create_app(self.settings, self.container)

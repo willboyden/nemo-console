@@ -1,0 +1,40 @@
+# Provider profile: the lab's LiteLLM router for Data Designer sandboxes.
+# The sandbox never holds the key: OpenShell stores it in the gateway credential store and the
+# supervisor injects it into requests matching these endpoints, from the listed binaries only.
+# Install:  openshell profile lint -f profile-lab-router.yaml
+#           openshell profile import -f profile-lab-router.yaml --global
+#           LITELLM_DD_KEY=$(cat ~/.config/data-designer/litellm.key) \
+#             openshell provider create --name lab-router-dd --type lab-litellm-dd
+# Attach at sandbox create with --provider lab-router-dd.
+id: lab-litellm-dd
+display_name: Lab LiteLLM Router (Data Designer)
+description: Synthetic-data generation through the local LiteLLM router (key_alias data-designer). Plaintext HTTP on the ai-lab bus; inspected and credential-rewritten by the supervisor.
+category: inference
+inference_capable: true
+
+credentials:
+  - name: litellm_dd_key
+    description: LiteLLM virtual key (key_alias data-designer, all models, no admin)
+    env_vars: [LITELLM_DD_KEY]
+    required: true
+    auth_style: bearer
+    header_name: authorization
+
+discovery:
+  credentials: [litellm_dd_key]
+
+endpoints:
+  - host: 172.16.0.5
+    port: 4000
+    path: /v1/**
+    protocol: rest
+    enforcement: enforce
+    allowed_ips:
+      - 172.16.0.5/32
+    rules:
+      - allow:
+          method: "*"
+          path: "/v1/**"
+
+binaries:
+  - /usr/local/bin/python3.13

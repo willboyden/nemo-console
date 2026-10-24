@@ -1,0 +1,14 @@
+2026-10-24 07:28:53,041 INFO nemo_evaluator.engine.eval_loop: p618 r0: solver-entry at +0.0s
+2026-10-24 07:28:53,042 INFO nemo_evaluator.engine.eval_loop: p599 r0: solver-entry at +0.0s
+2026-10-24 07:28:53,042 INFO nemo_evaluator.engine.eval_loop: p289 r0: solver-entry at +0.0s
+2026-10-24 07:28:53,042 INFO nemo_evaluator.engine.eval_loop: p608 r0: solver-entry at +0.0s
+2026-10-24 07:28:53,042 INFO nemo_evaluator.engine.eval_loop: p400 r0: solver-entry at +0.0s
+2026-10-24 07:28:53,044 INFO nemo_evaluator.adapters.interceptors.payload_modifier: payload_modifier: remove=[], add=['max_tokens', 'temperature'], rename=[], headers_add=[], headers_remove=[], headers_rename=[]
+2026-10-24 07:28:53,992 INFO nemo_evaluator.observability.progress: progress: 10/10 (100.0%) | pass@1=100.0% (10/10) | 10.5/s | 0s elapsed | ETA — | 2875 tok
+2026-10-24 07:28:54,037 INFO nemo_evaluator.observability.progress: Done 1.0s | pass@1=100.0% (10/10) | 2,875 tok
+
+  gsm8k: pass@1=1.0000 
+Report: /run/out/smoke/gsm8k/report.md
+2026-10-24 07:28:54,281 WARNING nemo_evaluator.orchestration.artifact_access: Artifact access may be blocked because parent directories lack a+x: /run/out/smoke, /run/out, /run/out, /run/out, /run/out Grant execute permission on these directories so other cluster users can traverse to /run/out/smoke/gsm8k; read permission is not required for traversal when artifact paths are known.
+
+Completed 1 benchmark(s). Results: /run/out/smoke/gsm8k

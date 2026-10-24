@@ -1,0 +1,4 @@
+ValidationError: 1 validation error for RailsConfig
+  Value error, Missing a `self_check_input` prompt template, which is required for the `self check input` rail. [type=value_error, input_value={'user_messages': {}, 'bo...fig_path': '/candidate'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.14/v/value_error
+  at main.py:790 in model_validate

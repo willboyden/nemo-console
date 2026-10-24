@@ -1,0 +1,1 @@
+{"id":"chatcmpl-8fc8c8a1-d943-4d24-8509-29dfa34c4371","choices":[{"finish_reason":"stop","index":0,"message":{"content":"I'm sorry, I can't respond to that.","role":"assistant"}}],"created":1792841402,"model":"aitop/nemotron-lightning","object":"chat.completion","guardrails":{"config_id":"lab-input-output"}}

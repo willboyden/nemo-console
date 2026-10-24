@@ -1,0 +1,42 @@
+{
+ "DCGM Diagnostic": {
+  "test_categories": [
+   {
+    "category": "Deployment",
+    "tests": [
+     {
+      "name": "software",
+      "results": [
+       {
+        "entity_group": "GPU",
+        "entity_group_id": 1,
+        "entity_id": 0,
+        "status": "Pass"
+       }
+      ],
+      "test_summary": {
+       "status": "Pass"
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "entity_groups": [
+  {
+   "entities": [
+    {
+     "device_id": "2bb4",
+     "entity_id": 0,
+     "serial_num": "REDACTED"
+    }
+   ],
+   "entity_group": "GPU",
+   "entity_group_id": 1
+  }
+ ],
+ "metadata": {
+  "Driver Version Detected": "595.99.02",
+  "version": "4.6.1"
+ }
+}

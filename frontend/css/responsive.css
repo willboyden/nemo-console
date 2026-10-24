@@ -9,6 +9,7 @@
   .sidebar { position: sticky; top: 0; z-index: 20; height: auto; flex-direction: row; align-items: center; gap: var(--s3); overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: var(--s2) var(--s3); }
   .nav { flex-direction: row; align-self: center; flex-wrap: nowrap; }
   .nav a { padding: var(--s2); }
+  .nav-label { display: none; }
   .topbar { position: static; }
 }
 @media (max-width: 720px) {

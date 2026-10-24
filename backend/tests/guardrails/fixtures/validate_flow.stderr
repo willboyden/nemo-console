@@ -1,0 +1,2 @@
+InvalidRailsConfigurationError: The provided output rail flow `self check nonsense` does not exist
+  at llmrails.py:511 in _validate_config

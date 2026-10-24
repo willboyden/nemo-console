@@ -10,7 +10,7 @@ additive only, appended to §9 and relayed to affected agents immediately.
 |---|---|---|
 | 1 | Hexagonal core + `SystemAdapter` port (`adapters/base.py`, LOCKED); one adapter per system | New system = one adapter; the UI renders from descriptors |
 | 2 | Host-run FastAPI on `127.0.0.1:8793`, not a container | Controls rootless Docker + a systemd user unit; mounting the socket into a network service is root-equivalent |
-| 3 | All process control through one `CommandRunner` (argv list, binary allowlist `docker`/`systemctl`/`nemo-relay`/`skillevaluator`/`skillevaluator-local`, timeout, output cap, redaction) | One audited choke point; adapters cannot shell out |
+| 3 | All process control through one `CommandRunner` (argv list, binary allowlist `docker`/`systemctl`/`nemo-relay`/`skillevaluator`/`skillevaluator-local` — extended by 9.7 and 9.8 —, timeout, output cap, redaction) | One audited choke point; adapters cannot shell out |
 | 4 | Config files: core does compare-and-swap (sha256), backup, atomic write, audit; adapter only validates + restarts | The dangerous IO exists once |
 | 5 | Config apply = validate → diff → confirm → backup → write → restart → health-check → **auto-rollback on unhealthy** | A bad routes.toml must not leave the router down |
 | 6 | Validators that are only a proxy say so (`authoritative=false`) | Relay's plugin schema differs from `switchyard-server`'s (measured; see clients/nemo-relay/routes.toml header) |
@@ -22,6 +22,7 @@ additive only, appended to §9 and relayed to affected agents immediately.
 | 12 | SQLite (WAL) for metrics rollups, config revisions, audit, settings; SSE for live streams | Single node, zero ops |
 | 13 | Zero-build, zero-npm frontend (ES modules + web components, SVG charts), strict CSP | No supply-chain surface (same as Engine Console) |
 | 14 | Security baseline = a localhost-service hardening checklist (ADR-0014), applied in full | Loopback is not a trust boundary for a browser |
+| 15 | NeMo Guardrails rails configs are editable, but a candidate that shrinks the rails is refused unless it carries `# nemo-console: allow-weaken-rails` (ADR-0015, exception to 0007) | Rails tuning is routine; silent weakening is not |
 
 ## 2. What each system exposes (measured 2026-09-24 unless noted)
 
@@ -307,3 +308,57 @@ nothing above changes. Contract: feature "datadesigner" (2026-10-23).
   run answers an empty records page (not 404). `GET /api/v1/systems/datadesigner/runs/{run_id}/files` →
   `{run_id, files: [{path, bytes}]}` (rel paths, regular files only) — nothing is served in v1: the UI shows
   paths; the user opens them on disk. Other systems → 404 on both.
+
+**9.8 (2026-10-24): five more systems — `openshell`, `dcgm`, `aiperf`, `guardrails`, `evaluator`.** Additive; nothing
+above changes. Contract: feature "nvidia-five" (2026-10-24).
+* **Core (orchestrator, done before fan-out):** `SystemId` gains the five ids; `adapters/__init__.py` registers
+  `openshell.OpenShellAdapter` ("OpenShell"), `dcgm.DcgmAdapter` ("DCGM"), `aiperf.AiPerfAdapter` ("AIPerf"),
+  `guardrails.GuardrailsAdapter` ("NeMo Guardrails"), `evaluator.EvaluatorAdapter` ("NeMo Evaluator"). Runner allowlist gains
+  `openshell`, `aiperf-local`, `guardrails-local`, `evaluator-local`; ONLY `aiperf-local profile` (3600 s) and
+  `evaluator-local run` (4800 s) get long caps; both wrappers are SIGINT-first. No env is forwarded to any of them: each lab
+  wrapper reads its OWN 0600 router key file (the console never holds a key). `DEFAULT_URLS` gains `dcgm`
+  (`http://127.0.0.1:9400`), `prometheus` (`http://127.0.0.1:9090`), `guardrails` (`http://127.0.0.1:8806`). `ctx.paths` gains
+  `openshell_runner_dir|openshell_gateway_config|openshell_policy|openshell_compose`, `observability_dir|observability_compose|
+  dcgm_counters`, `aiperf_dir|aiperf_profiles|aiperf_key_file`, `guardrails_dir|guardrails_compose|guardrails_config_dir`,
+  `evaluator_dir|evaluator_suites|evaluator_key_file` (key files: EXISTENCE only). Settings gain `dcgm_exporter_container`,
+  `dcgm_diag_image` (the FULL DCGM image, tag + digest — the exporter image has no diagnostic plugins), `dcgm_prometheus_jobs`,
+  `openshell_containers`, `guardrails_container`. Every adapter follows the SkillEvaluator/Data Designer structure: `_run`
+  wrapper (runner exceptions → `CommandResult(127)`), TTL-cached version probes, failure is data, redaction everywhere,
+  bounded label cardinality, run dirs `<state_dir>/<system>/runs/<run_id>/run.json` (0700/0600) for CLI runs.
+* **Metric key prefixes:** `os.` (openshell) · `dcgm.` · `ap.` (aiperf) · `gr.` (guardrails) · `ev.` (evaluator). Event kinds:
+  `openshell.sandbox`, `dcgm.xid` / `dcgm.diag`, `aiperf.run`, `guardrails.check`, `evaluator.run`.
+* **openshell** — the OpenShell gateway that contains Data Designer runs (`clients/data-designer/runner`). Status from
+  `openshell status` / `--version` (ANSI stripped) + `docker inspect` of `openshell_containers`; the gateway is started on
+  demand by `data-designer-local`, so stopped = `off`, not `down`. Security checks are problems, not prose: the sandbox
+  network `openshell-docker` must be `--internal` (error if not). Config files `gateway.toml`, `policy.yaml` and the
+  provider profile are READ-ONLY (ADR 0007: a web console never loosens a sandbox's trust policy); `openshell policy prove`
+  is offered as an action instead. Actions include sandbox list/delete (delete = destructive) and gateway up/stop.
+* **dcgm** — this host's dcgm-exporter (`urls.dcgm`) plus every DCGM host Prometheus scrapes (`urls.prometheus`,
+  `dcgm_prometheus_jobs`; loopback only — the console never contacts a fabric address). Problem `dcgm.exporter.vulnerable`
+  (error) when the running exporter image is older than 4.8.3 (CVE-2026-47483, `/debug/pprof`), and a direct probe of
+  `/debug/pprof/` (must not answer 200). Config: `observability/dcgm/counters.csv` is EDITABLE (validator = field-name and
+  type check against the field lists shipped in the exporter image; `authoritative=False`, say so); the exporter re-reads
+  the file (directory mount), so `post_apply` health-checks `/metrics` and returns `unhealthy` (→ core rollback) if it stops
+  answering or the configured families vanish; `restart=True` restarts the exporter container. Diagnostics run in a
+  throwaway container from `dcgm_diag_image` (`--network none`, per GPU index — the two cards are different models and
+  DCGM refuses a heterogeneous group): level 1 and level 2 both `disruptive` after the 2026-10-24 audit (a privileged
+  container; level 2 loads the GPU for minutes), `discovery` `safe`; level 3 is not offered. The in-container command is a CONSTANT per level with only a validated integer GPU index substituted.
+* **aiperf** — NVIDIA AIPerf (lab: `clients/aiperf/`, wrapper `aiperf-local`, own router key alias `aiperf`). Named load
+  presets in `clients/aiperf/profiles.yaml` (EDITABLE; own schema, authoritative). `profile` action is `disruptive` (it
+  loads a live engine and spends router capacity), one run at a time, artifacts in the run dir; metrics from the newest
+  run (`ap.ttft_ms{q}`, `ap.itl_ms{q}`, `ap.output_tps`, `ap.request_tps`, `ap.runs`).
+* **guardrails** — a NeMo Guardrails server (lab: `security/nemo-guardrails/`, container `guardrails_container`, loopback
+  `:8806`, own router key alias `guardrails`, NO internet egress, no runtime model downloads). Rails configs under
+  `security/nemo-guardrails/config/<id>/` are EDITABLE; validation loads the candidate with the pinned nemoguardrails in a
+  `--network none` container (`guardrails-local validate`); `post_apply` restarts the server and checks the config is
+  served, else `unhealthy` (→ rollback). Playground only if the server's chat endpoint accepts the core's OpenAI body;
+  otherwise a `check` action sends fixed probe prompts and reports allowed/blocked.
+* **evaluator** — NVIDIA NeMo Evaluator (`nel`; lab: `clients/nemo-evaluator/`, wrapper `evaluator-local`, own router key
+  alias `nemo-evaluator`). Datasets are prefetched once by the human (`evaluator-local prefetch`, the only step with
+  egress); runs are OFFLINE (`HF_*_OFFLINE=1`) against router aliases, only benchmarks that need no Docker sandbox and no
+  judge. Named suites in `clients/nemo-evaluator/suites.yaml` (EDITABLE; own schema). `run` is `disruptive` (router
+  tokens), one at a time; scores become `ev.score{bench,model}`.
+* **Ownership (fan-out 2026-10-24):** one adapter agent per system owns `adapters/<system>.py`, `backend/tests/<system>/`
+  and its lab directory (`clients/aiperf/`, `security/nemo-guardrails/`, `clients/nemo-evaluator/`; openshell and dcgm own
+  no lab directory — `observability/dcgm/counters.csv` and the exporter bump are the orchestrator's). The frontend agent
+  owns `frontend/` (one view per system, routes, i18n, mock data). Core files, docs and every other path: orchestrator.

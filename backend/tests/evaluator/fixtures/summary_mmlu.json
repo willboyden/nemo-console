@@ -1,0 +1,29 @@
+{
+ "schema": 1,
+ "suite": "knowledge-lightning",
+ "model": "aitop/nemotron-lightning",
+ "router": "http://127.0.0.1:4000",
+ "nel": "0.3.0",
+ "started": 1792841345.6911204,
+ "state": "succeeded",
+ "benchmarks": [
+  {
+   "bench": "mmlu",
+   "max_problems": 50,
+   "repeats": 1,
+   "exit_code": 0,
+   "wall_s": 7.1,
+   "metric": "pass@1",
+   "score": 0.48,
+   "ci_low": 0.34,
+   "ci_high": 0.62,
+   "samples": 50,
+   "tokens": 21445,
+   "elapsed_s": 5.53,
+   "model_errors": 0,
+   "failure_rate": 0.42,
+   "status": "ok"
+  }
+ ],
+ "finished": 1792841352.758392
+}

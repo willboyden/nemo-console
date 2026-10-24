@@ -1,0 +1,2 @@
+^[[1mNAME            ^[[0m  ^[[1mCREATED            ^[[0m  ^[[1mPHASE^[[0m
+nc-adapter-probe  2026-10-24 11:24:40  ^[[32mReady^[[39m

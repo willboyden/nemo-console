@@ -1,0 +1,5 @@
+[1m[36mGateway Status[39m[0m
+
+  [2mStatus:[0m No gateway configured.
+
+Register a gateway with: [2mopenshell gateway add <endpoint>[0m

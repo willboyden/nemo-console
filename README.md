@@ -1,6 +1,6 @@
 # Nemo Console
 
-A local, single-user web console to **monitor, configure and interact with** five NVIDIA-ecosystem systems
+A local, single-user web console to **monitor, configure and interact with** ten NVIDIA-ecosystem systems
 running on one workstation:
 
 - **NeMo Switchyard**: tier-based request routing (an HTTP server in a container).
@@ -12,6 +12,17 @@ running on one workstation:
 - **NVIDIA Data Designer** (unreleased): generates synthetic datasets from config scripts through the lab router
   (validate → preview → create, record review, parquet/csv/jsonl/json copies under `~/Datasets`). Also a CLI, not a
   service, driven the same way (install: the lab's `clients/data-designer/install.sh`).
+- **NVIDIA OpenShell** (unreleased): the sandbox gateway that contains Data Designer runs. Status, sandbox list,
+  logs and policy proofs; its trust files are shown read-only.
+- **NVIDIA DCGM** (unreleased): GPU telemetry from this host's dcgm-exporter plus every DCGM host the lab's
+  Prometheus scrapes; per-GPU diagnostics in a throwaway container; the exporter's field list is editable with
+  rollback. Flags an exporter older than 4.8.3 (CVE-2026-47483).
+- **NVIDIA AIPerf** (unreleased): load tests against router models from named presets, one run at a time, with
+  TTFT/ITL/throughput from each run.
+- **NVIDIA NeMo Guardrails** (unreleased): a rails server (input and output self-checks) in an internal-network
+  container; rails configs editable with validation and rollback; probe checks and a playground through the rails.
+- **NVIDIA NeMo Evaluator** (unreleased): offline benchmark suites (GSM8K, MMLU, ...) against router models, scores
+  per benchmark and model.
 
 It is a host-run FastAPI process bound to loopback, with a zero-build, zero-npm browser UI. One adapter per
 system plugs into a system-agnostic core; the UI renders from descriptors (status, metrics, config files,
@@ -64,7 +75,7 @@ flowchart LR
 ```
 
 *(Unrendered Mermaid.)* Details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (the locked contract),
-[`docs/adr/`](docs/adr/) (14 decisions with rejected alternatives), [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md),
+[`docs/adr/`](docs/adr/) (15 decisions with rejected alternatives), [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md),
 [`docs/OPERATIONS.md`](docs/OPERATIONS.md), [`docs/FEATURE-MATRIX.md`](docs/FEATURE-MATRIX.md), [`docs/PUBLISHING-CHECKLIST.md`](docs/PUBLISHING-CHECKLIST.md),
 [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -97,7 +108,9 @@ Loopback bind; `Host` allowlist (421); same-origin-or-absent `Origin` on unsafe 
 on every non-GET (403); bearer keys stored as SHA-256 with `admin` / `viewer` roles (an unauthenticated caller is
 role `public` and gets 401 on everything but `/health`); strict CSP and other
 security headers on every response including errors; body and SSE caps; all process control through one argv-only
-runner with a five-binary allowlist (`docker`, `systemctl`, `nemo-relay`, and the two SkillEvaluator launchers); config writes only to paths fixed at startup, refusing symlinks and
+runner with a bare-name binary allowlist (`docker`, `systemctl`, `nemo-relay`, `openshell`, the two SkillEvaluator
+launchers and the lab wrappers `data-designer-local`, `data-designer-export`, `aiperf-local`, `guardrails-local`,
+`evaluator-local`); config writes only to paths fixed at startup, refusing symlinks and
 secret-looking content; secrets referenced by environment-variable **name**, never stored or returned; no
 outbound network beyond configured loopback URLs.
 
@@ -161,6 +174,12 @@ The adapters were written against one deployment and encode it as constants and 
 - Relay's gateway runs as the systemd user unit `nemo-relay-gateway.service` on `127.0.0.1:4040`.
 - Dynamo runs as a compose project with `dynamo-frontend` / `dynamo-worker` services, pinned to a GPU by UUID.
 - A LiteLLM-compatible router answers `/health/liveliness` on `127.0.0.1:4000` (topology probe only).
+- OpenShell: the lab's Data Designer runner (`clients/data-designer/runner`: gateway `ai-lab-dd-gateway`, forwarder
+  `ai-lab-dd-cli-fwd`, sandbox network `openshell-docker`). DCGM: dcgm-exporter on `127.0.0.1:9400` (container
+  `ai-lab-observability-dcgm-exporter-1`, fields in `observability/dcgm/counters.csv`) and Prometheus on
+  `127.0.0.1:9090`. AIPerf / NeMo Evaluator / NeMo Guardrails: the lab wrappers `aiperf-local`, `evaluator-local`,
+  `guardrails-local` on PATH (each reads its own 0600 router key file) and, for Guardrails, the server on
+  `127.0.0.1:8806` (`security/nemo-guardrails`). Container names are settings (`NEMO_CONSOLE_*`).
 - The root that holds those directories is `NEMO_CONSOLE_REPO_ROOT`. The default walks up from the source file to
   a directory containing `inference/dynamo/docker-compose.yml`, else uses the current directory; a root that lacks that
   file is reported as a problem. For a standalone checkout set it explicitly.

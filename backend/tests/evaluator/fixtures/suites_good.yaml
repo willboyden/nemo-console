@@ -1,0 +1,32 @@
+# suites.yaml — named NeMo Evaluator runs for the lab (clients/nemo-evaluator/README.md documents the schema).
+#
+# Every suite names a router model alias and 1-8 benchmarks; `max_problems` is REQUIRED (a bounded, shuffled
+# sample; seed 42) so no run is ever accidentally the whole dataset. Allowed benchmarks: gsm8k, mmlu, math500,
+# mmlu_pro, triviaqa, drop. Docker-sandbox and LLM-judge benchmarks are refused by the validator. Datasets must be
+# prefetched first:  evaluator-local prefetch gsm8k mmlu
+version: 1
+suites:
+  smoke-lightning:
+    description: 10 GSM8K problems on Nemotron Lightning (fast, thinking off) - proves the whole path in seconds.
+    model: aitop/nemotron-lightning
+    benchmarks:
+      - bench: gsm8k
+        max_problems: 10
+        max_tokens: 1024
+  knowledge-lightning:
+    description: 50 MMLU questions on Lightning - a rough knowledge sanity check.
+    model: aitop/nemotron-lightning
+    benchmarks:
+      - bench: mmlu
+        max_problems: 50
+        max_tokens: 1024
+  baseline-lightning:
+    description: 100 GSM8K + 100 MMLU problems on Lightning - a quick before/after baseline for engine changes.
+    model: aitop/nemotron-lightning
+    benchmarks:
+      - bench: gsm8k
+        max_problems: 100
+        max_tokens: 1024
+      - bench: mmlu
+        max_problems: 100
+        max_tokens: 1024

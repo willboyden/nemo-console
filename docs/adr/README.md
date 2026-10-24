@@ -20,3 +20,4 @@ record is **Accepted** (v0.1.0). Where the code deviates from a decision, the re
 | [0012](0012-sqlite-wal-and-sse.md) | SQLite (WAL) for state, SSE for live streams |
 | [0013](0013-zero-build-zero-npm-frontend.md) | Zero-build, zero-npm frontend with a strict CSP |
 | [0014](0014-localhost-security-baseline.md) | Localhost-service security baseline applied in full |
+| [0015](0015-guardrails-rails-editable-weakening-deliberate.md) | NeMo Guardrails rails configs are editable; weakening them needs an explicit marker (exception to 0007) |

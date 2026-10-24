@@ -45,3 +45,6 @@ kbd { border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 5px
 .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .grid > * { min-width: 0; }
 .wrap-anywhere { overflow-wrap: anywhere; min-width: 0; }
+.sidebar { overflow-y: auto; }
+.nav-label { margin: var(--s3) var(--s3) var(--s1); font-size: var(--fs-sm); font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; }
+.nav-label:first-child { margin-top: 0; }

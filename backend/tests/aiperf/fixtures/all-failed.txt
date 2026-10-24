@@ -1,0 +1,11 @@
+07:36:11.912 ERROR    All 1 inference request(s) failed; no successful responses were collected. (system_controller.py:2370)
+
+╭─ AIPerf System Exit Errors ──────────────────────────────────────────────────╮
+│ • Service: system_controller                                                 │
+│    Operation: export_results                                                 │
+│    Error: Unknown                                                            │
+│    Reason: All 1 inference request(s) failed. No successful responses were   │
+│            collected — check the server URL, endpoint path, and              │
+│            response format. See prior log output for per-request             │
+Log File:
+/tmp/ARTIFACTS/logs/aiperf.log

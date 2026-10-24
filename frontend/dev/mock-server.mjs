@@ -12,6 +12,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { DEMOS } from './demos.mjs';
+import { FIVE, MOCKED, FIVE_LABEL, fiveStatus, fiveHealth, fiveMetrics, fiveHistory, FIVE_SPECS, FIVE_FILES, FIVE_RESTARTS, fiveValidate, FIVE_ACTIONS, fiveRunAction, fiveSeedEvents, fiveLiveEvent, GR_PLAY, GR_REFUSAL } from './mock-five.mjs';
 import { SWITCHYARD_ROUTES, RELAY_ROUTES, RELAY_PLUGINS, RELAY_CONFIG, DYNAMO_CATALOG, DD_SCRIPTS, DD_SCRIPT, DD_COLS, ddRows, DD_RUNS, DD_PREVIEW_FILES, DD_CREATE_FILES } from './mock-data.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -35,7 +36,8 @@ const state = {
   dynamo: process.env.MOCK_DYNAMO || 'up',       // up | loading | down | off (opt-in, stopped on purpose)
   vllmRunning: false,                             // the container that shares the Workstation card
   dynamoSince: now() - 5400,
-  failNext: null,                                 // {status, n}
+  failNext: null,
+  five: { dcgmFixed: false, guardPlayground: true },   // dev toggles for the 9.8 systems (/__dev/five)                                 // {status, n}
   settings: {
     version: '0.1.0-mock', urls: { switchyard: 'http://127.0.0.1:4010', relay: 'http://127.0.0.1:4040', dynamo: 'http://127.0.0.1:8020', dynamo_worker_metrics: 'http://127.0.0.1:8081', litellm: 'http://127.0.0.1:4000' },
     state_dir: '~/.local/share/nemo-console', poll_interval_s: 2.0, ring_seconds: 900, playground_key_env: { switchyard: 'LITELLM_API_KEY' }, tokens: { switchyard: '[set, 67 chars]' }, trust_loopback: true, restart_required: false,
@@ -51,8 +53,10 @@ const files = {
 };
 files['switchyard/routes'].history.push({ id: 'rev_0001', ts: now() - 5 * 86400, actor: 'loopback-admin', content: SWITCHYARD_ROUTES.replace('confidence_threshold = 0.5\nrecent_turn_window = 3', 'confidence_threshold = 0.6\nrecent_turn_window = 3'), note: 'before: threshold 0.6 -> 0.5' });
 files['switchyard/routes'].history.push({ id: 'rev_0002', ts: now() - 86400, actor: 'loopback-admin', content: SWITCHYARD_ROUTES.replace('picker = "efficient_first"', 'picker = "capable_first"'), note: 'before: picker efficient_first' });
+for (const [k, c] of Object.entries(FIVE_FILES)) files[k] = { content: c, mtime: now() - 3 * 86400, history: [] };
 for (const s of DD_SCRIPTS) files[`datadesigner/${s}`] = { content: `# ${s} — Data Designer config script (mock copy)\n` + DD_SCRIPT, mtime: now() - 2 * 86400, history: [] };
 const specs = {
+  ...FIVE_SPECS, skillevaluator: [],
   switchyard: [{ id: 'routes', label: 'routes.toml', description: 'Routing table for the Switchyard container: llm clients, targets and routes (stage routers and passthroughs).', display_path: 'inference/switchyard/routes.toml', format: 'toml', editable: true, validators: ['switchyard-server --dry-run'], authoritative: true, apply_effect: 'Recreates the switchyard container; about 5 s of dropped requests on :4010. LiteLLM on :4000 is unaffected.' }],
   relay: [
     { id: 'routes', label: 'routes.toml', description: 'Routes for the Relay native Switchyard plugin (host side).', display_path: 'clients/nemo-relay/routes.toml', format: 'toml', editable: true, validators: ['nemo-relay plugins validate (proxy)'], authoritative: false, apply_effect: 'Restarts nemo-relay-gateway.service; agents connected through :4040 reconnect after about 3 s.' },
@@ -84,9 +88,10 @@ const looksSecret = (s) => /\bsk-[A-Za-z0-9]{12,}|Bearer\s+[A-Za-z0-9._-]{12,}|a
 
 // ---------------------------------------------------------------- system status
 const dynState = () => state.dynamo;
-function health(id) { if (id === 'relay') return 'degraded'; if (id === 'dynamo') return dynState() === 'up' ? 'up' : dynState() === 'loading' ? 'degraded' : dynState() === 'off' ? 'off' : 'down'; return 'up'; }
+function health(id) { if (MOCKED.includes(id)) return fiveHealth(id, state.five); if (id === 'relay') return 'degraded'; if (id === 'dynamo') return dynState() === 'up' ? 'up' : dynState() === 'loading' ? 'degraded' : dynState() === 'off' ? 'off' : 'down'; return 'up'; }
 function status(id) {
   const checked_at = now();
+  if (MOCKED.includes(id)) return fiveStatus(id, checked_at, state.five);
   if (id === 'switchyard') return { system: id, health: 'up', version: '0.3.0', summary: 'Routing on :4010; 2 of 4 tiers reachable (capable tier qwen3.8-27b-1m is dark)',
     endpoints: [{ name: 'api', url: 'http://127.0.0.1:4010/v1', role: 'api', auth: 'forwarded' }, { name: 'health', url: 'http://127.0.0.1:4010/health', role: 'health', auth: 'none' }, { name: 'metrics', url: 'http://127.0.0.1:4010/metrics', role: 'metrics', auth: 'none' }],
     components: [{ kind: 'container', name: 'ai-lab-switchyard-switchyard-1', state: 'running', image: 'switchyard-server:0.3.0', detail: 'healthy, up 19h' }, { kind: 'http', name: 'litellm upstream', state: 'running', detail: 'http://litellm:4000/v1 answers' }],
@@ -120,9 +125,9 @@ function status(id) {
   if (s === 'off') return { ...base, health: 'off', summary: 'off (opt-in): no Dynamo container is running', components: [{ kind: 'container', name: 'ai-lab-dynamo-dynamo-frontend-1', state: 'stopped' }, { kind: 'container', name: 'ai-lab-dynamo-dynamo-worker-1', state: 'stopped', detail: 'exited (code 1)' }], problems: [{ severity: 'info', code: 'dynamo.off', message: 'Dynamo is opt-in and off: no frontend, worker or mocker container is running or restarting.', fix: 'scripts/use-model.sh qwen3.8-27b-dynamo' }] };
   return { ...base, health: 'down', summary: 'Dynamo is not running', components: [{ kind: 'container', name: 'ai-lab-dynamo-dynamo-frontend-1', state: 'stopped', detail: 'exited 12 min ago' }, { kind: 'container', name: 'ai-lab-dynamo-dynamo-worker-1', state: 'absent' }], problems: [{ severity: 'error', code: 'dynamo.down', message: 'The frontend on :8020 does not answer and no worker container exists.', fix: 'cd inference/dynamo && docker compose up -d' }] };
 }
-const SYSTEMS = ['switchyard', 'relay', 'dynamo', 'datadesigner'];
+const SYSTEMS = ['switchyard', 'relay', 'dynamo', 'skillevaluator', 'datadesigner', ...FIVE];
 const EVENTED = ['switchyard', 'relay', 'dynamo'];   // systems with a periodic event feed (datadesigner emits dd.run on runs only)
-const LABEL = { switchyard: 'NeMo Switchyard', relay: 'NeMo Relay', dynamo: 'NVIDIA Dynamo', datadesigner: 'NVIDIA Data Designer' };
+const LABEL = { switchyard: 'NeMo Switchyard', relay: 'NeMo Relay', dynamo: 'NVIDIA Dynamo', datadesigner: 'NVIDIA Data Designer', ...FIVE_LABEL };
 function topology() {
   const dh = health('dynamo');
   return { ts: now(), nodes: [
@@ -143,6 +148,7 @@ const upDyn = () => dynState() === 'up';
 function metrics(id) {
   const ts = now(), P = (key, value, unit = '', labels = {}) => ({ key, value, unit, labels });
   const wob = (b, a) => b + Math.sin(ts / 7) * a + rnd() * a * 0.4;
+  if (MOCKED.includes(id)) return { system: id, ts, available: true, points: fiveMetrics(id, ts, wob) };
   if (id === 'switchyard') return { system: id, ts, available: true, points: [P('sy.requests_total', 1200 + (ts - T0) * 0.4), P('sy.errors_total', 3), P('sy.in_flight', Math.round(wob(2, 2))), P('sy.tokens', 3.1e6, 'tok', { kind: 'prompt' }), P('sy.tokens', 41200, 'tok', { kind: 'completion' }), P('sy.tokens', 9800, 'tok', { kind: 'reasoning' }), P('sy.tokens', 120000, 'tok', { kind: 'cached' }), P('sy.route.calls', 812, '', { route: 'auto-local' }), P('sy.model.calls', 700, '', { model: 'nemotron-lightning' })] };
   if (id === 'relay') return { system: id, ts, available: true, points: [P('relay.gateway_up', 1), P('relay.plugin_loaded', 1), P('relay.atof_files', 214), P('relay.atof_bytes', 48e6, 'B'), P('relay.atif_trajectories', 37), P('relay.exporters_enabled', 0)] };
   if (id === 'datadesigner') {
@@ -157,6 +163,7 @@ function metrics(id) {
   return { system: id, ts, available: true, points: [P('dyn.up', 1), P('dyn.models', 1), P('dyn.requests_total', 640 + (ts - T0) * 0.2), P('dyn.in_flight', Math.round(wob(2, 2))), P('dyn.ttft_ms', wob(230, 30), 'ms', { q: 'p50' }), P('dyn.ttft_ms', wob(520, 80), 'ms', { q: 'p95' }), P('dyn.itl_ms', wob(19, 2), 'ms', { q: 'p50' }), P('dyn.itl_ms', wob(34, 5), 'ms', { q: 'p95' }), P('dyn.kv_cache_usage', wob(0.22, 0.05), 'ratio'), P('dyn.worker_up', 1)] };
 }
 function history(id, key, window) {
+  if (MOCKED.includes(id) && fiveHistory(key, 0, rnd) === undefined) return { key, points: [] };
   if (id === 'dynamo' && !upDyn()) return { key, points: [] };
   const n = { '15m': 30, '1h': 60, '24h': 96 }[window] || 30, step = { '15m': 30, '1h': 60, '24h': 900 }[window] || 30, t1 = Math.floor(now());
   const pts = [];
@@ -170,6 +177,7 @@ function history(id, key, window) {
     else if (/dyn\.itl_ms/.test(key)) v = 19 + Math.sin(ts / 80) * 2 + rnd();
     else if (key === 'dyn.in_flight') v = Math.max(0, Math.round(2 + Math.sin(ts / 45) * 2 + rnd() * 2));
     else if (key === 'dyn.kv_cache_usage') v = 0.2 + Math.abs(Math.sin(ts / 300)) * 0.25 + rnd() * 0.03;
+    else if (MOCKED.includes(id)) v = fiveHistory(key, ts, rnd);
     else v = rnd() * 10;
     pts.push([ts, +v.toFixed(3)]);
   }
@@ -185,7 +193,8 @@ function routingSummary(window) {
 }
 
 // ---------------------------------------------------------------- events + SSE
-const ring = { switchyard: [], relay: [], dynamo: [], datadesigner: [] };
+const ring = { switchyard: [], relay: [], dynamo: [], datadesigner: [], skillevaluator: [] };
+for (const [id, evs] of Object.entries(fiveSeedEvents(now()))) ring[id] = evs;
 const streams = new Set();
 function makeEvent(system) {
   const ts = now();
@@ -204,6 +213,7 @@ for (const s of EVENTED) for (let i = 25; i > 0; i--) { const e = makeEvent(s); 
 // Data Designer has no periodic feed: one dd.run event per stored run (metadata only).
 for (const r of DD_RUNS) ring.datadesigner.unshift(ddEvent(r));
 setInterval(() => {
+  if (rnd() < 0.3) { const e = fiveLiveEvent(now(), pick, rnd); ring.guardrails.unshift(e); ring.guardrails.length = Math.min(ring.guardrails.length, 200); for (const c of streams) if (c.system === 'guardrails') sseWrite(c.res, e); }
   for (const s of EVENTED) {
     if (s === 'dynamo' && !upDyn()) continue;
     if (rnd() > (s === 'switchyard' ? 0.7 : 0.35)) continue;
@@ -254,6 +264,7 @@ function validate(system, file, content) {
       diagnostics: ok ? [] : [{ severity: 'error', message: 'the script does not define load_config_builder(); the CLI could not build a config', line: 1 }],
       note: 'Validation executes this script locally (it calls load_config_builder) with the console user\'s privileges.' };
   }
+  if (MOCKED.includes(system)) return fiveValidate(system, file, content);
   const diags = [], lines = content.split('\n'), targets = new Set();
   lines.forEach((l) => { const m = /^\[targets\.([\w-]+)\]/.exec(l); if (m) targets.add(m[1]); });
   lines.forEach((l, i) => {
@@ -284,6 +295,7 @@ async function applyFile(system, file, content, base, restart, note, postCheck) 
 
 // ---------------------------------------------------------------- actions
 const ACTIONS = {
+  ...FIVE_ACTIONS,
   switchyard: [
     { id: 'restart', label: 'Restart Switchyard', description: 'Recreates the switchyard container. About 5 s of dropped requests on :4010; in-memory /v1/stats are lost.', danger: 'disruptive', params: [] },
     { id: 'reset_stats', label: 'Reset stats', description: 'Zeroes the in-memory /v1/stats counters. The durable routing log is not touched.', danger: 'destructive', params: [] },
@@ -331,6 +343,7 @@ const ACTIONS = {
 function goLoading() { state.dynamo = 'loading'; setTimeout(() => { if (state.dynamo === 'loading') { state.dynamo = 'up'; state.dynamoSince = now(); } }, 12000).unref(); }
 function runAction(system, id, params) {
   const t0 = Date.now(), R = (ok, output, problems = []) => ({ ok, output, duration_ms: Date.now() - t0 + Math.round(rnd() * 400), problems });
+  if (MOCKED.includes(system)) return fiveRunAction(system, id, params, R);
   if (system === 'datadesigner') {
     const script = DD_SCRIPTS.includes(params.script) ? params.script : DD_SCRIPTS[0];
     if (id === 'preview') {
@@ -424,6 +437,7 @@ function validateParams(values) {
 // ---------------------------------------------------------------- playground
 const REPLY = 'Routing keeps the cheap model on the easy turns and hands the hard ones to the capable tier. Here is the short version: classify the request, pick the tier, and forward it through LiteLLM.';
 const PLAY = {
+  get guardrails() { return state.five.guardPlayground ? GR_PLAY : null; },
   switchyard: { wire: 'openai_chat', models: ['auto-local', 'auto-flashnext', 'direct-lightning', 'direct-27b'], default_model: 'auto-local', note: 'Sent to Switchyard on :4010 with the console credential resolved server-side.' },
   relay: { wire: 'anthropic_messages', models: ['auto-local'], default_model: 'auto-local', note: 'Sent through the Relay gateway on :4040 (Anthropic Messages wire).' },
   dynamo: { wire: 'openai_chat', models: ['unsloth/Qwen3.8-27B-NVFP4'], default_model: 'unsloth/Qwen3.8-27B-NVFP4', note: 'Sent to the Dynamo frontend on :8020.' },
@@ -436,7 +450,8 @@ async function playgroundChat(req, res, system, body) {
   if (system === 'dynamo' && !upDyn()) return err(res, 503, 'upstream_unavailable', dynState() === 'loading' ? 'Dynamo worker is still loading' : 'Dynamo is not running');
   const extra = system === 'switchyard' ? { 'X-Served-By-Route': body.model, 'X-Served-By-Tier': body.model === 'direct-27b' ? 'capable' : pick(['efficient', 'efficient', 'capable']) } : {};
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', ...SEC, ...extra });
-  const words = REPLY.split(' '), n = Math.min(words.length, body.max_tokens || 256);
+  const blocked = system === 'guardrails' && /ignore previous|password|secret/i.test(String(body.messages[body.messages.length - 1]?.content));
+  const words = (blocked ? GR_REFUSAL : REPLY).split(' '), n = Math.min(words.length, body.max_tokens || 256);
   let closed = false; req.on('close', () => { closed = true; });
   if (spec.wire === 'anthropic_messages') sseWrite(res, { type: 'message_start', message: { usage: { input_tokens: 812 } } }, 'message_start');
   for (let i = 0; i < n && !closed; i++) {
@@ -513,7 +528,7 @@ async function api(req, res, url) {
         rows: all.slice(offset, offset + limit), truncated: all.length > 2000 });
     }
     let mm;
-    if ((mm = sub.match(/^\/config\/([\w.]+)(\/(validate|apply|history|rollback))?$/))) {
+    if ((mm = sub.match(/^\/config\/([\w.-]+)(\/(validate|apply|history|rollback))?$/))) {
       const spec = specs[id].find((s) => s.id === mm[1]);
       if (!spec) return err(res, 404, 'not_found', `unknown config file ${mm[1]}`);
       const f = files[`${id}/${spec.id}`], act = mm[3];
@@ -526,8 +541,8 @@ async function api(req, res, url) {
         if (typeof body.content !== 'string' || body.content.length > 262144) return err(res, body.content ? 413 : 422, body.content ? 'too_large' : 'invalid_request', 'content missing or over 256 KiB');
         if (looksSecret(body.content)) return err(res, 422, 'secret_in_content', 'content looks like it contains a secret; reference an env var name instead');
         if (body.base_sha256 !== sha(f.content)) return err(res, 409, 'stale_base', 'the file changed on disk since it was read (base_sha256 mismatch)');
-        const restart = body.restart !== false && id !== 'datadesigner';   // a script has nothing to restart
-        const r = await applyFile(id, spec.id, body.content, body.base_sha256, restart, undefined, id === 'datadesigner' ? 'healthy' : undefined);
+        const restart = body.restart !== false && id !== 'datadesigner' && (!FIVE.includes(id) || FIVE_RESTARTS.has(id));   // a script has nothing to restart
+        const r = await applyFile(id, spec.id, body.content, body.base_sha256, restart, undefined, id === 'datadesigner' || (FIVE.includes(id) && !FIVE_RESTARTS.has(id)) ? 'healthy' : undefined);
         audit(id, 'POST', `config.apply ${spec.id}`, { restart: body.restart, content: body.content, base_sha256: body.base_sha256 }, r.ok ? 200 : 200); return json(res, 200, r);
       }
       if (act === 'rollback' && M === 'POST') {
@@ -580,6 +595,7 @@ function dev(req, res, url) {
   if (p === '/__dev/role') { state.role = ['viewer', 'public'].includes(q.get('set')) ? q.get('set') : 'admin'; return json(res, 200, { role: state.role }); }
   if (p === '/__dev/touch') { const f = files['switchyard/routes']; f.content += `\n# edited on disk by another process at ${new Date().toISOString()}\n`; f.mtime = now(); return json(res, 200, { sha256: sha(f.content) }); }
   if (p === '/__dev/fail') { state.failNext = { status: Number(q.get('status') || 503), n: Number(q.get('n') || 1) }; return json(res, 200, state.failNext); }
+  if (p === '/__dev/five') { if (q.has('dcgm_fixed')) state.five.dcgmFixed = q.get('dcgm_fixed') === '1'; if (q.has('playground')) state.five.guardPlayground = q.get('playground') === '1'; return json(res, 200, state.five); }
   if (p === '/__dev/dd') {
     const do_ = q.get('do');
     if (do_ === 'start' && !dd.live) runAction('datadesigner', 'create', { script: DD_SCRIPTS[0], num_records: 500, dataset_name: 'support_tickets_v2', destination_subdir: 'support_tickets_v2', format: 'parquet' });

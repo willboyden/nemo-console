@@ -69,6 +69,29 @@ def _configure_dynamo(adapter: SystemAdapter, cfg: Settings) -> None:
             ignored=tuple(cfg.dynamo_ignored_containers), dark=tuple(cfg.dynamo_dark_while_held))
 
 
+def _configure_openshell(adapter: SystemAdapter, cfg: Settings) -> None:
+    """Addendum 9.8: hand the OpenShell container names (`openshell_containers`) to the registry-built adapter."""
+    from nemo_console.adapters.openshell import OpenShellAdapter
+    if isinstance(adapter, OpenShellAdapter):
+        adapter.containers = tuple(cfg.openshell_containers)
+
+
+def _configure_guardrails(adapter: SystemAdapter, cfg: Settings) -> None:
+    """Addendum 9.8: hand the NeMo Guardrails server container name (`guardrails_container`) to the adapter; its
+    gateway and router-broker siblings are derived from it (`<name>-gw`, `<name>-router-broker`)."""
+    from nemo_console.adapters.guardrails import GuardrailsAdapter
+    if isinstance(adapter, GuardrailsAdapter):
+        adapter.container = cfg.guardrails_container
+
+
+def _configure_dcgm(adapter: SystemAdapter, cfg: Settings) -> None:
+    """Addendum 9.8: hand the DCGM settings (exporter container, diag image, Prometheus jobs) to the adapter."""
+    from nemo_console.adapters.dcgm import DcgmAdapter
+    if isinstance(adapter, DcgmAdapter):
+        adapter.configure(exporter_container=cfg.dcgm_exporter_container, diag_image=cfg.dcgm_diag_image,
+                          prometheus_jobs=cfg.dcgm_prometheus_jobs)
+
+
 def build_container(cfg: Settings, *, adapters: dict[SystemId, SystemAdapter] | None = None,
                     runner: CommandRunner | None = None, http: httpx.AsyncClient | None = None) -> Container:
     store = Store(cfg.state_dir)
@@ -88,6 +111,12 @@ def build_container(cfg: Settings, *, adapters: dict[SystemId, SystemAdapter] | 
             built[sid] = build_adapter(sid, ctx)
             if sid == "dynamo":
                 _configure_dynamo(built[sid], cfg)
+            elif sid == "openshell":
+                _configure_openshell(built[sid], cfg)
+            elif sid == "guardrails":
+                _configure_guardrails(built[sid], cfg)
+            elif sid == "dcgm":
+                _configure_dcgm(built[sid], cfg)
         except Exception as e:  # noqa: BLE001 - a missing/broken adapter degrades that system only
             log.warning("adapter %s unavailable: %s", sid, type(e).__name__)
             built[sid] = MissingAdapter(sid, ctx, f"{type(e).__name__}: {e}")

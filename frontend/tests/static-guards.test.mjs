@@ -19,13 +19,13 @@ test('every literal t("key") and key-like string used in js/ exists in en.json',
     for (const m of src.matchAll(/\bt\(\s*['"`]([a-z_]+\.[a-z_0-9.]+)['"`]/g)) keys.add(m[1]);
     for (const m of src.matchAll(/['"]([a-z_]+\.[a-z_0-9]+)['"]/g)) if (ns.has(m[1].split('.')[0]) && dynamic.test(m[1])) keys.add(m[1]);
     // Metric keys / event kinds share the namespace prefixes but are not message keys.
-    const notMessage = /^(routing\.decision|dyn\.(ttft|itl)(_ms)?|dyn\.inflight|dyn\.kv_cache_usage|dyn\.requests_total|relay\.(atof_bytes|atif_trajectories|exporters_enabled))$/;
+    const notMessage = /^(routing\.decision|dyn\.(ttft|itl)(_ms)?|dyn\.inflight|dyn\.kv_cache_usage|dyn\.requests_total|relay\.(atof_bytes|atif_trajectories|exporters_enabled)|ev\.(runs|score|suites|live_running))$/;
     for (const k of keys) if (!notMessage.test(k) && !(k in en) && !(`${k}_one` in en) && !/\.(js|json|md)$/.test(k)) missing.push(`${rel(f)}: ${k}`);
   }
   assert.deepEqual(missing, []);
 });
 test('dynamic key families are complete', () => {
-  const fam = { 'nav.': ['overview', 'switchyard', 'relay', 'dynamo', 'audit', 'settings'], 'sys.': ['switchyard', 'relay', 'dynamo'], 'health.': ['up', 'degraded', 'down', 'unknown', 'off'], 'comp.': ['running', 'stopped', 'failed', 'absent', 'unknown'],
+  const fam = { 'nav.': ['overview', 'switchyard', 'relay', 'dynamo', 'audit', 'settings', 'skillevaluator', 'datadesigner', 'openshell', 'dcgm', 'aiperf', 'guardrails', 'evaluator'], 'sys.': ['switchyard', 'relay', 'dynamo', 'skillevaluator', 'datadesigner', 'openshell', 'dcgm', 'aiperf', 'guardrails', 'evaluator'], 'group.': ['routing', 'engines', 'safety', 'quality', 'console'], 'intro.': ['openshell', 'dcgm', 'aiperf', 'guardrails', 'evaluator'], 'health.': ['up', 'degraded', 'down', 'unknown', 'off'], 'comp.': ['running', 'stopped', 'failed', 'absent', 'unknown'],
     'kind.': ['container', 'systemd', 'process', 'http'], 'sev.': ['info', 'warn', 'error'], 'danger.': ['safe', 'disruptive', 'destructive'], 'postcheck.': ['healthy', 'unhealthy', 'skipped'], 'window.': ['15m', '1h', '24h'],
     'tokens.': ['prompt', 'completion', 'reasoning', 'cached', 'total'], 'act.danger_': ['disruptive', 'destructive'], 'dyn.effect_': ['up', 'down', 'restart'], 'ev.state_': ['live', 'connecting', 'reconnecting', 'paused'], 'relay.att_': ['verified', 'failed', 'unknown', 'unreported', 'reported'],
     'diff.': ['add', 'del', 'eq'], 'role.': ['admin', 'viewer'], 'chart.dyn.': ['ttft', 'itl', 'inflight', 'kv'], 'err.': ['401', '403', '409', '413', '415', '421', '429', '502', '503', 'network'], 'auth.': ['none', 'bearer', 'forwarded'] };

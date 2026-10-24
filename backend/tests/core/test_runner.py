@@ -121,3 +121,17 @@ async def test_cancelled_other_binary_is_killed_without_grace(bindir: Path) -> N
         await asyncio.wait_for(task, 10)
     assert time.monotonic() - t0 < 3
     assert await _group_gone(int(pidfile.read_text()))
+
+
+def test_addendum_98_container_and_image_settings_refuse_option_like_values() -> None:
+    """Audit L8: container names and the diag image reach docker argv; a leading '-' must never get through."""
+    import pytest
+    from pydantic import ValidationError
+
+    from nemo_console.config import Settings
+    for kw in ({"dcgm_exporter_container": "-v"}, {"guardrails_container": "--rm"},
+               {"openshell_containers": ["ok-name", "-x"]}, {"dcgm_diag_image": "--privileged"}):
+        with pytest.raises(ValidationError):
+            Settings(**kw)  # type: ignore[arg-type]
+    s = Settings()
+    assert s.dcgm_exporter_container and s.guardrails_container and s.openshell_containers and s.dcgm_diag_image

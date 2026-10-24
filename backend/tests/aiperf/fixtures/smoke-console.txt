@@ -1,0 +1,34 @@
+                                                NVIDIA AIPerf | LLM Metrics                                                 
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━┓
+┃                                        Metric ┃      avg ┃      min ┃      max ┃      p99 ┃      p90 ┃      p50 ┃    std ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━┩
+│                      Time to First Token (ms) │    30.18 │    21.46 │    41.24 │    40.70 │    35.81 │    29.96 │   5.67 │
+│                     Time to Second Token (ms) │    50.00 │    39.99 │    61.37 │    60.98 │    57.48 │    49.85 │   6.67 │
+│               Time to First Output Token (ms) │    30.18 │    21.46 │    41.24 │    40.70 │    35.81 │    29.96 │   5.67 │
+│                          Request Latency (ms) │    80.18 │    68.06 │    92.32 │    92.21 │    91.19 │    78.62 │   9.00 │
+│                          Decode Duration (ms) │    50.00 │    39.99 │    61.37 │    60.98 │    57.48 │    49.85 │   6.67 │
+│                      Inter Token Latency (ms) │     0.79 │     0.63 │     0.97 │     0.97 │     0.91 │     0.79 │   0.11 │
+│              Output Token Throughput Per User │ 1,283.00 │ 1,026.64 │ 1,575.28 │ 1,569.32 │ 1,515.69 │ 1,264.69 │ 173.21 │
+│                             (tokens/sec/user) │          │          │          │          │          │          │        │
+│ E2E Output Token Throughput (tokens/sec/user) │   808.39 │   693.21 │   940.40 │   939.50 │   931.47 │   814.05 │  91.02 │
+│               Output Sequence Length (tokens) │    64.00 │    64.00 │    64.00 │    64.00 │    64.00 │    64.00 │   0.00 │
+│                Input Sequence Length (tokens) │   150.00 │   150.00 │   150.00 │   150.00 │   150.00 │   150.00 │   0.00 │
+│          Output Token Throughput (tokens/sec) │ 1,532.99 │      N/A │      N/A │      N/A │      N/A │      N/A │    N/A │
+│           Input Token Throughput (tokens/sec) │ 3,592.95 │      N/A │      N/A │      N/A │      N/A │      N/A │    N/A │
+│             Request Throughput (requests/sec) │    23.95 │      N/A │      N/A │      N/A │      N/A │      N/A │    N/A │
+│          Completed Requests (Success + Error) │     8.00 │      N/A │      N/A │      N/A │      N/A │      N/A │    N/A │
+│                                    (requests) │          │          │          │          │          │          │        │
+│                        Request Error Rate (%) │     0.00 │      N/A │      N/A │      N/A │      N/A │      N/A │    N/A │
+│                      Request Count (requests) │     8.00 │      N/A │      N/A │      N/A │      N/A │      N/A │    N/A │
+└───────────────────────────────────────────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴────────┘
+
+Token usage is reported but no prompt-cache read tokens were seen (usage.prompt_tokens_details.cached_tokens absent). If your server uses 
+prefix/KV caching, enable cache reporting so AIPerf can populate the prompt-cache metrics: vLLM --enable-prompt-tokens-details, SGLang 
+--enable-cache-report (TRT-LLM reports it by default).
+
+CLI Command: (omitted)
+Benchmark Duration: 0.33 sec
+CSV Export: /tmp/ARTIFACTS/...
+JSON Export: /tmp/ARTIFACTS/...
+Log File:
+/tmp/ARTIFACTS/logs/aiperf.log

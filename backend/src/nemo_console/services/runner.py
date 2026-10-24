@@ -13,7 +13,10 @@ from nemo_console.adapters.base import CommandResult
 from nemo_console.services.common import redact
 
 ALLOWED_BINARIES = frozenset({"docker", "systemctl", "nemo-relay", "skillevaluator", "skillevaluator-local",
-                              "data-designer-local", "data-designer-export"})
+                              "data-designer-local", "data-designer-export",
+                              # addendum 9.8: the OpenShell CLI and the lab wrappers of AIPerf, NeMo Guardrails and
+                              # NeMo Evaluator (each wrapper reads its OWN 0600 router key file; none needs our env)
+                              "openshell", "aiperf-local", "guardrails-local", "evaluator-local"})
 CHILD_ENV_KEYS = ("PATH", "HOME", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "DOCKER_HOST", "DOCKER_CONTEXT",
                   "DOCKER_CONFIG", "LANG", "LC_ALL")
 # SkillEvaluator is configured by environment only (SKILL_EVAL_*, no config file). Those variables reach ITS children
@@ -33,9 +36,15 @@ MAX_LIVE_EVAL_TIMEOUT = 4800.0
 # (never pass secrets on its behalf); `data-designer-export` is a fixed parquet converter.
 DD_BINARIES = frozenset({"data-designer-local"})
 DD_CREATE = 3600.0
+# addendum 9.8: ONLY `aiperf-local profile ...` (a load test) and `evaluator-local run ...` (a benchmark run) get long
+# caps; every other subcommand of those wrappers keeps MAX_TIMEOUT. Both wrappers stop their children on SIGINT.
+AIPERF_BINARIES = frozenset({"aiperf-local"})
+AIPERF_PROFILE = 3600.0
+EVALUATOR_BINARIES = frozenset({"evaluator-local"})
+EVALUATOR_RUN = MAX_LIVE_EVAL_TIMEOUT
 # SkillEvaluator launchers and the Data Designer wrapper are stopped with SIGINT first (the lab launchers clean up
 # their own children/jobs on SIGINT), then SIGKILL after this grace. Every other binary gets SIGKILL straight away.
-GRACEFUL_BINARIES = SKILLEVAL_BINARIES | DD_BINARIES
+GRACEFUL_BINARIES = SKILLEVAL_BINARIES | DD_BINARIES | AIPERF_BINARIES | EVALUATOR_BINARIES
 STOP_GRACE = 5.0        # short enough for `nemo-console stop`, which waits 10 s for the console to exit
 MAX_ARGS = 64
 MAX_ARG_LEN = 8192
@@ -46,12 +55,17 @@ class RunnerError(Exception):
 
 
 def max_timeout(argv: list[str]) -> float:
-    """The cap for this argv: the long one only for a SkillEvaluator launcher's `tier3` subcommand and for
-    `data-designer-local create` (DD_CREATE); everything else keeps MAX_TIMEOUT."""
+    """The cap for this argv: the long one only for a SkillEvaluator launcher's `tier3` subcommand,
+    `data-designer-local create` (DD_CREATE), `aiperf-local profile` and `evaluator-local run` (addendum 9.8);
+    everything else keeps MAX_TIMEOUT."""
     if argv[:1] and argv[0] in SKILLEVAL_BINARIES and argv[1:2] == ["tier3"]:
         return MAX_LIVE_EVAL_TIMEOUT
     if argv[:1] and argv[0] in DD_BINARIES and argv[1:2] == ["create"]:
         return DD_CREATE
+    if argv[:1] and argv[0] in AIPERF_BINARIES and argv[1:2] == ["profile"]:
+        return AIPERF_PROFILE
+    if argv[:1] and argv[0] in EVALUATOR_BINARIES and argv[1:2] == ["run"]:
+        return EVALUATOR_RUN
     return MAX_TIMEOUT
 
 

@@ -50,6 +50,10 @@ const ICONS = {
   plus: 'M12 5v14M5 12h14',
   lock: 'M6 11h12v9H6zM8 11V8a4 4 0 018 0v3',
   shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
+  gpu: 'M3 7h18v10H3zM7 10.5h4v3H7zM15 12h2M6 20v-3M10 20v-3M14 20v-3M18 20v-3',
+  gauge: 'M4 17a8 8 0 1116 0M12 17l4-5M7 20h10',
+  sandbox: 'M12 3l8 4v10l-8 4-8-4V7zM4 7l8 4 8-4M12 11v10',
+  flask: 'M9 3h6M10 3v6l-5 9a2 2 0 001.8 3h10.4a2 2 0 001.8-3l-5-9V3M8 15h8',
   history: 'M4 12a8 8 0 108-8M4 4v5h5M12 8v5l3 2',
 };
 export function icon(name, size = 18) {

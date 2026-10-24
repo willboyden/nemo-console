@@ -165,6 +165,52 @@ Dynamo `restart`, assistive technology, browsers other than headless Firefox.
 | Runner policy (allowlist, long timeout for create only) | Implemented | fakes + live (real CLI runs through the real runner during the live smoke) | `data-designer-local` joins the SIGINT-first graceful set; `data-designer-export` is the conversion wrapper. |
 | Data Designer page (status, scripts, actions, runs tabs) | Implemented | headless Firefox screenshots at 1440 and 884 px against the live backend (2026-10-24: status/actions/runs with a real run); run-detail records table mock only | Deep-linked tabs (`?tab=`); SSE live-run banner. |
 
+## OpenShell (addendum 9.8)
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| Status: CLI version, gateway + forwarder containers, connection, `openshell-docker` internal check, exposed-port check, version skew | Implemented | verified live (2026-10-24: CLI 0.0.71, gateway 0.0.77 connected, network internal, one info problem `openshell.version.skew`); stopped/crashed/disconnected/not-internal paths fakes only | A stopped gateway is `off` (started on demand by `data-designer-local`), not `down`. `openshell -g openshell` pins the lab registration (the CLI also has stale `nemoclaw-*` ones). |
+| Metrics `os.*`, sandbox events | Implemented | metrics verified live (no sandboxes at the time); events fakes only | Phase names other than `Ready` are from memory; unknown phases land in `Other`. |
+| Config files (gateway.toml, policy.yaml, provider profile, compose) | Implemented **read-only by design** (ADR 0007) | read verified live | A web console never loosens a sandbox trust policy. |
+| Actions `doctor`, `list_sandboxes`, `sandbox_get`, `sandbox_logs`, `gateway_logs`, `prove_policy` | Implemented | verified live (2026-10-24) except `sandbox_get`/`sandbox_logs` on a live sandbox (refused-name path live; real output captured from a throwaway sandbox) | `prove_policy` derives the credential descriptor from the provider profile (no key read); findings are for human review (the scopes vocabulary is undocumented). |
+| Actions `gateway_up`, `gateway_stop` (disruptive), `delete_sandbox` (destructive) | Implemented | **fakes only** | `gateway_up` mirrors `data-designer-local` (refuses unless the network is internal, re-pins the router alias); `gateway_stop` refuses while sandboxes exist unless `force`; never `down`/`-v`. |
+
+## DCGM (addendum 9.8)
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| Status: exporter container + version, `/metrics`, vulnerable-version and `/debug/pprof` checks, every DCGM host Prometheus scrapes | Implemented | verified live (2026-10-24: exporter 4.8.4, pprof 404, 6/6 hosts up); vulnerable/pprof-200/host-down paths fakes only | `dcgm.exporter.vulnerable` (< 4.8.3, CVE-2026-47483). Remote exporters' versions are not visible through Prometheus and are not guessed. |
+| Metrics per GPU and per host (`dcgm.*`) | Implemented | verified live (50 points) and charted from the real history API | Ratios and bytes, never UUIDs or serials. Label values are slugs (`RTX-PRO-6000-Blackwell-Workstation`): the history API's series keys allow no spaces, which made every per-GPU chart empty until fixed (test `test_every_metric_point_forms_a_history_key_the_api_accepts`). `dcgm.xid_last` is the exporter's LAST XID code, not a count. |
+| `counters.csv` edit (validate, apply, rollback) | Implemented | validate verified live (live file ok; a broken candidate rejected); `post_apply(restart=True)` verified live on the unchanged file (healthy, 34 s); a real edit applied without restart: **unverified** | Validator `authoritative=False` (field names from the exporter image's lists; an unlisted name with no close match is a warning). The exporter re-reads the file (directory mount). |
+| Actions `discovery` (safe), `diag` (level 1), `diag_level2`, `restart_exporter` (all disruptive) | Implemented | `discovery` and `diag` level 1 on GPU 0 verified live with the hardened flags (2026-10-24: PASS 2.8 s) and through the console API; `restart_exporter` exercised live via `post_apply` before the identity check was added (the check itself: fakes + one live read); level 2 **unverified** | Throwaway container from the full DCGM image: `--network none --pull never --cap-drop ALL --cap-add SYS_ADMIN --read-only --tmpfs /tmp --pids-limit 256 --memory 2g`, no-new-privileges, one GPU index, constant command (no `/run` tmpfs: it hides the persistence daemon's socket and fails level 1). `docker restart` only after the container's compose labels match the observability project. Serials stripped before storage. |
+
+## AIPerf (addendum 9.8)
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| Status: wrapper version, router, key file, presets, newest run | Implemented | verified live (2026-10-24: 0.13.0) | Lab install `clients/aiperf/` (pinned to the scanned commit, venv-local; only `aiperf-local` on PATH). |
+| `profile` action (background, one at a time) and `report` | Implemented | verified live against `aitop/nemotron-lightning` (smoke preset; TTFT p50 25–34 ms; a second start refused; a bad model reported with the router's 400 text; console cancel → `interrupted`) | Disruptive: loads a live engine. The `aiperf` router key has `max_parallel_requests` 64, `rpm_limit` 2200, `tpm_limit` 600000. `aiperf-local` accepts an exact-token flag allowlist. Tokenizer `builtin` (tiktoken o200k, cached once by the installer): prompt sizes are o200k tokens, so compare runs with each other. |
+| Presets `profiles.yaml` edit | Implemented | validate fakes + live read | Own schema, authoritative; nothing to restart. |
+
+## NeMo Guardrails (addendum 9.8)
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| Status: server, gateway and router-broker containers, `/v1/health`, served configs, isolation checks | Implemented | verified live (2026-10-24: 0.24.1, 1 config); isolation problems fakes only | Error problem if the server ever joins a non-internal network or publishes a port. |
+| Rails config files edit (validate in a `--network none` container, restart, served-check, rollback) | Implemented | validate verified live (good + three broken copies + a weakening candidate refused); `post_apply(restart=True)` healthy live; rollback paths fakes only; apply through the console HTTP API: **unverified** | ADR 0015: a candidate that removes rails is refused unless it carries `# nemo-console: allow-weaken-rails`. Python files are read-only. A load check does not call the LLM: run `check` after an edit. |
+| `check` action (fixed benign/jailbreak/harmful probes via `/v1/checks`) | Implemented | verified live (benign allowed, jailbreak and harmful blocked by `self check input`) | Disruptive: spends router tokens. Events carry names and verdicts, never prompt text. |
+| Playground (`openai_chat`, model = the rails' main model, the server's default config) | Implemented | the same body replayed by hand live (benign answered, jailbreak refused); through the core's playground: **unverified** | The server has no auth on `127.0.0.1:8806`. |
+| `up` / `restart` / `stop` | Implemented | `restart` live via `post_apply`; others fakes only | Compose; never `down`/`-v`. |
+
+## NeMo Evaluator (addendum 9.8)
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| Status: wrapper version, router, key file, suites, cached datasets | Implemented | verified live (2026-10-24: 0.3.0, 3 suites, gsm8k + mmlu cached) | Lab install `clients/nemo-evaluator/` (scanned commit, constraints file). |
+| `run` action (offline, background, one at a time) and `report` | Implemented | verified live (smoke suite: GSM8K 10/10 on Lightning; MMLU 50 problems 0.48–0.50; second start refused; SIGINT → `interrupted`); strace of a full run (re-run 2026-10-24 after the cache change): 22 connects, all 127.0.0.1 | Offline by library switches, not a kernel block. Only rule-scored benchmarks (no Docker sandbox, no judge). Each request carries LiteLLM's `cache: {no-cache: true}` (a generated per-benchmark config), so repeats are fresh generations. Key limits: 32 parallel, 1200 rpm, 600000 tpm. |
+| Suites `suites.yaml` edit | Implemented | validate verified live (shipped file ok; a broken candidate rejected with 4 line-numbered errors) | Own schema plus the wrapper's own `suites --file` as a second opinion. |
+| Dataset prefetch | Lab only (`evaluator-local prefetch`) | live (gsm8k, mmlu) | The only step with internet; deliberately not a console action. |
+
 ## Not planned for v1
 
 Editing Relay `plugins.toml` / `config.toml`; multi-user or per-user audit identity beyond the key

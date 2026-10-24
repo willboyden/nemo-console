@@ -64,3 +64,24 @@ export function clampMaxTokens(v, fallback = 256) {
 
 /** Axis tick: whole numbers stay whole, fractions get at most 2 decimals with trailing zeros trimmed (0.25, not 0.3). */
 export const fmtTick = (v) => (Number.isFinite(v) ? (Number.isInteger(v) ? String(v) : String(+v.toFixed(2))) : '–');
+/** Format a metric value by its MetricPoint.unit ("ms", "ratio", "%", "B", "MiB", "W", "C", "tok/s", "tok", "1" or ""). */
+export function fmtUnit(v, unit = '') {
+  if (!isNum(v)) return '–';
+  const num = (d) => (Number.isInteger(v) ? String(v) : v.toFixed(d));
+  switch (unit) {
+    case 'ms': return fmtMs(v);
+    case 'ratio': return fmtRatio(v, 0);
+    case '%': return `${v.toFixed(0)}%`;
+    case 'B': return fmtBytes(v);
+    case 'MiB': return `${fmtInt(v)} MiB`;
+    case 'W': return `${v.toFixed(0)} W`;
+    case 'C': return `${v.toFixed(0)} °C`;
+    case 's': return fmtDuration(v);
+    case 'MHz': return `${fmtInt(v)} MHz`;
+    case 'B/s': return `${fmtBytes(v)}/s`;
+    case 'tok/s': return `${v.toFixed(1)} tok/s`;
+    case 'req/s': return `${v.toFixed(2)} req/s`;
+    case 'tok': return fmtCompact(v);
+    default: return Math.abs(v) >= 1000 ? fmtCompact(v) : num(2);
+  }
+}

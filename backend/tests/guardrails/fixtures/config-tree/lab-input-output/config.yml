@@ -1,0 +1,27 @@
+# lab-input-output — self-check input + self-check output rails in front of the lab's fast model.
+# The LLM is the router alias aitop/nemotron-lightning (thinking off). The server reaches the router only through the
+# key-injecting router-broker (http://router:4000), so no key lives here; the api key below is a placeholder env.
+# passthrough: the guarded model answers directly (no Colang intent/dialog step), which also means no embedding model
+# is needed — nothing is downloaded at runtime.
+models:
+  - type: main
+    engine: openai
+    model: aitop/nemotron-lightning
+    parameters:
+      base_url: http://router:4000/v1
+      temperature: 0.2
+
+passthrough: true
+
+rails:
+  input:
+    flows:
+      - self check input
+  output:
+    flows:
+      - self check output
+    streaming:
+      enabled: true         # a streaming chat needs this when output rails exist
+      chunk_size: 200       # tokens per rail check
+      context_size: 50
+      stream_first: false   # check a chunk BEFORE it is sent (true would stream first and check after)

@@ -1,0 +1,4 @@
+Error:   × parsing credentials YAML
+  ╰─▶ credentials: invalid type: string "nope", expected a sequence at line 1
+      column 14
+

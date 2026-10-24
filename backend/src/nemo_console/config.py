@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 from importlib import metadata
 from pathlib import Path
 
@@ -30,6 +31,10 @@ DEFAULT_URLS = {
     "dynamo": "http://127.0.0.1:8020",
     "dynamo_worker_metrics": "http://127.0.0.1:8081",
     "litellm": "http://127.0.0.1:4000",
+    # addendum 9.8
+    "dcgm": "http://127.0.0.1:9400",           # this host's dcgm-exporter (/metrics)
+    "prometheus": "http://127.0.0.1:9090",     # the lab Prometheus: DCGM_* of every scraped host (fleet view)
+    "guardrails": "http://127.0.0.1:8806",     # NeMo Guardrails server (security/nemo-guardrails)
 }
 # Engine containers of the author's deployment (2026-10-17, addendum 9.6). Resident: Nemotron 3.5 Super VL on Dynamo
 # (inference/dynamo/docker-compose.yml + docker-compose.super-vl.yml, worker on BOTH cards), nemotron-lightning (vLLM
@@ -96,6 +101,17 @@ DEFAULT_TOPOLOGY_ENGINES = [
 # (opencode sends LITELLM_API_KEY to :4040). Override per system: NEMO_CONSOLE_PLAYGROUND_KEY_ENV__RELAY=OTHER_API_KEY.
 DEFAULT_KEY_ENV = {"switchyard": "LITELLM_API_KEY", "relay": "LITELLM_API_KEY"}
 REPO_MARKER = Path("inference") / "dynamo" / "docker-compose.yml"
+# addendum 9.8 defaults (each one a setting)
+DCGM_EXPORTER_CONTAINER = "ai-lab-observability-dcgm-exporter-1"
+# the FULL DCGM image (nv-hostengine + dcgmi + diagnostic plugins); the exporter image ships no diag plugins.
+# Tag + digest pulled and run 2026-10-24 (level-1 diag on GPU 0: Pass, ~3 s).
+DCGM_DIAG_IMAGE = ("nvcr.io/nvidia/cloud-native/dcgm:4.6.1-1-ubuntu24.04"
+                   "@sha256:48464e50aa76671f5b204264cb4999739591112bf74330a727523f5655c6d7f2")
+DCGM_PROMETHEUS_JOBS = ["dcgm", "dcgm-aitop100", "dcgm-sparks"]
+OPENSHELL_CONTAINERS = ["ai-lab-dd-gateway", "ai-lab-dd-cli-fwd"]
+GUARDRAILS_CONTAINER = "ai-lab-nemo-guardrails"
+CONTAINER_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\-]{0,127}")
+IMAGE_REF_RE = re.compile(r"[a-z0-9][a-z0-9._/:\-]{0,254}(@sha256:[0-9a-f]{64})?")
 
 
 class TopologyEngine(BaseModel):
@@ -183,6 +199,36 @@ class Settings(BaseSettings):
     dd_datasets_root: Path = Field(default_factory=lambda: Path.home() / "Datasets")
     dd_config_dir: Path = Field(default_factory=lambda: Path.home() / ".data-designer")
 
+    # addendum 9.8 (OpenShell, DCGM, AIPerf, NeMo Guardrails, NeMo Evaluator). Container names are identifiers.
+    dcgm_exporter_container: str = DCGM_EXPORTER_CONTAINER
+    dcgm_diag_image: str = DCGM_DIAG_IMAGE
+    dcgm_prometheus_jobs: list[str] = list(DCGM_PROMETHEUS_JOBS)
+    openshell_containers: list[str] = list(OPENSHELL_CONTAINERS)
+    guardrails_container: str = GUARDRAILS_CONTAINER
+
+    @field_validator("dcgm_exporter_container", "guardrails_container")
+    @classmethod
+    def _container_name(cls, v: str) -> str:
+        """Addendum 9.8: these reach `docker inspect/restart` argv; a leading '-' would read as an option."""
+        if not CONTAINER_NAME_RE.fullmatch(v):
+            raise ValueError(f"not a container name: {v!r}")
+        return v
+
+    @field_validator("openshell_containers")
+    @classmethod
+    def _container_names(cls, v: list[str]) -> list[str]:
+        for name in v:
+            if not CONTAINER_NAME_RE.fullmatch(name):
+                raise ValueError(f"not a container name: {name!r}")
+        return v
+
+    @field_validator("dcgm_diag_image")
+    @classmethod
+    def _image_ref(cls, v: str) -> str:
+        if not IMAGE_REF_RE.fullmatch(v):
+            raise ValueError(f"not an image reference: {v!r}")
+        return v
+
     @field_validator("urls")
     @classmethod
     def _merge_urls(cls, v: dict[str, str]) -> dict[str, str]:
@@ -242,4 +288,21 @@ class Settings(BaseSettings):
             "datasets_root": self.dd_datasets_root,          # where `create` writes the user's dataset copies
             "dd_config_dir": self.dd_config_dir,             # the tool's own dir (model_providers/model_configs.yaml)
             "dd_key_file": home / ".config" / "data-designer" / "litellm.key",   # LITELLM_DD_KEY source; EXISTENCE only
+            # addendum 9.8 — key files are checked for EXISTENCE only, never read
+            "openshell_runner_dir": r / "clients" / "data-designer" / "runner",
+            "openshell_gateway_config": r / "clients" / "data-designer" / "runner" / "config" / "gateway.toml",
+            "openshell_policy": r / "clients" / "data-designer" / "runner" / "policy.yaml",
+            "openshell_compose": r / "clients" / "data-designer" / "runner" / "docker-compose.yml",
+            "observability_dir": r / "observability",
+            "observability_compose": r / "observability" / "docker-compose.yml",
+            "dcgm_counters": r / "observability" / "dcgm" / "counters.csv",
+            "aiperf_dir": r / "clients" / "aiperf",
+            "aiperf_profiles": r / "clients" / "aiperf" / "profiles.yaml",
+            "aiperf_key_file": home / ".config" / "aiperf" / "litellm.key",
+            "guardrails_dir": r / "security" / "nemo-guardrails",
+            "guardrails_compose": r / "security" / "nemo-guardrails" / "docker-compose.yml",
+            "guardrails_config_dir": r / "security" / "nemo-guardrails" / "config",
+            "evaluator_dir": r / "clients" / "nemo-evaluator",
+            "evaluator_suites": r / "clients" / "nemo-evaluator" / "suites.yaml",
+            "evaluator_key_file": home / ".config" / "nemo-evaluator" / "litellm.key",
         }

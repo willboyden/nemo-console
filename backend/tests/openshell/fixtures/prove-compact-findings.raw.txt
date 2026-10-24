@@ -1,0 +1,11 @@
+  [33m•[39m credential_reach_expansion: 172.16.0.5:4000 via /usr/local/bin/python3.13
+
+  [33m•[39m capability_expansion: POST on 172.16.0.5:4000 via /usr/local/bin/python3.13
+  [33m•[39m capability_expansion: DELETE on 172.16.0.5:4000 via /usr/local/bin/python3.13
+  [33m•[39m capability_expansion: OPTIONS on 172.16.0.5:4000 via /usr/local/bin/python3.13
+  [33m•[39m capability_expansion: PUT on 172.16.0.5:4000 via /usr/local/bin/python3.13
+  [33m•[39m capability_expansion: PATCH on 172.16.0.5:4000 via /usr/local/bin/python3.13
+  [33m•[39m capability_expansion: HEAD on 172.16.0.5:4000 via /usr/local/bin/python3.13
+  [33m•[39m capability_expansion: GET on 172.16.0.5:4000 via /usr/local/bin/python3.13
+
+   [43m[1m[30m REVIEW [39m[0m[49m  8 finding path(s) require review

@@ -1,0 +1,5 @@
+[1m[36mServer Status[39m[0m
+
+  [2mGateway:[0m openshell
+  [2mServer:[0m https://127.0.0.1:17670
+  [2mStatus:[0m [31mDisconnected[39m

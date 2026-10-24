@@ -15,10 +15,11 @@ from .conftest import Env
 async def test_health_overview_systems_topology(env: Env) -> None:
     async with env.client() as c:
         h = (await c.get("/api/v1/health")).json()
-        assert h["status"] == "ok" and h["trust"] == "loopback-admin" and set(h["systems"]) == {"switchyard", "relay", "dynamo", "skillevaluator", "datadesigner"}
+        assert h["status"] == "ok" and h["trust"] == "loopback-admin" and set(h["systems"]) == {"switchyard", "relay", "dynamo", "skillevaluator", "datadesigner",
+                                                                                               "openshell", "dcgm", "aiperf", "guardrails", "evaluator"}
         o = (await c.get("/api/v1/overview")).json()
-        assert len(o["systems"]) == 5 and {n["id"] for n in o["topology"]["nodes"]} >= {"litellm", "switchyard", "relay"}
-        assert len((await c.get("/api/v1/systems")).json()) == 5
+        assert len(o["systems"]) == 10 and {n["id"] for n in o["topology"]["nodes"]} >= {"litellm", "switchyard", "relay"}
+        assert len((await c.get("/api/v1/systems")).json()) == 10
         assert (await c.get("/api/v1/systems/dynamo/status")).json()["system"] == "dynamo"
         t = (await c.get("/api/v1/topology")).json()
         assert next(n for n in t["nodes"] if n["id"] == "litellm")["health"] == "up"

@@ -1,0 +1,11 @@
+[
+  {
+    "credential_keys": [
+      "LITELLM_DD_KEY"
+    ],
+    "id": "c82a4b93-d559-40e1-ad15-27be16e28af0",
+    "name": "lab-router-dd",
+    "resource_version": 1,
+    "type": "lab-litellm-dd"
+  }
+]
