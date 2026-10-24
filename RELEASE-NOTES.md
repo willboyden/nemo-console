@@ -11,6 +11,9 @@ A fix for the five pages added in 0.3.0, and a browser test that now gates every
   shared modules and paired them with the new pages. Every frontend file is now revalidated on each load
   (`Cache-Control: no-cache`, ETag 304). **If you used an earlier version, reload the console once with
   Ctrl+Shift+R.**
+- **Fixed, found by that suite on a fresh clone:** the Dynamo Params preview answered 500 when the Dynamo compose was
+  missing (now a 422 with the reason), and the Config tab of a system that is not deployed said "Something went
+  wrong" (now "This file is not on this machine", with the reason and a Retry button).
 - **Added: a browser end-to-end suite** (`make e2e`): the real backend and a headless Chrome open every page and
   every tab and fail on any error state, console error or uncached-module risk. It runs in `make all` and in CI.
 - **Added: a pre-push hook** (`make hooks`, part of `make setup`) that refuses to push code the suite has not passed
