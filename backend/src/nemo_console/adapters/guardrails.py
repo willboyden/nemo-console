@@ -111,6 +111,7 @@ class GuardrailsAdapter(SystemAdapter):
     label = "NeMo Guardrails"
 
     container = CONTAINER                  # the core may override (Settings.guardrails_container)
+    compose_project = COMPOSE_PROJECT      # the core may override (Settings.guardrails_compose_project)
     poll_seconds = 60.0                    # post-apply budget (the server needs ~10 s to boot)
     poll_interval = 1.0
     follow_interval = 2.0
@@ -403,7 +404,7 @@ class GuardrailsAdapter(SystemAdapter):
         if res.returncode != 0:
             return None
         parts = res.stdout.strip().split("|")
-        if len(parts) != 4 or parts[3] != COMPOSE_PROJECT:
+        if len(parts) != 4 or parts[3] != self.compose_project:
             return None
         return parts[0], parts[1], parts[2]
 
@@ -471,7 +472,7 @@ class GuardrailsAdapter(SystemAdapter):
         insp = await self._inspect(self.container)
         if insp is None:
             components.append(Component(kind="container", name=self.container, state="absent",
-                                        detail=f"not found or not part of compose project {COMPOSE_PROJECT}"))
+                                        detail=f"not found or not part of compose project {self.compose_project}"))
         else:
             st, hl, img = insp
             state = "running" if st == "running" else ("stopped" if st in {"exited", "created", "paused"} else "unknown")

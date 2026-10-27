@@ -54,7 +54,7 @@ def create_app(cfg: Settings | None = None, container: Container | None = None) 
         key_file = c.auth.ensure_bootstrap_key()
         if key_file:
             log.info("first start: admin API key written to %s (0600); copy it, then delete the file", key_file)
-        for name in c.settings.effective_key_env().values():
+        for name in [*c.settings.effective_key_env().values(), cfg.capable_probe_key_env]:
             resolve_secret({"x": name}, "x")            # register credential VALUES with the redactor
         tasks: list[asyncio.Task[None]] = []
         if cfg.background_tasks:
@@ -66,6 +66,8 @@ def create_app(cfg: Settings | None = None, container: Container | None = None) 
                 t.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
             c.metrics.flush()
+            if c.capable_probe is not None:
+                await c.capable_probe.aclose()
             await c.http.aclose()
 
     # No Swagger/ReDoc (they load scripts from a CDN); the OpenAPI JSON stays behind auth.

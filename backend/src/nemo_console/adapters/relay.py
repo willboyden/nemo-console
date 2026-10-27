@@ -678,8 +678,8 @@ def parse_systemctl_show(text: str) -> UnitState:
                      enabled=kv.get("UnitFileState", ""), active_since=since)
 
 
-SHOW_ARGV = ["systemctl", "--user", "--timestamp=unix", "show", UNIT, "-p",
-             "ActiveEnterTimestamp,ActiveState,SubState,MainPID,NRestarts,Result,LoadState,UnitFileState"]
+SHOW_PROPS = "ActiveEnterTimestamp,ActiveState,SubState,MainPID,NRestarts,Result,LoadState,UnitFileState"
+SHOW_ARGV = ["systemctl", "--user", "--timestamp=unix", "show", UNIT, "-p", SHOW_PROPS]   # with the default unit
 
 
 class RelayAdapter(SystemAdapter):
@@ -691,6 +691,8 @@ class RelayAdapter(SystemAdapter):
     #   relay_config  ~/.config/nemo-relay/config.toml   relay_atof_dir ~/.local/share/nemo-relay/atof
     #   relay_atif_dir ~/.local/share/nemo-relay/atif
     # ctx.urls: "relay" (default http://127.0.0.1:4040), "litellm" (the gateway's upstream, default :4000).
+    unit = UNIT                         # systemd --user unit (addendum 9.11: the container sets `relay_unit`)
+
     def __init__(self, ctx: AdapterContext) -> None:
         super().__init__(ctx)
         self.poll_interval = 1.0        # health poll cadence after a restart (tests set 0)
@@ -740,7 +742,8 @@ class RelayAdapter(SystemAdapter):
         return val
 
     async def _unit(self) -> UnitState:
-        r = await self._run(SHOW_ARGV, timeout=8.0)
+        r = await self._run(["systemctl", "--user", "--timestamp=unix", "show", self.unit, "-p", SHOW_PROPS],
+                                timeout=8.0)
         return parse_systemctl_show(r.stdout) if r.returncode == 0 else UnitState(known=False)
 
     async def _get_probe(self, url: str) -> Probe:
@@ -815,7 +818,7 @@ class RelayAdapter(SystemAdapter):
         summary, plugins_mtime = await asyncio.to_thread(self._plugins_summary)
         atof_scan = await asyncio.to_thread(self._scan_dir, "relay_atof_dir", None)
         problems: list[Problem] = []
-        restart_fix = f"systemctl --user restart {UNIT}"
+        restart_fix = f"systemctl --user restart {self.unit}"
 
         unit_running = unit.known and unit.active == "active"
         if not unit.known:
@@ -829,7 +832,7 @@ class RelayAdapter(SystemAdapter):
         else:
             ustate = "stopped"
         components = [
-            Component(kind="systemd", name=UNIT, state=ustate,
+            Component(kind="systemd", name=self.unit, state=ustate,
                       detail=(f"{unit.active}/{unit.sub} pid={unit.pid} restarts={unit.restarts} enabled={unit.enabled}"
                               if unit.known else "systemctl --user show failed")),
             Component(kind="http", name="gateway " + self._base, state="running" if probe.reachable else "stopped",
@@ -857,14 +860,14 @@ class RelayAdapter(SystemAdapter):
                                         fix=f"curl -s -o /dev/null -w '%{{http_code}}\\n' {self._litellm}/health/liveliness"))
             if unit.known and not unit_running:
                 problems.append(Problem(severity="info", code="relay.gateway.not_under_systemd",
-                                        message=f"The gateway answers but {UNIT} is {unit.active}; it is being run by hand.",
+                                        message=f"The gateway answers but {self.unit} is {unit.active}; it is being run by hand.",
                                         fix=None))
         else:
             health = "degraded" if unit_running else "down"
             problems.append(Problem(
                 severity="error", code="relay.gateway.down",
-                message=(f"{UNIT} is active but {self._base} does not answer." if unit_running
-                         else f"NeMo Relay gateway is not reachable at {self._base} ({UNIT} is {unit.active or 'unknown'})."),
+                message=(f"{self.unit} is active but {self._base} does not answer." if unit_running
+                         else f"NeMo Relay gateway is not reachable at {self._base} ({self.unit} is {unit.active or 'unknown'})."),
                 fix=restart_fix))
 
         if not summary.parsed:
@@ -1067,7 +1070,7 @@ class RelayAdapter(SystemAdapter):
                             "clients here speak anthropic_messages, the judge speaks openai_chat).",
                 display_path="clients/nemo-relay/routes.toml",
                 validators=["TOML parse", "Switchyard schema mirror (semantic)"], authoritative=False,
-                apply_effect=f"restarts {UNIT}; ~5-10 s of dropped requests on :4040; auto-rolled back if the gateway is not healthy"),
+                apply_effect=f"restarts {self.unit}; ~5-10 s of dropped requests on :4040; auto-rolled back if the gateway is not healthy"),
             ConfigFileSpec(
                 id="plugins", label="Relay plugins & observability policy", format="toml", editable=False,
                 description="Plugin registration, attestation policy, PII redaction and the ATOF/ATIF/OTLP exporters.",
@@ -1134,12 +1137,12 @@ class RelayAdapter(SystemAdapter):
             await asyncio.sleep(self.poll_interval)
 
     async def _restart(self) -> tuple[bool, str]:
-        r = await self._run(["systemctl", "--user", "restart", UNIT], timeout=60.0, max_bytes=16_000)
+        r = await self._run(["systemctl", "--user", "restart", self.unit], timeout=60.0, max_bytes=16_000)
         if r.returncode != 0 or r.timed_out:
             return False, scrub(f"systemctl restart failed (rc={r.returncode}, timed_out={r.timed_out}): {(r.stderr or r.stdout)[:400]}")
         ok, detail = await self._wait_healthy()
         if not ok:
-            st = await self._run(["systemctl", "--user", "status", "--no-pager", "-n", "15", UNIT], timeout=10.0, max_bytes=8_000)
+            st = await self._run(["systemctl", "--user", "status", "--no-pager", "-n", "15", self.unit], timeout=10.0, max_bytes=8_000)
             detail += "\n" + scrub(st.stdout or st.stderr)[-1800:]
         return ok, detail
 
@@ -1156,10 +1159,10 @@ class RelayAdapter(SystemAdapter):
     def actions(self) -> list[ActionSpec]:
         return [
             ActionSpec(id="gateway_restart", label="Restart gateway", danger="disruptive",
-                       description=f"systemctl --user restart {UNIT}, then health-check for up to 30 s. Drops in-flight requests on :4040 "
+                       description=f"systemctl --user restart {self.unit}, then health-check for up to 30 s. Drops in-flight requests on :4040 "
                                    "(opencode and other host clients)."),
             ActionSpec(id="gateway_status", label="Gateway status", danger="safe",
-                       description=f"systemctl --user status {UNIT} (Relay has no `gateway status` subcommand)."),
+                       description=f"systemctl --user status {self.unit} (Relay has no `gateway status` subcommand)."),
             ActionSpec(id="doctor_offline", label="Doctor (offline)", danger="safe",
                        description="nemo-relay doctor --offline --json, summarised, with notes on its known misleading lines."),
             ActionSpec(id="agents_list", label="List agents", danger="safe",
@@ -1179,9 +1182,9 @@ class RelayAdapter(SystemAdapter):
             ok, detail = await self._restart()
             return done(ok, detail, [] if ok else [Problem(
                 severity="error", code="relay.gateway.restart_unhealthy", message="Gateway did not become healthy after restart.",
-                fix=f"systemctl --user status {UNIT}")])
+                fix=f"systemctl --user status {self.unit}")])
         if action_id == "gateway_status":
-            r = await self._run(["systemctl", "--user", "status", "--no-pager", "-n", "20", UNIT], timeout=10.0)
+            r = await self._run(["systemctl", "--user", "status", "--no-pager", "-n", "20", self.unit], timeout=10.0)
             return done(r.returncode in (0, 3), r.stdout or r.stderr)      # 3 = inactive, a valid answer
         if action_id == "agents_list":
             r = await self._run(["nemo-relay", "agents", "--json"], timeout=20.0)

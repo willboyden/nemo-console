@@ -4,7 +4,7 @@
 // Host allowlist (421), same-origin Origin (403), 1 MiB body cap (413), JSON content type (415), SSE cap of 8 (429),
 // secret redaction ("[set, N chars]"), strict CSP + security headers on every response, optional bearer (MOCK_KEY).
 // All data is canned or simulated. Nothing here is a verified fact about the real systems.
-// Usage: node dev/mock-server.mjs [--port 8796] [--host 127.0.0.1]     env: MOCK_KEY=secret  MOCK_ROLE=viewer  MOCK_DYNAMO=up|loading|down
+// Usage: node dev/mock-server.mjs [--port 18796] [--host 127.0.0.1]     env: MOCK_KEY=secret  MOCK_ROLE=viewer  MOCK_DYNAMO=up|loading|down
 // Dev helpers (not part of the contract): /__dev/scenario /__dev/touch /__dev/role /__dev/fail /__dev/vllm /__shot
 import http from 'node:http';
 import fs from 'node:fs';
@@ -18,7 +18,7 @@ import { SWITCHYARD_ROUTES, RELAY_ROUTES, RELAY_PLUGINS, RELAY_CONFIG, DYNAMO_CA
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const argv = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : d; };
-const PORT = Number(argv('port', process.env.PORT ?? 8796));
+const PORT = Number(argv('port', process.env.PORT ?? 18796));   // 8796 collided with another local tool
 const HOST = argv('host', '127.0.0.1');
 if (!['127.0.0.1', 'localhost', '::1'].includes(HOST) && !process.env.MOCK_KEY) { console.error(`refusing --host ${HOST}: a non-loopback bind needs MOCK_KEY set`); process.exit(2); }
 const KEY = process.env.MOCK_KEY || '';

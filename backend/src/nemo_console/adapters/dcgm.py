@@ -315,6 +315,7 @@ class DcgmAdapter(SystemAdapter):
     diag_image: str = DCGM_DIAG_IMAGE
     prometheus_jobs: tuple[str, ...] = tuple(DCGM_PROMETHEUS_JOBS)
     compose_project = "ai-lab-observability"      # a restart is only sent to this project's dcgm-exporter service
+                                                  # (the core may override: Settings.dcgm_compose_project)
     compose_service = "dcgm-exporter"
 
     # ctx.urls: dcgm (this host's exporter), prometheus. ctx.paths: observability_dir, observability_compose,
@@ -334,8 +335,11 @@ class DcgmAdapter(SystemAdapter):
         self._image_cache: tuple[float, bool] = (NEVER, True)   # NEVER, not 0.0: monotonic() counts from boot
         self._diag_lock = asyncio.Lock()
 
-    def configure(self, *, exporter_container: str, diag_image: str, prometheus_jobs: list[str]) -> None:
+    def configure(self, *, exporter_container: str, diag_image: str, prometheus_jobs: list[str],
+                  compose_project: str | None = None) -> None:
         self.exporter_container = exporter_container
+        if compose_project is not None:
+            self.compose_project = compose_project
         self.diag_image = diag_image
         self.prometheus_jobs = tuple(prometheus_jobs)
 

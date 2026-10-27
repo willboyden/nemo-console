@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from nemo_console.config import Settings, __version__
+from nemo_console.config import Settings, __version__, credential_env_allowed
 from nemo_console.services.errors import ApiError
 from nemo_console.services.store import Store
 
@@ -16,10 +16,8 @@ ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]{0,63}")
 
 
 def key_env_allowed(name: str) -> bool:
-    """Only credential-looking env names may be referenced (else an admin could read the length of, or send as a
-    Bearer token, ANY variable such as AWS_SECRET_ACCESS_KEY): LITELLM_*, NEMO_CONSOLE_PLAYGROUND_*, or *_API_KEY."""
-    return ENV_NAME.fullmatch(name) is not None and (
-        name.startswith(("LITELLM_", "NEMO_CONSOLE_PLAYGROUND_")) or name.endswith("_API_KEY"))
+    """Only credential-looking env names may be referenced (see config.credential_env_allowed)."""
+    return credential_env_allowed(name)
 
 URL_NAME = re.compile(r"[a-z][a-z0-9_]{0,31}")
 OVERRIDES_KEY = "overrides"

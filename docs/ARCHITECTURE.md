@@ -382,3 +382,30 @@ console error, an API 5xx, or a frontend file that does not load or lacks `no-ca
 state ("not on this machine"), not an error, and an adapter's `ValueError` in a params preview is a 422. It runs in `make all`, in the CI job `e2e`, and in the git
 `pre-push` hook through `scripts/e2e-gate.sh`, which records a pass as the git tree ids of `backend/` and `frontend/`
 inside `.git` and refuses a pushed commit or tag without one.
+
+**9.11 (2026-10-26): deployment identities and the repo layout are settings; an opt-in active capable-tier probe.**
+Additive; defaults reproduce the earlier constants exactly.
+* **Settings** (`config.py`, environment or the user env file only, read at start, never through the API):
+  `switchyard_container`, `switchyard_compose_project`, `switchyard_compose_service`, `switchyard_image`,
+  `switchyard_log_path`, `relay_unit`, `dynamo_compose_project`, `dynamo_services` and `dynamo_containers` (role ->
+  name for `frontend`, `worker`, `mocker`, `sv_frontend`; merged over the defaults), `guardrails_compose_project`,
+  `dcgm_compose_project`, and `layout` (key -> directory under `repo_root`; `resolved_paths()` and the repo-root marker
+  follow it). Each value is validated with a full match (container, compose project, compose service, `.service` unit,
+  absolute in-container path, relative plain-segment directory); an invalid value stops the start-up.
+* **Hand-off:** as for the card policy (9.4) the container sets them on the registry-built adapters after
+  construction (`_configure_switchyard`, `_configure_relay`, `_configure_dynamo` with a `DynamoNames` value,
+  `_configure_guardrails`, `_configure_dcgm`); module constants stay the defaults, so injected adapters (tests) are
+  unchanged. Lab helper hints (installers, key minters, the Ollama directory) look under the layout directory first.
+* **Not settings, on purpose:** Dynamo's `STOPPABLE_*` (the one container `up` may stop; a setting must not widen what
+  the console stops), OpenShell's sandbox network and router address (they must equal the lab wrapper's), the router
+  liveness path.
+* **Active probe** (`services/engines.CapableProbe`, setting `capable_probe`, default false): for each capable-tier alias
+  whose container is running, one `POST {litellm}/v1/chat/completions` (`max_tokens` 1, `temperature` 0, LiteLLM
+  `cache.no-cache`), credential from the env var NAMED by `capable_probe_key_env` (registered with the redactor; same
+  naming rule as `playground_key_env`). Background task, one request at a time, at most once per
+  `capable_probe_interval_s` (>= 300) per alias, `capable_probe_timeout_s` per request, one retry after
+  `capable_probe_retry_s`. Status reads cached results only. Verdicts: ok, broken (timeout, transport error, HTTP >= 400
+  other than 401/403, no `choices`), denied (401/403), unconfigured (env var unset: nothing is sent). New problem codes
+  `switchyard.tier.capable_broken` (warn, degrades Switchyard, summary prefix "capable tier not answering"),
+  `switchyard.tier.probe_unconfigured` and `switchyard.tier.probe_denied` (info). Only the verdict and a status are kept
+  and logged.

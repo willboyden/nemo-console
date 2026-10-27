@@ -57,6 +57,18 @@ Names read by `backend/src/nemo_console/config.py` (each is `NEMO_CONSOLE_<NAME>
 | `REVISIONS_KEEP` | `50` | Config revisions kept per file. |
 | `OTLP_ENDPOINT` | unset | e.g. `http://localhost:4317`; needs the optional `opentelemetry` packages (not installed by default; otherwise one warning is logged). Unverified. |
 | `EXTRA_BIN_DIRS` | `["~/.local/bin"]` | Extra directories searched for the five allowed binaries. |
+| `SWITCHYARD_CONTAINER`, `SWITCHYARD_COMPOSE_PROJECT`, `SWITCHYARD_COMPOSE_SERVICE` | `ai-lab-switchyard-switchyard-1`, `ai-lab-switchyard`, `switchyard` | The Switchyard container and the compose labels it must carry (a container with other labels is treated as absent). |
+| `SWITCHYARD_IMAGE` | `ai-lab-switchyard:0.3.0` | Image the routes validator's `--dry-run` uses when the container cannot be inspected. |
+| `SWITCHYARD_LOG_PATH` | `/var/log/switchyard/routing.jsonl` | The routing log inside the container (absolute; read with `docker exec ... tail`). |
+| `RELAY_UNIT` | `nemo-relay-gateway.service` | systemd `--user` unit of the Relay gateway (must end in `.service`). |
+| `DYNAMO_COMPOSE_PROJECT` | `ai-lab-dynamo` | Compose project label the Dynamo containers must carry. |
+| `DYNAMO_SERVICES` | `frontend dynamo-frontend`, `worker dynamo-worker`, `mocker dynamo-mocker`, `sv_frontend dynamo-sv-frontend` | JSON object role -> compose service; single roles merge over the defaults (`NEMO_CONSOLE_DYNAMO_SERVICES__WORKER=...`). The generated override and the GPU parse use these names. |
+| `DYNAMO_CONTAINERS` | `ai-lab-dynamo-dynamo-<service>-1` per role | JSON object role -> container name; merges like `DYNAMO_SERVICES`; each role needs its own name. |
+| `GUARDRAILS_COMPOSE_PROJECT`, `DCGM_COMPOSE_PROJECT` | `ai-lab-nemo-guardrails`, `ai-lab-observability` | Compose project labels checked before the console restarts those containers. |
+| `LAYOUT` | `switchyard inference/switchyard`, `relay clients/nemo-relay`, `dynamo inference/dynamo`, `skills .claude/skills`, `data_designer clients/data-designer`, `openshell_runner clients/data-designer/runner`, `observability observability`, `aiperf clients/aiperf`, `guardrails security/nemo-guardrails`, `evaluator clients/nemo-evaluator`, `skillevaluator clients/skillevaluator`, `ollama inference/ollama` | JSON object key -> directory under `REPO_ROOT` (relative, plain segments; no `..`, absolute path or backslash). Set single keys: `NEMO_CONSOLE_LAYOUT__SWITCHYARD=deploy/switchyard`; unknown keys are refused. The file names inside each directory (`routes.toml`, `docker-compose.yml`, ...) are fixed. |
+| `CAPABLE_PROBE` | `false` | Active capable-tier probe (see below). |
+| `CAPABLE_PROBE_INTERVAL_S`, `CAPABLE_PROBE_TIMEOUT_S`, `CAPABLE_PROBE_RETRY_S` | `300`, `60`, `30` | At most one probe per alias per interval (minimum 300); per-request timeout; delay before the one retry of a failed probe. |
+| `CAPABLE_PROBE_KEY_ENV` | `LITELLM_API_KEY` | **Name** of the env var holding the router key the probe sends (same naming rule as the playground's: `LITELLM_*`, `NEMO_CONSOLE_PLAYGROUND_*`, `*_API_KEY`). |
 
 Default URLs: `switchyard http://127.0.0.1:4010`, `relay http://127.0.0.1:4040`, `dynamo http://127.0.0.1:8020`,
 `dynamo_worker_metrics http://127.0.0.1:8081`, `litellm http://127.0.0.1:4000`.
@@ -77,9 +89,23 @@ URLs changed at runtime on the Settings page are stored in the database, validat
 `ALLOWED_URL_HOSTS`, no credentials or query) and take effect for adapters only **after a restart**
 (the page shows "restart required").
 
-Adapter constants that are not settings: container names, compose project and service names, the systemd unit name
-and the router liveness path (`/health/liveliness`). They live at the top of `adapters/*.py`. Edit them if your
-deployment differs. The Dynamo compose FILES are not a constant: up/down/restart use the files the running containers
+Every value above that names a container, compose project, service, unit or path is checked with a full match when the
+console starts (a leading `-`, a space, `..` or an unknown key is refused, and the console does not start). None of
+them can be changed through the API. Still constants in `adapters/*.py`: the one container Dynamo's `up` may stop
+(`stop_sharing_engine`; a setting must not widen what the console stops), OpenShell's sandbox network and router address
+(they must match the lab wrapper), and the router liveness path (`/health/liveliness`).
+
+**Active capable-tier probe (`CAPABLE_PROBE=true`).** The passive checks only see a capable-tier container that is
+stopped. A container can run while its engine cannot answer (a tensor-parallel rank died, `/health` still says 200). With
+the probe on, for every capable-tier alias whose container is running, the console sends one chat completion through
+the LiteLLM router (`max_tokens: 1`, `temperature: 0`, the word `ping`, LiteLLM's response cache bypassed), in the
+background, one request at a time, at most once per `CAPABLE_PROBE_INTERVAL_S` per alias. A failure is retried once
+after `CAPABLE_PROBE_RETRY_S`; two failures raise `switchyard.tier.capable_broken` and Switchyard turns `degraded`
+("capable tier not answering"). Only the verdict and an HTTP status or error class are kept and logged, never the answer.
+Each probe is a real router request: it appears in the router's logs, traces and spend under the key you name, so a key
+of its own (with access to the capable-tier aliases only) keeps it separate. A busy engine that queues the probe behind
+long prefills for longer than `CAPABLE_PROBE_TIMEOUT_S` twice in a row is reported broken; raise the timeout if that
+happens. The Dynamo compose FILES are not a constant: up/down/restart use the files the running containers
 were started from (their compose labels, checked to lie inside the configured compose directory), and the configured
 `inference/dynamo/docker-compose.yml` only when no Dynamo container exists (ARCHITECTURE 9.6).
 
@@ -305,6 +331,8 @@ shows is prefixed with the code words for security rejections.
 | `switchyard.config.drift` | `routes.toml` differs from the running server's routes; recreate the container (shown command). |
 | `switchyard.tier.capable_not_deployed` (info) | The capable-tier model of a `stage_router` route maps to a container that does not exist on this host. Switchyard stays `up`. The fix names both options: point the route at a deployed engine, or deploy that one (its start command says what it stops). |
 | `switchyard.tier.capable_dark` | A container listed in `ENGINE_PROBES` exists but is not running and its alias is the capable-tier model of a `stage_router` route (the message names the routes). Switchyard turns `degraded` with a summary starting "capable tier dark". The fix is the container's `ENGINE_START` command, else the compose directory to `up`. It shares one cached `docker inspect` probe with the topology view; a probe error or an unparseable `routes.toml` yields no problem. |
+| `switchyard.tier.capable_broken` | Only with `CAPABLE_PROBE=true`: the alias's container runs, but a 1-token completion through the router failed twice (timeout, router error, or no answer). The message gives the reason (status only); the fix is the container's logs, then its start command. |
+| `switchyard.tier.probe_unconfigured` / `switchyard.tier.probe_denied` (info) | The probe is on but the env var named by `CAPABLE_PROBE_KEY_ENV` is not set in the console process, or the router refused the key (401/403). Nothing is reported broken until the probe can run. |
 | `switchyard.capable_tier.upstream_errors` | Inferred from `/v1/stats` that the capable-tier engine is failing. `calls` there counts successes (calls + errors = attempts), so it fires when errors >= successes (errors > 0) or errors rose since the last poll with no new success; the message reads "N errors, M successes". **Heuristic:** no active probe, so it appears only after traffic hit the failing tier and never for an idle one. |
 | `switchyard.routing.fallback_unavailable` | Requests were re-routed because a target was unavailable. |
 | `relay.gateway.down` | Gateway URL does not answer; run `systemctl --user restart nemo-relay-gateway.service`. A 404 from `/health` is **up**, not a failure. |

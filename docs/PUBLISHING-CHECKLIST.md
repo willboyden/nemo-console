@@ -61,7 +61,8 @@ The code and `docs/ARCHITECTURE.md` were written inside a larger private reposit
 
 ## 4. Configurability of deployment names
 
-These are currently constants; move them into `Settings` (with the current values as defaults documented as examples):
+Done in addendum 9.11 (2026-10-26) for the container, compose and unit names and the repo layout; still constants on
+purpose: `STOPPABLE_*` (Dynamo), OpenShell's sandbox network and router address. The original list, kept for reference:
 
 - `adapters/switchyard.py`: `CONTAINER`, `COMPOSE_PROJECT`, `COMPOSE_SERVICE`, `FALLBACK_IMAGE`, `LOG_PATH`.
 - `adapters/dynamo.py`: `PROJECT`, `FRONTEND`, `WORKER`, `MOCKER`, service names, `STOPPABLE_ENGINE`, `STOPPABLE_PROJECT`,

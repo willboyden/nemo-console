@@ -112,6 +112,63 @@ OPENSHELL_CONTAINERS = ["ai-lab-dd-gateway", "ai-lab-dd-cli-fwd"]
 GUARDRAILS_CONTAINER = "ai-lab-nemo-guardrails"
 CONTAINER_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\-]{0,127}")
 IMAGE_REF_RE = re.compile(r"[a-z0-9][a-z0-9._/:\-]{0,254}(@sha256:[0-9a-f]{64})?")
+COMPOSE_PROJECT_RE = re.compile(r"[a-z0-9][a-z0-9_\-]{0,62}")          # docker compose's own rule for -p
+COMPOSE_SERVICE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.\-]{0,62}")
+UNIT_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9@_.:\-]{0,240}\.service")
+IN_CONTAINER_PATH_RE = re.compile(r"(/[A-Za-z0-9_.\-]+){1,16}")
+LAYOUT_SEGMENT_RE = re.compile(r"[A-Za-z0-9_.\-]{1,64}")
+CREDENTIAL_ENV_RE = re.compile(r"[A-Z_][A-Z0-9_]{0,63}")
+
+# Deployment identities (addendum 9.11): the compose projects, services, containers and systemd unit the adapters act
+# on, and where each system's files live under repo_root. The defaults are the author's deployment; every value is an
+# identifier that reaches docker / systemctl argv, so each is checked with a full match, and none is writable through
+# the API (environment or the user env file only, read at start).
+SWITCHYARD_CONTAINER = "ai-lab-switchyard-switchyard-1"
+SWITCHYARD_COMPOSE_PROJECT = "ai-lab-switchyard"
+SWITCHYARD_COMPOSE_SERVICE = "switchyard"
+SWITCHYARD_IMAGE = "ai-lab-switchyard:0.3.0"         # the dry-run validator's image when the container cannot be inspected
+SWITCHYARD_LOG_PATH = "/var/log/switchyard/routing.jsonl"   # the routing log INSIDE the container
+RELAY_UNIT = "nemo-relay-gateway.service"            # systemd --user unit of the Relay gateway
+DYNAMO_COMPOSE_PROJECT = "ai-lab-dynamo"
+DYNAMO_ROLES = ("frontend", "worker", "mocker", "sv_frontend")
+# compose service per role (sv_frontend: the real frontend behind the Super VL gateway, docker-compose.super-vl.yml)
+DEFAULT_DYNAMO_SERVICES = {"frontend": "dynamo-frontend", "worker": "dynamo-worker", "mocker": "dynamo-mocker",
+                           "sv_frontend": "dynamo-sv-frontend"}
+DEFAULT_DYNAMO_CONTAINERS = {"frontend": "ai-lab-dynamo-dynamo-frontend-1", "worker": DYNAMO_WORKER,
+                             "mocker": "ai-lab-dynamo-dynamo-mocker-1", "sv_frontend": "ai-lab-dynamo-dynamo-sv-frontend-1"}
+GUARDRAILS_COMPOSE_PROJECT = "ai-lab-nemo-guardrails"
+DCGM_COMPOSE_PROJECT = "ai-lab-observability"         # a restart is only sent to this project's dcgm-exporter service
+# directory of each system under repo_root (relative, '/'-separated). Set single keys, e.g.
+# NEMO_CONSOLE_LAYOUT__SWITCHYARD=deploy/switchyard; the others keep their defaults; unknown keys are refused.
+DEFAULT_LAYOUT = {
+    "switchyard": "inference/switchyard",
+    "relay": "clients/nemo-relay",
+    "dynamo": "inference/dynamo",
+    "skills": ".claude/skills",
+    "data_designer": "clients/data-designer",
+    "openshell_runner": "clients/data-designer/runner",
+    "observability": "observability",
+    "aiperf": "clients/aiperf",
+    "guardrails": "security/nemo-guardrails",
+    "evaluator": "clients/nemo-evaluator",
+    "skillevaluator": "clients/skillevaluator",
+    "ollama": "inference/ollama",
+}
+
+
+def credential_env_allowed(name: str) -> bool:
+    """Only credential-looking env names may be referenced (else an admin could read the length of, or send as a
+    Bearer token, ANY variable such as AWS_SECRET_ACCESS_KEY): LITELLM_*, NEMO_CONSOLE_PLAYGROUND_*, or *_API_KEY."""
+    return CREDENTIAL_ENV_RE.fullmatch(name) is not None and (
+        name.startswith(("LITELLM_", "NEMO_CONSOLE_PLAYGROUND_")) or name.endswith("_API_KEY"))
+
+
+def _layout_rel(key: str, value: str) -> str:
+    """A repo-relative directory: '/'-separated plain segments, no '.', '..', absolute path, backslash or NUL."""
+    parts = value.strip("/").split("/") if value and not value.startswith("/") else []
+    if not parts or len(parts) > 8 or any(p in {".", ".."} or not LAYOUT_SEGMENT_RE.fullmatch(p) for p in parts):
+        raise ValueError(f"layout {key!r}: not a relative directory under the repo root: {value[:80]!r}")
+    return "/".join(parts)
 
 
 class TopologyEngine(BaseModel):
@@ -209,12 +266,113 @@ class Settings(BaseSettings):
     openshell_containers: list[str] = list(OPENSHELL_CONTAINERS)
     guardrails_container: str = GUARDRAILS_CONTAINER
 
-    @field_validator("dcgm_exporter_container", "guardrails_container")
+    # deployment identities and repo layout (addendum 9.11; see the constants above). Read at start only.
+    switchyard_container: str = SWITCHYARD_CONTAINER
+    switchyard_compose_project: str = SWITCHYARD_COMPOSE_PROJECT
+    switchyard_compose_service: str = SWITCHYARD_COMPOSE_SERVICE
+    switchyard_image: str = SWITCHYARD_IMAGE
+    switchyard_log_path: str = SWITCHYARD_LOG_PATH
+    relay_unit: str = RELAY_UNIT
+    dynamo_compose_project: str = DYNAMO_COMPOSE_PROJECT
+    dynamo_services: dict[str, str] = dict(DEFAULT_DYNAMO_SERVICES)
+    dynamo_containers: dict[str, str] = dict(DEFAULT_DYNAMO_CONTAINERS)
+    guardrails_compose_project: str = GUARDRAILS_COMPOSE_PROJECT
+    dcgm_compose_project: str = DCGM_COMPOSE_PROJECT
+    layout: dict[str, str] = dict(DEFAULT_LAYOUT)
+
+    # Active capable-tier probe (addendum 9.11, OFF by default): one tiny real completion per capable-tier alias through
+    # the LiteLLM router, so an engine whose container runs but cannot answer (a dead rank behind a healthy /health)
+    # shows up as switchyard.tier.capable_broken. Spends one router request per alias per interval.
+    capable_probe: bool = False
+    capable_probe_interval_s: float = Field(default=300.0, ge=300.0, le=86400.0)
+    capable_probe_timeout_s: float = Field(default=60.0, ge=2.0, le=300.0)   # a busy engine queues the probe behind long prefills
+    capable_probe_retry_s: float = Field(default=30.0, ge=0.0, le=300.0)     # a failure is retried once after this
+    capable_probe_key_env: str = "LITELLM_API_KEY"   # env-var NAME of the router credential (never the value)
+
+    @field_validator("dcgm_exporter_container", "guardrails_container", "switchyard_container")
     @classmethod
     def _container_name(cls, v: str) -> str:
         """Addendum 9.8: these reach `docker inspect/restart` argv; a leading '-' would read as an option."""
         if not CONTAINER_NAME_RE.fullmatch(v):
             raise ValueError(f"not a container name: {v!r}")
+        return v
+
+    @field_validator("switchyard_compose_project", "dynamo_compose_project", "guardrails_compose_project",
+                     "dcgm_compose_project")
+    @classmethod
+    def _compose_project(cls, v: str) -> str:
+        if not COMPOSE_PROJECT_RE.fullmatch(v):
+            raise ValueError(f"not a compose project name: {v!r}")
+        return v
+
+    @field_validator("switchyard_compose_service")
+    @classmethod
+    def _compose_service(cls, v: str) -> str:
+        if not COMPOSE_SERVICE_RE.fullmatch(v):
+            raise ValueError(f"not a compose service name: {v!r}")
+        return v
+
+    @field_validator("switchyard_image")
+    @classmethod
+    def _switchyard_image(cls, v: str) -> str:
+        if not IMAGE_REF_RE.fullmatch(v):
+            raise ValueError(f"not an image reference: {v!r}")
+        return v
+
+    @field_validator("switchyard_log_path")
+    @classmethod
+    def _log_path(cls, v: str) -> str:
+        if not IN_CONTAINER_PATH_RE.fullmatch(v) or any(seg in {".", ".."} for seg in v.split("/")):
+            raise ValueError(f"not an absolute in-container path: {v!r}")
+        return v
+
+    @field_validator("relay_unit")
+    @classmethod
+    def _unit(cls, v: str) -> str:
+        if not UNIT_RE.fullmatch(v):
+            raise ValueError(f"not a systemd .service unit name: {v!r}")
+        return v
+
+    @field_validator("dynamo_services")
+    @classmethod
+    def _dynamo_services(cls, v: dict[str, str]) -> dict[str, str]:
+        merged = {**DEFAULT_DYNAMO_SERVICES, **v}
+        for role, name in merged.items():
+            if role not in DYNAMO_ROLES:
+                raise ValueError(f"unknown Dynamo role {role!r} (one of {', '.join(DYNAMO_ROLES)})")
+            if not COMPOSE_SERVICE_RE.fullmatch(name):
+                raise ValueError(f"dynamo_services {role!r}: not a compose service name: {name!r}")
+        return merged
+
+    @field_validator("dynamo_containers")
+    @classmethod
+    def _dynamo_containers(cls, v: dict[str, str]) -> dict[str, str]:
+        merged = {**DEFAULT_DYNAMO_CONTAINERS, **v}
+        for role, name in merged.items():
+            if role not in DYNAMO_ROLES:
+                raise ValueError(f"unknown Dynamo role {role!r} (one of {', '.join(DYNAMO_ROLES)})")
+            if not CONTAINER_NAME_RE.fullmatch(name):
+                raise ValueError(f"dynamo_containers {role!r}: not a container name: {name!r}")
+        if len(set(merged.values())) != len(merged):
+            raise ValueError("dynamo_containers: each role needs its own container name")
+        return merged
+
+    @field_validator("layout")
+    @classmethod
+    def _layout(cls, v: dict[str, str]) -> dict[str, str]:
+        out = dict(DEFAULT_LAYOUT)
+        for key, rel in v.items():
+            if key not in DEFAULT_LAYOUT:
+                raise ValueError(f"unknown layout key {key!r} (one of {', '.join(DEFAULT_LAYOUT)})")
+            out[key] = _layout_rel(key, rel)
+        return out
+
+    @field_validator("capable_probe_key_env")
+    @classmethod
+    def _probe_key_env(cls, v: str) -> str:
+        """Same rule as the playground's credential names: only credential-looking env names can be referenced."""
+        if not credential_env_allowed(v):
+            raise ValueError("capable_probe_key_env takes an ENV VAR NAME: LITELLM_*, NEMO_CONSOLE_PLAYGROUND_* or *_API_KEY")
         return v
 
     @field_validator("openshell_containers")
@@ -262,50 +420,61 @@ class Settings(BaseSettings):
             return False, "loopback trust disabled: allowed_hosts is set (a same-host reverse proxy would make callers admin)"
         return True, None
 
+    def repo_marker(self) -> Path:
+        """The file that proves repo_root is the deployment checkout: the Dynamo compose file under the layout."""
+        return Path(self.layout["dynamo"]) / "docker-compose.yml"
+
     def repo_root_problem(self) -> str | None:
-        if (self.repo_root / REPO_MARKER).is_file():
+        marker = self.repo_marker()
+        if (self.repo_root / marker).is_file():
             return None
-        return (f"repo root {self.repo_root} does not contain {REPO_MARKER}; "
+        return (f"repo root {self.repo_root} does not contain {marker}; "
                 "set NEMO_CONSOLE_REPO_ROOT to the lab repository checkout (see docs/OPERATIONS.md)")
 
     def resolved_paths(self) -> dict[str, Path]:
-        """Named ABSOLUTE config-only paths for the adapters (see docs: proposal, additive)."""
+        """Named ABSOLUTE config-only paths for the adapters (see docs: proposal, additive). Directories under the repo
+        root come from `layout` (addendum 9.11); the defaults are the author's deployment."""
         r = self.repo_root
         home = Path.home()
+        lay = {k: r / v for k, v in self.layout.items()}
+        runner = lay["openshell_runner"]
         return {
             "repo": r,
             "state": self.state_dir,
-            "switchyard_dir": r / "inference" / "switchyard",
-            "switchyard_routes": r / "inference" / "switchyard" / "routes.toml",
-            "switchyard_compose": r / "inference" / "switchyard" / "docker-compose.yml",
-            "relay_routes": r / "clients" / "nemo-relay" / "routes.toml",
-            "relay_dir": r / "clients" / "nemo-relay",
+            "switchyard_dir": lay["switchyard"],
+            "switchyard_routes": lay["switchyard"] / "routes.toml",
+            "switchyard_compose": lay["switchyard"] / "docker-compose.yml",
+            "relay_routes": lay["relay"] / "routes.toml",
+            "relay_dir": lay["relay"],
             "relay_config": home / ".config" / "nemo-relay" / "config.toml",
             "relay_plugins": home / ".config" / "nemo-relay" / "plugins.toml",
             "relay_atof_dir": home / ".local" / "share" / "nemo-relay" / "atof",
             "relay_atif_dir": home / ".local" / "share" / "nemo-relay" / "atif",
-            "dynamo_dir": r / "inference" / "dynamo",
-            "dynamo_compose": r / "inference" / "dynamo" / "docker-compose.yml",
-            "skills_dir": r / ".claude" / "skills",          # SkillEvaluator: one sub-directory per skill (SKILL.md)
+            "dynamo_dir": lay["dynamo"],
+            "dynamo_compose": lay["dynamo"] / "docker-compose.yml",
+            "skills_dir": lay["skills"],                     # SkillEvaluator: one sub-directory per skill (SKILL.md)
+            "skillevaluator_dir": lay["skillevaluator"],     # the lab installer (install.sh), display only
+            "ollama_dir": lay["ollama"],                     # the embeddings model's compose dir, display only
+            "data_designer_dir": lay["data_designer"],       # the lab installer + key minter, display only
             "scripts_dir": self.dd_scripts_dir,              # Data Designer dataset config scripts (console-owned)
             "datasets_root": self.dd_datasets_root,          # where `create` writes the user's dataset copies
             "dd_config_dir": self.dd_config_dir,             # the tool's own dir (model_providers/model_configs.yaml)
             "dd_key_file": home / ".config" / "data-designer" / "litellm.key",   # LITELLM_DD_KEY source; EXISTENCE only
             # addendum 9.8 — key files are checked for EXISTENCE only, never read
-            "openshell_runner_dir": r / "clients" / "data-designer" / "runner",
-            "openshell_gateway_config": r / "clients" / "data-designer" / "runner" / "config" / "gateway.toml",
-            "openshell_policy": r / "clients" / "data-designer" / "runner" / "policy.yaml",
-            "openshell_compose": r / "clients" / "data-designer" / "runner" / "docker-compose.yml",
-            "observability_dir": r / "observability",
-            "observability_compose": r / "observability" / "docker-compose.yml",
-            "dcgm_counters": r / "observability" / "dcgm" / "counters.csv",
-            "aiperf_dir": r / "clients" / "aiperf",
-            "aiperf_profiles": r / "clients" / "aiperf" / "profiles.yaml",
+            "openshell_runner_dir": runner,
+            "openshell_gateway_config": runner / "config" / "gateway.toml",
+            "openshell_policy": runner / "policy.yaml",
+            "openshell_compose": runner / "docker-compose.yml",
+            "observability_dir": lay["observability"],
+            "observability_compose": lay["observability"] / "docker-compose.yml",
+            "dcgm_counters": lay["observability"] / "dcgm" / "counters.csv",
+            "aiperf_dir": lay["aiperf"],
+            "aiperf_profiles": lay["aiperf"] / "profiles.yaml",
             "aiperf_key_file": home / ".config" / "aiperf" / "litellm.key",
-            "guardrails_dir": r / "security" / "nemo-guardrails",
-            "guardrails_compose": r / "security" / "nemo-guardrails" / "docker-compose.yml",
-            "guardrails_config_dir": r / "security" / "nemo-guardrails" / "config",
-            "evaluator_dir": r / "clients" / "nemo-evaluator",
-            "evaluator_suites": r / "clients" / "nemo-evaluator" / "suites.yaml",
+            "guardrails_dir": lay["guardrails"],
+            "guardrails_compose": lay["guardrails"] / "docker-compose.yml",
+            "guardrails_config_dir": lay["guardrails"] / "config",
+            "evaluator_dir": lay["evaluator"],
+            "evaluator_suites": lay["evaluator"] / "suites.yaml",
             "evaluator_key_file": home / ".config" / "nemo-evaluator" / "litellm.key",
         }

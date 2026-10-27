@@ -5,6 +5,30 @@ implemented / verified-live / unverified defined in the README.
 
 ## [Unreleased]
 
+### Added
+
+- **Deployment names and the repo layout are settings** (ARCHITECTURE addendum 9.11). New `NEMO_CONSOLE_*` names:
+  `SWITCHYARD_CONTAINER`, `SWITCHYARD_COMPOSE_PROJECT`, `SWITCHYARD_COMPOSE_SERVICE`, `SWITCHYARD_IMAGE`,
+  `SWITCHYARD_LOG_PATH`, `RELAY_UNIT`, `DYNAMO_COMPOSE_PROJECT`, `DYNAMO_SERVICES`, `DYNAMO_CONTAINERS`,
+  `GUARDRAILS_COMPOSE_PROJECT`, `DCGM_COMPOSE_PROJECT` and `LAYOUT` (each system's directory under the repo root;
+  `resolved_paths()`, the repo-root check and the lab helper hints follow it). Defaults are the former constants, so an
+  existing deployment behaves as before. Every value is checked with a full match at start and none is writable through
+  the API. Still constants on purpose: Dynamo's one stoppable container, OpenShell's sandbox network and router address.
+  Implemented; covered by offline tests; the defaults were exercised live through a second console's status reads.
+- **Opt-in active capable-tier probe** (`NEMO_CONSOLE_CAPABLE_PROBE=true`, off by default). For each capable-tier alias
+  whose container is running, one 1-token chat completion through the LiteLLM router (response cache bypassed), in the
+  background, one at a time, at most every 5 minutes per alias, retried once before it counts. A running engine that
+  does not answer is the new problem `switchyard.tier.capable_broken` (Switchyard `degraded`, "capable tier not
+  answering"); a missing or refused key is the info problem `switchyard.tier.probe_unconfigured` /
+  `switchyard.tier.probe_denied`. The key comes from the env var named by `CAPABLE_PROBE_KEY_ENV` (default
+  `LITELLM_API_KEY`); only the verdict and an HTTP status are kept or logged. Verified live 2026-10-26 against the real
+  router (ok, denied and unconfigured); the broken path with fakes only. Each probe is a real request billed to that key
+  (THREAT-MODEL E-12, R-24).
+
+### Changed
+
+- The mock server's default port is 18796 (was 8796, which another local tool on the author's machine uses).
+
 ## [0.3.1] - 2026-10-24
 
 ### Fixed

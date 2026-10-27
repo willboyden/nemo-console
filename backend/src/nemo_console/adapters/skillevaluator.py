@@ -280,8 +280,12 @@ class SkillEvaluatorAdapter(SystemAdapter):
         return self.ctx.state_dir / "skillevaluator" / "runs"
 
     def _lab_file(self, rel: Path) -> Path | None:
-        repo = self.ctx.paths.get("repo")
-        return repo / rel if repo is not None and (repo / rel).exists() else None
+        """A lab helper: `rel`'s file under the `skillevaluator_dir` layout dir (addendum 9.11), else `rel` under the repo root."""
+        base, repo = self.ctx.paths.get("skillevaluator_dir"), self.ctx.paths.get("repo")
+        for p in (base / rel.name if base is not None else None, repo / rel if repo is not None else None):
+            if p is not None and p.exists():
+                return p
+        return None
 
     def _install_fix(self) -> str:
         """The lab's pinned installer when the repo has it (it also links the wrapper), else the pinned uv command."""
@@ -296,7 +300,9 @@ class SkillEvaluatorAdapter(SystemAdapter):
                 "skillevaluator-local onto PATH and builds the runner)")
 
     def _embeddings_fix(self) -> str:
-        ollama = self._lab_file(LAB_OLLAMA)
+        repo = self.ctx.paths.get("repo")
+        ollama = next((p for p in (self.ctx.paths.get("ollama_dir"), repo / LAB_OLLAMA if repo is not None else None)
+                       if p is not None and p.exists()), None)
         return (f"cd {ollama} && docker compose up -d" if ollama
                 else "start the embeddings model the launcher names in SKILL_EVAL_EMBEDDING_MODEL")
 

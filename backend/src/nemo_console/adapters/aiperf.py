@@ -360,8 +360,12 @@ class AiPerfAdapter(SystemAdapter):
         return self.ctx.state_dir / "aiperf" / "runs"
 
     def _lab_file(self, rel: Path) -> Path | None:
-        repo = self.ctx.paths.get("repo")
-        return repo / rel if repo is not None and (repo / rel).exists() else None
+        """A lab helper: `rel`'s file under the `aiperf_dir` layout dir (addendum 9.11), else `rel` under the repo root."""
+        base, repo = self.ctx.paths.get("aiperf_dir"), self.ctx.paths.get("repo")
+        for p in (base / rel.name if base is not None else None, repo / rel if repo is not None else None):
+            if p is not None and p.exists():
+                return p
+        return None
 
     def _install_fix(self) -> str:
         lab = self._lab_file(LAB_INSTALLER)

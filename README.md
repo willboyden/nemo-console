@@ -103,7 +103,7 @@ make install-desktop  # optional (Linux): "Nemo Console" in your app menu; see d
 of a 0600 key file. Full instructions: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
 UI without a backend (canned data, nothing verified about real systems): `cd frontend && node dev/mock-server.mjs`
-(its default port is 8796; the real backend is 8793; pass `--port` to change the mock's).
+(its default port is 18796; the real backend is 8793; pass `--port` to change the mock's).
 
 ## Security posture (summary)
 
@@ -131,7 +131,8 @@ outbound network beyond configured loopback URLs.
 
 ## Known limitations
 
-- **Switchyard "capable tier dark" detection is indirect, with no active request probe.** Two signals exist:
+- **Switchyard "capable tier dark" detection is indirect unless you turn on the active probe.** Two passive signals
+  exist, and an opt-in third:
   (a) `switchyard.tier.capable_dark` (setting `engine_probes`, alias to engine container) fires when a mapped alias
   is the `capable_target` model of a `stage_router` route in the parsed `routes.toml` (a passthrough such as
   `direct-*` does not count) and the mapped container is *not running* per `docker inspect`; it makes Switchyard
@@ -140,7 +141,10 @@ outbound network beyond configured loopback URLs.
   all is only the info problem `switchyard.tier.capable_not_deployed`. (b) `switchyard.capable_tier.upstream_errors`
   is a traffic heuristic on `/v1/stats` error counts. Neither notices a running-but-broken engine, and (a) only knows
   the containers you list in `engine_probes` (the defaults list two aliases and containers from the author's
-  deployment).
+  deployment). (c) With `NEMO_CONSOLE_CAPABLE_PROBE=true` (off by default) the console sends one 1-token completion per
+  running capable-tier alias through the router, at most every 5 minutes, and raises
+  `switchyard.tier.capable_broken` when it fails twice; each probe is a real router request, billed to the key named
+  by `capable_probe_key_env` (see [`docs/OPERATIONS.md`](docs/OPERATIONS.md)).
 - **Playground "served by" headers are guessed.** The console looks for `X-Served-By-Route` style headers
   (several candidate names); they were absent from real Switchyard responses, so the route/tier badges are
   usually empty.
@@ -155,10 +159,11 @@ outbound network beyond configured loopback URLs.
 - **`/health` reports the caller's role** (`admin`, `viewer` or `public`) and a `trust_notice`; with the default
   settings an unauthenticated caller sees `public` and a null notice.
 - **Dynamo events are redacted log lines**, not an allowlist of metadata fields (ADR-0010 deviation).
-- Container, compose-project and unit names for Switchyard, Relay and Dynamo, and the repo layout under the configured
-  root, are constants in the adapters. Only the capable-tier alias-to-container mapping and each engine's start
-  command are configurable today (`ENGINE_PROBES`, `ENGINE_START`); anything else needs a code edit (see
-  [Deployment assumptions](#deployment-assumptions)).
+- The container, compose-project and unit names, and where each system's files live under the repo root, are settings
+  since the unreleased work after 0.3.1, defaulting to the author's deployment (see
+  [Deployment assumptions](#deployment-assumptions)). Still fixed in code: the one container Dynamo's `up` may stop
+  (`stop_sharing_engine`, deliberately not a setting: a setting must not widen what the console stops), OpenShell's
+  sandbox network and router address (they must match the lab wrapper), and the router liveness path.
 - **Route validators guard against off-box IPs and dotted hostnames, not against a hostile local resolver.** A bare
   single-label hostname (for example `metadata`) is accepted as an in-network "service name"; a resolver search domain
   could send it off the box. An `allowed_service_names` setting is a possible future option, not implemented.
@@ -171,13 +176,16 @@ outbound network beyond configured loopback URLs.
 
 ## Deployment assumptions
 
-The adapters were written against one deployment and encode it as constants and default paths
-(`resolved_paths()` in `backend/src/nemo_console/config.py`, constants at the top of each adapter):
+The adapters were written against one deployment. Its names and paths are now settings whose defaults are that
+deployment (`NEMO_CONSOLE_*`, listed in [`docs/OPERATIONS.md`](docs/OPERATIONS.md) section 2): set the ones that differ
+for yours. What they describe:
 
 - Switchyard runs as a docker compose service in a project directory containing `routes.toml` and
-  `docker-compose.yml`, with a container name the adapter verifies by compose labels.
-- Relay's gateway runs as the systemd user unit `nemo-relay-gateway.service` on `127.0.0.1:4040`.
-- Dynamo runs as a compose project with `dynamo-frontend` / `dynamo-worker` services, pinned to a GPU by UUID.
+  `docker-compose.yml`, with a container name the adapter verifies by compose labels (`SWITCHYARD_CONTAINER`,
+  `SWITCHYARD_COMPOSE_PROJECT`, `SWITCHYARD_COMPOSE_SERVICE`; directory `LAYOUT__SWITCHYARD`).
+- Relay's gateway runs as a systemd user unit (`RELAY_UNIT`, default `nemo-relay-gateway.service`) on `127.0.0.1:4040`.
+- Dynamo runs as a compose project (`DYNAMO_COMPOSE_PROJECT`) with frontend / worker services (`DYNAMO_SERVICES`,
+  `DYNAMO_CONTAINERS`), pinned to a GPU by UUID.
 - A LiteLLM-compatible router answers `/health/liveliness` on `127.0.0.1:4000` (topology probe only).
 - OpenShell: the lab's Data Designer runner (`clients/data-designer/runner`: gateway `ai-lab-dd-gateway`, forwarder
   `ai-lab-dd-cli-fwd`, sandbox network `openshell-docker`). DCGM: dcgm-exporter on `127.0.0.1:9400` (container
@@ -185,9 +193,11 @@ The adapters were written against one deployment and encode it as constants and 
   `127.0.0.1:9090`. AIPerf / NeMo Evaluator / NeMo Guardrails: the lab wrappers `aiperf-local`, `evaluator-local`,
   `guardrails-local` on PATH (each reads its own 0600 router key file) and, for Guardrails, the server on
   `127.0.0.1:8806` (`security/nemo-guardrails`). Container names are settings (`NEMO_CONSOLE_*`).
-- The root that holds those directories is `NEMO_CONSOLE_REPO_ROOT`. The default walks up from the source file to
-  a directory containing `inference/dynamo/docker-compose.yml`, else uses the current directory; a root that lacks that
-  file is reported as a problem. For a standalone checkout set it explicitly.
+- The root that holds those directories is `NEMO_CONSOLE_REPO_ROOT`; each system's directory under it is a `LAYOUT__*`
+  setting (defaults `inference/switchyard`, `clients/nemo-relay`, `inference/dynamo`, ...). The default root walks up from
+  the source file to a directory containing `inference/dynamo/docker-compose.yml`, else uses the current directory; a
+  root that lacks the Dynamo compose file of the layout is reported as a problem. For a standalone checkout set it
+  explicitly.
 
 ## Repository layout
 

@@ -246,7 +246,12 @@ class SwitchyardAdapter(SystemAdapter):
     id = "switchyard"
     label = "NeMo Switchyard"
 
+    # deployment identities (addendum 9.11): class defaults = the module constants; the container sets the configured ones
     container = CONTAINER
+    compose_project = COMPOSE_PROJECT
+    compose_service = COMPOSE_SERVICE
+    fallback_image = FALLBACK_IMAGE
+    log_path = LOG_PATH
     poll_seconds = 30.0              # post-apply /health budget
     poll_interval = 1.0
     follow_interval = 2.0
@@ -303,7 +308,7 @@ class SwitchyardAdapter(SystemAdapter):
         if res.returncode != 0:
             return None
         parts = res.stdout.strip().split("|")
-        if len(parts) != 5 or parts[3] != COMPOSE_PROJECT or parts[4] != COMPOSE_SERVICE:
+        if len(parts) != 5 or parts[3] != self.compose_project or parts[4] != self.compose_service:
             return None
         return parts[0], parts[1], parts[2]
 
@@ -312,7 +317,7 @@ class SwitchyardAdapter(SystemAdapter):
         if await self._inspect() is None:
             return None
         res = await self.ctx.runner.run(
-            ["docker", "exec", self.container, "tail", "-n", str(n), LOG_PATH],
+            ["docker", "exec", self.container, "tail", "-n", str(n), self.log_path],
             timeout=15.0, max_bytes=min(2_000_000, n * 700 + 4096))
         if res.returncode != 0:
             return None
@@ -352,7 +357,8 @@ class SwitchyardAdapter(SystemAdapter):
             insp = None
         if insp is None:
             components.append(Component(kind="container", name=self.container, state="absent",
-                                        detail="not found or not the compose service ai-lab-switchyard/switchyard"))
+                                        detail=f"not found or not the compose service "
+                                               f"{self.compose_project}/{self.compose_service}"))
         else:
             st, hl, img = insp
             state = "running" if st == "running" else ("stopped" if st in {"exited", "created", "paused"}
@@ -708,7 +714,7 @@ class SwitchyardAdapter(SystemAdapter):
             insp = await self._inspect()
         except Exception:  # noqa: BLE001
             insp = None
-        return insp[2] if insp else FALLBACK_IMAGE
+        return insp[2] if insp else self.fallback_image
 
     async def _dry_run(self, raw: bytes) -> tuple[list[Diagnostic], str | None]:
         """Candidate goes over stdin into a throwaway, network-less, read-only container."""
