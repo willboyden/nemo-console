@@ -23,6 +23,7 @@ export const isAdmin = () => store.get().role === 'admin';
 
 export function setApiKey(key) {
   if (key) session.set('nc.bearer', key); else session.remove('nc.bearer');
+  api.clearAuthHold();   // a new sign-in, even with the same key, lets requests through again
   store.set({ apiKey: key || '', authRequired: false });
 }
 

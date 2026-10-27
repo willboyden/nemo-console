@@ -5,6 +5,15 @@ implemented / verified-live / unverified defined in the README.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A signed-out tab no longer polls forever.** Every view refreshes on a timer, and after a 401 the UI showed the sign-in
+  dialog but kept sending the refused requests: one `/overview` call every 5 s per tab (12 a minute; 24 a minute were seen
+  in the console's denied-request log with two such tabs open). After a 401 the API client now holds every request made
+  with the same key (or with none) and answers it locally with a 401, until the user signs in again (even with the same
+  key) or a request succeeds; `/health` stays open. Verified live with headless Chrome against a scratch console: a
+  signed-out page sent one `/health` and one `/overview` in 30 s (the 0.3.1 frontend: six refused `/overview` calls).
+
 ### Added
 
 - **Deployment names and the repo layout are settings** (ARCHITECTURE addendum 9.11). New `NEMO_CONSOLE_*` names:

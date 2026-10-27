@@ -30,15 +30,26 @@ export function createClient({ base = '/api/v1', getKey = () => null, onUnauthor
   const authHeaders = () => { const k = getKey(); return k ? { Authorization: `Bearer ${k}` } : {}; };
   const url = (path, query) => `${base}${path}${buildQuery(query)}`;
   const mutHeaders = (method) => (SAFE_METHODS.has(method.toUpperCase()) ? {} : { [CSRF_HEADER]: '1' });
+  // After a 401 nothing is sent with the same key (or with none) until the user signs in again: every view polls on a
+  // timer, and a signed-out tab used to send the refused requests forever (about 24 a minute). /health stays open: it
+  // is public and tells the UI the caller's role.
+  let authHeld = false;
+  let heldKey = null;
+  const clearAuthHold = () => { authHeld = false; heldKey = null; };
 
   async function request(method, path, { query, body, signal } = {}) {
+    if (authHeld && path !== '/health' && (getKey() || null) === heldKey) {
+      onUnauthorized();
+      throw new ApiError(401, { error: { code: 'unauthorized', message: 'sign in to continue' } });
+    }
     const hdr = { Accept: 'application/json', ...authHeaders(), ...mutHeaders(method) };
     let payload;
     if (body !== undefined) { hdr['Content-Type'] = 'application/json'; payload = JSON.stringify(body); }
     let res;
     try { res = await f(url(path, query), { method, headers: hdr, body: payload, signal }); }
     catch (e) { if (e?.name === 'AbortError') throw e; throw new ApiError(0, { error: { code: 'network', message: e?.message || 'unreachable' } }); }
-    if (res.status === 401) onUnauthorized();
+    if (res.status === 401) { authHeld = true; heldKey = getKey() || null; onUnauthorized(); }
+    else if (res.ok) clearAuthHold();
     if (!res.ok) { let b = {}; try { b = await res.json(); } catch { /* not json */ } throw new ApiError(res.status, b); }
     if (res.status === 204) return null;
     return (res.headers.get?.('content-type') || '').includes('json') ? res.json() : res.text();
@@ -49,7 +60,7 @@ export function createClient({ base = '/api/v1', getKey = () => null, onUnauthor
   const sys = (id) => `/systems/${enc(id)}`;
 
   return {
-    url, authHeaders, mutHeaders, request, get, post, put,
+    url, authHeaders, mutHeaders, request, get, post, put, clearAuthHold,
     health: () => get('/health'),
     overview: () => get('/overview'),
     topology: () => get('/topology'),

@@ -56,3 +56,26 @@ test('describeError maps 401/403/409/413/415/421/429/503 (+502, network) to dist
   assert.match(describeError({ status: 0, code: 'network' }), /Cannot reach/); assert.equal(describeError({ status: 500, message: 'boom' }), 'boom'); assert.equal(describeError(null), 'Something went wrong');
   assert.match(describeError({ status: 429, message: 'at most 8 concurrent event streams' }), /at most 8/);
 });
+
+test('after a 401 nothing is sent with the same key until the hold is cleared; /health stays open', async () => {
+  let key = null; let unauth = 0; const sent = [];
+  const api = createClient({ getKey: () => key, onUnauthorized: () => unauth++,
+    fetchImpl: async (u) => { sent.push(u); return key === 'good' ? res(200, {}) : res(401, { error: { code: 'unauthorized', message: 'no' } }); } });
+  await assert.rejects(api.overview(), (e) => e.status === 401);
+  await assert.rejects(api.overview(), (e) => e.status === 401 && e.message === 'sign in to continue');
+  await assert.rejects(api.status('relay'), (e) => e.status === 401);
+  assert.equal(sent.length, 1, 'held requests never reach the server');
+  assert.equal(unauth, 3, 'every held call still asks for a sign-in');
+  await api.health().catch(() => {});
+  assert.equal(sent.length, 2, '/health is not held');
+  key = 'wrong';
+  await assert.rejects(api.overview(), (e) => e.status === 401);
+  assert.equal(sent.length, 3, 'a different key is tried');
+  await assert.rejects(api.overview(), (e) => e.status === 401);
+  assert.equal(sent.length, 3, 'and held once it is refused too');
+  key = 'good'; await api.overview();
+  assert.equal(sent.length, 4);
+  key = 'wrong'; await assert.rejects(api.overview()); assert.equal(sent.length, 5);
+  api.clearAuthHold(); await assert.rejects(api.overview());
+  assert.equal(sent.length, 6, 'clearAuthHold lets the same key be tried again (signing in again with it)');
+});
