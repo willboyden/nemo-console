@@ -1,0 +1,230 @@
+# NeMo Switchyard routes — routing IN FRONT OF LiteLLM, additive and bypassable.
+#
+# MIGRATED to switchyard-server 0.3.0 on 2026-09-23 (was 0.2.0). Checked with the 0.3.0 binary:
+# `--dry-run` clean with no warnings, auto-local/direct-27b answered, and the 0.3.0 server escalated
+# 3 of 4 hard prompts where the live 0.2.0 escalated 0 of 4. What changed from 0.2.0:
+#   - forward_auth now works (0.2.0 rejected it), so this server no longer holds a key — see below.
+#   - capable_/efficient_system_prompt on a route are gone (rejected as unknown fields); per-tier
+#     steering is a target `system_prompt`. See the *-auto targets and the routes note.
+# The 0.2.0 file is what the README's "What the docs get wrong about 0.2.0" describes; that section
+# is history now — `type = "auto"`, target system_prompt/reasoning_effort and forward_auth all exist.
+#
+# Every target is an EXISTING LiteLLM alias from inference/litellm/config.yaml, reached on the
+# ai-lab bus as http://litellm:4000/v1. LiteLLM keeps credentials, aliasing, caching, spend
+# tracking and its exporters. Switchyard only decides WHICH alias serves a call.
+#
+# BYPASS IS THE DEFAULT, NOT A MODE:
+#   1. Port level  — LiteLLM still owns :4000 and is untouched. Anything pointed there never sees
+#                    this file. Routing is opt-in by calling :4010.
+#   2. Route level — the `direct-*` passthroughs below pin one model with no routing decision.
+schema_version = 1
+
+# ── upstream ────────────────────────────────────────────────────────────────────────────────
+# forward_auth = true (works in 0.3.0; 0.2.0 rejected the key, which is why this file used
+# api_key_env and the container held LITELLM_MASTER_KEY). The caller's own Authorization header is
+# forwarded to LiteLLM, which does the validating: measured 2026-09-23 against 0.3.0 with NO key in
+# the container — no credential -> 401, wrong key -> 401, a valid key -> answered. That closes the
+# hole documented in docker-compose.yml (an unauthenticated peer getting master-key-backed
+# completions). Consequences: every caller of :4010 must now send `Authorization: Bearer <key>`;
+# /health, /metrics and /v1/models stay unauthenticated (route ids only). Classifier judge calls
+# use the same forwarded credential.
+[llm_clients.litellm]
+format = "openai_chat"
+base_url = "http://litellm:4000/v1"
+forward_auth = true
+max_retries = 2
+
+# ── targets: existing router aliases, nothing new ───────────────────────────────────────────
+# 0.2.0 targets accept ONLY id / llm_client / extra_body. `system_prompt` and `reasoning_effort`
+# are documented but rejected — per-tier steering goes on the ROUTE instead (see below).
+[targets.lightning]
+id = "nemotron-lightning"          # Nemotron 3.5 Lightning 30B-A3B NVFP4 (QAD) — efficient tier
+llm_client = "litellm"
+
+[targets.qwen-27b-1m]
+id = "qwen3.8-27b-1m"              # 256K ctx + MTP — the capable tier that is up today
+llm_client = "litellm"
+
+# auto-local's tiers: same model ids as the two above, plus the tier prompt (see routes note below).
+# OWN CLIENT, same URL, on purpose: target identity is (model id, llm_client), so reusing `litellm` would
+# make Switchyard keep one target per id and silently DROP the other (WARN only) — the prompt would vanish.
+[llm_clients.litellm_auto]
+format = "openai_chat"
+base_url = "http://litellm:4000/v1"
+forward_auth = true
+max_retries = 2
+
+[targets.lightning-auto]
+id = "nemotron-lightning"
+llm_client = "litellm_auto"
+system_prompt = "Answer directly and finish the task. If it needs multi-step planning or wide code edits, say so briefly instead of guessing."
+
+[targets.qwen-27b-auto]
+id = "qwen3.8-27b-1m"
+llm_client = "litellm_auto"
+system_prompt = "You were escalated to because a smaller model stopped short. Read what it already did and continue; do not redo settled work."
+
+[targets.flash-next]
+id = "qwen3.8-flash-next"          # SGLang custom build; start inference/sglang-flashnext first
+llm_client = "litellm"
+
+[targets.omni]
+id = "nemotron-omni"               # always-on multimodal engine, own card
+llm_client = "litellm"
+
+# JUDGE CLIENT — kept as the REVERT PATH. History: the 0.2.0 build shipped with the judge at
+# nemotron-omni because lightning-as-judge produced parse_error (reasoning model spent its budget
+# thinking and returned EMPTY content -> confidence 0.000 -> silent fall-through to efficient).
+# 2026-09-13 the classifier target was switched to lightning ON PURPOSE: the hypothesis is that
+# the old failures were reasoning-budget exhaustion (thinking ON by default) rather than a model
+# choice, and thinking is now OFF by default for lightning in inference/litellm/config.yaml (chat_template_kwargs
+# enable_thinking: false on the nemotron-lightning alias AND the switchyard group's efficient tier), so the judge verdict arrives as plain text. Target identity is (model id, llm_client):
+# this judge target (nemotron-omni, litellm_judge) stays distinct from every answer target.
+[llm_clients.litellm_judge]
+format = "openai_chat"
+base_url = "http://litellm:4000/v1"
+forward_auth = true
+max_retries = 2
+
+[targets.judge]
+id = "nemotron-omni"
+llm_client = "litellm_judge"
+
+# TWO CLUSTER LANES. BOTH ARE MULTIMODAL — text+image in, 1M ctx, GLM-5.3 Flash on the cluster
+# behind a remote gateway. The gateway's "text-only lane" naming for glm-5.3-flash is WRONG:
+# measured 2026-09-14 through this router, it named the colour of solid PNGs correctly and it
+# returns tool_calls and streams. Neither of these is a text-only lane; do not re-label them.
+#
+# Either engine may be stopped at any time — normal here, not a config fault, so this file does
+# not record which is up. Declaring both (rather than deleting a stopped one) means each starts
+# working again with no edit here, the convention inference/litellm/config.yaml already uses for
+# deepseek-v4-flash.
+[targets.cluster-glm]
+id = "cluster/glm-5.3-flash"       # cluster TP4, 1M ctx, text+image in — remote, over the fabric
+llm_client = "litellm"
+
+[targets.cluster-glm-next]
+id = "cluster/glm-5.3-flash-next"  # cluster TP4, 1M ctx, text+image in — remote, over the fabric
+llm_client = "litellm"
+
+# ── routed models ───────────────────────────────────────────────────────────────────────────
+# type = "stage_router" spelled out: 0.2.0 rejects the documented `type = "auto"` preset, so its
+# documented values (picker = efficient_first, confidence_threshold = 0.5) are written here.
+# Start on the efficient tier; escalate to capable on tool-ACTIVITY signals (not on the mere
+# presence of tool definitions — measured 2026-09-13).
+#
+# handoff_notes.escalation_note is the quality field that was missing from the first build. Without
+# it the capable tier inherits the conversation with no idea it is a second attempt, and re-does
+# work the efficient tier already did. The wording mirrors NVIDIA's own LiteLLM example.
+# Per-tier steering is a per-TARGET `system_prompt` since 0.3.0 (it was the route-level
+# capable_/efficient_system_prompt on 0.2.0, which 0.3.0 rejects). The auto-local tiers get their OWN
+# targets (`*-auto`, same model id and client) because a target's prompt applies wherever it serves a
+# completion — putting it on `lightning` / `qwen-27b-1m` would also steer the direct-* A/B baselines.
+
+# PRIMARY. Fully local: no egress, no remote dependency. Trust this one when the fabric is down.
+[routes.auto-local]
+id = "auto-local"
+type = "stage_router"
+capable_target = "qwen-27b-auto"
+efficient_target = "lightning-auto"
+picker = "efficient_first"
+confidence_threshold = 0.5
+recent_turn_window = 3
+context_window = 262144
+tool_calling = true
+reasoning = true
+handoff_notes = { escalation_note = "A smaller model handled the earlier turns and did not finish. Continue from its work rather than restarting it." }
+
+# WITHOUT THIS BLOCK THE ROUTE NEVER ESCALATES. stage_router computes no confidence of its own —
+# with no classifier every request reports
+#   x-model-router-rationale: fall-through selected <efficient> (confidence 0.000)
+# and efficient_first falls through unconditionally. That is not a tuning problem, it is a missing
+# component: measured over hundreds of calls, the capable tier had NEVER served a request.
+[routes.auto-local.classifier]
+# `lightning-auto`, not `lightning`: a route may not hold the same model id on two clients, and the
+# efficient tier is on litellm_auto. Judge calls do NOT receive the target prompt.
+target = "lightning-auto"
+base_threshold = 0.5
+max_output_tokens = 4096
+
+# Same pair, capable tier on the flashnext engine. Only works while that engine is up.
+[routes.auto-flashnext]
+id = "auto-flashnext"
+type = "stage_router"
+capable_target = "flash-next"
+efficient_target = "lightning"
+picker = "efficient_first"
+confidence_threshold = 0.5
+recent_turn_window = 3
+tool_calling = true
+reasoning = true
+handoff_notes = { escalation_note = "A smaller model handled the earlier turns and did not finish. Continue from its work rather than restarting it." }
+
+# WITHOUT THIS BLOCK THE ROUTE NEVER ESCALATES — same missing-component story as above.
+[routes.auto-flashnext.classifier]
+target = "lightning"
+base_threshold = 0.5
+max_output_tokens = 4096
+
+# Local efficient tier, capable tier on your own cluster. Crosses the fabric, not the internet.
+[routes.auto-cluster]
+id = "auto-cluster"
+type = "stage_router"
+capable_target = "cluster-glm"
+efficient_target = "lightning"
+picker = "efficient_first"
+confidence_threshold = 0.5
+recent_turn_window = 3
+context_window = 1000000
+tool_calling = true
+reasoning = true
+handoff_notes = { escalation_note = "A smaller model handled the earlier turns and did not finish. Continue from its work rather than restarting it." }
+
+# WITHOUT THIS BLOCK THE ROUTE NEVER ESCALATES — same missing-component story as above.
+[routes.auto-cluster.classifier]
+target = "lightning"
+base_threshold = 0.5
+max_output_tokens = 4096
+
+# A frontier-API capable tier is DELIBERATELY ABSENT: it needs a second llm_clients block with a
+# real egress path and an API key — an egress-allowlist and secret-handling change, not a config
+# tweak. See README.md "Adding a frontier tier".
+
+# ── explicit bypasses ───────────────────────────────────────────────────────────────────────
+# One passthrough per tier that appears in a route above, so every routed model can be A/B'd
+# against its own tiers ON THE SAME SURFACE. That is the only honest way to tell whether routing
+# is helping, and it is why direct-flashnext and direct-cluster exist rather than just the two
+# the first build shipped.
+[routes.direct-lightning]
+id = "direct-lightning"
+type = "passthrough"
+target = "lightning"
+
+[routes.direct-27b]
+id = "direct-27b"
+type = "passthrough"
+target = "qwen-27b-1m"
+
+[routes.direct-flashnext]
+id = "direct-flashnext"
+type = "passthrough"
+target = "flash-next"
+
+[routes.direct-cluster]
+id = "direct-cluster"
+type = "passthrough"
+target = "cluster-glm"
+
+# The -next engine, addressable on its own. Same capability as direct-cluster — a separate
+# checkpoint on the gateway, NOT a different modality. When its engine is stopped the upstream
+# error names the backend directly ("Cannot connect to host 192.0.2.12:8000"), which is the
+# quickest way to tell "engine not started" apart from a genuinely missing model id.
+[routes.direct-cluster-next]
+id = "direct-cluster-next"
+type = "passthrough"
+target = "cluster-glm-next"
+
+[routes.direct-omni]
+id = "direct-omni"
+type = "passthrough"
+target = "omni"

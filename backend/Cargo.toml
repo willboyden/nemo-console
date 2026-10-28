@@ -1,0 +1,93 @@
+# Nemo Console, Rust backend (port of backend/src/nemo_console). Contract: backend/PORTING.md.
+[workspace]
+resolver = "3"
+members = ["crates/nemo-console"]
+
+[workspace.package]
+version = "0.4.0"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT"
+repository = "https://github.com/willboyden/nemo-console"
+publish = false
+
+# Direct dependency versions follow the owner's 14-day cooldown policy: each is the newest stable release that had
+# been public for at least 14 days on 2026-10-27, preferring the versions already in harness2-workbench's Cargo.lock.
+# Every crate a workstream needs is listed here NOW (PORTING.md section 2), so no workstream edits this file.
+[workspace.dependencies]
+anyhow = "1.0.104"
+async-stream = "0.3.6"
+async-trait = "0.1.92"
+axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio", "matched-path", "original-uri"] }
+base64 = "0.23.1"
+bytes = "1.12.1"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+fancy-regex = "0.19.2"
+futures = "0.3.34"
+getrandom = "0.4.3"
+hex = "0.4.3"
+http = "1.5.0"
+http-body-util = "0.1.5"
+httpdate = "1.0.3"
+hyper = { version = "1.12.0", features = ["http1", "server"] }
+hyper-util = { version = "0.1.21", features = ["tokio", "server-graceful"] }
+indexmap = { version = "2.14.2", features = ["serde"] }
+md-5 = "0.11.0"
+nix = { version = "0.31.3", features = ["signal", "process", "user", "fs"] }
+percent-encoding = "2.3.2"
+proptest = "1.11.0"
+regex = "1.13.1"
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls", "stream", "query"] }
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.151", features = ["float_roundtrip", "preserve_order"] }
+sha2 = "0.11.0"
+shlex = "2.0.1"
+signal-hook = { version = "0.4.5", default-features = false }
+subtle = "2.6.1"
+tempfile = "3.27.0"
+thiserror = "2.0.21"
+time = { version = "0.3.55", features = ["formatting", "parsing", "macros"] }
+tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "process", "signal", "fs", "io-util", "net", "sync", "time"] }
+tokio-stream = { version = "0.1.19", features = ["sync"] }
+tokio-util = { version = "0.7.20", features = ["io"] }
+tower = { version = "0.5.3", features = ["util"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["json", "fmt"] }
+url = "2.5.8"
+uuid = { version = "1.27.0", features = ["v4"] }
+wiremock = "0.6.5"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+unwrap_used = "deny"
+expect_used = "warn"
+panic = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+large_futures = "warn"
+needless_pass_by_value = "warn"
+redundant_clone = "warn"
+semicolon_if_nothing_returned = "warn"
+cast_possible_truncation = "warn"
+cast_sign_loss = "warn"
+inefficient_to_string = "warn"
+manual_let_else = "warn"
+match_same_arms = "warn"
+explicit_iter_loop = "warn"
+implicit_clone = "warn"
+uninlined_format_args = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

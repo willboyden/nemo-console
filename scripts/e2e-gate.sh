@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Ship gate for the browser end-to-end suite (frontend/e2e/run.mjs).
 #
-#   scripts/e2e-gate.sh run           run the suite; on a pass with a clean backend/ and frontend/, record it
+#   scripts/e2e-gate.sh run           build the backend (cargo build --locked), run the suite; on a pass with a clean
+#                                     backend/ and frontend/, record it
 #   scripts/e2e-gate.sh check <rev>   exit 0 only if the suite passed on exactly <rev>'s backend/ and frontend/
 #
 # The record is the pair of git tree ids of backend/ and frontend/, kept inside .git (never committed). A docs-only
@@ -25,6 +26,8 @@ case "${1:-}" in
   run)
     # A Chrome that is not on PATH can be named once per checkout: git config nemo-console.chrome /path/to/chrome
     if [ -z "${CHROME_BIN:-}" ] && chrome=$(git config --get nemo-console.chrome); then export CHROME_BIN="$chrome"; fi
+    # the suite runs backend/target/debug/nemo-console: build it from the working tree first
+    (cd backend && cargo build --locked --quiet) || { echo "e2e-gate: cargo build failed" >&2; exit 1; }
     node frontend/e2e/run.mjs || exit 1
     # The suite tested the working tree, so a pass only counts for a commit when backend/ and frontend/ match it.
     if [ -n "$(git status --porcelain -- backend frontend)" ]; then

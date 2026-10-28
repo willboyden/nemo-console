@@ -1,6 +1,6 @@
 # ADR-0002: Host-run FastAPI on `127.0.0.1:8793`, not a container
 
-Status: Accepted (v0.1.0)
+Status: Accepted (v0.1.0); amended by ADR-0016 (v0.4.0: the process is a Rust binary, `backend/target/release/nemo-console`)
 
 ## Context
 
@@ -25,7 +25,7 @@ Run the console as a normal process owned by the operator (`nemo-console` entry 
   "bind 127.0.0.1 only"; the code does not enforce it (it only builds the `Host` allowlist from the configured
   host and port). Operators must not change it without adding their own network controls. What the code does do:
   loopback trust is forced off for a non-loopback host or when `allowed_hosts` is set.
-- The default repo root walks up from the source file to a directory containing the Dynamo compose file, else falls
+- The default repo root walks up from the source file (0.4: the executable) to a directory containing the Dynamo compose file, else falls
   back to the current directory; a root without it is reported as the status problem `console.repo_root.missing`.
   A standalone checkout should set `NEMO_CONSOLE_REPO_ROOT`.
 - Not verified: running under the provided systemd unit (the template sets `NoNewPrivileges` and similar hardening, and namespace-based options could fail with 226/NAMESPACE on restricted distributions;

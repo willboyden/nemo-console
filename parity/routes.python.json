@@ -1,0 +1,818 @@
+{
+ "generated_by": "rust/parity/tools/dump_routes.py",
+ "app_version": "0.3.1",
+ "routes": [
+  {
+   "method": "GET",
+   "path": "/api/v1/audit",
+   "name": "audit",
+   "handler": "nemo_console.api.routers.admin.audit",
+   "auth": "admin",
+   "middleware": "bearer",
+   "path_params": [],
+   "query": [
+    {
+     "name": "limit",
+     "required": false,
+     "default": 100,
+     "annotation": "<class 'int'>",
+     "constraints": [
+      "Ge(ge=1)",
+      "Le(le=500)"
+     ]
+    },
+    {
+     "name": "system",
+     "required": false,
+     "default": null,
+     "annotation": "str | None",
+     "constraints": []
+    }
+   ],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "list",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/health",
+   "name": "health",
+   "handler": "nemo_console.api.routers.observe.health",
+   "auth": "public",
+   "middleware": "open",
+   "path_params": [],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "dict",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/openapi.json",
+   "name": "openapi",
+   "handler": "fastapi.openapi",
+   "auth": null,
+   "middleware": "bearer",
+   "path_params": [],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": null,
+   "status_code": 200
+  },
+  {
+   "method": "HEAD",
+   "path": "/api/v1/openapi.json",
+   "name": "openapi",
+   "handler": "fastapi.openapi",
+   "auth": null,
+   "middleware": "bearer",
+   "path_params": [],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": null,
+   "status_code": 200
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/overview",
+   "name": "overview",
+   "handler": "nemo_console.api.routers.observe.overview",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "dict",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/routing/summary",
+   "name": "routing",
+   "handler": "nemo_console.api.routers.admin.routing",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [],
+   "query": [
+    {
+     "name": "window",
+     "required": false,
+     "default": "1h",
+     "annotation": "<class 'str'>",
+     "constraints": []
+    }
+   ],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "dict",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/settings",
+   "name": "settings_get",
+   "handler": "nemo_console.api.routers.admin.settings_get",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "dict",
+   "status_code": null
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/settings",
+   "name": "settings_put",
+   "handler": "nemo_console.api.routers.admin.settings_put",
+   "auth": "admin",
+   "middleware": "bearer",
+   "path_params": [],
+   "query": [],
+   "body_model": "SettingsBody",
+   "body_schema": {
+    "additionalProperties": false,
+    "properties": {
+     "urls": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "type": "string"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Urls"
+     },
+     "poll_interval_s": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Poll Interval S"
+     },
+     "playground_key_env": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "type": "string"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Playground Key Env"
+     }
+    },
+    "title": "SettingsBody",
+    "type": "object"
+   },
+   "response_model": "dict",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/systems",
+   "name": "systems",
+   "handler": "nemo_console.api.routers.observe.systems",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "list",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/systems/{system_id}/actions",
+   "name": "actions_list",
+   "handler": "nemo_console.api.routers.act.actions_list",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [
+    "system_id"
+   ],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "list",
+   "status_code": null
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/systems/{system_id}/actions/{action}",
+   "name": "action_run",
+   "handler": "nemo_console.api.routers.act.action_run",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [
+    "action",
+    "system_id"
+   ],
+   "query": [],
+   "body_model": "ActionBody",
+   "body_schema": {
+    "additionalProperties": false,
+    "properties": {
+     "params": {
+      "additionalProperties": true,
+      "default": {},
+      "title": "Params",
+      "type": "object"
+     },
+     "confirm": {
+      "default": false,
+      "title": "Confirm",
+      "type": "boolean"
+     }
+    },
+    "title": "ActionBody",
+    "type": "object"
+   },
+   "response_model": "ActionResult",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/systems/{system_id}/config",
+   "name": "config_list",
+   "handler": "nemo_console.api.routers.configure.config_list",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [
+    "system_id"
+   ],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "list",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/systems/{system_id}/config/{file_id}",
+   "name": "config_get",
+   "handler": "nemo_console.api.routers.configure.config_get",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [
+    "file_id",
+    "system_id"
+   ],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "ConfigFile",
+   "status_code": null
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/systems/{system_id}/config/{file_id}/apply",
+   "name": "config_apply",
+   "handler": "nemo_console.api.routers.configure.config_apply",
+   "auth": "admin",
+   "middleware": "bearer",
+   "path_params": [
+    "file_id",
+    "system_id"
+   ],
+   "query": [],
+   "body_model": "ApplyBody",
+   "body_schema": {
+    "additionalProperties": false,
+    "properties": {
+     "content": {
+      "title": "Content",
+      "type": "string"
+     },
+     "base_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Base Sha256",
+      "type": "string"
+     },
+     "restart": {
+      "default": true,
+      "title": "Restart",
+      "type": "boolean"
+     },
+     "confirm": {
+      "default": false,
+      "title": "Confirm",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "content",
+     "base_sha256"
+    ],
+    "title": "ApplyBody",
+    "type": "object"
+   },
+   "response_model": "ApplyResult",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/systems/{system_id}/config/{file_id}/history",
+   "name": "config_history",
+   "handler": "nemo_console.api.routers.configure.config_history",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [
+    "file_id",
+    "system_id"
+   ],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "list",
+   "status_code": null
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/systems/{system_id}/config/{file_id}/rollback",
+   "name": "config_rollback",
+   "handler": "nemo_console.api.routers.configure.config_rollback",
+   "auth": "admin",
+   "middleware": "bearer",
+   "path_params": [
+    "file_id",
+    "system_id"
+   ],
+   "query": [],
+   "body_model": "RollbackBody",
+   "body_schema": {
+    "additionalProperties": false,
+    "properties": {
+     "revision_id": {
+      "pattern": "^[0-9a-f]{8,32}$",
+      "title": "Revision Id",
+      "type": "string"
+     },
+     "confirm": {
+      "default": false,
+      "title": "Confirm",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "revision_id"
+    ],
+    "title": "RollbackBody",
+    "type": "object"
+   },
+   "response_model": "ApplyResult",
+   "status_code": null
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/systems/{system_id}/config/{file_id}/validate",
+   "name": "config_validate",
+   "handler": "nemo_console.api.routers.configure.config_validate",
+   "auth": "admin",
+   "middleware": "bearer",
+   "path_params": [
+    "file_id",
+    "system_id"
+   ],
+   "query": [],
+   "body_model": "ValidateBody",
+   "body_schema": {
+    "additionalProperties": false,
+    "properties": {
+     "content": {
+      "title": "Content",
+      "type": "string"
+     }
+    },
+    "required": [
+     "content"
+    ],
+    "title": "ValidateBody",
+    "type": "object"
+   },
+   "response_model": "ValidationResult",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/systems/{system_id}/events",
+   "name": "events",
+   "handler": "nemo_console.api.routers.observe.events",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [
+    "system_id"
+   ],
+   "query": [
+    {
+     "name": "limit",
+     "required": false,
+     "default": 100,
+     "annotation": "<class 'int'>",
+     "constraints": [
+      "Ge(ge=1)",
+      "Le(le=500)"
+     ]
+    }
+   ],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "list",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/systems/{system_id}/events/stream",
+   "name": "events_stream",
+   "handler": "nemo_console.api.routers.observe.events_stream",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [
+    "system_id"
+   ],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": null,
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/systems/{system_id}/metrics",
+   "name": "system_metrics",
+   "handler": "nemo_console.api.routers.observe.system_metrics",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [
+    "system_id"
+   ],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "MetricsSnapshot",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/systems/{system_id}/metrics/history",
+   "name": "metrics_history",
+   "handler": "nemo_console.api.routers.observe.metrics_history",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [
+    "system_id"
+   ],
+   "query": [
+    {
+     "name": "window",
+     "required": false,
+     "default": "15m",
+     "annotation": "<class 'str'>",
+     "constraints": []
+    },
+    {
+     "name": "key",
+     "required": false,
+     "default": "",
+     "annotation": "<class 'str'>",
+     "constraints": []
+    }
+   ],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "dict",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/systems/{system_id}/params",
+   "name": "params_get",
+   "handler": "nemo_console.api.routers.configure.params_get",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [
+    "system_id"
+   ],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "dict",
+   "status_code": null
+  },
+  {
+   "method": "PUT",
+   "path": "/api/v1/systems/{system_id}/params",
+   "name": "params_put",
+   "handler": "nemo_console.api.routers.configure.params_put",
+   "auth": "admin",
+   "middleware": "bearer",
+   "path_params": [
+    "system_id"
+   ],
+   "query": [],
+   "body_model": "ParamsPutBody",
+   "body_schema": {
+    "additionalProperties": false,
+    "properties": {
+     "values": {
+      "additionalProperties": true,
+      "default": {},
+      "title": "Values",
+      "type": "object"
+     },
+     "confirm": {
+      "default": false,
+      "title": "Confirm",
+      "type": "boolean"
+     }
+    },
+    "title": "ParamsPutBody",
+    "type": "object"
+   },
+   "response_model": "ApplyResult",
+   "status_code": null
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/systems/{system_id}/params/preview",
+   "name": "params_preview",
+   "handler": "nemo_console.api.routers.configure.params_preview",
+   "auth": "admin",
+   "middleware": "bearer",
+   "path_params": [
+    "system_id"
+   ],
+   "query": [],
+   "body_model": "ParamsBody",
+   "body_schema": {
+    "additionalProperties": false,
+    "properties": {
+     "values": {
+      "additionalProperties": true,
+      "default": {},
+      "title": "Values",
+      "type": "object"
+     }
+    },
+    "title": "ParamsBody",
+    "type": "object"
+   },
+   "response_model": "dict",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/systems/{system_id}/playground",
+   "name": "playground_spec",
+   "handler": "nemo_console.api.routers.act.playground_spec",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [
+    "system_id"
+   ],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "nemo_console.domain.models.PlaygroundSpec | None",
+   "status_code": null
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/systems/{system_id}/playground/chat",
+   "name": "playground_chat",
+   "handler": "nemo_console.api.routers.act.playground_chat",
+   "auth": "admin",
+   "middleware": "bearer",
+   "path_params": [
+    "system_id"
+   ],
+   "query": [],
+   "body_model": "ChatBody",
+   "body_schema": {
+    "$defs": {
+     "ChatMessage": {
+      "additionalProperties": false,
+      "properties": {
+       "role": {
+        "pattern": "^(system|user|assistant|tool)$",
+        "title": "Role",
+        "type": "string"
+       },
+       "content": {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "items": {
+           "additionalProperties": true,
+           "type": "object"
+          },
+          "type": "array"
+         }
+        ],
+        "title": "Content"
+       }
+      },
+      "required": [
+       "role",
+       "content"
+      ],
+      "title": "ChatMessage",
+      "type": "object"
+     }
+    },
+    "additionalProperties": false,
+    "properties": {
+     "model": {
+      "title": "Model",
+      "type": "string"
+     },
+     "messages": {
+      "items": {
+       "$ref": "#/$defs/ChatMessage"
+      },
+      "maxItems": 200,
+      "minItems": 1,
+      "title": "Messages",
+      "type": "array"
+     },
+     "max_tokens": {
+      "anyOf": [
+       {
+        "minimum": 1,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Max Tokens"
+     },
+     "stream": {
+      "default": true,
+      "title": "Stream",
+      "type": "boolean"
+     },
+     "system": {
+      "anyOf": [
+       {
+        "maxLength": 100000,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "System"
+     }
+    },
+    "required": [
+     "model",
+     "messages"
+    ],
+    "title": "ChatBody",
+    "type": "object"
+   },
+   "response_model": null,
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/systems/{system_id}/runs/{run_id}/files",
+   "name": "dd_run_files",
+   "handler": "nemo_console.api.routers.observe.dd_run_files",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [
+    "run_id",
+    "system_id"
+   ],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "dict",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/systems/{system_id}/runs/{run_id}/records",
+   "name": "dd_run_records",
+   "handler": "nemo_console.api.routers.observe.dd_run_records",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [
+    "run_id",
+    "system_id"
+   ],
+   "query": [
+    {
+     "name": "limit",
+     "required": false,
+     "default": 50,
+     "annotation": "<class 'int'>",
+     "constraints": [
+      "Ge(ge=1)",
+      "Le(le=200)"
+     ]
+    },
+    {
+     "name": "offset",
+     "required": false,
+     "default": 0,
+     "annotation": "<class 'int'>",
+     "constraints": [
+      "Ge(ge=0)"
+     ]
+    }
+   ],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "dict",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/systems/{system_id}/status",
+   "name": "system_status",
+   "handler": "nemo_console.api.routers.observe.system_status",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [
+    "system_id"
+   ],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "SystemStatus",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/topology",
+   "name": "topology",
+   "handler": "nemo_console.api.routers.observe.topology",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": "Topology",
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/metrics",
+   "name": "console_metrics",
+   "handler": "nemo_console.api.routers.admin.console_metrics",
+   "auth": "viewer",
+   "middleware": "bearer",
+   "path_params": [],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": null,
+   "status_code": null
+  },
+  {
+   "method": "GET",
+   "path": "/{path:path}",
+   "name": "static",
+   "handler": "nemo_console.main.static",
+   "auth": "public",
+   "middleware": "open",
+   "path_params": [
+    "path"
+   ],
+   "query": [],
+   "body_model": null,
+   "body_schema": null,
+   "response_model": null,
+   "status_code": null
+  }
+ ]
+}

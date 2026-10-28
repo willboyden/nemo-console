@@ -1,0 +1,4 @@
+# Python-vs-Rust diffs the parity gate allows (rust/PORTING.md section 12 and 13). Every adapter is ported (A-7):
+# what is left are deliberate, documented deviations, by case id. Everything else must stay at 0 diffs.
+# (Line forms: "METHOD /template", a case id, or "stub:<system_id>"; see run.mjs.)
+params.dynamo.preview.nan  # D-6: NaN in params values, refused by the core check (Rust) or the adapter (Python)

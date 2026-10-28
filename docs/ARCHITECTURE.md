@@ -1,5 +1,13 @@
 # Nemo Console — architecture & contract (v1)
 
+> **0.4.0: the backend is Rust.** The contract below (API, settings, adapters, security controls) is unchanged; it was
+> written for the Python backend of 0.1-0.3 and its file names map one to one: `adapters/<system>.py` ->
+> `backend/crates/nemo-console/src/adapters/<system>.rs`, `api/routers/*.py` + `api/security.py` -> `api/*.rs`,
+> `services/*.py` -> `services/*.rs`, `domain/models.py` -> `domain/models.rs`, `config.py` / `container.py` /
+> `main.py` -> `config.rs` / `container.rs` / `main.rs` + `server.rs`; FastAPI + uvicorn -> axum + hyper on tokio,
+> pydantic -> hand-written validators with pydantic's messages (`services/pyvalidate.rs`). The port's contract,
+> its deviations and the parity evidence are in `backend/PORTING.md`; the decision is ADR 0016.
+
 Monitor, configure and interact with **NeMo Switchyard** (tier routing), **NeMo Relay** (agent gateway + observability)
 and **NVIDIA Dynamo** (serving frontend + workers) from one local UI. Contract v1 — LOCKED. Changes after fan-out are
 additive only, appended to §9 and relayed to affected agents immediately.
@@ -8,8 +16,8 @@ additive only, appended to §9 and relayed to affected agents immediately.
 
 | # | Decision | Why |
 |---|---|---|
-| 1 | Hexagonal core + `SystemAdapter` port (`adapters/base.py`, LOCKED); one adapter per system | New system = one adapter; the UI renders from descriptors |
-| 2 | Host-run FastAPI on `127.0.0.1:8793`, not a container | Controls rootless Docker + a systemd user unit; mounting the socket into a network service is root-equivalent |
+| 1 | Hexagonal core + `SystemAdapter` port (`adapters/base.rs`, LOCKED); one adapter per system | New system = one adapter; the UI renders from descriptors |
+| 2 | Host-run server on `127.0.0.1:8793`, not a container (FastAPI to 0.3, a Rust binary since 0.4: ADR 0016) | Controls rootless Docker + a systemd user unit; mounting the socket into a network service is root-equivalent |
 | 3 | All process control through one `CommandRunner` (argv list, binary allowlist `docker`/`systemctl`/`nemo-relay`/`skillevaluator`/`skillevaluator-local` — extended by 9.7 and 9.8 —, timeout, output cap, redaction) | One audited choke point; adapters cannot shell out |
 | 4 | Config files: core does compare-and-swap (sha256), backup, atomic write, audit; adapter only validates + restarts | The dangerous IO exists once |
 | 5 | Config apply = validate → diff → confirm → backup → write → restart → health-check → **auto-rollback on unhealthy** | A bad routes.toml must not leave the router down |
@@ -35,6 +43,7 @@ additive only, appended to §9 and relayed to affected agents immediately.
 ## 3. Layout — one owner per path
 
 ```
+(0.1-0.3, the Python build; since 0.4 the backend is `backend/` = a Cargo workspace, see backend/PORTING.md §3)
 clients/nemo-console/                       (its own git repo, ignored by the parent)
   Makefile README.md LICENSE .gitignore     orchestrator (README finalised by docs agent)
   docs/ARCHITECTURE.md                      orchestrator (this file, LOCKED)
@@ -120,7 +129,7 @@ Prefix is the adapter's; the core stores whatever it returns (bounded label card
 
 ## 8. Quality bar / gates
 
-Backend: `uv sync --frozen`, `ruff check`, `mypy --strict src`, `pytest -q` fully offline (fakes for runner + http; adapter fixtures are **captured real output**, not invented).
+Backend (0.4+): `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test --locked` fully offline (fakes for runner + http; adapter fixtures are **captured real output**, not invented), `cargo deny`, `cargo audit`, the crate-age cooldown, and the parity harness against the last Python backend (`make parity`). (0.1-0.3: `uv sync --frozen`, `ruff`, `mypy --strict`, `pytest -q`.)
 Frontend: `node --test tests/*.test.mjs` + headless-Firefox screenshots of every view (see `headless-ui-verify`), and since
 addendum 9.10 the browser suite `frontend/e2e/run.mjs` (`make e2e`).
 Ship gate: literal clean clone outside the tree, all of the above, added-lines leak scan, then CI. Every agent reports what it did **not** verify.
@@ -159,7 +168,7 @@ row: "shares the Workstation card with `vllm-qwen38`") and §7 where they differ
   whose fix is `dynamo_start`. Anything running or restarting (including a crash-looping worker) keeps the error-level report.
   `/health` `status` ignores systems that are `off`. The UI renders `off` as a neutral badge (○, dashed node/tile), never red.
 * `_state` reads `Restarting` before `Running` (Docker sets both during a restart back-off), so a crash loop is `failed`, not `running`.
-* Card model = settings (`config.py`, `DEFAULT_DYNAMO_*`): `dynamo_exclusive_engines` (cannot run beside the worker; default the
+* Card model = settings (`config.rs`, `DEFAULT_DYNAMO_*`): `dynamo_exclusive_engines` (cannot run beside the worker; default the
   flashnext and vllm-qwen38 containers), `dynamo_coexisting_engines` (allowed; default lightning, ollama), `dynamo_ignored_containers`
   (monitoring; default the dcgm-exporter). Any other running container on the worker's GPU UUID is "unknown" and blocks `up` too.
   Handed to the adapter as a `CardPolicy` by the container (`_configure_dynamo`; injected adapters keep their own).
@@ -181,7 +190,7 @@ row: "shares the Workstation card with `vllm-qwen38`") and §7 where they differ
   errors >= successes (and > 0), or errors rose since the last poll while successes did not.
 
 **9.5 (2026-10-06): a fourth system, `skillevaluator` (NVIDIA SkillEvaluator).** Additive; nothing above changes.
-* It is a CLI, not a service: `SystemId` gains `"skillevaluator"`, adapter `adapters/skillevaluator.py`. Status = launcher found
+* It is a CLI, not a service: `SystemId` gains `"skillevaluator"`, adapter `adapters/skillevaluator.rs`. Status = launcher found
   (`skillevaluator-local` if on PATH, else `skillevaluator`; `--version` cached 300 s), the router's `/health/liveliness`, and the
   newest stored run. Health: `down` when no launcher, `degraded` when the router is down, else `up`.
 * Runner: both launcher names join the bare-name allowlist. `SKILL_EVAL_*` / `SKILLEVAL_*` (+ `LOCAL_AI_LAB`, `LITELLM_URL`) are passed
@@ -208,7 +217,7 @@ longer exist there; Bolt and GLM (`lil-glm53-tp2`) are opt-in and exclusive with
   --agent-model opencode=<agent_model> --judge-model <judge_model> --dataset <d> [--skip-baseline] --results-dir <run dir>
   --quiet` (`--quiet` keeps stdout to the final summary JSON so an hour of progress lines cannot trip the output cap).
 * It never runs inside the HTTP request: the action writes `<run dir>/run.json` (`verdict: "running"`) and starts ONE
-  asyncio task owned by the adapter, then returns ok with the run id. A second request while it runs is refused
+  background task owned by the adapter (asyncio in 0.3, tokio in 0.4), then returns ok with the run id. A second request while it runs is refused
   (`skillevaluator.live.busy`). On completion the task writes the verdict (result.json `execution_status`:
   `succeeded|failed|unknown|skipped|not_applicable`; `error` when no result.json), Skill Lift per agent
   (`agents.X.lift.overall.delta` plus the per-metric deltas), scored/expected attempts, duration, and at most 8
@@ -253,8 +262,8 @@ longer exist there; Bolt and GLM (`lil-glm53-tp2`) are opt-in and exclusive with
 
 **9.7 (2026-10-23): a fifth system, `datadesigner` (NVIDIA NeMo Data Designer, the CLI as a managed system).** Additive;
 nothing above changes. Contract: feature "datadesigner" (2026-10-23).
-* `SystemId` gains `"datadesigner"`; the adapter is `adapters/datadesigner.py` (`DataDesignerAdapter`, label
-  "Data Designer"), registered in `adapters/__init__.py`. It follows the SkillEvaluator adapter structure: `_run`
+* `SystemId` gains `"datadesigner"`; the adapter is `adapters/datadesigner.rs` (`DataDesignerAdapter`, label
+  "Data Designer"), registered in `adapters/mod.rs`. It follows the SkillEvaluator adapter structure: `_run`
   wrapper (runner exceptions → `CommandResult(127)`), TTL-cached launcher probe (`data-designer-local --version`,
   300 s), run dirs `<state_dir>/datadesigner/runs/<run_id>/run.json` (0700 dirs, 0600 run.json), `follow_events`
   polling 2 s keyed (run_id, verdict), `KEEP_RUNS=100`, redaction everywhere, failure is data.
@@ -312,7 +321,7 @@ nothing above changes. Contract: feature "datadesigner" (2026-10-23).
 
 **9.8 (2026-10-24): five more systems — `openshell`, `dcgm`, `aiperf`, `guardrails`, `evaluator`.** Additive; nothing
 above changes. Contract: feature "nvidia-five" (2026-10-24).
-* **Core (orchestrator, done before fan-out):** `SystemId` gains the five ids; `adapters/__init__.py` registers
+* **Core (orchestrator, done before fan-out):** `SystemId` gains the five ids; `adapters/mod.rs` registers
   `openshell.OpenShellAdapter` ("OpenShell"), `dcgm.DcgmAdapter` ("DCGM"), `aiperf.AiPerfAdapter` ("AIPerf"),
   `guardrails.GuardrailsAdapter` ("NeMo Guardrails"), `evaluator.EvaluatorAdapter` ("NeMo Evaluator"). Runner allowlist gains
   `openshell`, `aiperf-local`, `guardrails-local`, `evaluator-local`; ONLY `aiperf-local profile` (3600 s) and
@@ -364,11 +373,11 @@ above changes. Contract: feature "nvidia-five" (2026-10-24).
   no lab directory — `observability/dcgm/counters.csv` and the exporter bump are the orchestrator's). The frontend agent
   owns `frontend/` (one view per system, routes, i18n, mock data). Core files, docs and every other path: orchestrator.
 
-**9.9 (2026-10-24): shutdown ends SSE streams.** Additive. On SIGTERM/SIGINT the server (`main.ConsoleServer`, a
-`uvicorn.Server` subclass) calls `services.events.begin_shutdown()` before uvicorn's own exit handling: every open
+**9.9 (2026-10-24): shutdown ends SSE streams.** Additive. On SIGTERM/SIGINT the server (0.3: `main.ConsoleServer`, a
+`uvicorn.Server` subclass; 0.4: `server.rs`) calls the events service's `begin_shutdown` before its own exit handling: every open
 event stream sends `event: shutdown` (`data: {}`) and ends, releasing its slot, so the process exits at once (a
 browser's stream would otherwise hold it). `shutdown_grace_s` (setting, int, default 5, below `nemo-console stop`'s
-10 s) is passed to uvicorn as `timeout_graceful_shutdown` as a backstop. Clients treat the end like any other stream
+10 s) is the graceful-shutdown backstop (uvicorn's `timeout_graceful_shutdown` in 0.3). Clients treat the end like any other stream
 end and reconnect with backoff.
 
 **9.10 (2026-10-24): frontend files are revalidated; a browser suite gates every push.** Additive. Every static
@@ -385,7 +394,7 @@ inside `.git` and refuses a pushed commit or tag without one.
 
 **9.11 (2026-10-26): deployment identities and the repo layout are settings; an opt-in active capable-tier probe.**
 Additive; defaults reproduce the earlier constants exactly.
-* **Settings** (`config.py`, environment or the user env file only, read at start, never through the API):
+* **Settings** (`config.rs`, environment or the user env file only, read at start, never through the API):
   `switchyard_container`, `switchyard_compose_project`, `switchyard_compose_service`, `switchyard_image`,
   `switchyard_log_path`, `relay_unit`, `dynamo_compose_project`, `dynamo_services` and `dynamo_containers` (role ->
   name for `frontend`, `worker`, `mocker`, `sv_frontend`; merged over the defaults), `guardrails_compose_project`,

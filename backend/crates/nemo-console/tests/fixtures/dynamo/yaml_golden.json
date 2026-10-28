@@ -1,0 +1,165 @@
+[
+ {
+  "input": "",
+  "ok": "None"
+ },
+ {
+  "input": "~",
+  "ok": "None"
+ },
+ {
+  "input": "a: 1",
+  "ok": "{'a': 1}"
+ },
+ {
+  "input": "a: yes\nb: No\nc: on\nd: OFF\ne: y\nf: n",
+  "ok": "{'a': True, 'b': False, 'c': True, 'd': False, 'e': 'y', 'f': 'n'}"
+ },
+ {
+  "input": "a: null\nb: Null\nc: ~\nd:",
+  "ok": "{'a': None, 'b': None, 'c': None, 'd': None}"
+ },
+ {
+  "input": "a: 0x1F\nb: 0o17\nc: 017\nd: 08\ne: 0b101",
+  "ok": "{'a': 31, 'b': '0o17', 'c': 15, 'd': '08', 'e': 5}"
+ },
+ {
+  "input": "a: 1_000\nb: +12\nc: -0\nd: 1:30\ne: 190:20:30",
+  "ok": "{'a': 1000, 'b': 12, 'c': 0, 'd': 90, 'e': 685230}"
+ },
+ {
+  "input": "a: 1.5\nb: 1e5\nc: 1.0e+5\nd: .5\ne: 1.\nf: .inf\ng: -.Inf\nh: .NaN\ni: 1_0.5",
+  "ok": "{'a': 1.5, 'b': '1e5', 'c': 100000.0, 'd': 0.5, 'e': 1.0, 'f': inf, 'g': -inf, 'h': nan, 'i': 10.5}"
+ },
+ {
+  "input": "a: 2026-01-02\nb: 2026-01-02T03:04:05Z\nc: 2026-01-02 03:04:05.5 +02:00\nd: 2026-1-2t3:04:05",
+  "ok": "{'a': datetime.date(2026, 1, 2), 'b': datetime.datetime(2026, 1, 2, 3, 4, 5, tzinfo=datetime.timezone.utc), 'c': datetime.datetime(2026, 1, 2, 3, 4, 5, 500000, tzinfo=datetime.timezone(datetime.timedelta(seconds=7200))), 'd': datetime.datetime(2026, 1, 2, 3, 4, 5)}"
+ },
+ {
+  "input": "a: '8'\nb: \"yes\"\nc: !!str 12\nd: !!int '7'",
+  "ok": "{'a': '8', 'b': 'yes', 'c': '12', 'd': 7}"
+ },
+ {
+  "input": "- a\n- [b, c]\n- {d: e}",
+  "ok": "['a', ['b', 'c'], {'d': 'e'}]"
+ },
+ {
+  "input": "x: &c {a: 1, b: 2}\ny:\n  <<: *c\n  b: 3",
+  "ok": "{'x': {'a': 1, 'b': 2}, 'y': {'a': 1, 'b': 3}}"
+ },
+ {
+  "input": "x: &a {k: 1}\nz: &b {k: 2, m: 3}\ny:\n  <<: [*a, *b]\n",
+  "ok": "{'x': {'k': 1}, 'z': {'k': 2, 'm': 3}, 'y': {'k': 1, 'm': 3}}"
+ },
+ {
+  "input": "a: 1\na: 2",
+  "ok": "{'a': 2}"
+ },
+ {
+  "input": "1: a\ntrue: b",
+  "ok": "{1: 'b'}"
+ },
+ {
+  "input": "a: |\n  line1\n  line2\n",
+  "ok": "{'a': 'line1\\nline2\\n'}"
+ },
+ {
+  "input": "a: >\n  folded\n  text\n\n  para\n",
+  "ok": "{'a': 'folded text\\npara\\n'}"
+ },
+ {
+  "input": "a: >-\n  x\n  y\n",
+  "ok": "{'a': 'x y'}"
+ },
+ {
+  "input": "services:\n  dynamo-worker:\n    command: [python3, -m, dynamo.vllm, --max-num-seqs, '4']\n",
+  "ok": "{'services': {'dynamo-worker': {'command': ['python3', '-m', 'dynamo.vllm', '--max-num-seqs', '4']}}}"
+ },
+ {
+  "input": "services:\n  dynamo-worker:\n    privileged: true\n",
+  "ok": "{'services': {'dynamo-worker': {'privileged': True}}}"
+ },
+ {
+  "input": "services:\n  evil:\n    command: [x]\n",
+  "ok": "{'services': {'evil': {'command': ['x']}}}"
+ },
+ {
+  "input": "services:\n  dynamo-frontend:\n    environment:\n      DYN_LOGGING_JSONL: \"${LITELLM_API_KEY}\"\n",
+  "ok": "{'services': {'dynamo-frontend': {'environment': {'DYN_LOGGING_JSONL': '${LITELLM_API_KEY}'}}}}"
+ },
+ {
+  "input": "a: [",
+  "err": "ParserError",
+  "problem": "expected the node content, but found '<stream end>'"
+ },
+ {
+  "input": "services:\n  x: [y\n",
+  "err": "ParserError",
+  "problem": "expected ',' or ']', but got '<stream end>'"
+ },
+ {
+  "input": "a: b: c",
+  "err": "ScannerError",
+  "problem": "mapping values are not allowed here"
+ },
+ {
+  "input": "- a\nb: c",
+  "err": "ParserError",
+  "problem": "expected <block end>, but found '?'"
+ },
+ {
+  "input": "a: \"x",
+  "err": "ScannerError",
+  "problem": "found unexpected end of stream"
+ },
+ {
+  "input": "a: *nope",
+  "err": "ComposerError",
+  "problem": "found undefined alias 'nope'"
+ },
+ {
+  "input": "{a",
+  "err": "ParserError",
+  "problem": "expected ',' or '}', but got '<stream end>'"
+ },
+ {
+  "input": "a: 1\n---\nb: 2",
+  "err": "ComposerError",
+  "problem": "but found another document"
+ },
+ {
+  "input": "? [1]\n: 2",
+  "err": "ConstructorError",
+  "problem": "found unhashable key"
+ },
+ {
+  "input": "key: 'it''s'",
+  "ok": "{'key': \"it's\"}"
+ },
+ {
+  "input": "key: \"tab\\tnew\\nline\"",
+  "ok": "{'key': 'tab\\tnew\\nline'}"
+ },
+ {
+  "input": "e: =",
+  "err": "ConstructorError",
+  "problem": "could not determine a constructor for the tag 'tag:yaml.org,2002:value'"
+ },
+ {
+  "input": "=: 1",
+  "ok": "{'=': 1}"
+ },
+ {
+  "input": "a: !!python/object:os.system x",
+  "err": "ConstructorError",
+  "problem": "could not determine a constructor for the tag 'tag:yaml.org,2002:python/object:os.system'"
+ },
+ {
+  "input": "# NVIDIA Dynamo 1.5.0 \u2014 an ALTERNATIVE serving path for Qwen3.8-27B, behind the LiteLLM router.\n#\n#   clients \u2500\u25b6 litellm :4000 \u2500\u25b6 dynamo-frontend :8000 (Rust HTTP + parsers) \u2500TCP\u2500\u25b6 dynamo-worker (vLLM 0.28.0)\n#\n# NOTHING EXISTING IS REWIRED. LiteLLM gets one NEW alias, `qwen3.8-27b-dynamo`, next to the\n# existing `qwen3.8-27b-1m` (plain vLLM 0.27.1). Same checkpoint, same flags, so the two can be\n# A/B'd through one router. Both want the same card, so they are MUTUALLY EXCLUSIVE:\n#   scripts/use-model.sh qwen3.8-27b-dynamo     # stops vllm-qwen38, starts this\n#   scripts/use-model.sh qwen3.8-27b-1m         # and back\n#\n# Generated 2026-09-23, unverified on a real GPU worker. What WAS checked (this image, this box):\n#   - image pulled: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0 (20.1 GB), ai-dynamo 1.5.0,\n#     vLLM 0.28.0, torch 2.13.0+cu130, get_device_capability() == (12, 0) on the Workstation card\n#   - every flag below appears in `--help` of dynamo.frontend / dynamo.vllm in that image\n#   - the frontend<->worker plumbing across two containers: `docker compose --profile mock up`\n#     (CPU-only mocker, no VRAM) \u2014 see README.md for what it proved\n# Not yet checked: that the NVFP4 Qwen3.8 weights load and answer under 0.28.0 on sm_120, and the\n# parser choice on real tool calls. Do that with the README's \"First real run\".\n#\n# NO etcd / NATS. Discovery is the `file` backend: frontend and worker share DYN_FILE_KV on a\n# named volume; the request plane is TCP. NATS is only needed for KV-event routing, which buys\n# nothing with one worker (see README).\n#\n# DYNAMO SPEAKS ITS OWN DIALECT ON THE WORKER, not vLLM's flags: tool/reasoning parsing runs in the\n# Rust frontend and is chosen by --dyn-tool-call-parser / --dyn-reasoning-parser on the WORKER.\n# Passing vLLM's --tool-call-parser here does nothing useful. Qwen3.8 uses qwen3_coder (the XML tool\n# format vLLM calls qwen3_xml) \u2014 CONFIRM on a real tool call before trusting it.\n#\n# THE PINNED SNAPSHOT IS LOADED BY PATH, not `--model <id> --revision <sha>`. Dynamo resolves the model\n# through the HF cache's refs/main, which in the lab's shared cache points at a different revision\n# (f0b7c9e\u2026, metadata only) than the pin (16b6615\u2026, the 22 GB one). By id it crash-loops with\n# \"Cannot find an appropriate cached snapshot folder ... outgoing traffic has been disabled\".\n# Measured 2026-09-23. Same reason the mocker takes the snapshot dir.\n#\n# Egress: none needed. HF_HUB_OFFLINE=1 \u2014 the checkpoint is already in the shared cache.\nname: ai-lab-dynamo\n\nx-image: &image nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0\nx-common: &common\n  image: *image\n  # Rootless Docker: uid 0 in the container is this host user, so the shared HF cache is readable.\n  # The image's default uid 1000 would map to a subuid that cannot read it.\n  user: \"0:0\"\n  entrypoint: []\n  networks: [ai-lab]\n  cap_drop: [ALL]\n  security_opt: [\"no-new-privileges:true\"]\n  restart: unless-stopped\n\nservices:\n  dynamo-frontend:\n    <<: *common\n    command: [\"python3\", \"-m\", \"dynamo.frontend\", \"--http-host\", \"0.0.0.0\", \"--http-port\", \"8000\",\n              \"--discovery-backend\", \"file\", \"--request-plane\", \"tcp\"]\n    environment:\n      DYN_FILE_KV: /dynamo-kv\n      # Traces -> the lab's collector (Tempo/Phoenix/Langfuse), same bus name every other service uses.\n      # Off until you flip it: the endpoint below is only reachable when observability/ is up.\n      DYN_LOGGING_JSONL: \"${DYN_LOGGING_JSONL:-false}\"\n      OTEL_EXPORT_ENABLED: \"${OTEL_EXPORT_ENABLED:-false}\"\n      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4317\n      OTEL_SERVICE_NAME: dynamo-frontend\n    volumes:\n      - dynamo-kv:/dynamo-kv\n    ports:\n      - \"127.0.0.1:8020:8000\"        # host loopback only; 8000 is taken by the vllm-* engines\n    healthcheck:\n      test: [\"CMD-SHELL\", \"python3 -c \\\"import urllib.request as u;u.urlopen('http://127.0.0.1:8000/health',timeout=3)\\\"\"]\n      interval: 30s\n      timeout: 5s\n      retries: 3\n      start_period: 20s\n    read_only: true\n    # The frontend materialises each worker's model card (tokenizer, chat template) into\n    # ~/.cache/dynamo before it will list the model. read_only:true without this = an EMPTY\n    # /v1/models and a WARN \"creating MDC blobs dir ... Read-only file system\" on repeat.\n    tmpfs: [/tmp, /home/dynamo/.cache]\n    pids_limit: 512\n\n  dynamo-worker:\n    <<: *common\n    command: >\n      python3 -m dynamo.vllm\n      --model /root/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4/snapshots/16b6615af3548b88e2d8e382457bc705b00479cf\n      --served-model-name unsloth/Qwen3.8-27B-NVFP4\n      --discovery-backend file\n      --request-plane tcp\n      --dyn-tool-call-parser qwen3_coder\n      --dyn-reasoning-parser qwen3\n      --dyn-enable-structural-tag\n      --max-model-len ${CTX:-262144}\n      --speculative-config '{\"method\":\"mtp\",\"num_speculative_tokens\":2}'\n      --gpu-memory-utilization ${GPU_MEM_UTIL:-0.50}\n      --kv-cache-memory-bytes ${KV_CACHE_MEMORY:-20000000000}\n      --max-num-seqs ${MAX_NUM_SEQS:-64}\n      --max-num-batched-tokens 8192\n      --enable-chunked-prefill\n      --enable-prefix-caching\n    environment:\n      # The image's HOME is /home/dynamo even for uid 0, so without this the flashinfer/vllm cache\n      # volumes below (mounted at /root/.cache) are never used and every start recompiles.\n      HOME: /root\n      DYN_FILE_KV: /dynamo-kv\n      DYN_SYSTEM_PORT: \"8081\"        # worker /metrics (+ engine metrics), scraped on the bus\n      HF_HUB_OFFLINE: \"1\"\n      TORCH_CUDA_ARCH_LIST: \"12.0\"\n      CUTE_DSL_ARCH: \"sm_120\"\n      FLASHINFER_NVCC_THREADS: \"2\"\n      NVCC_THREADS: \"2\"\n      MAX_JOBS: \"4\"\n      OTEL_SERVICE_NAME: dynamo-worker\n    volumes:\n      - dynamo-kv:/dynamo-kv\n      - /srv/models/hf:/root/.cache/huggingface\n      - flashinfer-cache:/root/.cache/flashinfer\n      - vllm-cache:/root/.cache/vllm\n    ipc: host\n    deploy:\n      resources:\n        reservations:\n          devices:\n            - driver: nvidia\n              device_ids: [\"GPU-00000000-0000-0000-0000-000000000001\"]   # Workstation Edition, same card as vllm-qwen38\n              capabilities: [gpu]\n    depends_on: [dynamo-frontend]\n\n  # CPU-only stand-in worker to prove frontend<->worker discovery + routing with NO VRAM.\n  # `docker compose --profile mock up -d` \u2014 never alongside dynamo-worker (same model name).\n  # --model-path is the pinned SNAPSHOT DIR, not the repo id: the shared cache's refs/main points at\n  # a different revision than the pin, so the id form fails \"Model snapshots ... not found in cache\".\n  dynamo-mocker:\n    <<: *common\n    profiles: [mock]\n    command: [\"python3\", \"-m\", \"dynamo.mocker\", \"--model-path\",\n              \"/root/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4/snapshots/16b6615af3548b88e2d8e382457bc705b00479cf\",\n              \"--model-name\", \"unsloth/Qwen3.8-27B-NVFP4\", \"--discovery-backend\", \"file\", \"--request-plane\", \"tcp\"]\n    environment:\n      DYN_FILE_KV: /dynamo-kv\n      HF_HUB_OFFLINE: \"1\"\n    volumes:\n      - dynamo-kv:/dynamo-kv\n      - /srv/models/hf:/root/.cache/huggingface:ro\n    depends_on: [dynamo-frontend]\n\nvolumes:\n  dynamo-kv:\n  flashinfer-cache:\n  vllm-cache:\n\nnetworks:\n  ai-lab:\n    external: true\n",
+  "ok": "{'name': 'ai-lab-dynamo', 'x-image': 'nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0', 'x-common': {'image': 'nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0', 'user': '0:0', 'entrypoint': [], 'networks': ['ai-lab'], 'cap_drop': ['ALL'], 'security_opt': ['no-new-privileges:true'], 'restart': 'unless-stopped'}, 'services': {'dynamo-frontend': {'image': 'nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0', 'user': '0:0', 'entrypoint': [], 'networks': ['ai-lab'], 'cap_drop': ['ALL'], 'security_opt': ['no-new-privileges:true'], 'restart': 'unless-stopped', 'command': ['python3', '-m', 'dynamo.frontend', '--http-host', '0.0.0.0', '--http-port', '8000', '--discovery-backend', 'file', '--request-plane', 'tcp'], 'environment': {'DYN_FILE_KV': '/dynamo-kv', 'DYN_LOGGING_JSONL': '${DYN_LOGGING_JSONL:-false}', 'OTEL_EXPORT_ENABLED': '${OTEL_EXPORT_ENABLED:-false}', 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT': 'http://otel-collector:4317', 'OTEL_SERVICE_NAME': 'dynamo-frontend'}, 'volumes': ['dynamo-kv:/dynamo-kv'], 'ports': ['127.0.0.1:8020:8000'], 'healthcheck': {'test': ['CMD-SHELL', 'python3 -c \"import urllib.request as u;u.urlopen(\\'http://127.0.0.1:8000/health\\',timeout=3)\"'], 'interval': '30s', 'timeout': '5s', 'retries': 3, 'start_period': '20s'}, 'read_only': True, 'tmpfs': ['/tmp', '/home/dynamo/.cache'], 'pids_limit': 512}, 'dynamo-worker': {'image': 'nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0', 'user': '0:0', 'entrypoint': [], 'networks': ['ai-lab'], 'cap_drop': ['ALL'], 'security_opt': ['no-new-privileges:true'], 'restart': 'unless-stopped', 'command': 'python3 -m dynamo.vllm --model /root/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4/snapshots/16b6615af3548b88e2d8e382457bc705b00479cf --served-model-name unsloth/Qwen3.8-27B-NVFP4 --discovery-backend file --request-plane tcp --dyn-tool-call-parser qwen3_coder --dyn-reasoning-parser qwen3 --dyn-enable-structural-tag --max-model-len ${CTX:-262144} --speculative-config \\'{\"method\":\"mtp\",\"num_speculative_tokens\":2}\\' --gpu-memory-utilization ${GPU_MEM_UTIL:-0.50} --kv-cache-memory-bytes ${KV_CACHE_MEMORY:-20000000000} --max-num-seqs ${MAX_NUM_SEQS:-64} --max-num-batched-tokens 8192 --enable-chunked-prefill --enable-prefix-caching\\n', 'environment': {'HOME': '/root', 'DYN_FILE_KV': '/dynamo-kv', 'DYN_SYSTEM_PORT': '8081', 'HF_HUB_OFFLINE': '1', 'TORCH_CUDA_ARCH_LIST': '12.0', 'CUTE_DSL_ARCH': 'sm_120', 'FLASHINFER_NVCC_THREADS': '2', 'NVCC_THREADS': '2', 'MAX_JOBS': '4', 'OTEL_SERVICE_NAME': 'dynamo-worker'}, 'volumes': ['dynamo-kv:/dynamo-kv', '/srv/models/hf:/root/.cache/huggingface', 'flashinfer-cache:/root/.cache/flashinfer', 'vllm-cache:/root/.cache/vllm'], 'ipc': 'host', 'deploy': {'resources': {'reservations': {'devices': [{'driver': 'nvidia', 'device_ids': ['GPU-00000000-0000-0000-0000-000000000001'], 'capabilities': ['gpu']}]}}}, 'depends_on': ['dynamo-frontend']}, 'dynamo-mocker': {'image': 'nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0', 'user': '0:0', 'entrypoint': [], 'networks': ['ai-lab'], 'cap_drop': ['ALL'], 'security_opt': ['no-new-privileges:true'], 'restart': 'unless-stopped', 'profiles': ['mock'], 'command': ['python3', '-m', 'dynamo.mocker', '--model-path', '/root/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4/snapshots/16b6615af3548b88e2d8e382457bc705b00479cf', '--model-name', 'unsloth/Qwen3.8-27B-NVFP4', '--discovery-backend', 'file', '--request-plane', 'tcp'], 'environment': {'DYN_FILE_KV': '/dynamo-kv', 'HF_HUB_OFFLINE': '1'}, 'volumes': ['dynamo-kv:/dynamo-kv', '/srv/models/hf:/root/.cache/huggingface:ro'], 'depends_on': ['dynamo-frontend']}}, 'volumes': {'dynamo-kv': None, 'flashinfer-cache': None, 'vllm-cache': None}, 'networks': {'ai-lab': {'external': True}}}"
+ },
+ {
+  "input": "# Generated by Nemo Console (ADR 8). The repo compose is never edited: delete this file to revert.\n# Compose REPLACES `command` (it does not merge it), so the full argv is restated below; flags the\n# console does not manage are carried over verbatim from the base compose.\n# nemo-console-values: {\"enable_prefix_caching\":false,\"gpu_memory_utilization\":0.6,\"max_model_len\":131072,\"num_speculative_tokens\":3,\"reasoning_parser\":\"none\",\"router_mode\":\"kv\"}\n# WARNING: router_mode=kv needs more than one worker and NATS/ZMQ KV events from the workers; with the single worker (file discovery, no NATS) it adds a hop for nothing and may not route.\n# WARNING: reasoning_parser=none: <think> text stays inline in content.\nservices:\n  dynamo-worker:\n    command:\n      - \"python3\"\n      - \"-m\"\n      - \"dynamo.vllm\"\n      - \"--model\"\n      - \"/root/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4/snapshots/16b6615af3548b88e2d8e382457bc705b00479cf\"\n      - \"--served-model-name\"\n      - \"unsloth/Qwen3.8-27B-NVFP4\"\n      - \"--discovery-backend\"\n      - \"file\"\n      - \"--request-plane\"\n      - \"tcp\"\n      - \"--dyn-tool-call-parser\"\n      - \"qwen3_coder\"\n      - \"--dyn-enable-structural-tag\"\n      - \"--max-model-len\"\n      - \"131072\"\n      - \"--speculative-config\"\n      - \"{\\\"method\\\":\\\"mtp\\\",\\\"num_speculative_tokens\\\":3}\"\n      - \"--gpu-memory-utilization\"\n      - \"0.60\"\n      - \"--kv-cache-memory-bytes\"\n      - \"${KV_CACHE_MEMORY:-20000000000}\"\n      - \"--max-num-seqs\"\n      - \"${MAX_NUM_SEQS:-64}\"\n      - \"--max-num-batched-tokens\"\n      - \"8192\"\n      - \"--enable-chunked-prefill\"\n      - \"--no-enable-prefix-caching\"\n  dynamo-frontend:\n    command:\n      - \"python3\"\n      - \"-m\"\n      - \"dynamo.frontend\"\n      - \"--http-host\"\n      - \"0.0.0.0\"\n      - \"--http-port\"\n      - \"8000\"\n      - \"--discovery-backend\"\n      - \"file\"\n      - \"--request-plane\"\n      - \"tcp\"\n      - \"--router-mode\"\n      - \"kv\"\n",
+  "ok": "{'services': {'dynamo-worker': {'command': ['python3', '-m', 'dynamo.vllm', '--model', '/root/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4/snapshots/16b6615af3548b88e2d8e382457bc705b00479cf', '--served-model-name', 'unsloth/Qwen3.8-27B-NVFP4', '--discovery-backend', 'file', '--request-plane', 'tcp', '--dyn-tool-call-parser', 'qwen3_coder', '--dyn-enable-structural-tag', '--max-model-len', '131072', '--speculative-config', '{\"method\":\"mtp\",\"num_speculative_tokens\":3}', '--gpu-memory-utilization', '0.60', '--kv-cache-memory-bytes', '${KV_CACHE_MEMORY:-20000000000}', '--max-num-seqs', '${MAX_NUM_SEQS:-64}', '--max-num-batched-tokens', '8192', '--enable-chunked-prefill', '--no-enable-prefix-caching']}, 'dynamo-frontend': {'command': ['python3', '-m', 'dynamo.frontend', '--http-host', '0.0.0.0', '--http-port', '8000', '--discovery-backend', 'file', '--request-plane', 'tcp', '--router-mode', 'kv']}}}"
+ }
+]

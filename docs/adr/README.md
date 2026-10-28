@@ -1,8 +1,9 @@
 # Architecture decision records
 
 One record per row of the decision table in [`../ARCHITECTURE.md`](../ARCHITECTURE.md) section 1. Status of every
-record is **Accepted** (v0.1.0). Where the code deviates from a decision, the record says so under
-"Consequences".
+record is **Accepted** (v0.1.0 unless the record says otherwise). Where the code deviates from a decision, the record
+says so under "Consequences". Since 0.4.0 the backend is Rust (ADR 0016); records written for the Python backend name
+its files (`*.py`), which map one to one to `backend/crates/nemo-console/src/**/*.rs`.
 
 | ADR | Decision |
 |---|---|
@@ -21,3 +22,4 @@ record is **Accepted** (v0.1.0). Where the code deviates from a decision, the re
 | [0013](0013-zero-build-zero-npm-frontend.md) | Zero-build, zero-npm frontend with a strict CSP |
 | [0014](0014-localhost-security-baseline.md) | Localhost-service security baseline applied in full |
 | [0015](0015-guardrails-rails-editable-weakening-deliberate.md) | NeMo Guardrails rails configs are editable; weakening them needs an explicit marker (exception to 0007) |
+| [0016](0016-backend-rewritten-in-rust.md) | The backend is rewritten in Rust; the last Python backend stays the parity reference (amends 0002) |

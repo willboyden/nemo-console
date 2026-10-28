@@ -17,7 +17,7 @@ while read -r lref lsha _rref _rsha; do
   head=$(git rev-parse HEAD 2>/dev/null)
   commit=$(git rev-parse --verify --quiet "$lsha^{commit}")
   if [ -n "$commit" ] && [ "$commit" = "$head" ] && [ -z "$(git -C "$top" status --porcelain -- backend frontend)" ]; then
-    echo "pre-push: no e2e pass recorded for $lref; running the browser suite now (about 40 s)" >&2
+    echo "pre-push: no e2e pass recorded for $lref; building the backend and running the browser suite now (about 40 s after the build)" >&2
     "$gate" run </dev/null && "$gate" check "$lsha" </dev/null && continue
   fi
   echo "pre-push: refusing $lref: the browser e2e suite has not passed on its backend/ and frontend/." >&2

@@ -24,11 +24,12 @@ running on one workstation:
 - **NVIDIA NeMo Evaluator** (new in 0.3.0): offline benchmark suites (GSM8K, MMLU, ...) against router models, scores
   per benchmark and model.
 
-It is a host-run FastAPI process bound to loopback, with a zero-build, zero-npm browser UI. One adapter per
+It is a single host-run binary (Rust, since 0.4.0; the Python backend before it is the behavioural reference) bound
+to loopback, with a zero-build, zero-npm browser UI. One adapter per
 system plugs into a system-agnostic core; the UI renders from descriptors (status, metrics, config files,
 parameters, actions, playground), so adding a system is one adapter file (SkillEvaluator was added that way).
 
-> **Status: v0.3.1.** Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
+> **Status: v0.4.0** (the backend rewritten in Rust; [`CHANGELOG.md`](CHANGELOG.md)). Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
 > Nothing here has been used by anyone other than its author, on one workstation, against one set of pinned
 > versions (Switchyard 0.3.0, Relay 0.9.2, Dynamo 1.5.0 and a 1.6.0 dev build, SkillEvaluator 0.5.0, Data Designer
 > 0.9.3, OpenShell CLI 0.0.71 / gateway 0.0.77, dcgm-exporter 4.8.4 with DCGM 4.6.1, AIPerf 0.13.0, NeMo Guardrails
@@ -44,14 +45,14 @@ Every feature claim in this repo is one of:
 | **verified-live** | Exercised against a real Switchyard 0.3.0, Relay 0.9.2 and Dynamo 1.5.0 on one workstation (evidence is stated in [`docs/FEATURE-MATRIX.md`](docs/FEATURE-MATRIX.md)). |
 | **unverified** | Only fakes have run it. It may work; nobody has watched it work. |
 
-Gate results (re-run on 2026-10-24 against the 0.3.1 release tree): `pytest -q` 878 passed / 2 skipped in the author's
-deployment checkout (the skips are opt-in or environment-gated live smoke tests; the Dynamo live smoke enables itself
-when a frontend answers on 127.0.0.1:8020), `ruff check` clean, `mypy --strict src` clean (48 files), `node --test` 121
-passed, browser suite (`make e2e`, headless Chrome 151) 13 routes and 46 pages and tabs with no error state. From a
-literal `git clone` outside that checkout (`make setup && make all`): 837 passed / 43 skipped, ruff and mypy clean,
-frontend 121 passed, browser suite passed; the extra skips are the tests that need the deployment's repository layout
-(the lab wrappers next to it) or a live system. Mermaid diagrams in these docs were **not
-rendered**; treat them as unvalidated.
+Gate results (2026-10-28, the 0.4.0 tree): `cargo test --locked` 842 passed / 0 failed (the live smoke tests return
+early without `NEMO_LIVE` / `NEMO_CONSOLE_LIVE`), rustfmt and clippy `-D warnings` clean, cargo-deny and cargo-audit
+clean, crate-age 265 locked crates with 0 too new and 2 security exceptions, frontend `node --test` 122 passed, browser
+suite (headless Chrome 151) 13 routes and 46 pages and tabs with no error state, parity against the last Python backend
+1,393 cases with 1,392 equal and the one difference documented (PORTING D-6), all 936 pytest ids mapped to Rust tests,
+and the cross-implementation checks (state directory, launcher, startup errors) passing; the clean-clone runs are in
+`backend/PORTING.md` A-8 and A-9. Mermaid diagrams in these docs were **not rendered**; treat them
+as unvalidated.
 
 ## What it does
 
@@ -67,7 +68,7 @@ rendered**; treat them as unvalidated.
 
 ```mermaid
 flowchart LR
-  B[Browser SPA<br/>no build, no CDN] -->|loopback HTTP + SSE| C[FastAPI 127.0.0.1:8793]
+  B[Browser SPA<br/>no build, no CDN] -->|loopback HTTP + SSE| C[nemo-console (Rust, axum)<br/>127.0.0.1:8793]
   C --> M[Security middleware<br/>Host, Origin, CSRF, auth, caps, headers, audit]
   M --> S[Core services<br/>config store, metrics, SSE, settings]
   S --> A1[Switchyard adapter]
@@ -79,21 +80,22 @@ flowchart LR
 ```
 
 *(Unrendered Mermaid.)* Details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (the locked contract),
-[`docs/adr/`](docs/adr/) (15 decisions with rejected alternatives), [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md),
+[`docs/adr/`](docs/adr/) (16 decisions with rejected alternatives), [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md),
 [`docs/OPERATIONS.md`](docs/OPERATIONS.md), [`docs/FEATURE-MATRIX.md`](docs/FEATURE-MATRIX.md), [`docs/PUBLISHING-CHECKLIST.md`](docs/PUBLISHING-CHECKLIST.md),
 [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Quick start
 
-Prerequisites: Linux, Python 3.13 (`uv` recommended; newer interpreters may lack wheels), Docker (rootless
+Prerequisites: Linux, a Rust toolchain manager (`rustup`; the exact toolchain is pinned in
+`backend/rust-toolchain.toml` and installed on first build), Docker (rootless
 works and is what the author used), the three systems deployed the way the adapters expect (see
 [Deployment assumptions](#deployment-assumptions)), Node 22 and a Chrome or Chromium only if you run the frontend tests
 and the browser end-to-end suite.
 
 ```bash
-make setup          # uv venv --python 3.13 && uv sync --frozen
-make run            # serves API + UI on http://127.0.0.1:8793
-make all            # ruff + mypy --strict + pytest + node --test + browser e2e (all offline)
+make setup          # cargo build --locked (backend/), enable the git hooks
+make run            # release build, then serves API + UI on http://127.0.0.1:8793
+make all            # rustfmt + clippy + cargo test + cargo-deny + cargo-audit + crate-age + node --test + browser e2e
 make install-desktop  # optional (Linux): "Nemo Console" in your app menu; see docs/OPERATIONS.md section 3
 ```
 
@@ -195,21 +197,26 @@ for yours. What they describe:
   `127.0.0.1:8806` (`security/nemo-guardrails`). Container names are settings (`NEMO_CONSOLE_*`).
 - The root that holds those directories is `NEMO_CONSOLE_REPO_ROOT`; each system's directory under it is a `LAYOUT__*`
   setting (defaults `inference/switchyard`, `clients/nemo-relay`, `inference/dynamo`, ...). The default root walks up from
-  the source file to a directory containing `inference/dynamo/docker-compose.yml`, else uses the current directory; a
+  the executable to a directory containing `inference/dynamo/docker-compose.yml`, else uses the current directory; a
   root that lacks the Dynamo compose file of the layout is reported as a problem. For a standalone checkout set it
   explicitly.
 
 ## Repository layout
 
 ```
-backend/src/nemo_console/
-  adapters/     base.py (locked port), switchyard.py, relay.py, dynamo.py
-  api/          security.py (middleware), deps.py (roles), errors.py, routers/{observe,configure,act,admin}.py
-  services/     runner, config_store, metrics, events (SSE), playground, auth, audit, settings, topology, ...
-  domain/       models.py (locked pydantic contract)   migrations/0001_init.sql
-frontend/       index.html, js/ (ES modules, web components), css/, i18n/en.json, dev/mock-server.mjs, tests/
-backend/tests/  core/ (fakes), switchyard/ relay/ dynamo/ (captured fixtures), *_live_smoke opt-in
-deploy/         nemo-console.service (opt-in systemd user unit template)
+backend/                    Cargo workspace (Rust; Cargo.lock, rust-toolchain.toml, deny.toml)
+  crates/nemo-console/src/
+    adapters/   base.rs (locked port), one module per system (switchyard, relay, dynamo, skillevaluator, ...)
+    api/        mod.rs (router + security middleware), observe / configure / act / admin handlers, bodies
+    services/   runner, config_store, metrics, events (SSE), playground, auth, audit, settings, topology,
+                pyyaml / pytoml / pyfmt (Python-exact YAML, TOML and formatting), ...
+    domain/     models.rs (locked contract)   migrations/0001_init.sql
+  crates/nemo-console/tests/  every ported test (fakes + captured fixtures), goldens, *_live_smoke opt-in
+  tools/        crate-age.py (dependency cooldown gate), gen-test-map.mjs
+  PORTING.md    the port's contract, deviations from the Python backend, addenda; TEST-MAP.md
+frontend/       index.html, js/ (ES modules, web components), css/, i18n/en.json, dev/mock-server.mjs, tests/, e2e/
+parity/         differential harness: the last Python backend (parity/ref.mjs) vs this backend, case by case
+deploy/         nemo-console.service (opt-in systemd user unit template), nemo-console.desktop
 docs/           ARCHITECTURE.md, adr/, THREAT-MODEL.md, OPERATIONS.md, FEATURE-MATRIX.md, PUBLISHING-CHECKLIST.md
 ```
 
@@ -217,20 +224,21 @@ docs/           ARCHITECTURE.md, adr/, THREAT-MODEL.md, OPERATIONS.md, FEATURE-M
 
 | Target | Does |
 |---|---|
-| `make setup` | create the venv, install locked dependencies, enable the git hooks (`make hooks`) |
-| `make run` | serve on 127.0.0.1:8793 |
-| `make test` / `lint` / `typecheck` | pytest, ruff, `mypy --strict` |
+| `make setup` | `cargo build --locked`, enable the git hooks (`make hooks`) |
+| `make run` | release build, then serve on 127.0.0.1:8793 (`make release` builds `backend/target/release/nemo-console`) |
+| `make test` / `lint` / `typecheck` | `cargo test`, `cargo fmt --check`, `cargo clippy -D warnings` |
+| `make deny` / `audit` / `crate-age` | cargo-deny, cargo-audit, the 14-day dependency cooldown (security fixes excepted) |
 | `make frontend-test` | `node --test` on the pure-logic modules |
-| `make e2e` | every page and tab in headless Chrome against the real backend; records a pass for the pre-push hook |
-| `make all` | all of the above |
+| `make e2e` | builds, then every page and tab in headless Chrome against the real backend; records a pass for the pre-push hook |
+| `make parity` | the differential harness against the last Python backend (needs `uv` and its cache; see `parity/README.md`) |
+| `make all` | every gate except parity |
 
 Pushing is gated: the `pre-push` hook (`.githooks/pre-push`) refuses a commit or tag that `make e2e` has not passed
 on (exact `backend/` and `frontend/` trees; docs-only commits after a pass need no rerun). If your Chrome is not on
 PATH, name it once: `git config nemo-console.chrome /path/to/chrome`. CI runs the same suite (job `e2e`).
 
-Live smoke tests are read-only against real systems and need the deployment described above. They are gated
-inconsistently: Switchyard by `NEMO_LIVE=1`, Relay by `NEMO_CONSOLE_LIVE=1`, Dynamo automatically when
-`127.0.0.1:8020/health` answers.
+Live smoke tests are read-only against real systems and need the deployment described above. They never run by
+default: Switchyard and Dynamo need `NEMO_LIVE=1`, Relay `NEMO_CONSOLE_LIVE=1`.
 
 ## License and trademarks
 

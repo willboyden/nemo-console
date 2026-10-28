@@ -5,7 +5,16 @@
 //
 //   cd frontend && node e2e/run.mjs          (or `make e2e` from the repo root)
 //
-// Needs: ../backend/.venv (make setup) and a Chrome — $CHROME_BIN (`make e2e` also reads `git config nemo-console.chrome`),
+// The backend is the Rust binary: E2E_BIN overrides its path (default ../backend/target/debug/nemo-console; `make e2e`
+// builds it first with `cargo build --locked`).
+//
+// Hermetic by default (backend/PORTING.md A-5): every upstream URL points at a CLOSED port
+// (127.0.0.1:9) and PATH is an empty directory, so the run never reaches a live service (router :4000, Switchyard
+// :4010, Relay :4040, Dynamo :8020/:8081, DCGM :9400, Prometheus :9090, Guardrails :8806) and never runs the host's
+// docker / systemctl / nemo-relay; the run checks the effective URLs before it opens a page. E2E_LIVE=1 restores the
+// old behaviour (the default URLs and the caller's PATH) for a deliberate run against a live lab.
+//
+// Needs: the built backend binary (make setup / make e2e) and a Chrome — $CHROME_BIN (`make e2e` also reads `git config nemo-console.chrome`),
 // else google-chrome / chromium / chrome-headless-shell on PATH. Every page of the nav and every tab of every system
 // page is opened; the run FAILS on:
 //   * the error state ("Something went wrong", class `state error`) or the not-found state anywhere in the page,
@@ -25,7 +34,12 @@ import { fileURLToPath } from 'node:url';
 
 const FRONTEND = dirname(dirname(fileURLToPath(import.meta.url)));
 const BACKEND = join(FRONTEND, '..', 'backend');
-const PY = join(BACKEND, '.venv', 'bin', 'python');
+const BIN = process.env.E2E_BIN || join(BACKEND, 'target', 'debug', 'nemo-console');
+const LIVE = process.env.E2E_LIVE === '1';
+const CLOSED_URL = 'http://127.0.0.1:9';   // discard port: nothing listens, a connection is refused at once
+// Every key of the backend's DEFAULT_URLS (backend/crates/nemo-console/src/config.rs). A key missing here keeps its live
+// default; the effective-URL check in startBackend catches that.
+const URL_KEYS = ['switchyard', 'relay', 'dynamo', 'dynamo_worker_metrics', 'litellm', 'dcgm', 'prometheus', 'guardrails'];
 const SETTLE_MS = 400;          // the page must stay free of skeletons for this long to count as rendered
 const PAGE_TIMEOUT_MS = 20000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -72,18 +86,20 @@ export class Cdp {
 }
 
 export async function startBackend(tmp, { port, frontendDir } = {}) {
-  if (!existsSync(PY)) throw new Error(`${PY} missing: run \`make setup\` first`);
+  if (!existsSync(BIN)) throw new Error(`${BIN} missing: build it (make setup, or cd backend && cargo build --locked)`);
   port ||= await freePort();
   const home = join(tmp, 'home'); const state = join(tmp, 'state'); const repo = join(tmp, 'repo');
-  for (const d of [home, state, repo]) mkdirSync(d, { recursive: true });
+  const bin = join(tmp, 'bin');      // the hermetic PATH: empty, so every allowlisted CLI is "not found"
+  for (const d of [home, state, repo, bin]) mkdirSync(d, { recursive: true });
   chmodSync(state, 0o700);
   const env = {
-    PATH: process.env.PATH || '/usr/bin:/bin', HOME: home, LANG: 'C.UTF-8',
+    PATH: LIVE ? (process.env.PATH || '/usr/bin:/bin') : bin, HOME: home, LANG: 'C.UTF-8',
     NEMO_CONSOLE_PORT: String(port), NEMO_CONSOLE_STATE_DIR: state, NEMO_CONSOLE_NO_USER_ENV: '1',
     NEMO_CONSOLE_TRUST_LOOPBACK: 'false', NEMO_CONSOLE_REPO_ROOT: repo,
+    ...(LIVE ? {} : { NEMO_CONSOLE_URLS: JSON.stringify(Object.fromEntries(URL_KEYS.map((k) => [k, CLOSED_URL]))) }),
     ...(frontendDir ? { NEMO_CONSOLE_FRONTEND_DIR: frontendDir } : {}),
   };
-  const proc = spawn(PY, ['-I', '-m', 'nemo_console.main'], { cwd: BACKEND, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const proc = spawn(BIN, [], { cwd: BACKEND, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = ''; proc.stdout.on('data', (d) => { log += d; }); proc.stderr.on('data', (d) => { log += d; });
   const base = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 150; i++) {
@@ -94,6 +110,20 @@ export async function startBackend(tmp, { port, frontendDir } = {}) {
   const keyFile = join(state, 'bootstrap-admin.key');
   for (let i = 0; i < 50 && !existsSync(keyFile); i++) await sleep(100);
   const key = readFileSync(keyFile, 'utf8').trim();
+  if (!LIVE) {
+    // Prove the run is hermetic before any page polls an upstream: every effective URL must be the closed port.
+    let urls = null;
+    try {
+      const r = await fetch(`${base}/api/v1/settings`, { headers: { Authorization: `Bearer ${key}` } });
+      urls = r.ok ? (await r.json()).urls : null;
+    } catch { /* reported below */ }
+    const live = urls && typeof urls === 'object' ? Object.entries(urls).filter(([, u]) => u !== CLOSED_URL) : null;
+    if (!live || live.length) {
+      proc.kill('SIGKILL');
+      throw new Error(`not hermetic: ${live ? live.map(([k, u]) => `${k}=${u}`).join(', ') : 'GET /api/v1/settings failed'}`
+        + ' (add the key to URL_KEYS, or set E2E_LIVE=1 for a deliberate live run)');
+    }
+  }
   return { proc, base, key, log: () => log };
 }
 
@@ -203,7 +233,7 @@ export async function main(argv = process.argv.slice(2)) {
     for (const [p, cc] of seenHeaders) if (!/\bno-cache\b/.test(cc)) problems(`${p} served without Cache-Control: no-cache (got '${cc}')`);
     if (!seenHeaders.size) problems('no frontend file was observed (the page never loaded?)');
 
-    console.log(`e2e: ${chrome.version}; ${paths.length} routes, ${pages} pages/tabs rendered, ${seenHeaders.size} static files checked`);
+    console.log(`e2e: backend ${BIN.replace(/^.*\/backend\//, 'backend/')} (${LIVE ? 'LIVE upstreams and PATH' : 'hermetic'}); ${chrome.version}; ${paths.length} routes, ${pages} pages/tabs rendered, ${seenHeaders.size} static files checked`);
   } catch (e) {
     failures.push(`harness: ${e.message}`);
   } finally {

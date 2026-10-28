@@ -30,7 +30,7 @@ export function fiveStatus(id, now, flags = {}) {
       { kind: 'container', name: 'dcgm-exporter', state: 'running', image: 'nvcr.io/nvidia/k8s/dcgm-exporter:4.4.1-4.1.0-mock', detail: 'healthy, up 6 d' },
       { kind: 'http', name: 'exporter /metrics', state: 'running', detail: '200, 2 GPUs' },
       { kind: 'http', name: 'prometheus job dcgm-aitop100', state: 'failed', detail: 'target down: connection refused (mock)' },
-      { kind: 'http', name: 'prometheus job dcgm-ai300', state: 'running', detail: '2 GPUs' },
+      { kind: 'http', name: 'prometheus job dcgm', state: 'running', detail: '2 GPUs' },
     ],
     problems: flags.dcgmFixed ? [] : [
       { severity: 'error', code: 'dcgm.exporter.vulnerable', message: 'The running dcgm-exporter (4.4.1) is older than 4.8.3 and exposes /debug/pprof (CVE-2026-47483). A direct probe of /debug/pprof/ answered 200. (mock data)', fix: 'observability/dcgm/bump-exporter.sh 4.8.3   # then: docker compose up -d dcgm-exporter' },
@@ -82,7 +82,7 @@ export function fiveMetrics(id, ts, wob) {
       P('dcgm.fb_used_b', (i ? 61200 : 60800) * 1048576, 'B', L), P('dcgm.fb_free_b', (i ? 37000 : 37400) * 1048576, 'B', L), P('dcgm.sm_clock_mhz', i ? 1980 : 2100, 'MHz', L),
       P('dcgm.pcie_replay_total', 0, '1', L), P('dcgm.gr_active', i ? 0.35 : 0.7, 'ratio', L), P('dcgm.tensor_active', i ? 0.2 : 0.5, 'ratio', L), P('dcgm.dram_active', i ? 0.3 : 0.45, 'ratio', L),
       P('dcgm.pcie_tx_bps', 2.1e8, 'B/s', L), P('dcgm.pcie_rx_bps', 1.4e8, 'B/s', L)]; }),
-    ...[['ai300', 'dcgm-ai300'], ['aitop100', 'dcgm-aitop100']].flatMap(([host, job], i) => { const L = { host, job }; return [P('dcgm.host_up', i ? 0 : 1, '1', L), P('dcgm.fleet_gpus', i ? 0 : 2, '1', L), P('dcgm.fleet_temp_max_c', 58, 'C', L), P('dcgm.fleet_power_w', 410, 'W', L)]; })];
+    ...[['node1', 'dcgm'], ['node5', 'dcgm-aitop100']].flatMap(([host, job], i) => { const L = { host, job }; return [P('dcgm.host_up', i ? 0 : 1, '1', L), P('dcgm.fleet_gpus', i ? 0 : 2, '1', L), P('dcgm.fleet_temp_max_c', 58, 'C', L), P('dcgm.fleet_power_w', 410, 'W', L)]; })];
   if (id === 'aiperf') return [P('ap.ttft_ms', wob(210, 25), 'ms', { q: 'p50' }), P('ap.ttft_ms', wob(540, 70), 'ms', { q: 'p99' }), P('ap.itl_ms', wob(18, 2), 'ms', { q: 'p50' }), P('ap.itl_ms', wob(31, 4), 'ms', { q: 'p99' }),
     P('ap.latency_ms', 2400, 'ms', { q: 'p50' }), P('ap.latency_ms', 4100, 'ms', { q: 'p99' }), P('ap.output_tps', 1840.5, 'tok/s'), P('ap.request_tps', 12.4, 'req/s'), P('ap.error_rate', 0.005, 'ratio'),
     P('ap.runs', 7), P('ap.runs_by_verdict', 6, '1', { verdict: 'succeeded' }), P('ap.runs_by_verdict', 1, '1', { verdict: 'failed' }), P('ap.live_running', 0)];
@@ -323,7 +323,7 @@ export function fiveRunAction(system, id, params, R) {
     'openshell/prove_policy': 'policy.yaml: default deny holds\nfilesystem: write limited to /sandbox/outputs\nnetwork: only litellm:4000 reachable\n[mock output]',
     'openshell/gateway_up': 'gateway container started\nmTLS listener on 127.0.0.1:8443',
     'openshell/gateway_stop': 'gateway container stopped',
-    'dcgm/discovery': 'GPU 0  NVIDIA RTX PRO 6000 Blackwell Max-Q  96 GB\nGPU 1  NVIDIA RTX PRO 6000 Blackwell Workstation  96 GB\nhost ai300 up, host aitop100 DOWN\n[mock output]',
+    'dcgm/discovery': 'GPU 0  NVIDIA RTX PRO 6000 Blackwell Max-Q  96 GB\nGPU 1  NVIDIA RTX PRO 6000 Blackwell Workstation  96 GB\nhost node1 up, host node5 DOWN\n[mock output]',
     'dcgm/restart_exporter': 'container dcgm-exporter recreated\n/metrics 200 after 2.2 s',
     'guardrails/up': 'container ai-lab-guardrails started\nconfigs served: lab-input-output',
     'guardrails/restart': 'container ai-lab-guardrails recreated\nconfigs served: lab-input-output',

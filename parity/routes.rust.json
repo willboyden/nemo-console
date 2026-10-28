@@ -1,0 +1,197 @@
+{
+  "generated_by": "cargo test --test core_routes_table",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/api/v1/audit",
+      "auth": "admin",
+      "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/health",
+      "auth": "public",
+      "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/openapi.json",
+      "auth": null,
+      "body": false
+    },
+    {
+      "method": "HEAD",
+      "path": "/api/v1/openapi.json",
+      "auth": null,
+      "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/overview",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/routing/summary",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/settings",
+      "auth": "admin",
+      "body": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/actions",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/systems/{system_id}/actions/{action}",
+      "auth": "viewer",
+      "body": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/config",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/config/{file_id}",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/systems/{system_id}/config/{file_id}/apply",
+      "auth": "admin",
+      "body": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/config/{file_id}/history",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/systems/{system_id}/config/{file_id}/rollback",
+      "auth": "admin",
+      "body": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/systems/{system_id}/config/{file_id}/validate",
+      "auth": "admin",
+      "body": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/events",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/events/stream",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/metrics",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/metrics/history",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/params",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/systems/{system_id}/params",
+      "auth": "admin",
+      "body": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/systems/{system_id}/params/preview",
+      "auth": "admin",
+      "body": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/playground",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/systems/{system_id}/playground/chat",
+      "auth": "admin",
+      "body": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/runs/{run_id}/files",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/runs/{run_id}/records",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/status",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/topology",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/metrics",
+      "auth": "viewer",
+      "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/{path:path}",
+      "auth": "public",
+      "body": false
+    }
+  ]
+}

@@ -6,14 +6,15 @@ document that were run on 2026-09-24 are marked "(run)"; everything else was rea
 
 ## 1. Install
 
-Requirements: Linux, `uv`, Python **3.13** (`requires-python = ">=3.13,<3.14"`), and on `PATH` (or in
+Requirements: Linux, `rustup` (the exact Rust toolchain is pinned in `backend/rust-toolchain.toml` and installed on
+the first build; the crates come from `backend/Cargo.lock`), and on `PATH` (or in
 `NEMO_CONSOLE_EXTRA_BIN_DIRS`, default `~/.local/bin`) whichever of `docker`, `systemctl`, `nemo-relay` the
 systems you manage need. Node 22 is needed only for the frontend tests.
 
 ```bash
 git clone <this repository> nemo-console && cd nemo-console
-make setup        # cd backend && uv venv --python 3.13 && uv sync --frozen
-make all          # ruff, mypy --strict, pytest, node --test; all offline
+make setup        # cd backend && cargo build --locked; enables the git hooks
+make all          # rustfmt, clippy, cargo test, cargo-deny, cargo-audit, crate-age, node --test, browser e2e
 ```
 
 ## 2. Configure
@@ -22,7 +23,7 @@ Settings are read from environment variables prefixed `NEMO_CONSOLE_` and from a
 (`~/.config/nemo-console/env`, dotenv syntax, same prefixed names). Set `NEMO_CONSOLE_NO_USER_ENV=1` to ignore
 the file. The process environment wins over the file.
 
-Names read by `backend/src/nemo_console/config.py` (each is `NEMO_CONSOLE_<NAME>`):
+Names read by `backend/crates/nemo-console/src/config.rs` (each is `NEMO_CONSOLE_<NAME>`):
 
 | Name | Default | Meaning |
 |---|---|---|
@@ -52,7 +53,7 @@ Names read by `backend/src/nemo_console/config.py` (each is `NEMO_CONSOLE_<NAME>
 | `DYNAMO_DARK_WHILE_HELD` | the exclusive engines' aliases and routes (Bolt, GLM, flashnext, the 27B) | JSON list of what cannot answer while Dynamo holds the card(s); shown in `dynamo.holds_card` (info; `[]` turns it off) and the preflight `router_aliases_dark:` line. |
 | `BODY_CAP_BYTES`, `CONFIG_CAP_BYTES` | `1048576`, `262144` | Request and config size limits. |
 | `SSE_MAX_CONNECTIONS`, `SSE_IDLE_TIMEOUT_S`, `SSE_HEARTBEAT_S` | `8`, `300`, `15` | Event stream limits. |
-| `SHUTDOWN_GRACE_S` | `5` | Seconds uvicorn waits for open connections on SIGTERM before closing them. Open event streams already end at once (`event: shutdown`); keep it below `nemo-console stop`'s 10 s. |
+| `SHUTDOWN_GRACE_S` | `5` | Seconds the server waits for open connections on SIGTERM before closing them. Open event streams already end at once (`event: shutdown`); keep it below `nemo-console stop`'s 10 s. |
 | `PLAYGROUND_MAX_TOKENS` | `4096` | Clamp for chat `max_tokens`. |
 | `REVISIONS_KEEP` | `50` | Config revisions kept per file. |
 | `OTLP_ENDPOINT` | unset | e.g. `http://localhost:4317`; needs the optional `opentelemetry` packages (not installed by default; otherwise one warning is logged). Unverified. |
@@ -81,8 +82,7 @@ process environment. Names set through the Settings page or API must be `LITELLM
 `*_API_KEY`; names from `NEMO_CONSOLE_PLAYGROUND_KEY_ENV` or the env file are not restricted.
 
 Nested variables such as `NEMO_CONSOLE_URLS__SWITCHYARD=http://127.0.0.1:14010` are merged over the built-in
-defaults (a validator in `config.py`; an earlier revision replaced the whole object, so re-check if you use an old
-checkout). The same merge applies to `ENGINE_PROBES`, `ENGINE_START` and `PLAYGROUND_KEY_ENV`. Lists (`DYNAMO_*`,
+defaults (`config.rs`; a revision before 0.2 replaced the whole object, so re-check if you use an old checkout). The same merge applies to `ENGINE_PROBES`, `ENGINE_START` and `PLAYGROUND_KEY_ENV`. Lists (`DYNAMO_*`,
 `TOPOLOGY_ENGINES`) replace their default.
 
 URLs changed at runtime on the Settings page are stored in the database, validated (plain `http`, host in
@@ -91,7 +91,7 @@ URLs changed at runtime on the Settings page are stored in the database, validat
 
 Every value above that names a container, compose project, service, unit or path is checked with a full match when the
 console starts (a leading `-`, a space, `..` or an unknown key is refused, and the console does not start). None of
-them can be changed through the API. Still constants in `adapters/*.py`: the one container Dynamo's `up` may stop
+them can be changed through the API. Still constants in the adapters (`backend/crates/nemo-console/src/adapters/`): the one container Dynamo's `up` may stop
 (`stop_sharing_engine`; a setting must not widen what the console stops), OpenShell's sandbox network and router address
 (they must match the lab wrapper), and the router liveness path (`/health/liveliness`).
 
@@ -112,9 +112,9 @@ were started from (their compose labels, checked to lie inside the configured co
 ## 3. Run
 
 ```bash
-make run                                  # foreground, http://127.0.0.1:8793   (run: starts, /api/v1/health answers)
-# or
-cd backend && uv run nemo-console
+make run                                  # release build, then foreground on http://127.0.0.1:8793
+# or, once built (make release):
+backend/target/release/nemo-console
 ```
 
 Logs are JSON lines on stderr (secrets and tracebacks scrubbed). The console's own Prometheus metrics are at
@@ -122,10 +122,15 @@ Logs are JSON lines on stderr (secrets and tracebacks scrubbed). The console's o
 
 ```bash
 curl -s http://127.0.0.1:8793/api/v1/health
-# {"status":"degraded","version":"0.2.0","trust":"bearer","role":"public","trust_notice":null,"systems":{...}}   (run, unauthenticated)
+# {"status":"degraded","version":"0.4.0","trust":"bearer","role":"public","trust_notice":null,"systems":{...}}
 ```
 
 `status` is `ok` only when all three systems are `up`. A system that is down is reported, not an error.
+
+Connection limits (fixed, not settings): a client must send a complete request head within 5 s (an idle keep-alive
+connection is closed after 5 s, as uvicorn did), a request body within 30 s (otherwise 408), and at most 256
+connections are open at once (each open event stream counts; past the cap a new connection is closed at once). A
+reverse proxy in front of the console should keep its own upstream timeouts above these.
 
 ### From the desktop (opt-in, Linux)
 
@@ -137,7 +142,8 @@ The menu entry runs `nemo-console open`; its right-click action **Stop Nemo Cons
 
 - `open` only uses a loopback address (a non-loopback `NEMO_CONSOLE_HOST` is refused). If the console already
   answers, it opens the UI with `xdg-open`. If nothing answers, it starts the console in the background
-  (`python -I -m nemo_console.main`, so the launch directory is not on its import path; log in
+  (the same binary with the argv `-I -m nemo_console.main` the Python releases used, so `stop` from either recognises
+  it; log in
   `<state dir>/console.log`, mode 0600, rotated past 10 MiB; pid in `<state dir>/console.pid`), waits up to 30 s for
   health, then opens the UI.
 - It opens the page only if **every socket listening on the port belongs to your user** (read from `/proc/net/tcp`
@@ -168,7 +174,8 @@ unprivileged user namespaces; if the unit fails that way, comment out such lines
 probably need to add: `Environment=`
 lines for `NEMO_CONSOLE_REPO_ROOT` and any `DOCKER_HOST` your rootless Docker needs (the runner passes only a
 short allowlist of variables to children), and `EnvironmentFile=` (mode 0600) or `Environment=` for the
-playground credential variable.
+playground credential variable. The template caps the unit (the console and every tool it starts) at
+`MemoryMax=4G` and `TasksMax=1024`; raise them if a profile or evaluator run you start from the UI needs more.
 
 ## 4. Keys and roles
 
@@ -188,7 +195,7 @@ playground credential variable.
   The key itself is never logged. Only its SHA-256 is stored.
 - **Mint more:** `nemo-console mint-key admin` or `nemo-console mint-key viewer` (default `viewer`). It writes
   `<STATE_DIR>/minted-<role>-<id>.key` (0600) and prints only the path. It can run while the server is up (run).
-  From `backend/`: `uv run nemo-console mint-key viewer`.
+  From the checkout: `backend/target/release/nemo-console mint-key viewer`.
 - **Use a key:** `Authorization: Bearer <key>`; non-GET requests also need `X-Console: 1`.
 
 ```bash
@@ -373,7 +380,8 @@ shows is prefixed with the code words for security rejections.
 ```bash
 make all                                   # offline gates, including the browser e2e suite (needs Chrome)
 make e2e                                   # only the browser suite: every page and tab, real backend, headless Chrome
-cd backend && NEMO_LIVE=1 NEMO_CONSOLE_LIVE=1 uv run pytest -q -rs   # read-only live smoke, needs the real stack
+cd backend && NEMO_LIVE=1 NEMO_CONSOLE_LIVE=1 cargo test --locked --test switchyard_live_smoke --test relay_relay_live_smoke --test dynamo_live_smoke   # read-only, needs the real stack
+make parity                                # differential check against the last Python backend (parity/README.md)
 ```
 
 The live tests never run a disruptive action. Actions that change state (recreate, restart, up/down) have been

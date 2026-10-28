@@ -1,0 +1,12 @@
+[
+ {
+  "label": "admin",
+  "key": "nck_TEST-ONLY-not-a-secret-admin",
+  "kid": "3ef0043edaba"
+ },
+ {
+  "label": "viewer",
+  "key": "nck_TEST-ONLY-not-a-secret-viewer",
+  "kid": "d9bf3c307838"
+ }
+]

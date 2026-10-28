@@ -2,12 +2,14 @@
 *.db
 *.db-wal
 *.db-shm
+# ...except the test fixtures: a console.db the Python reference wrote (parity/gen/gen_xstate_fixture.py)
+!backend/crates/nemo-console/tests/fixtures/**/*.db
 *.key
 secrets/
 .env
 .env.*
 bootstrap-admin.key
-# python
+# python (only the parity harness's Python reference, parity/.ref/, uses a venv)
 .venv/
 __pycache__/
 *.pyc
@@ -24,6 +26,7 @@ node_modules/
 *.log
 screenshots/
 .DS_Store
-
-# test fixtures are real captured logs — keep them despite the *.log rule above
-!backend/tests/**/fixtures/*.log
+# rust build output
+/backend/target/
+# the parity harness's extracted Python reference (parity/ref.mjs) and its output
+/parity/.ref/

@@ -1,0 +1,160 @@
+[
+ {
+  "input": "a b  c",
+  "ok": [
+   "a",
+   "b",
+   "c"
+  ]
+ },
+ {
+  "input": "'a b' \"c d\"",
+  "ok": [
+   "a b",
+   "c d"
+  ]
+ },
+ {
+  "input": "a\\ b",
+  "ok": [
+   "a b"
+  ]
+ },
+ {
+  "input": "\"a\\\"b\"",
+  "ok": [
+   "a\"b"
+  ]
+ },
+ {
+  "input": "\"a\\$b\"",
+  "ok": [
+   "a\\$b"
+  ]
+ },
+ {
+  "input": "\"a\\\\b\"",
+  "ok": [
+   "a\\b"
+  ]
+ },
+ {
+  "input": "'a\\b'",
+  "ok": [
+   "a\\b"
+  ]
+ },
+ {
+  "input": "x '' y",
+  "ok": [
+   "x",
+   "",
+   "y"
+  ]
+ },
+ {
+  "input": "#c d",
+  "ok": [
+   "#c",
+   "d"
+  ]
+ },
+ {
+  "input": "a#b",
+  "ok": [
+   "a#b"
+  ]
+ },
+ {
+  "input": "--speculative-config '{\"method\":\"mtp\",\"num_speculative_tokens\":2}'",
+  "ok": [
+   "--speculative-config",
+   "{\"method\":\"mtp\",\"num_speculative_tokens\":2}"
+  ]
+ },
+ {
+  "input": "a\tb\nc\rd",
+  "ok": [
+   "a",
+   "b",
+   "c",
+   "d"
+  ]
+ },
+ {
+  "input": "",
+  "ok": []
+ },
+ {
+  "input": "   ",
+  "ok": []
+ },
+ {
+  "input": "'unclosed",
+  "err": "No closing quotation"
+ },
+ {
+  "input": "trailing\\",
+  "err": "No escaped character"
+ },
+ {
+  "input": "a\"b c\"d",
+  "ok": [
+   "ab cd"
+  ]
+ },
+ {
+  "input": "\\\"",
+  "ok": [
+   "\""
+  ]
+ },
+ {
+  "input": "\"\"",
+  "ok": [
+   ""
+  ]
+ },
+ {
+  "input": "'' ''",
+  "ok": [
+   "",
+   ""
+  ]
+ },
+ {
+  "input": "python3 -m dynamo.vllm --model /root/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4/snapshots/16b6615af3548b88e2d8e382457bc705b00479cf --served-model-name unsloth/Qwen3.8-27B-NVFP4 --discovery-backend file --request-plane tcp --dyn-tool-call-parser qwen3_coder --dyn-reasoning-parser qwen3 --dyn-enable-structural-tag --max-model-len ${CTX:-262144} --speculative-config '{\"method\":\"mtp\",\"num_speculative_tokens\":2}' --gpu-memory-utilization ${GPU_MEM_UTIL:-0.50} --kv-cache-memory-bytes ${KV_CACHE_MEMORY:-20000000000} --max-num-seqs ${MAX_NUM_SEQS:-64} --max-num-batched-tokens 8192 --enable-chunked-prefill --enable-prefix-caching\n",
+  "ok": [
+   "python3",
+   "-m",
+   "dynamo.vllm",
+   "--model",
+   "/root/.cache/huggingface/hub/models--unsloth--Qwen3.8-27B-NVFP4/snapshots/16b6615af3548b88e2d8e382457bc705b00479cf",
+   "--served-model-name",
+   "unsloth/Qwen3.8-27B-NVFP4",
+   "--discovery-backend",
+   "file",
+   "--request-plane",
+   "tcp",
+   "--dyn-tool-call-parser",
+   "qwen3_coder",
+   "--dyn-reasoning-parser",
+   "qwen3",
+   "--dyn-enable-structural-tag",
+   "--max-model-len",
+   "${CTX:-262144}",
+   "--speculative-config",
+   "{\"method\":\"mtp\",\"num_speculative_tokens\":2}",
+   "--gpu-memory-utilization",
+   "${GPU_MEM_UTIL:-0.50}",
+   "--kv-cache-memory-bytes",
+   "${KV_CACHE_MEMORY:-20000000000}",
+   "--max-num-seqs",
+   "${MAX_NUM_SEQS:-64}",
+   "--max-num-batched-tokens",
+   "8192",
+   "--enable-chunked-prefill",
+   "--enable-prefix-caching"
+  ]
+ }
+]

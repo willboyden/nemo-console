@@ -1,0 +1,297 @@
+{
+ "keys": [
+  {
+   "label": "admin",
+   "principal": [
+    "key:3ef0043edaba",
+    "admin"
+   ]
+  },
+  {
+   "label": "viewer",
+   "principal": [
+    "key:d9bf3c307838",
+    "viewer"
+   ]
+  },
+  {
+   "label": "wrong",
+   "principal": null
+  }
+ ],
+ "audit_all": [
+  {
+   "id": 6,
+   "ts": 1.5,
+   "actor": "a",
+   "role": "admin",
+   "method": "POST",
+   "path": "/api/v1/x",
+   "system": null,
+   "status": 200,
+   "params": {
+    "_unparseable": true
+   }
+  },
+  {
+   "id": 5,
+   "ts": 1793190844.24369,
+   "actor": "key:abc",
+   "role": "admin",
+   "method": "DELETE",
+   "path": "/api/v1/systems",
+   "system": null,
+   "status": 405,
+   "params": null
+  },
+  {
+   "id": 4,
+   "ts": 1793190844.2436762,
+   "actor": "key:abc",
+   "role": "admin",
+   "method": "POST",
+   "path": "/api/v1/systems/relay/actions/x",
+   "system": "relay",
+   "status": 422,
+   "params": {
+    "_truncated": true,
+    "bytes": 11090,
+    "keys": [
+     "k0",
+     "k1",
+     "k10",
+     "k11",
+     "k12",
+     "k13",
+     "k14",
+     "k15",
+     "k16",
+     "k17",
+     "k18",
+     "k19",
+     "k2",
+     "k20",
+     "k21",
+     "k22",
+     "k23",
+     "k24",
+     "k25",
+     "k26"
+    ]
+   }
+  },
+  {
+   "id": 3,
+   "ts": 1793190844.2431667,
+   "actor": "key:abc",
+   "role": "viewer",
+   "method": "POST",
+   "path": "/api/v1/systems/dynamo/actions/x",
+   "system": "dynamo",
+   "status": 403,
+   "params": "[12 bytes, non-json]"
+  },
+  {
+   "id": 2,
+   "ts": 1793190844.243146,
+   "actor": "loopback",
+   "role": "admin",
+   "method": "POST",
+   "path": "/api/v1/systems/dynamo/actions/up",
+   "system": "dynamo",
+   "status": 200,
+   "params": {
+    "confirm": true,
+    "params": {
+     "note": "h\u00e9llo \u2713",
+     "api_key": "[redacted]"
+    }
+   }
+  },
+  {
+   "id": 1,
+   "ts": 1793190844.2430995,
+   "actor": "key:abc",
+   "role": "admin",
+   "method": "PUT",
+   "path": "/api/v1/settings",
+   "system": null,
+   "status": 200,
+   "params": {
+    "poll_interval_s": 7.5
+   }
+  }
+ ],
+ "audit_dynamo": [
+  {
+   "id": 3,
+   "ts": 1793190844.2431667,
+   "actor": "key:abc",
+   "role": "viewer",
+   "method": "POST",
+   "path": "/api/v1/systems/dynamo/actions/x",
+   "system": "dynamo",
+   "status": 403,
+   "params": "[12 bytes, non-json]"
+  },
+  {
+   "id": 2,
+   "ts": 1793190844.243146,
+   "actor": "loopback",
+   "role": "admin",
+   "method": "POST",
+   "path": "/api/v1/systems/dynamo/actions/up",
+   "system": "dynamo",
+   "status": 200,
+   "params": {
+    "confirm": true,
+    "params": {
+     "note": "h\u00e9llo \u2713",
+     "api_key": "[redacted]"
+    }
+   }
+  }
+ ],
+ "history": [
+  {
+   "id": "8cf06fd58bf24965",
+   "ts": 1793190844.2442675,
+   "actor": "loopback",
+   "sha256": "65f052997298a053f0c25c4a89fbbd1d92a4f61dfda6a275eaf39598a3c47fe7",
+   "note": "pre-rollback backup (to d9d5c33f99bb4d11)"
+  },
+  {
+   "id": "d9d5c33f99bb4d11",
+   "ts": 1793190844.2439947,
+   "actor": "key:abc",
+   "sha256": "cb78bd8a17f7b751fe0d4663366dcbc257204033ef7ddd64b1f2969573b5b2e2",
+   "note": "pre-apply backup"
+  }
+ ],
+ "revisions": {
+  "d9d5c33f99bb4d11": "YSA9IDEK",
+  "8cf06fd58bf24965": "YSA9IDIKIyDDqQo="
+ },
+ "metrics": {
+  "1h:sy.requests_total": [
+   [
+    1792999380.0,
+    2.4
+   ],
+   [
+    1792999440.0,
+    3.3
+   ],
+   [
+    1792999500.0,
+    2.8
+   ]
+  ],
+  "1h:sy.tokens": [
+   [
+    1792999380.0,
+    5.8
+   ],
+   [
+    1792999440.0,
+    7.6
+   ],
+   [
+    1792999500.0,
+    6.6
+   ]
+  ],
+  "1h:sy.tokens{kind=prompt}": [
+   [
+    1792999380.0,
+    2.9
+   ],
+   [
+    1792999440.0,
+    3.8
+   ],
+   [
+    1792999500.0,
+    3.3
+   ]
+  ],
+  "24h:sy.requests_total": [
+   [
+    1792999380.0,
+    2.4
+   ],
+   [
+    1792999440.0,
+    3.3
+   ],
+   [
+    1792999500.0,
+    2.8
+   ]
+  ],
+  "24h:sy.tokens": [
+   [
+    1792999380.0,
+    5.8
+   ],
+   [
+    1792999440.0,
+    7.6
+   ],
+   [
+    1792999500.0,
+    6.6
+   ]
+  ],
+  "24h:sy.tokens{kind=prompt}": [
+   [
+    1792999380.0,
+    2.9
+   ],
+   [
+    1792999440.0,
+    3.8
+   ],
+   [
+    1792999500.0,
+    3.3
+   ]
+  ]
+ },
+ "overrides": {
+  "urls": {
+   "dynamo": "http://localhost:8021"
+  },
+  "playground_key_env": {
+   "switchyard": "MY_API_KEY"
+  },
+  "poll_interval_s": 7.5
+ },
+ "effective_urls": {
+  "switchyard": "http://127.0.0.1:9",
+  "relay": "http://127.0.0.1:9",
+  "dynamo": "http://localhost:8021",
+  "dynamo_worker_metrics": "http://127.0.0.1:9",
+  "litellm": "http://127.0.0.1:9",
+  "dcgm": "http://127.0.0.1:9",
+  "prometheus": "http://127.0.0.1:9",
+  "guardrails": "http://127.0.0.1:9"
+ },
+ "effective_key_env": {
+  "switchyard": "MY_API_KEY",
+  "relay": "LITELLM_API_KEY"
+ },
+ "effective_poll_interval": 7.5,
+ "saved_params": {
+  "dynamo": {
+   "gpu_memory_utilization": 0.6,
+   "max_num_seqs": 16,
+   "router_mode": "kv",
+   "enable_prefix_caching": false
+  },
+  "relay": {}
+ },
+ "schema_version": [
+  1
+ ]
+}

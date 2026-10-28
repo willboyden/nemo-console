@@ -2,22 +2,26 @@
 
 Notes for the most recent release only; history lives in CHANGELOG.md.
 
-## 0.3.1 — 2026-10-24
+## 0.4.0 — 2026-10-28
 
-A fix for the five pages added in 0.3.0, and a browser test that now gates every push.
+The backend is rewritten in Rust. Nothing changes for the browser, the API, your settings or your state.
 
-- **Fixed: GPU telemetry, AIPerf, Guardrails, OpenShell and Evaluator showed "Something went wrong"** in a browser
-  that had used an older version. The console served its files without `Cache-Control`, so the browser kept old
-  shared modules and paired them with the new pages. Every frontend file is now revalidated on each load
-  (`Cache-Control: no-cache`, ETag 304). **If you used an earlier version, reload the console once with
-  Ctrl+Shift+R.**
-- **Fixed, found by that suite on a fresh clone:** the Dynamo Params preview answered 500 when the Dynamo compose was
-  missing (now a 422 with the reason), and the Config tab of a system that is not deployed said "Something went
-  wrong" (now "This file is not on this machine", with the reason and a Retry button).
-- **Added: a browser end-to-end suite** (`make e2e`): the real backend and a headless Chrome open every page and
-  every tab and fail on any error state, console error or uncached-module risk. It runs in `make all` and in CI.
-- **Added: a pre-push hook** (`make hooks`, part of `make setup`) that refuses to push code the suite has not passed
-  on. If your Chrome is not on PATH: `git config nemo-console.chrome /path/to/chrome`.
+- **One binary instead of a Python venv:** `make setup` (needs `rustup`; the toolchain is pinned) builds it, `make run`
+  serves on 127.0.0.1:8793 as before, `make release` writes `backend/target/release/nemo-console`. The API, the
+  `NEMO_CONSOLE_*` settings and `~/.config/nemo-console/env`, the state directory and its database, the `open` /
+  `stop` / `mint-key` commands, the log lines and the exit codes are the same: a 0.3 state directory is used as is.
+- **How it was checked:** every Python test was ported (936 of 936 mapped), and a differential harness runs 1,393
+  cases against the last Python backend and this one side by side, with fakes for every CLI and upstream: all equal but
+  one documented deviation. The Rust backend has **not** been run against the real Switchyard, Relay, Dynamo or the
+  other systems yet; the "verified live" claims in the docs were observed with the Python backend (FEATURE-MATRIX).
+- **Hardening before release:** roles are enforced by the request pipeline for every route, slow or idle clients and
+  connection floods are cut off (5 s for a request head, 30 s for a body, 256 connections), background-task panics
+  are contained, redaction fails closed, and run-file reads refuse symlinks (CHANGELOG; `backend/PORTING.md` A-9).
+- **Deliberate differences** are few and listed in the CHANGELOG and `backend/PORTING.md` §13 (fixed parser limits
+  instead of stack-dependent ones, offset-less timestamps read as UTC, a handful of edge cases); some Python bugs are
+  kept on purpose for now (CHANGELOG, "Known Python bugs kept").
 
-Upgrade: pull, `make setup`, restart the console (`nemo-console stop`, then start it as before), reload the page with
-Ctrl+Shift+R.
+Upgrade: `git pull`, `make setup`, stop the old console (`nemo-console stop` with the old binary, or the new one: either
+stops the other), start it again with `make run`, or re-run `make install-desktop` for the menu entry. If you use the
+systemd template, point `ExecStart` at `backend/target/release/nemo-console` (`deploy/nemo-console.service`). The old
+`backend/.venv` can be deleted.

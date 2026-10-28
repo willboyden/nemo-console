@@ -1,0 +1,650 @@
+[
+ {
+  "input": "",
+  "ok": "{}"
+ },
+ {
+  "input": "\n\n",
+  "ok": "{}"
+ },
+ {
+  "input": "# only a comment\n",
+  "ok": "{}"
+ },
+ {
+  "input": "a = 1",
+  "ok": "{'a': 1}"
+ },
+ {
+  "input": "a = 1\n",
+  "ok": "{'a': 1}"
+ },
+ {
+  "input": "a=1",
+  "ok": "{'a': 1}"
+ },
+ {
+  "input": "a = 'x'",
+  "ok": "{'a': 'x'}"
+ },
+ {
+  "input": "a = \"x\"",
+  "ok": "{'a': 'x'}"
+ },
+ {
+  "input": "a = \"\"\"\nx\ny\"\"\"",
+  "ok": "{'a': 'x\\ny'}"
+ },
+ {
+  "input": "a = '''\nx'''",
+  "ok": "{'a': 'x'}"
+ },
+ {
+  "input": "a = '''x''''",
+  "ok": "{'a': \"x'\"}"
+ },
+ {
+  "input": "a = '''x'''''",
+  "ok": "{'a': \"x''\"}"
+ },
+ {
+  "input": "a = \"\"\"x\"\"\"\"\"",
+  "ok": "{'a': 'x\"\"'}"
+ },
+ {
+  "input": "a = \"\"\"x\"\"\"\"\"\"",
+  "err": "Expected newline or end of document after a statement (at line 1, column 14)"
+ },
+ {
+  "input": "a = \"\\u00e9\\U0001F600\"",
+  "ok": "{'a': '\u00e9\ud83d\ude00'}"
+ },
+ {
+  "input": "a = \"\\b\\t\\n\\f\\r\\\"\\\\\"",
+  "ok": "{'a': '\\x08\\t\\n\\x0c\\r\"\\\\'}"
+ },
+ {
+  "input": "a = \"\\x\"",
+  "err": "Unescaped '\\' in a string (at line 1, column 8)"
+ },
+ {
+  "input": "a = \"\\uZZZZ\"",
+  "err": "Invalid hex value (at line 1, column 8)"
+ },
+ {
+  "input": "a = \"\\uD800\"",
+  "err": "Escaped character is not a Unicode scalar value (at line 1, column 12)"
+ },
+ {
+  "input": "a = \"unterminated",
+  "err": "Unterminated string (at end of document)"
+ },
+ {
+  "input": "a = 'unterminated",
+  "err": "Expected \"'\" (at end of document)"
+ },
+ {
+  "input": "a = \"\"\"\nline \\\n   continued\"\"\"",
+  "ok": "{'a': 'line continued'}"
+ },
+ {
+  "input": "a = \"\"\"x \\  y\"\"\"",
+  "err": "Unescaped '\\' in a string (at line 1, column 13)"
+ },
+ {
+  "input": "a = \"tab\there\"",
+  "ok": "{'a': 'tab\\there'}"
+ },
+ {
+  "input": "a = \"nl\u0001\"",
+  "err": "Illegal character '\\x01' (at line 1, column 8)"
+ },
+ {
+  "input": "a = true",
+  "ok": "{'a': True}"
+ },
+ {
+  "input": "a = false",
+  "ok": "{'a': False}"
+ },
+ {
+  "input": "a = tru",
+  "err": "Invalid value (at line 1, column 5)"
+ },
+ {
+  "input": "a = 1_000",
+  "ok": "{'a': 1000}"
+ },
+ {
+  "input": "a = 1__0",
+  "err": "Expected newline or end of document after a statement (at line 1, column 6)"
+ },
+ {
+  "input": "a = _1",
+  "err": "Invalid value (at line 1, column 5)"
+ },
+ {
+  "input": "a = 0x1F",
+  "ok": "{'a': 31}"
+ },
+ {
+  "input": "a = 0xDEAD_beef",
+  "ok": "{'a': 3735928559}"
+ },
+ {
+  "input": "a = 0o17",
+  "ok": "{'a': 15}"
+ },
+ {
+  "input": "a = 0b1010",
+  "ok": "{'a': 10}"
+ },
+ {
+  "input": "a = 0b12",
+  "err": "Expected newline or end of document after a statement (at line 1, column 8)"
+ },
+ {
+  "input": "a = 0x",
+  "err": "Expected newline or end of document after a statement (at line 1, column 6)"
+ },
+ {
+  "input": "a = +1",
+  "ok": "{'a': 1}"
+ },
+ {
+  "input": "a = -1",
+  "ok": "{'a': -1}"
+ },
+ {
+  "input": "a = -0",
+  "ok": "{'a': 0}"
+ },
+ {
+  "input": "a = 012",
+  "err": "Expected newline or end of document after a statement (at line 1, column 6)"
+ },
+ {
+  "input": "a = 1.5",
+  "ok": "{'a': 1.5}"
+ },
+ {
+  "input": "a = 1.",
+  "err": "Expected newline or end of document after a statement (at line 1, column 6)"
+ },
+ {
+  "input": "a = .5",
+  "err": "Invalid value (at line 1, column 5)"
+ },
+ {
+  "input": "a = 1e5",
+  "ok": "{'a': 100000.0}"
+ },
+ {
+  "input": "a = 1E-5",
+  "ok": "{'a': 1e-05}"
+ },
+ {
+  "input": "a = 1.5e+3",
+  "ok": "{'a': 1500.0}"
+ },
+ {
+  "input": "a = 1e",
+  "err": "Expected newline or end of document after a statement (at line 1, column 6)"
+ },
+ {
+  "input": "a = 6.02_2e2_3",
+  "ok": "{'a': 6.022e+23}"
+ },
+ {
+  "input": "a = inf",
+  "ok": "{'a': inf}"
+ },
+ {
+  "input": "a = -inf",
+  "ok": "{'a': -inf}"
+ },
+ {
+  "input": "a = +inf",
+  "ok": "{'a': inf}"
+ },
+ {
+  "input": "a = nan",
+  "ok": "{'a': nan}"
+ },
+ {
+  "input": "a = -nan",
+  "ok": "{'a': nan}"
+ },
+ {
+  "input": "a = +nan",
+  "ok": "{'a': nan}"
+ },
+ {
+  "input": "a = 99999999999999999999999999999999999999999",
+  "ok": "{'a': 99999999999999999999999999999999999999999}"
+ },
+ {
+  "input": "a = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "ok": "{'a': 22300745198530623141535718272648361505980415}"
+ },
+ {
+  "input": "a = 1979-05-27",
+  "ok": "{'a': datetime.date(1979, 5, 27)}"
+ },
+ {
+  "input": "a = 1979-05-27T07:32:00Z",
+  "ok": "{'a': datetime.datetime(1979, 5, 27, 7, 32, tzinfo=datetime.timezone.utc)}"
+ },
+ {
+  "input": "a = 1979-05-27T07:32:00",
+  "ok": "{'a': datetime.datetime(1979, 5, 27, 7, 32)}"
+ },
+ {
+  "input": "a = 1979-05-27 07:32:00.999999",
+  "ok": "{'a': datetime.datetime(1979, 5, 27, 7, 32, 0, 999999)}"
+ },
+ {
+  "input": "a = 1979-05-27T07:32:00.1234567-07:00",
+  "ok": "{'a': datetime.datetime(1979, 5, 27, 7, 32, 0, 123456, tzinfo=datetime.timezone(datetime.timedelta(days=-1, seconds=61200)))}"
+ },
+ {
+  "input": "a = 1979-05-27T00:32:00+09:30",
+  "ok": "{'a': datetime.datetime(1979, 5, 27, 0, 32, tzinfo=datetime.timezone(datetime.timedelta(seconds=34200)))}"
+ },
+ {
+  "input": "a = 1979-05-27t07:32:00z",
+  "ok": "{'a': datetime.datetime(1979, 5, 27, 7, 32, tzinfo=datetime.timezone.utc)}"
+ },
+ {
+  "input": "a = 2021-02-29",
+  "err": "Invalid date or datetime (at line 1, column 5)"
+ },
+ {
+  "input": "a = 2020-02-29",
+  "ok": "{'a': datetime.date(2020, 2, 29)}"
+ },
+ {
+  "input": "a = 2021-13-01",
+  "err": "Expected newline or end of document after a statement (at line 1, column 9)"
+ },
+ {
+  "input": "a = 2021-04-31",
+  "err": "Invalid date or datetime (at line 1, column 5)"
+ },
+ {
+  "input": "a = 07:32:00",
+  "ok": "{'a': datetime.time(7, 32)}"
+ },
+ {
+  "input": "a = 07:32:00.5",
+  "ok": "{'a': datetime.time(7, 32, 0, 500000)}"
+ },
+ {
+  "input": "a = 24:00:00",
+  "err": "Expected newline or end of document after a statement (at line 1, column 7)"
+ },
+ {
+  "input": "a = 1979-05-27T07:32",
+  "err": "Expected newline or end of document after a statement (at line 1, column 15)"
+ },
+ {
+  "input": "a = 1979-05-27 x",
+  "err": "Expected newline or end of document after a statement (at line 1, column 16)"
+ },
+ {
+  "input": "a = 1979-05-27T07:32:00+25:00",
+  "err": "Expected newline or end of document after a statement (at line 1, column 24)"
+ },
+ {
+  "input": "a = [1, 2, 3]",
+  "ok": "{'a': [1, 2, 3]}"
+ },
+ {
+  "input": "a = [1, 2, 3,]",
+  "ok": "{'a': [1, 2, 3]}"
+ },
+ {
+  "input": "a = [\n 1, # c\n 2\n]",
+  "ok": "{'a': [1, 2]}"
+ },
+ {
+  "input": "a = [1 2]",
+  "err": "Unclosed array (at line 1, column 8)"
+ },
+ {
+  "input": "a = [",
+  "err": "Invalid value (at end of document)"
+ },
+ {
+  "input": "a = [,]",
+  "err": "Invalid value (at line 1, column 6)"
+ },
+ {
+  "input": "a = []",
+  "ok": "{'a': []}"
+ },
+ {
+  "input": "a = [[1], ['x'], {b = 1}]",
+  "ok": "{'a': [[1], ['x'], {'b': 1}]}"
+ },
+ {
+  "input": "a = {}",
+  "ok": "{'a': {}}"
+ },
+ {
+  "input": "a = { b = 1, c = 'd' }",
+  "ok": "{'a': {'b': 1, 'c': 'd'}}"
+ },
+ {
+  "input": "a = { b = 1, }",
+  "err": "Invalid initial character for a key part (at line 1, column 14)"
+ },
+ {
+  "input": "a = { b = 1 c = 2 }",
+  "err": "Unclosed inline table (at line 1, column 13)"
+ },
+ {
+  "input": "a = { b = 1, b = 2 }",
+  "err": "Duplicate inline table key 'b' (at line 1, column 19)"
+ },
+ {
+  "input": "a = { b.c = 1, b.d = 2 }",
+  "ok": "{'a': {'b': {'c': 1, 'd': 2}}}"
+ },
+ {
+  "input": "a = { b = {c = 1}, b.d = 2 }",
+  "err": "Cannot mutate immutable namespace ('b', 'd') (at line 1, column 27)"
+ },
+ {
+  "input": "a = {b = [1], b.c = 1}",
+  "err": "Cannot mutate immutable namespace ('b', 'c') (at line 1, column 22)"
+ },
+ {
+  "input": "a = { b = 1\n}",
+  "err": "Unclosed inline table (at line 1, column 12)"
+ },
+ {
+  "input": "a.b = 1",
+  "ok": "{'a': {'b': 1}}"
+ },
+ {
+  "input": "a.b = 1\na.c = 2",
+  "ok": "{'a': {'b': 1, 'c': 2}}"
+ },
+ {
+  "input": "a = 1\na = 2",
+  "err": "Cannot overwrite a value (at end of document)"
+ },
+ {
+  "input": "a.b = 1\na = 2",
+  "err": "Cannot overwrite a value (at end of document)"
+ },
+ {
+  "input": "a = 1\na.b = 2",
+  "err": "Cannot overwrite a value (at end of document)"
+ },
+ {
+  "input": "[a]\nb = 1\n[a]\nc = 2",
+  "err": "Cannot declare ('a',) twice (at line 3, column 3)"
+ },
+ {
+  "input": "[a]\n[a.b]\nc = 1",
+  "ok": "{'a': {'b': {'c': 1}}}"
+ },
+ {
+  "input": "[a.b]\n[a]",
+  "ok": "{'a': {'b': {}}}"
+ },
+ {
+  "input": "[a]\nb.c = 1\n[a.b]",
+  "err": "Cannot declare ('a', 'b') twice (at line 3, column 5)"
+ },
+ {
+  "input": "[a.b.c]\n[a]\nb.d = 1",
+  "ok": "{'a': {'b': {'c': {}, 'd': 1}}}"
+ },
+ {
+  "input": "a = {}\n[a.b]",
+  "err": "Cannot declare ('a', 'b') twice (at line 2, column 5)"
+ },
+ {
+  "input": "a = [1]\n[[a]]",
+  "err": "Cannot mutate immutable namespace ('a',) (at line 2, column 4)"
+ },
+ {
+  "input": "[[a]]\nb = 1\n[[a]]\nb = 2",
+  "ok": "{'a': [{'b': 1}, {'b': 2}]}"
+ },
+ {
+  "input": "[[a]]\n[a.b]\nc = 1\n[[a]]\n[a.b]",
+  "ok": "{'a': [{'b': {'c': 1}}, {'b': {}}]}"
+ },
+ {
+  "input": "[[a]]\n[a]",
+  "err": "Cannot declare ('a',) twice (at line 2, column 3)"
+ },
+ {
+  "input": "[a]\n[[a]]",
+  "err": "Cannot overwrite a value (at line 2, column 4)"
+ },
+ {
+  "input": "[[a.b]]\n[a]\nc = 1",
+  "ok": "{'a': {'b': [{}], 'c': 1}}"
+ },
+ {
+  "input": "[ a . b ]\nc = 1",
+  "ok": "{'a': {'b': {'c': 1}}}"
+ },
+ {
+  "input": "[\"quoted key\".'lit']\nx = 1",
+  "ok": "{'quoted key': {'lit': {'x': 1}}}"
+ },
+ {
+  "input": "\"\" = 1",
+  "ok": "{'': 1}"
+ },
+ {
+  "input": "'' = 1",
+  "ok": "{'': 1}"
+ },
+ {
+  "input": "a b = 1",
+  "err": "Expected '=' after a key in a key/value pair (at line 1, column 3)"
+ },
+ {
+  "input": "a = 1 b = 2",
+  "err": "Expected newline or end of document after a statement (at line 1, column 7)"
+ },
+ {
+  "input": "a = 1 # comment",
+  "ok": "{'a': 1}"
+ },
+ {
+  "input": "a = 1 #\u0001",
+  "err": "Found invalid character '\\x01' (at line 1, column 8)"
+ },
+ {
+  "input": "a = 'x' # \u00e9 ok",
+  "ok": "{'a': 'x'}"
+ },
+ {
+  "input": "[a\nx=1",
+  "err": "Expected ']' at the end of a table declaration (at line 1, column 3)"
+ },
+ {
+  "input": "[[a]\nx = 1",
+  "err": "Expected ']]' at the end of an array declaration (at line 1, column 4)"
+ },
+ {
+  "input": "[a]]",
+  "err": "Expected newline or end of document after a statement (at line 1, column 4)"
+ },
+ {
+  "input": "[]",
+  "err": "Invalid initial character for a key part (at line 1, column 2)"
+ },
+ {
+  "input": "[[]]",
+  "err": "Invalid initial character for a key part (at line 1, column 3)"
+ },
+ {
+  "input": "= 1",
+  "err": "Invalid statement (at line 1, column 1)"
+ },
+ {
+  "input": "a =",
+  "err": "Invalid value (at end of document)"
+ },
+ {
+  "input": "a = ",
+  "err": "Invalid value (at end of document)"
+ },
+ {
+  "input": "#\n[a]\n#x\nb=1 # y\n",
+  "ok": "{'a': {'b': 1}}"
+ },
+ {
+  "input": "a = 1\r\nb = 2\r\n",
+  "ok": "{'a': 1, 'b': 2}"
+ },
+ {
+  "input": "a = 1\rb = 2",
+  "err": "Expected newline or end of document after a statement (at line 1, column 6)"
+ },
+ {
+  "input": "\ufeffa = 1",
+  "err": "Invalid statement (at line 1, column 1)"
+ },
+ {
+  "input": "\u00e9 = 1",
+  "err": "Invalid statement (at line 1, column 1)"
+ },
+ {
+  "input": "a.\u00e9 = 1",
+  "err": "Invalid initial character for a key part (at line 1, column 3)"
+ },
+ {
+  "input": "a.\"\u00e9\" = 1",
+  "ok": "{'a': {'\u00e9': 1}}"
+ },
+ {
+  "input": "a = \"\u00e9\"\nb = [",
+  "err": "Invalid value (at end of document)"
+ },
+ {
+  "input": "x\n= 1",
+  "err": "Expected '=' after a key in a key/value pair (at line 1, column 2)"
+ },
+ {
+  "input": "[routes.x\nid = \"a\"\n",
+  "err": "Expected ']' at the end of a table declaration (at line 1, column 10)"
+ },
+ {
+  "input": "schema_version = 1\n[routes.x\nid = \"a\"\n",
+  "err": "Expected ']' at the end of a table declaration (at line 2, column 10)"
+ },
+ {
+  "input": "a = [1,\n2,\n# end\n]",
+  "ok": "{'a': [1, 2]}"
+ },
+ {
+  "input": "a = { b = [1, 2], c = { d = 'e' } }",
+  "ok": "{'a': {'b': [1, 2], 'c': {'d': 'e'}}}"
+ },
+ {
+  "input": "a = 'it''s'",
+  "err": "Expected newline or end of document after a statement (at line 1, column 9)"
+ },
+ {
+  "input": "a = \"\"\"a\"\"b\"\"\"",
+  "ok": "{'a': 'a\"\"b'}"
+ },
+ {
+  "input": "a = 1.0",
+  "ok": "{'a': 1.0}"
+ },
+ {
+  "input": "a = -0.0",
+  "ok": "{'a': -0.0}"
+ },
+ {
+  "input": "a = 1e400",
+  "ok": "{'a': inf}"
+ },
+ {
+  "input": "a = 5e-324",
+  "ok": "{'a': 5e-324}"
+ },
+ {
+  "input": "a = 0.1",
+  "ok": "{'a': 0.1}"
+ },
+ {
+  "input": "a = 100000000000000000.0",
+  "ok": "{'a': 1e+17}"
+ },
+ {
+  "input": "a = 1e16",
+  "ok": "{'a': 1e+16}"
+ },
+ {
+  "input": "a = 0.0001",
+  "ok": "{'a': 0.0001}"
+ },
+ {
+  "input": "a = 1e-5",
+  "ok": "{'a': 1e-05}"
+ },
+ {
+  "input": "[a.b]\n[a.b.c]\n[a.b.c.d]\nx = 1",
+  "ok": "{'a': {'b': {'c': {'d': {'x': 1}}}}}"
+ },
+ {
+  "input": "a.b.c = 1\n[a]\nd = 2",
+  "err": "Cannot declare ('a',) twice (at line 2, column 3)"
+ },
+ {
+  "input": "[a]\nb = {c = 1}\n[a.b.d]",
+  "err": "Cannot declare ('a', 'b', 'd') twice (at line 3, column 7)"
+ },
+ {
+  "input": "a = '''\n'''",
+  "ok": "{'a': ''}"
+ },
+ {
+  "input": "a = \"\"\"\n\"\"\"",
+  "ok": "{'a': ''}"
+ },
+ {
+  "input": "a = '\u2028'",
+  "ok": "{'a': '\\u2028'}"
+ },
+ {
+  "input": "[a]\n  b = 1\n\t[a.c]\n\td = 2",
+  "ok": "{'a': {'b': 1, 'c': {'d': 2}}}"
+ },
+ {
+  "input": "# NeMo Switchyard routes \u2014 routing IN FRONT OF LiteLLM, additive and bypassable.\n#\n# MIGRATED to switchyard-server 0.3.0 on 2026-09-23 (was 0.2.0). Checked with the 0.3.0 binary:\n# `--dry-run` clean with no warnings, auto-local/direct-27b answered, and the 0.3.0 server escalated\n# 3 of 4 hard prompts where the live 0.2.0 escalated 0 of 4. What changed from 0.2.0:\n#   - forward_auth now works (0.2.0 rejected it), so this server no longer holds a key \u2014 see below.\n#   - capable_/efficient_system_prompt on a route are gone (rejected as unknown fields); per-tier\n#     steering is a target `system_prompt`. See the *-auto targets and the routes note.\n# The 0.2.0 file is what the README's \"What the docs get wrong about 0.2.0\" describes; that section\n# is history now \u2014 `type = \"auto\"`, target system_prompt/reasoning_effort and forward_auth all exist.\n#\n# Every target is an EXISTING LiteLLM alias from inference/litellm/config.yaml, reached on the\n# ai-lab bus as http://litellm:4000/v1. LiteLLM keeps credentials, aliasing, caching, spend\n# tracking and its exporters. Switchyard only decides WHICH alias serves a call.\n#\n# BYPASS IS THE DEFAULT, NOT A MODE:\n#   1. Port level  \u2014 LiteLLM still owns :4000 and is untouched. Anything pointed there never sees\n#                    this file. Routing is opt-in by calling :4010.\n#   2. Route level \u2014 the `direct-*` passthroughs below pin one model with no routing decision.\nschema_version = 1\n\n# \u2500\u2500 upstream \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n# forward_auth = true (works in 0.3.0; 0.2.0 rejected the key, which is why this file used\n# api_key_env and the container held LITELLM_MASTER_KEY). The caller's own Authorization header is\n# forwarded to LiteLLM, which does the validating: measured 2026-09-23 against 0.3.0 with NO key in\n# the container \u2014 no credential -> 401, wrong key -> 401, a valid key -> answered. That closes the\n# hole documented in docker-compose.yml (an unauthenticated peer getting master-key-backed\n# completions). Consequences: every caller of :4010 must now send `Authorization: Bearer <key>`;\n# /health, /metrics and /v1/models stay unauthenticated (route ids only). Classifier judge calls\n# use the same forwarded credential.\n[llm_clients.litellm]\nformat = \"openai_chat\"\nbase_url = \"http://litellm:4000/v1\"\nforward_auth = true\nmax_retries = 2\n\n# \u2500\u2500 targets: existing router aliases, nothing new \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n# 0.2.0 targets accept ONLY id / llm_client / extra_body. `system_prompt` and `reasoning_effort`\n# are documented but rejected \u2014 per-tier steering goes on the ROUTE instead (see below).\n[targets.lightning]\nid = \"nemotron-lightning\"          # Nemotron 3.5 Lightning 30B-A3B NVFP4 (QAD) \u2014 efficient tier\nllm_client = \"litellm\"\n\n[targets.qwen-27b-1m]\nid = \"qwen3.8-27b-1m\"              # 256K ctx + MTP \u2014 the capable tier that is up today\nllm_client = \"litellm\"\n\n# auto-local's tiers: same model ids as the two above, plus the tier prompt (see routes note below).\n# OWN CLIENT, same URL, on purpose: target identity is (model id, llm_client), so reusing `litellm` would\n# make Switchyard keep one target per id and silently DROP the other (WARN only) \u2014 the prompt would vanish.\n[llm_clients.litellm_auto]\nformat = \"openai_chat\"\nbase_url = \"http://litellm:4000/v1\"\nforward_auth = true\nmax_retries = 2\n\n[targets.lightning-auto]\nid = \"nemotron-lightning\"\nllm_client = \"litellm_auto\"\nsystem_prompt = \"Answer directly and finish the task. If it needs multi-step planning or wide code edits, say so briefly instead of guessing.\"\n\n[targets.qwen-27b-auto]\nid = \"qwen3.8-27b-1m\"\nllm_client = \"litellm_auto\"\nsystem_prompt = \"You were escalated to because a smaller model stopped short. Read what it already did and continue; do not redo settled work.\"\n\n[targets.flash-next]\nid = \"qwen3.8-flash-next\"          # SGLang custom build; start inference/sglang-flashnext first\nllm_client = \"litellm\"\n\n[targets.omni]\nid = \"nemotron-omni\"               # always-on multimodal engine, own card\nllm_client = \"litellm\"\n\n# JUDGE CLIENT \u2014 kept as the REVERT PATH. History: the 0.2.0 build shipped with the judge at\n# nemotron-omni because lightning-as-judge produced parse_error (reasoning model spent its budget\n# thinking and returned EMPTY content -> confidence 0.000 -> silent fall-through to efficient).\n# 2026-09-13 the classifier target was switched to lightning ON PURPOSE: the hypothesis is that\n# the old failures were reasoning-budget exhaustion (thinking ON by default) rather than a model\n# choice, and thinking is now OFF by default for lightning in inference/litellm/config.yaml (chat_template_kwargs\n# enable_thinking: false on the nemotron-lightning alias AND the switchyard group's efficient tier), so the judge verdict arrives as plain text. Target identity is (model id, llm_client):\n# this judge target (nemotron-omni, litellm_judge) stays distinct from every answer target.\n[llm_clients.litellm_judge]\nformat = \"openai_chat\"\nbase_url = \"http://litellm:4000/v1\"\nforward_auth = true\nmax_retries = 2\n\n[targets.judge]\nid = \"nemotron-omni\"\nllm_client = \"litellm_judge\"\n\n# TWO CLUSTER LANES. BOTH ARE MULTIMODAL \u2014 text+image in, 1M ctx, GLM-5.3 Flash on the cluster\n# behind a remote gateway. The gateway's \"text-only lane\" naming for glm-5.3-flash is WRONG:\n# measured 2026-09-14 through this router, it named the colour of solid PNGs correctly and it\n# returns tool_calls and streams. Neither of these is a text-only lane; do not re-label them.\n#\n# Either engine may be stopped at any time \u2014 normal here, not a config fault, so this file does\n# not record which is up. Declaring both (rather than deleting a stopped one) means each starts\n# working again with no edit here, the convention inference/litellm/config.yaml already uses for\n# deepseek-v4-flash.\n[targets.cluster-glm]\nid = \"cluster/glm-5.3-flash\"       # cluster TP4, 1M ctx, text+image in \u2014 remote, over the fabric\nllm_client = \"litellm\"\n\n[targets.cluster-glm-next]\nid = \"cluster/glm-5.3-flash-next\"  # cluster TP4, 1M ctx, text+image in \u2014 remote, over the fabric\nllm_client = \"litellm\"\n\n# \u2500\u2500 routed models \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n# type = \"stage_router\" spelled out: 0.2.0 rejects the documented `type = \"auto\"` preset, so its\n# documented values (picker = efficient_first, confidence_threshold = 0.5) are written here.\n# Start on the efficient tier; escalate to capable on tool-ACTIVITY signals (not on the mere\n# presence of tool definitions \u2014 measured 2026-09-13).\n#\n# handoff_notes.escalation_note is the quality field that was missing from the first build. Without\n# it the capable tier inherits the conversation with no idea it is a second attempt, and re-does\n# work the efficient tier already did. The wording mirrors NVIDIA's own LiteLLM example.\n# Per-tier steering is a per-TARGET `system_prompt` since 0.3.0 (it was the route-level\n# capable_/efficient_system_prompt on 0.2.0, which 0.3.0 rejects). The auto-local tiers get their OWN\n# targets (`*-auto`, same model id and client) because a target's prompt applies wherever it serves a\n# completion \u2014 putting it on `lightning` / `qwen-27b-1m` would also steer the direct-* A/B baselines.\n\n# PRIMARY. Fully local: no egress, no remote dependency. Trust this one when the fabric is down.\n[routes.auto-local]\nid = \"auto-local\"\ntype = \"stage_router\"\ncapable_target = \"qwen-27b-auto\"\nefficient_target = \"lightning-auto\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\nrecent_turn_window = 3\ncontext_window = 262144\ntool_calling = true\nreasoning = true\nhandoff_notes = { escalation_note = \"A smaller model handled the earlier turns and did not finish. Continue from its work rather than restarting it.\" }\n\n# WITHOUT THIS BLOCK THE ROUTE NEVER ESCALATES. stage_router computes no confidence of its own \u2014\n# with no classifier every request reports\n#   x-model-router-rationale: fall-through selected <efficient> (confidence 0.000)\n# and efficient_first falls through unconditionally. That is not a tuning problem, it is a missing\n# component: measured over hundreds of calls, the capable tier had NEVER served a request.\n[routes.auto-local.classifier]\n# `lightning-auto`, not `lightning`: a route may not hold the same model id on two clients, and the\n# efficient tier is on litellm_auto. Judge calls do NOT receive the target prompt.\ntarget = \"lightning-auto\"\nbase_threshold = 0.5\nmax_output_tokens = 4096\n\n# Same pair, capable tier on the flashnext engine. Only works while that engine is up.\n[routes.auto-flashnext]\nid = \"auto-flashnext\"\ntype = \"stage_router\"\ncapable_target = \"flash-next\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\nrecent_turn_window = 3\ntool_calling = true\nreasoning = true\nhandoff_notes = { escalation_note = \"A smaller model handled the earlier turns and did not finish. Continue from its work rather than restarting it.\" }\n\n# WITHOUT THIS BLOCK THE ROUTE NEVER ESCALATES \u2014 same missing-component story as above.\n[routes.auto-flashnext.classifier]\ntarget = \"lightning\"\nbase_threshold = 0.5\nmax_output_tokens = 4096\n\n# Local efficient tier, capable tier on your own cluster. Crosses the fabric, not the internet.\n[routes.auto-cluster]\nid = \"auto-cluster\"\ntype = \"stage_router\"\ncapable_target = \"cluster-glm\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\nrecent_turn_window = 3\ncontext_window = 1000000\ntool_calling = true\nreasoning = true\nhandoff_notes = { escalation_note = \"A smaller model handled the earlier turns and did not finish. Continue from its work rather than restarting it.\" }\n\n# WITHOUT THIS BLOCK THE ROUTE NEVER ESCALATES \u2014 same missing-component story as above.\n[routes.auto-cluster.classifier]\ntarget = \"lightning\"\nbase_threshold = 0.5\nmax_output_tokens = 4096\n\n# A frontier-API capable tier is DELIBERATELY ABSENT: it needs a second llm_clients block with a\n# real egress path and an API key \u2014 an egress-allowlist and secret-handling change, not a config\n# tweak. See README.md \"Adding a frontier tier\".\n\n# \u2500\u2500 explicit bypasses \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n# One passthrough per tier that appears in a route above, so every routed model can be A/B'd\n# against its own tiers ON THE SAME SURFACE. That is the only honest way to tell whether routing\n# is helping, and it is why direct-flashnext and direct-cluster exist rather than just the two\n# the first build shipped.\n[routes.direct-lightning]\nid = \"direct-lightning\"\ntype = \"passthrough\"\ntarget = \"lightning\"\n\n[routes.direct-27b]\nid = \"direct-27b\"\ntype = \"passthrough\"\ntarget = \"qwen-27b-1m\"\n\n[routes.direct-flashnext]\nid = \"direct-flashnext\"\ntype = \"passthrough\"\ntarget = \"flash-next\"\n\n[routes.direct-cluster]\nid = \"direct-cluster\"\ntype = \"passthrough\"\ntarget = \"cluster-glm\"\n\n# The -next engine, addressable on its own. Same capability as direct-cluster \u2014 a separate\n# checkpoint on the gateway, NOT a different modality. When its engine is stopped the upstream\n# error names the backend directly (\"Cannot connect to host 192.0.2.12:8000\"), which is the\n# quickest way to tell \"engine not started\" apart from a genuinely missing model id.\n[routes.direct-cluster-next]\nid = \"direct-cluster-next\"\ntype = \"passthrough\"\ntarget = \"cluster-glm-next\"\n\n[routes.direct-omni]\nid = \"direct-omni\"\ntype = \"passthrough\"\ntarget = \"omni\"\n",
+  "ok": "{'schema_version': 1, 'llm_clients': {'litellm': {'format': 'openai_chat', 'base_url': 'http://litellm:4000/v1', 'forward_auth': True, 'max_retries': 2}, 'litellm_auto': {'format': 'openai_chat', 'base_url': 'http://litellm:4000/v1', 'forward_auth': True, 'max_retries': 2}, 'litellm_judge': {'format': 'openai_chat', 'base_url': 'http://litellm:4000/v1', 'forward_auth': True, 'max_retries': 2}}, 'targets': {'lightning': {'id': 'nemotron-lightning', 'llm_client': 'litellm'}, 'qwen-27b-1m': {'id': 'qwen3.8-27b-1m', 'llm_client': 'litellm'}, 'lightning-auto': {'id': 'nemotron-lightning', 'llm_client': 'litellm_auto', 'system_prompt': 'Answer directly and finish the task. If it needs multi-step planning or wide code edits, say so briefly instead of guessing.'}, 'qwen-27b-auto': {'id': 'qwen3.8-27b-1m', 'llm_client': 'litellm_auto', 'system_prompt': 'You were escalated to because a smaller model stopped short. Read what it already did and continue; do not redo settled work.'}, 'flash-next': {'id': 'qwen3.8-flash-next', 'llm_client': 'litellm'}, 'omni': {'id': 'nemotron-omni', 'llm_client': 'litellm'}, 'judge': {'id': 'nemotron-omni', 'llm_client': 'litellm_judge'}, 'cluster-glm': {'id': 'cluster/glm-5.3-flash', 'llm_client': 'litellm'}, 'cluster-glm-next': {'id': 'cluster/glm-5.3-flash-next', 'llm_client': 'litellm'}}, 'routes': {'auto-local': {'id': 'auto-local', 'type': 'stage_router', 'capable_target': 'qwen-27b-auto', 'efficient_target': 'lightning-auto', 'picker': 'efficient_first', 'confidence_threshold': 0.5, 'recent_turn_window': 3, 'context_window': 262144, 'tool_calling': True, 'reasoning': True, 'handoff_notes': {'escalation_note': 'A smaller model handled the earlier turns and did not finish. Continue from its work rather than restarting it.'}, 'classifier': {'target': 'lightning-auto', 'base_threshold': 0.5, 'max_output_tokens': 4096}}, 'auto-flashnext': {'id': 'auto-flashnext', 'type': 'stage_router', 'capable_target': 'flash-next', 'efficient_target': 'lightning', 'picker': 'efficient_first', 'confidence_threshold': 0.5, 'recent_turn_window': 3, 'tool_calling': True, 'reasoning': True, 'handoff_notes': {'escalation_note': 'A smaller model handled the earlier turns and did not finish. Continue from its work rather than restarting it.'}, 'classifier': {'target': 'lightning', 'base_threshold': 0.5, 'max_output_tokens': 4096}}, 'auto-cluster': {'id': 'auto-cluster', 'type': 'stage_router', 'capable_target': 'cluster-glm', 'efficient_target': 'lightning', 'picker': 'efficient_first', 'confidence_threshold': 0.5, 'recent_turn_window': 3, 'context_window': 1000000, 'tool_calling': True, 'reasoning': True, 'handoff_notes': {'escalation_note': 'A smaller model handled the earlier turns and did not finish. Continue from its work rather than restarting it.'}, 'classifier': {'target': 'lightning', 'base_threshold': 0.5, 'max_output_tokens': 4096}}, 'direct-lightning': {'id': 'direct-lightning', 'type': 'passthrough', 'target': 'lightning'}, 'direct-27b': {'id': 'direct-27b', 'type': 'passthrough', 'target': 'qwen-27b-1m'}, 'direct-flashnext': {'id': 'direct-flashnext', 'type': 'passthrough', 'target': 'flash-next'}, 'direct-cluster': {'id': 'direct-cluster', 'type': 'passthrough', 'target': 'cluster-glm'}, 'direct-cluster-next': {'id': 'direct-cluster-next', 'type': 'passthrough', 'target': 'cluster-glm-next'}, 'direct-omni': {'id': 'direct-omni', 'type': 'passthrough', 'target': 'omni'}}}"
+ },
+ {
+  "input": "schema_version = 1\n[llm_clients.litellm]\nformat = \"openai_chat\"\nbase_url = \"http://litellm:4000/v1\"\nforward_auth = true\n[targets.a]\nid = \"m1\"\nllm_client = \"litellm\"\n[routes.x]\nid = \"x\"\ntype = \"passthrough\"\ntarget = \"nope\"\n",
+  "ok": "{'schema_version': 1, 'llm_clients': {'litellm': {'format': 'openai_chat', 'base_url': 'http://litellm:4000/v1', 'forward_auth': True}}, 'targets': {'a': {'id': 'm1', 'llm_client': 'litellm'}}, 'routes': {'x': {'id': 'x', 'type': 'passthrough', 'target': 'nope'}}}"
+ },
+ {
+  "input": "schema_version = 1\n[llm_clients.litellm]\nformat = \"openai_chat\"\nbase_url = \"http://litellm:4000/v1\"\nforward_auth = true\n[targets.a]\nid = \"m1\"\nllm_client = \"litellm\"\n[targets.b]\nid = \"m1\"\nllm_client = \"litellm\"\nsystem_prompt = \"x\"\n[routes.x]\nid = \"x\"\ntype = \"passthrough\"\ntarget = \"a\"\n",
+  "ok": "{'schema_version': 1, 'llm_clients': {'litellm': {'format': 'openai_chat', 'base_url': 'http://litellm:4000/v1', 'forward_auth': True}}, 'targets': {'a': {'id': 'm1', 'llm_client': 'litellm'}, 'b': {'id': 'm1', 'llm_client': 'litellm', 'system_prompt': 'x'}}, 'routes': {'x': {'id': 'x', 'type': 'passthrough', 'target': 'a'}}}"
+ },
+ {
+  "input": "# VALIDATE THIS FILE WITH THE PLUGIN, NOT WITH switchyard-server 0.2.0.\n# Those are different builds \u2014 the server is the v0.2.0 TAG, the Relay plugin is built from a main\n# COMMIT \u2014 and their schemas differ. Measured 2026-09-13: 0.2.0 happily accepts\n# capable_system_prompt / efficient_system_prompt on a stage_router; the plugin REJECTS both with\n# \"unknown field\", and the gateway then refuses to start with \"plugin activation failed\". Using the\n# server as a proxy validator passed a file the plugin could not load. It does accept handoff_notes.\n# The authoritative check is starting the gateway:\n#   nemo-relay gateway start    # config errors surface AFTER the banner, so read the whole output\n#\n# Switchyard deployment for the NeMo Relay NATIVE PLUGIN (host-side).\n#\n# Same schema_version-1 language as inference/switchyard/routes.toml \u2014 the Relay plugin and\n# switchyard-server deliberately share one config format (\"The plugin does not define a second\n# routing or target configuration language\"). It is a SEPARATE FILE anyway, for two reasons:\n#\n# 1. ADDRESS. Relay runs on the HOST, so the router is 127.0.0.1:4000. The server's copy runs in a\n#    container on the ai-lab bus and uses http://litellm:4000. Same router, different address.\n#\n# 2. WIRE FORMAT. The Relay plugin does NOT translate between provider APIs:\n#      \"Each route's target client must use the caller's wire format ... The runner selects the\n#       upstream backend from that format rather than translating a route to a different provider\n#       API. When one upstream model must serve multiple caller formats, declare a target and\n#       route for each corresponding client format.\"\n#    switchyard-server DOES translate (verified: its /v1/messages accepts Anthropic and speaks\n#    openai_chat upstream). The plugin does not. Claude Code speaks Anthropic Messages, so the\n#    clients here are `anthropic_messages` \u2014 pointed at LiteLLM's own Anthropic surface, verified\n#    2026-09-13: POST http://127.0.0.1:4000/v1/messages returns a well-formed\n#    {\"type\":\"message\",\"stop_reason\":\"end_turn\"}.\n#\n# A model name Relay sees that is NOT a route id below is passed through to Relay's continuation\n# unchanged, so this cannot capture traffic it was not configured for.\nschema_version = 1\n\n[llm_clients.litellm_anthropic]\nformat = \"anthropic_messages\"\nbase_url = \"http://127.0.0.1:4000\"\napi_key_env = \"LITELLM_MASTER_KEY\"\nmax_retries = 2\n\n[targets.lightning]\nid = \"nemotron-lightning\"\nllm_client = \"litellm_anthropic\"\n\n[targets.qwen-27b-1m]\nid = \"qwen3.8-27b-1m\"\nllm_client = \"litellm_anthropic\"\n\n# Routed model. Claude Code would be pointed at this id.\n[routes.auto-local]\nid = \"auto-local\"\ntype = \"stage_router\"\ncapable_target = \"qwen-27b-1m\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\nrecent_turn_window = 3\ncontext_window = 262144\ntool_calling = true\nreasoning = true\nhandoff_notes = { escalation_note = \"A smaller model handled the earlier turns and did not finish. Continue from its work rather than restarting it.\" }\n\n[routes.direct-lightning]\nid = \"direct-lightning\"\ntype = \"passthrough\"\n# Real engine window; also what relay-claude exports as CLAUDE_CODE_MAX_CONTEXT_TOKENS.\ncontext_window = 262144\ntarget = \"lightning\"\n\n[routes.direct-27b]\nid = \"direct-27b\"\ntype = \"passthrough\"\n# Real engine window; also what relay-claude exports as CLAUDE_CODE_MAX_CONTEXT_TOKENS.\ncontext_window = 262144\ntarget = \"qwen-27b-1m\"\n\n# \u2500\u2500 JUDGE, so auto-local ESCALATES on this path too \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n# Without a classifier stage_router computes no confidence: turn 1 is always the efficient tier\n# and nothing else can move it. The standalone :4010 server has had this judge since the fix that\n# made it escalate; the Relay plugin was left without one because its schema was stricter than the\n# server's and rejected other route fields. It ACCEPTS this block \u2014 verified 2026-09-14 by starting\n# the gateway against a copy. Same judge, same threshold, so the two surfaces route alike.\n# Own client despite the identical URL: target identity is (model id, llm_client), and a collision\n# silently DROPS one target with only a WARN.\n[llm_clients.litellm_judge]\nformat = \"anthropic_messages\"\nbase_url = \"http://127.0.0.1:4000\"\napi_key_env = \"LITELLM_MASTER_KEY\"\nmax_retries = 2\n\n# JUDGE CLIENT, openai_chat on purpose. The classifier judge is nemotron-lightning with thinking\n# OFF (inference/litellm/config.yaml, chat_template_kwargs enable_thinking: false on the alias).\n# That switch only reaches the vLLM engine on the OpenAI wire: LiteLLM's /v1/messages translation\n# DROPS chat_template_kwargs, so on anthropic_messages lightning keeps reasoning, burns the token\n# budget and returns an empty/truncated verdict (parse_error -> confidence 0.000 -> silent\n# fall-through to the efficient tier \u2014 the exact failure the omni judge was meant to cure).\n# Measured 2026-09-14 over 6 hard prompts through a throwaway gateway: anthropic judge escalated\n# 1/6, this openai judge escalated 5/6 (matching :4010), 0 judge failures. So the classifier speaks\n# openai_chat to :4000/v1 even though the answer tiers above speak anthropic_messages; the plugin\n# accepts the mixed formats (--dry-run OK, gateway verified).\n[llm_clients.litellm_judge_oai]\nformat = \"openai_chat\"\nbase_url = \"http://127.0.0.1:4000/v1\"\napi_key_env = \"LITELLM_MASTER_KEY\"\nmax_retries = 2\n\n# ACTIVE judge: nemotron-lightning over the openai_chat client, so thinking-off actually applies.\n# id is the `nemotron-lightning-judge` LiteLLM alias (same engine, thinking off), NOT `nemotron-lightning`:\n# the Switchyard 0.3.0 plugin refuses a route that holds one model id on two wire formats, and this\n# judge is openai_chat while the answer tier `lightning` above is anthropic_messages. The alias is\n# defined in inference/litellm/config.yaml. (0.2.0-era plugin accepted the shared id.)\n[targets.judge-lightning]\nid = \"nemotron-lightning-judge\"\nllm_client = \"litellm_judge_oai\"\n\n# REVERT PATH, unreferenced. nemotron-omni over the anthropic client. omni is more robust than\n# lightning on the anthropic wire (it does not reason itself into an empty verdict as often), so if\n# the openai-judge path ever regresses, `target = \"judge\"` restores a working \u2014 if slower \u2014 judge.\n[targets.judge]\nid = \"nemotron-omni\"\nllm_client = \"litellm_judge\"\n\n[routes.auto-local.classifier]\n# `judge-lightning` (nemotron-lightning via openai_chat), NOT `judge` (omni) and NOT the bare\n# `lightning` answer target: the answer target uses the anthropic client, on which thinking-off is\n# silently dropped. See the litellm_judge_oai comment above for the measured evidence. Same judge\n# model and mechanism as inference/switchyard/routes.toml, so both surfaces route alike.\ntarget = \"judge-lightning\"\nbase_threshold = 0.5\nmax_output_tokens = 4096\n\n",
+  "ok": "{'schema_version': 1, 'llm_clients': {'litellm_anthropic': {'format': 'anthropic_messages', 'base_url': 'http://127.0.0.1:4000', 'api_key_env': 'LITELLM_MASTER_KEY', 'max_retries': 2}, 'litellm_judge': {'format': 'anthropic_messages', 'base_url': 'http://127.0.0.1:4000', 'api_key_env': 'LITELLM_MASTER_KEY', 'max_retries': 2}, 'litellm_judge_oai': {'format': 'openai_chat', 'base_url': 'http://127.0.0.1:4000/v1', 'api_key_env': 'LITELLM_MASTER_KEY', 'max_retries': 2}}, 'targets': {'lightning': {'id': 'nemotron-lightning', 'llm_client': 'litellm_anthropic'}, 'qwen-27b-1m': {'id': 'qwen3.8-27b-1m', 'llm_client': 'litellm_anthropic'}, 'judge-lightning': {'id': 'nemotron-lightning-judge', 'llm_client': 'litellm_judge_oai'}, 'judge': {'id': 'nemotron-omni', 'llm_client': 'litellm_judge'}}, 'routes': {'auto-local': {'id': 'auto-local', 'type': 'stage_router', 'capable_target': 'qwen-27b-1m', 'efficient_target': 'lightning', 'picker': 'efficient_first', 'confidence_threshold': 0.5, 'recent_turn_window': 3, 'context_window': 262144, 'tool_calling': True, 'reasoning': True, 'handoff_notes': {'escalation_note': 'A smaller model handled the earlier turns and did not finish. Continue from its work rather than restarting it.'}, 'classifier': {'target': 'judge-lightning', 'base_threshold': 0.5, 'max_output_tokens': 4096}}, 'direct-lightning': {'id': 'direct-lightning', 'type': 'passthrough', 'context_window': 262144, 'target': 'lightning'}, 'direct-27b': {'id': 'direct-27b', 'type': 'passthrough', 'context_window': 262144, 'target': 'qwen-27b-1m'}}}"
+ },
+ {
+  "input": "version = 1\n\n[[plugins.dynamic]]\nmanifest = \"/home/user/.local/share/nemo-relay-plugins/switchyard-0.3.0/relay-plugin.toml\"\n\n# Switchyard deployment. schema_version-1 TOML, the SAME language switchyard-server reads.\n# Host-side copy: Relay runs on the host so the router is 127.0.0.1:4000, and its clients must be\n# anthropic_messages because the plugin does NOT translate wire formats.\n[plugins.dynamic.config]\npriority = 0\nswitchyard_config_path = \"/home/user/lab/clients/nemo-relay/routes.toml\"\n\n# Require a real signature rather than the integrity_only downgrade. The bundle is signed and this\n# key is verified against it (authenticity_state=valid; a wrong key is rejected). integrity_only\n# would let anyone who can write the plugin directory rewrite the .so AND its sha256 together.\n[plugins.policy.defaults]\nattestation = \"signature_required\"\ntrusted_public_keys = [\"ed25519:rASDTu8lHF/D+tIowmL7Tpu2pOPDzmN+NrC8FZdO+aM=\"]\n\n[[components]]\nkind = \"pii_redaction\"\nenabled = true\n\n[components.config]\nversion = 1\n\n[[components.config.profiles]]\n\n[components.config.profiles.builtin]\naction = \"redact\"\ndetector = \"email\"\nreplacement = \"[REDACTED-EMAIL]\"\n\n[[components.config.profiles]]\n\n[components.config.profiles.builtin]\naction = \"redact\"\ndetector = \"phone\"\nreplacement = \"[REDACTED-PHONE]\"\n\n[[components.config.profiles]]\n\n[components.config.profiles.builtin]\naction = \"redact\"\ndetector = \"ip_address\"\nreplacement = \"[REDACTED-IP_ADDRESS]\"\n\n[[components.config.profiles]]\n\n[components.config.profiles.builtin]\naction = \"redact\"\ndetector = \"credit_card\"\nreplacement = \"[REDACTED-CREDIT_CARD]\"\n\n[[components.config.profiles]]\n\n[components.config.profiles.builtin]\naction = \"redact\"\ndetector = \"api_key\"\nreplacement = \"[REDACTED-API_KEY]\"\n\n[[components.config.profiles]]\n\n[components.config.profiles.builtin]\naction = \"redact\"\ndetector = \"bearer_token\"\nreplacement = \"[REDACTED-BEARER_TOKEN]\"\n\n[[components.config.profiles]]\n\n[components.config.profiles.builtin]\naction = \"redact\"\ndetector = \"jwt\"\nreplacement = \"[REDACTED-JWT]\"\n\n[[components.config.profiles]]\n\n[components.config.profiles.builtin]\naction = \"redact\"\ndetector = \"aws_access_key_id\"\nreplacement = \"[REDACTED-AWS_ACCESS_KEY_ID]\"\n\n[[components.config.profiles]]\n\n[components.config.profiles.builtin]\naction = \"redact\"\ndetector = \"aws_secret_access_key\"\nreplacement = \"[REDACTED-AWS_SECRET_ACCESS_KEY]\"\n\n[[components.config.profiles]]\n\n[components.config.profiles.builtin]\naction = \"redact\"\ndetector = \"gcp_api_key\"\nreplacement = \"[REDACTED-GCP_API_KEY]\"\n\n[[components.config.profiles]]\n\n[components.config.profiles.builtin]\naction = \"redact\"\ndetector = \"azure_storage_account_key\"\nreplacement = \"[REDACTED-AZURE_STORAGE_ACCOUNT_KEY]\"\n\n[[components]]\nkind = \"observability\"\nenabled = true\n\n[components.config]\nversion = 4\nenable_full_payloads = false\n\n[components.config.atof]\nenabled = true\n\n[[components.config.atof.sinks]]\ntype = \"file\"\noutput_directory = \"/home/user/.local/share/nemo-relay/atof\"\nfilename = \"relay-events.jsonl\"\nmode = \"append\"\n\n[components.config.atif]\nenabled = true\nagent_name = \"lab\"\noutput_directory = \"/home/user/.local/share/nemo-relay/atif\"\nfilename_template = \"nemo-relay-atif-{session_id}.json\"\n\n# \u2500\u2500 OTLP EXPORT TO THE LAB COLLECTOR (added 2026-09-15) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n# Metrics -> otel-collector :4318 -> Prometheus (OTLP receiver) -> Grafana \"AI Lab \u2014 NeMo Relay Routing\".\n# Traces  -> otel-collector -> Tempo + Phoenix (project \"nemo-relay\" via the collector transform).\n# gen_ai projection on purpose: it omits messages and tool payloads, matching the lab rule that prompt\n# content is not exported (observability/README.md). Metrics carry labels only, never content.\n# Logs deliberately OFF: every llm.chunk and hook mark would become a LogRecord, and hook marks carry\n# prompt text. service_name becomes the Prometheus `job` label (the board's $relay_job).\n[components.config.opentelemetry]\nenabled = true\n\n[[components.config.opentelemetry.endpoints]]\ntype = \"gen_ai\"\nendpoint = \"http://127.0.0.1:4318/v1/traces\"\ntransport = \"http_binary\"\nservice_name = \"nemo-relay\"\n\n[components.config.opentelemetry.metrics]\nenabled = true\n# Metrics endpoint is derived from the trace endpoint: http://127.0.0.1:4318/v1/metrics.\n# 15 s instead of the 60 s default so the 10 s-refresh board lags a scrape, not a minute.\nexport_interval_millis = 15000\n",
+  "ok": "{'version': 1, 'plugins': {'dynamic': [{'manifest': '/home/user/.local/share/nemo-relay-plugins/switchyard-0.3.0/relay-plugin.toml', 'config': {'priority': 0, 'switchyard_config_path': '/home/user/lab/clients/nemo-relay/routes.toml'}}], 'policy': {'defaults': {'attestation': 'signature_required', 'trusted_public_keys': ['ed25519:rASDTu8lHF/D+tIowmL7Tpu2pOPDzmN+NrC8FZdO+aM=']}}}, 'components': [{'kind': 'pii_redaction', 'enabled': True, 'config': {'version': 1, 'profiles': [{'builtin': {'action': 'redact', 'detector': 'email', 'replacement': '[REDACTED-EMAIL]'}}, {'builtin': {'action': 'redact', 'detector': 'phone', 'replacement': '[REDACTED-PHONE]'}}, {'builtin': {'action': 'redact', 'detector': 'ip_address', 'replacement': '[REDACTED-IP_ADDRESS]'}}, {'builtin': {'action': 'redact', 'detector': 'credit_card', 'replacement': '[REDACTED-CREDIT_CARD]'}}, {'builtin': {'action': 'redact', 'detector': 'api_key', 'replacement': '[REDACTED-API_KEY]'}}, {'builtin': {'action': 'redact', 'detector': 'bearer_token', 'replacement': '[REDACTED-BEARER_TOKEN]'}}, {'builtin': {'action': 'redact', 'detector': 'jwt', 'replacement': '[REDACTED-JWT]'}}, {'builtin': {'action': 'redact', 'detector': 'aws_access_key_id', 'replacement': '[REDACTED-AWS_ACCESS_KEY_ID]'}}, {'builtin': {'action': 'redact', 'detector': 'aws_secret_access_key', 'replacement': '[REDACTED-AWS_SECRET_ACCESS_KEY]'}}, {'builtin': {'action': 'redact', 'detector': 'gcp_api_key', 'replacement': '[REDACTED-GCP_API_KEY]'}}, {'builtin': {'action': 'redact', 'detector': 'azure_storage_account_key', 'replacement': '[REDACTED-AZURE_STORAGE_ACCOUNT_KEY]'}}]}}, {'kind': 'observability', 'enabled': True, 'config': {'version': 4, 'enable_full_payloads': False, 'atof': {'enabled': True, 'sinks': [{'type': 'file', 'output_directory': '/home/user/.local/share/nemo-relay/atof', 'filename': 'relay-events.jsonl', 'mode': 'append'}]}, 'atif': {'enabled': True, 'agent_name': 'lab', 'output_directory': '/home/user/.local/share/nemo-relay/atif', 'filename_template': 'nemo-relay-atif-{session_id}.json'}, 'opentelemetry': {'enabled': True, 'endpoints': [{'type': 'gen_ai', 'endpoint': 'http://127.0.0.1:4318/v1/traces', 'transport': 'http_binary', 'service_name': 'nemo-relay'}], 'metrics': {'enabled': True, 'export_interval_millis': 15000}}}}]}"
+ },
+ {
+  "input": "[agents]\n\n[agents.claude]\ncommand = \"claude\"\n",
+  "ok": "{'agents': {'claude': {'command': 'claude'}}}"
+ }
+]

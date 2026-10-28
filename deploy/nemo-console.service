@@ -1,8 +1,9 @@
 # OPT-IN TEMPLATE. Nothing installs this for you. Not exercised under systemd yet (generated
 # 2026-09-24, unverified): start it by hand once and check `journalctl --user -u nemo-console`.
 #
-# Install:  mkdir -p ~/.config/systemd/user && cp deploy/nemo-console.service ~/.config/systemd/user/
-#           1. edit the two paths marked EDIT to your checkout (the directory holding backend/)
+# Install:  make release   (builds backend/target/release/nemo-console)
+#           mkdir -p ~/.config/systemd/user && cp deploy/nemo-console.service ~/.config/systemd/user/
+#           1. edit the two paths below to your checkout (the directory holding backend/)
 #           2. optional credential for the playground: put `LITELLM_API_KEY=...` in the EnvironmentFile
 #              below, chmod 600 (the console reads it only by env-var NAME and never returns it)
 #           3. systemctl --user daemon-reload && systemctl --user enable --now nemo-console.service
@@ -15,7 +16,7 @@ Description=Nemo Console (Switchyard / Relay / Dynamo control plane)
 [Service]
 Type=simple
 WorkingDirectory=%h/PATH/TO/nemo-console/backend
-ExecStart=%h/PATH/TO/nemo-console/backend/.venv/bin/nemo-console
+ExecStart=%h/PATH/TO/nemo-console/backend/target/release/nemo-console
 Environment=NEMO_CONSOLE_PORT=8793
 # Set if the checkout is not inside the repo that holds inference/dynamo/docker-compose.yml:
 #Environment=NEMO_CONSOLE_REPO_ROOT=%h/PATH/TO/repo
@@ -25,6 +26,12 @@ EnvironmentFile=-%h/.config/nemo-console/env
 UMask=0077
 Restart=on-failure
 RestartSec=5
+# Resource ceilings for the console AND the tools it starts (docker / systemctl / aiperf-local / evaluator runs
+# share this unit's cgroup). Raise MemoryMax if a profile or evaluator run you start from the UI needs more.
+# TasksMax counts threads: tokio's blocking pool alone may use up to 512. Both need the memory and pids
+# controllers delegated to the user manager (the systemd default on current distros).
+MemoryMax=4G
+TasksMax=1024
 
 # Sandboxing. The console must write its state dir, the config files it edits, and reach the docker
 # and user-systemd sockets, so this is a narrow read-only-filesystem, not a full lockdown.

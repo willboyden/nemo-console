@@ -3,7 +3,7 @@
 What must happen before this repository is released publicly. Paths are relative to the repository root.
 
 **Status for v0.1.1 (2026-09-28).** Done:
-- Section 1: `LICENSE` holder; `pyproject.toml` licence, author and URLs; the non-affiliation notice in the README (not
+- Section 1: `LICENSE` holder; `backend/Cargo.toml` licence, author and URLs; the non-affiliation notice in the README (not
   in the UI); the licence check. Runtime dependencies are MIT, BSD, Apache-2.0 or PSF, plus certifi under MPL-2.0,
   used unmodified.
 - Section 2: fixtures and test literals sanitised. The public history starts from one fresh commit, so earlier
@@ -24,11 +24,11 @@ verifying the systemd unit.
 
 - [ ] `LICENSE`: the copyright holder line was copied from a sibling project and names the wrong project. Replace it with
       the actual holder and year (the MIT text itself can stay if that is the intended licence).
-- [ ] `backend/pyproject.toml`: add `license`, `authors`, `readme` and `[project.urls]` (repository, issues, changelog).
+- [ ] `backend/Cargo.toml` (`[workspace.package]`): `license`, `authors`, `repository` (and `readme`/`homepage` if wanted).
 - [ ] Add a **non-affiliation notice** (README and the UI About/Settings text): this project is independent and is not
       affiliated with, endorsed by or sponsored by NVIDIA. "NVIDIA", "NeMo", "NeMo Switchyard", "NeMo Relay" and "Dynamo"
       are names of products of their respective owners and are used only to describe compatibility.
-- [ ] Confirm third-party dependency licences (`backend/uv.lock`) are compatible with the chosen licence.
+- [ ] Confirm third-party dependency licences (`backend/Cargo.lock`; `cargo deny check licenses` against `backend/deny.toml`) are compatible with the chosen licence.
 
 ## 2. Scrub personal and machine-specific data
 
@@ -36,11 +36,11 @@ Test fixtures were captured from a real workstation and still contain usernames,
 identifiers. Review each file, replace with neutral placeholders (`/home/user`, `example`, zero UUIDs), and re-run the
 tests (parsers must not depend on the real values):
 
-- `backend/tests/switchyard/fixtures/inspect.json`
-- `backend/tests/switchyard/fixtures/routes.good.toml` (around lines 93-107 and 220)
-- `backend/tests/dynamo/fixtures/worker_inspect.json`, `frontend_inspect.json`, `base_compose.yml`
-- `backend/tests/relay/fixtures/atof_sample.jsonl`, `doctor_offline.json`, `plugins_validate.json`, `agents.json`, `plugins.toml`
-- Path literals in `backend/tests/relay/test_relay_config.py` and `backend/tests/dynamo/test_adapter.py`
+- `backend/crates/nemo-console/tests/fixtures/switchyard/inspect.json`
+- `backend/crates/nemo-console/tests/fixtures/switchyard/routes.good.toml` (around lines 93-107 and 220)
+- `backend/crates/nemo-console/tests/fixtures/dynamo/worker_inspect.json`, `frontend_inspect.json`, `base_compose.yml`
+- `backend/crates/nemo-console/tests/fixtures/relay/atof_sample.jsonl`, `doctor_offline.json`, `plugins_validate.json`, `agents.json`, `plugins.toml`
+- Path literals in `backend/crates/nemo-console/tests/relay_relay_config.rs` and `backend/crates/nemo-console/tests/dynamo_adapter.rs`
 - Also check for: GPU UUIDs, MAC addresses, IP addresses, session ids, container ids, hostnames.
 - Verify with a repository-wide search for the username, the home directory, `uuid`-shaped strings and RFC1918 addresses
   (`grep -rnE '/home/[a-z]|GPU-[0-9a-f]{8}|([0-9]{1,3}\.){3}[0-9]{1,3}'`), including `git log -p` (history may still
@@ -64,12 +64,12 @@ The code and `docs/ARCHITECTURE.md` were written inside a larger private reposit
 Done in addendum 9.11 (2026-10-26) for the container, compose and unit names and the repo layout; still constants on
 purpose: `STOPPABLE_*` (Dynamo), OpenShell's sandbox network and router address. The original list, kept for reference:
 
-- `adapters/switchyard.py`: `CONTAINER`, `COMPOSE_PROJECT`, `COMPOSE_SERVICE`, `FALLBACK_IMAGE`, `LOG_PATH`.
-- `adapters/dynamo.py`: `PROJECT`, `FRONTEND`, `WORKER`, `MOCKER`, service names, `STOPPABLE_ENGINE`, `STOPPABLE_PROJECT`,
+- `adapters/switchyard.rs`: `CONTAINER`, `COMPOSE_PROJECT`, `COMPOSE_SERVICE`, `FALLBACK_IMAGE`, `LOG_PATH`.
+- `adapters/dynamo.rs`: `PROJECT`, `FRONTEND`, `WORKER`, `MOCKER`, service names, `STOPPABLE_ENGINE`, `STOPPABLE_PROJECT`,
   `STOPPABLE_SERVICE`, `DEFAULT_MODEL`. (The card model is already in `Settings` since 2026-10-06: `dynamo_*`.)
-- `adapters/relay.py`: `UNIT`, `DEFAULT_ROUTE_IDS`.
-- `services/topology.py` (fixed node labels; the engine nodes are the `topology_engines` setting since 2026-10-17), `services/engines.py` (`compose_dir_hint`
-  assumes a name prefix and layout), `config.py` (`DEFAULT_ENGINE_PROBES`, `DEFAULT_ENGINE_START`, `DEFAULT_URLS`).
+- `adapters/relay.rs`: `UNIT`, `DEFAULT_ROUTE_IDS`.
+- `services/topology.rs` (fixed node labels; the engine nodes are the `topology_engines` setting since 2026-10-17), `services/engines.rs` (`compose_dir_hint`
+  assumes a name prefix and layout), `config.rs` (`DEFAULT_ENGINE_PROBES`, `DEFAULT_ENGINE_START`, `DEFAULT_URLS`).
 - Optional: an `allowed_service_names` setting for the routes validators (single-label hostnames are currently accepted;
   see THREAT-MODEL R-14).
 
@@ -82,9 +82,9 @@ purpose: `STOPPABLE_*` (Dynamo), OpenShell's sandbox network and router address.
 - [ ] `CODE_OF_CONDUCT.md` (optional but conventional).
 - [ ] `.github/ISSUE_TEMPLATE/` (bug report asking for versions of the three systems, redacted logs; feature request) and
       `.github/pull_request_template.md` (gate checklist, verification labels).
-- [ ] `.github/workflows/ci.yml`: `uv sync --frozen`, `uv run ruff check src tests`, `uv run mypy src`, `uv run pytest -q`
-      (live smoke tests stay skipped), and `node --test tests/*.test.mjs` in `frontend/` on Node 22. Pin actions by commit
-      SHA. No secrets required.
+- [x] `.github/workflows/ci.yml` (0.4.0): rustfmt, clippy, `cargo test --locked` (live smoke tests stay off), cargo-deny,
+      cargo-audit, the crate-age cooldown, `node --test` in `frontend/` on Node 22, and the hermetic browser e2e. Actions
+      pinned by commit SHA. No secrets required.
 - [ ] `.gitignore` review: state files (`*.db`, `*.key`) are already excluded; confirm nothing else machine-specific is tracked.
 
 ## 6. Documentation

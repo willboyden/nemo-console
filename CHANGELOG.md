@@ -3,9 +3,60 @@
 Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Claims use the labels
 implemented / verified-live / unverified defined in the README.
 
-## [Unreleased]
+## [0.4.0] - 2026-10-28
 
-### Fixed
+### Changed
+
+- **The backend is rewritten in Rust** (one binary, `backend/target/release/nemo-console`; axum + hyper on tokio,
+  rusqlite, reqwest). Same API, same settings (`NEMO_CONSOLE_*` and the env file), same state directory and database
+  (a 0.3 `console.db` is read as is and the other way round), same CLI (`open`, `stop`, `mint-key`), same log lines and
+  exit codes. The Python backend is gone from the checkout; its last revision (main at `aa2f810`) stays the behavioural
+  reference of the parity harness (`make parity`, `parity/ref.mjs`). Developer tasks: `make setup` builds with cargo,
+  `make all` runs rustfmt, clippy, `cargo test`, cargo-deny, cargo-audit, a 14-day crate cooldown, the frontend tests and
+  the browser e2e. Implemented and checked against the Python reference with fakes (1,393 cases, 1,392 equal, the one
+  difference documented as PORTING D-6); every "verified live"
+  in the docs was observed with the Python backend and has NOT been repeated with the Rust one (FEATURE-MATRIX).
+- **Deviations from 0.3** (each with its reason in `backend/PORTING.md` section 13): parser limits are fixed instead of
+  stack-dependent (JSON bodies nested past 512 levels get the 400 Python gives past ~9,998; TOML/YAML past Python's
+  recursion depth fail with Python's RecursionError text); offset-less timestamps are read as UTC, not local time;
+  ints beyond i128 in JSON become floats; a NaN in Dynamo params is refused by the core check (422 `invalid_param`)
+  rather than by the adapter (422 `params_invalid`); YAML sets keep document order; Data Designer copies do not copy
+  extended attributes; hyper answers a few malformed requests uvicorn answered itself; multi-range static requests
+  get the whole file. Everything else matched the Python backend case by case.
+- **Hardening found by a pre-release audit** (`backend/PORTING.md` A-9, deviations D-26 to D-29): every route's role
+  is enforced by the request pipeline before its handler (handlers keep their own check); a request head must arrive
+  within 5 s, a body within 30 s (408), and at most 256 connections are open at once (uvicorn had no such limits);
+  panics in background work are caught and logged redacted, and a poisoned lock no longer locks everyone out;
+  redaction and the secret scan fail closed when the regex engine gives up; upstream URLs are also parsed with the
+  HTTP client's own parser and refused when the two disagree; Data Designer and AIPerf run-file reads refuse symlinks
+  and are size-capped, the top-level static files must resolve inside the frontend directory, and private files are
+  written through an exclusive 0600 temp file; header values are decoded as latin-1, as Starlette does, so a
+  non-ASCII `Origin` still meets the Origin check. Run ids take their seconds and milliseconds from one clock
+  reading (Python's could fall a second behind at a second boundary and sort out of order). The systemd template
+  sets `MemoryMax` and `TasksMax`.
+- **Upgrade:** `git pull`, `make setup` (needs `rustup`; the toolchain is pinned), restart the console, and point any
+  launcher or systemd unit at `backend/target/release/nemo-console` (`make install-desktop` again; edit
+  `deploy/nemo-console.service`'s ExecStart). Old venvs under `backend/.venv` can be deleted.
+
+### Fixed (Python failures the Rust backend does not reproduce)
+
+- A Switchyard, Relay or OpenShell config with absurdly deep nesting, a key of more than 1,000 parts or a 4,301-digit
+  int no longer answers 500 from validate (Switchyard/Relay: a diagnostic; OpenShell keeps Python's exception class).
+- A malformed entry in `docker inspect` output no longer fails the Dynamo status call (it is skipped).
+- Recursive YAML aliases and alias bombs: the loader shares objects like PyYAML (no blow-up); the adapters that walk
+  plain values refuse a cycle or more than 1,000,000 values instead of recursing.
+
+### Known Python bugs kept on purpose (fix both together later)
+
+- Data Designer `_export_batches`: once `records.jsonl` holds 2,000 lines, later batches are silently missing from the
+  user's csv / jsonl / json copy.
+- Data Designer does not catch KeyError / TypeError from YAML constructors; the evaluator does not catch
+  UnicodeDecodeError on `suites.yaml`; SkillEvaluator reports raise format errors on odd `run.json` values; an
+  impossible YAML date (`2026-02-30`) answers 500 in Guardrails, AIPerf and OpenShell validate.
+
+### Also in 0.4.0: the last Python changes after 0.3.1 (ported with the rest)
+
+#### Fixed
 
 - **A signed-out tab no longer polls forever.** Every view refreshes on a timer, and after a 401 the UI showed the sign-in
   dialog but kept sending the refused requests: one `/overview` call every 5 s per tab (12 a minute; 24 a minute were seen
@@ -14,7 +65,7 @@ implemented / verified-live / unverified defined in the README.
   key) or a request succeeds; `/health` stays open. Verified live with headless Chrome against a scratch console: a
   signed-out page sent one `/health` and one `/overview` in 30 s (the 0.3.1 frontend: six refused `/overview` calls).
 
-### Added
+#### Added
 
 - **Deployment names and the repo layout are settings** (ARCHITECTURE addendum 9.11). New `NEMO_CONSOLE_*` names:
   `SWITCHYARD_CONTAINER`, `SWITCHYARD_COMPOSE_PROJECT`, `SWITCHYARD_COMPOSE_SERVICE`, `SWITCHYARD_IMAGE`,
@@ -34,7 +85,7 @@ implemented / verified-live / unverified defined in the README.
   router (ok, denied and unconfigured); the broken path with fakes only. Each probe is a real request billed to that key
   (THREAT-MODEL E-12, R-24).
 
-### Changed
+#### Changed
 
 - The mock server's default port is 18796 (was 8796, which another local tool on the author's machine uses).
 
