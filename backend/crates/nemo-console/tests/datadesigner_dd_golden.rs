@@ -241,11 +241,20 @@ async fn test_dataset_copies_are_byte_for_byte_python() {
                     b64(t),
                     "{name}: records.jsonl bytes"
                 );
-                assert_eq!(
-                    format!("0o{:o}", mode_of(&rec)),
-                    want["records_mode"].as_str().unwrap(),
-                    "{name}"
-                );
+                // The golden was recorded under umask 002 (0o666 & ~0o002 = 0o664). Python creates the file with
+                // 0o666 & ~umask, so compare with a probe file made under this process's umask, as for the copy above.
+                let want_mode = want["records_mode"].as_str().unwrap();
+                if want_mode == "0o600" {
+                    assert_eq!(mode_of(&rec), 0o600, "{name}");
+                } else {
+                    assert_eq!(
+                        want_mode, "0o664",
+                        "{name}: golden recorded under an unexpected umask"
+                    );
+                    let probe = f.path().join("umask-probe-records");
+                    std::fs::write(&probe, "").unwrap();
+                    assert_eq!(mode_of(&rec), mode_of(&probe), "{name}");
+                }
             }
             None => assert!(!rec.exists(), "{name}"),
         }
