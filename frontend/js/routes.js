@@ -12,6 +12,7 @@ export const ROUTES = [
   { path: '/skillevaluator', tag: 'nc-skillevaluator', mod: 'skillevaluator', nav: 'skillevaluator', icon: 'skills', group: 'quality' },
   { path: '/evaluator', tag: 'nc-evaluator', mod: 'evaluator', nav: 'evaluator', icon: 'flask', group: 'quality' },
   { path: '/datadesigner', tag: 'nc-datadesigner', mod: 'datadesigner', nav: 'datadesigner', icon: 'skills', group: 'quality' },
+  { path: '/modelopt', tag: 'nc-modelopt', mod: 'modelopt', nav: 'modelopt', icon: 'compress', group: 'engines' },
   { path: '/audit', tag: 'nc-audit', mod: 'audit', nav: 'audit', icon: 'audit', admin: true, group: 'console' },
   { path: '/settings', tag: 'nc-settings', mod: 'settings', nav: 'settings', icon: 'settings', group: 'console' },
 ];

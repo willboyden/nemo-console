@@ -491,6 +491,7 @@
   "sys.aiperf": "NVIDIA AIPerf",
   "sys.guardrails": "NeMo Guardrails",
   "sys.evaluator": "NeMo Evaluator",
+  "sys.modelopt": "NVIDIA Model Optimizer",
   "group.routing": "Routing",
   "group.engines": "Engines and load",
   "group.safety": "Safety and sandboxing",
@@ -552,5 +553,13 @@
   "metric.ev.runs": "Stored runs",
   "metric.ev.live_running": "Run in progress",
   "metric.ev.runs_by_verdict": "Runs by verdict",
-  "metric.ev.score": "Benchmark scores"
+  "metric.ev.score": "Benchmark scores",
+  "nav.modelopt": "Model Optimizer",
+  "intro.modelopt": "Offline compression of a pinned checkpoint: quantization, REAP expert pruning or Minitron. A job takes a GPU for hours and writes a new checkpoint, so it asks for confirmation; the job runs in the background and the console reads its result.",
+  "metric.mo.jobs": "Compression jobs",
+  "metric.mo.jobs_by_verdict": "Jobs by verdict",
+  "metric.mo.live_running": "Jobs running now",
+  "metric.mo.output_bytes": "Output size",
+  "metric.mo.compression_ratio": "Size vs. the base model",
+  "metric.mo.duration_s": "Job duration"
 }

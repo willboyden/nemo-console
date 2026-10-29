@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-/// The ten managed systems, in the registry order (`adapters/__init__.py` `SYSTEM_IDS`).
+/// The eleven managed systems, in the registry order (`adapters/__init__.py` `SYSTEM_IDS`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SystemId {
@@ -21,11 +21,12 @@ pub enum SystemId {
     Aiperf,
     Guardrails,
     Evaluator,
+    Modelopt,
 }
 
 impl SystemId {
     /// Registry order: overview, /systems and /health list systems in exactly this order.
-    pub const ALL: [SystemId; 10] = [
+    pub const ALL: [SystemId; 11] = [
         SystemId::Switchyard,
         SystemId::Relay,
         SystemId::Dynamo,
@@ -36,6 +37,7 @@ impl SystemId {
         SystemId::Aiperf,
         SystemId::Guardrails,
         SystemId::Evaluator,
+        SystemId::Modelopt,
     ];
 
     #[must_use]
@@ -51,6 +53,7 @@ impl SystemId {
             SystemId::Aiperf => "aiperf",
             SystemId::Guardrails => "guardrails",
             SystemId::Evaluator => "evaluator",
+            SystemId::Modelopt => "modelopt",
         }
     }
 

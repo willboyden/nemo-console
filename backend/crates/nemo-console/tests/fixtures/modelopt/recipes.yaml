@@ -1,0 +1,19 @@
+# Model Optimizer compression recipes: the console's own schema (clients/modelopt/recipes.yaml).
+# Each recipe drives one offline compression job: the method, the base model it reads, the calibration data
+# and the checkpoint it writes.
+version: 1
+recipes:
+  reap-glm53:
+    description: "REAP expert pruning 25% + NVFP4 for the GLM-5.3-Flash checkpoint"
+    method: reap
+    base_model: GLM-5.3-Flash
+    sparsity: 0.25
+    calibration: ultrachat-200k
+    output: GLM-5.3-Flash-REAP25-NVFP4
+  quantize-glm53-nvfp4:
+    description: "NVFP4 quantization of the GLM-5.3-Flash checkpoint"
+    method: quantize
+    base_model: GLM-5.3-Flash
+    scheme: NVFP4
+    calibration: cnn-dailystories
+    output: GLM-5.3-Flash-NVFP4

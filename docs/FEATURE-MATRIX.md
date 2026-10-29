@@ -227,6 +227,17 @@ Dynamo `restart`, assistive technology, browsers other than headless Firefox and
 | Suites `suites.yaml` edit | Implemented | validate verified live (shipped file ok; a broken candidate rejected with 4 line-numbered errors) | Own schema plus the wrapper's own `suites --file` as a second opinion. |
 | Dataset prefetch | Lab only (`evaluator-local prefetch`) | live (gsm8k, mmlu) | The only step with internet; deliberately not a console action. |
 
+## Model Optimizer (addendum 10.9)
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| Status: wrapper version, the recipe file, the last job | Implemented | fakes only (`tests/modelopt_adapter.rs`) | Lab install `clients/modelopt/` (the `modelopt-local` wrapper, offline container, wheels only and sha256-pinned). |
+| `mo.*` metrics (jobs, jobs by verdict, running, output size, size vs. the base, duration) | Implemented | fakes only | Every number is read from a finished job's `run.json`; nothing is estimated and nothing is invented. With no job only `mo.jobs` = 0 is reported. |
+| `run` action (a background job) and `report` | Implemented | fakes only | `run` is **disruptive** (it takes a GPU for hours) and the wrapper returns at once; the job keeps running after the tab is closed. `report` is **safe**. An unknown recipe is refused with the validator's own first error. |
+| `recipes.yaml` edit | Implemented | fakes only | The console's own schema: `version` must be 1, a recipe needs `method` (`reap` \| `quantize` \| `minitron`), `base_model` and `output`; unknown keys are refused with the line number. Validated before the write. |
+| The job directory as the contract | Implemented | fakes only | `<state>/modelopt/jobs/<job-id>/run.json`, read-only and size-capped. The console never writes a job's files and never stops a running job. |
+| REAP expert pruning with the stock `nvidia-modelopt` | Not planned for v1 | unverified | `nvidia-modelopt` does not cover REAP expert pruning: its pruning is Minitron/Puzzletron and needs the NeMo container plus Megatron-Bridge. The console drives the lab's wrapper and does not ship the compression code. |
+
 ## Not planned for v1
 
 Editing Relay `plugins.toml` / `config.toml`; multi-user or per-user audit identity beyond the key

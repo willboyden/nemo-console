@@ -55,6 +55,7 @@ const ICONS = {
   sandbox: 'M12 3l8 4v10l-8 4-8-4V7zM4 7l8 4 8-4M12 11v10',
   flask: 'M9 3h6M10 3v6l-5 9a2 2 0 001.8 3h10.4a2 2 0 001.8-3l-5-9V3M8 15h8',
   history: 'M4 12a8 8 0 108-8M4 4v5h5M12 8v5l3 2',
+  compress: 'M12 3v6M12 15v6M4 9h16M4 15h16M7 6l2 3M17 6l-2 3M7 18l2-3M17 18l-2-3',
 };
 export function icon(name, size = 18) {
   const ns = 'http://www.w3.org/2000/svg';

@@ -3,6 +3,17 @@
 Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Claims use the labels
 implemented / verified-live / unverified defined in the README.
 
+## [Unreleased] - 2026-10-29
+
+### Added
+
+- **NVIDIA Model Optimizer as the eleventh managed system** (addendum 10.9). Status (the wrapper's version, the
+  recipe file, the last job), the `mo.*` metrics, the editable `recipes.yaml`, a `run` action that starts a
+  compression job in the background and a safe `report` action. The console starts the lab's `modelopt-local`
+  wrapper and reads each job's `run.json`; it never runs the compression code, never writes a job's files and
+  never stops a running job ([ADR-0017](docs/adr/0017-model-optimizer-is-a-background-job.md)). Implemented with
+  fakes only (`tests/modelopt_adapter.rs`); nothing about it has been seen live yet.
+
 ## [0.4.0] - 2026-10-28
 
 ### Changed

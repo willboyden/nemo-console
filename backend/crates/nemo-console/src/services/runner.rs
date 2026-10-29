@@ -36,6 +36,7 @@ pub static ALLOWED_BINARIES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
         "aiperf-local",
         "guardrails-local",
         "evaluator-local",
+        "modelopt-local",
     ]
     .into_iter()
     .collect()
@@ -62,6 +63,8 @@ pub const AIPERF_BINARIES: [&str; 1] = ["aiperf-local"];
 pub const AIPERF_PROFILE: f64 = 3600.0;
 pub const EVALUATOR_BINARIES: [&str; 1] = ["evaluator-local"];
 pub const EVALUATOR_RUN: f64 = MAX_LIVE_EVAL_TIMEOUT;
+pub const MODELOPT_BINARIES: [&str; 1] = ["modelopt-local"];
+pub const MODELOPT_RUN: f64 = MAX_TIMEOUT;
 pub const STOP_GRACE: f64 = 5.0;
 pub const MAX_ARGS: usize = 64;
 pub const MAX_ARG_LEN: usize = 8192;
@@ -73,6 +76,7 @@ fn is_graceful(bin: &str) -> bool {
         || DD_BINARIES.contains(&bin)
         || AIPERF_BINARIES.contains(&bin)
         || EVALUATOR_BINARIES.contains(&bin)
+        || MODELOPT_BINARIES.contains(&bin)
 }
 
 /// The cap for this argv: the long one only for a SkillEvaluator launcher's `tier3`, `data-designer-local create`,
@@ -92,6 +96,9 @@ pub fn max_timeout(argv: &[String]) -> f64 {
     }
     if EVALUATOR_BINARIES.contains(&first) && second == Some("run") {
         return EVALUATOR_RUN;
+    }
+    if MODELOPT_BINARIES.contains(&first) && second == Some("run") {
+        return MODELOPT_RUN;
     }
     MAX_TIMEOUT
 }

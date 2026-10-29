@@ -1,6 +1,6 @@
 # Nemo Console
 
-A local, single-user web console to **monitor, configure and interact with** ten NVIDIA-ecosystem systems
+A local, single-user web console to **monitor, configure and interact with** eleven NVIDIA-ecosystem systems
 running on one workstation:
 
 - **NeMo Switchyard**: tier-based request routing (an HTTP server in a container).
@@ -19,6 +19,9 @@ running on one workstation:
   rollback. Flags an exporter older than 4.8.3 (CVE-2026-47483).
 - **NVIDIA AIPerf** (new in 0.3.0): load tests against router models from named presets, one run at a time, with
   TTFT/ITL/throughput from each run.
+- **NVIDIA Model Optimizer** (new in 0.5.0): offline compression of a pinned checkpoint (quantization,
+  REAP expert pruning or Minitron). A CLI, not a service: the console starts a job in the
+  background and then reads its verdict, its output size and its compression ratio.
 - **NVIDIA NeMo Guardrails** (new in 0.3.0): a rails server (input and output self-checks) in an internal-network
   container; rails configs editable with validation and rollback; probe checks and a playground through the rails.
 - **NVIDIA NeMo Evaluator** (new in 0.3.0): offline benchmark suites (GSM8K, MMLU, ...) against router models, scores

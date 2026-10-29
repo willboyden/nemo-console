@@ -26,6 +26,9 @@ no test or run. A test proves the control against its fake, not against every re
 | Audit log and config revisions | Accountability and rollback | SQLite `console.db` in the state dir |
 | Console availability | Loss means no console, not loss of serving | Process |
 
+| **Model Optimizer wrapper** (`modelopt-local`): a local CLI that starts a compression job in an offline
+  container and writes the job's verdict to a file. It runs with the operator's privileges; the console starts it and
+  reads its files, nothing more (ADR-0017).
 ## 2. Trust boundaries
 
 ```mermaid
