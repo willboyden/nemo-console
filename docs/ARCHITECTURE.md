@@ -373,6 +373,27 @@ above changes. Contract: feature "nvidia-five" (2026-10-24).
   no lab directory — `observability/dcgm/counters.csv` and the exporter bump are the orchestrator's). The frontend agent
   owns `frontend/` (one view per system, routes, i18n, mock data). Core files, docs and every other path: orchestrator.
 
+**10.9 (2026-10-29): one more system — `modelopt`.** Additive; nothing above changes. Contract: ADR-0017.
+* **Core:** `SystemId` gains `modelopt`; `adapters/mod.rs` registers `modelopt.ModelOptAdapter` ("Model Optimizer").
+  Runner allowlist gains `modelopt-local` (ONLY `modelopt-local run` gets the 600 s cap; the wrapper returns at once, so the
+  cap only bounds the start). `ctx.paths` gains `modelopt_dir|modelopt_recipes`; `DEFAULT_LAYOUT` gains
+  `("modelopt", "clients/modelopt")`. No env is forwarded and no key is read: the wrapper owns its own container and its
+  own store, and the console never holds a credential for it.
+* **The wrapper contract:** `modelopt-local --version` prints one line (e.g. `0.47.0`); `modelopt-local run --job-id ID
+  --recipe NAME --run-dir DIR` starts the job in the BACKGROUND and returns at once, leaving the verdict in
+  `DIR/run.json` (`job_id`, `recipe`, `method`, `base_model`, `output`, `verdict` in `running|succeeded|failed|error`,
+  `ts`, `duration_ms`, `metrics{output_bytes, base_bytes, ratio}`, `error`). The console reads each job dir
+  `<state_dir>/modelopt/jobs/<job_id>/` read-only, size-capped, and never writes a job's files or stops a job.
+* **Metric key prefix:** `mo.` — `mo.jobs`, `mo.jobs_by_verdict{verdict}` (one point per verdict),
+  `mo.live_running`, `mo.output_bytes`, `mo.compression_ratio`, `mo.duration_s`. Every number is read from a finished
+  job's `run.json`; nothing is estimated. Event kind: `modelopt.job` (data: `job_id`, `recipe`, `verdict`).
+* **Config:** `clients/modelopt/recipes.yaml` is EDITABLE and authoritative (own schema: `version` must be 1, a recipe
+  needs `method` in `reap|quantize|minitron` plus `base_model` and `output`, names match `[a-z0-9][a-z0-9-]{0,39}`,
+  unknown keys are refused with their line number).
+* **Actions:** `run` (DISRUPTIVE: it takes a GPU for hours; the wrapper returns at once and the job keeps running
+  after the tab closes) and `report` (SAFE: one job's `run.json`, redacted). No stop, no cancel: the console does not own
+  the container's lifecycle. No playground.
+
 **9.9 (2026-10-24): shutdown ends SSE streams.** Additive. On SIGTERM/SIGINT the server (0.3: `main.ConsoleServer`, a
 `uvicorn.Server` subclass; 0.4: `server.rs`) calls the events service's `begin_shutdown` before its own exit handling: every open
 event stream sends `event: shutdown` (`data: {}`) and ends, releasing its slot, so the process exits at once (a
