@@ -20,7 +20,8 @@ implemented / verified-live / unverified defined in the README.
   disruptive `smoke` action that runs one bounded rollout of the `mcqa` environment through the router in the
   background (one at a time, numbers only), and safe `verify` and `report` actions. A client network that is not
   internal makes the system down and blocks a run ([ADR-0018](docs/adr/0018-nemo-gym-smoke-is-a-console-owned-background-run.md)).
-  Implemented with fakes only (`tests/gym_adapter.rs`).
+  Tested with fakes (`tests/gym_adapter.rs`). The status read path is also verified live (2026-11-03: against the
+  lab's installed wrapper the system reports up); the `smoke` action has not been run from the console yet.
 
 ### Fixed
 
