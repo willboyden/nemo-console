@@ -492,6 +492,7 @@
   "sys.guardrails": "NeMo Guardrails",
   "sys.evaluator": "NeMo Evaluator",
   "sys.modelopt": "NVIDIA Model Optimizer",
+  "sys.gym": "NeMo Gym",
   "group.routing": "Routing",
   "group.engines": "Engines and load",
   "group.safety": "Safety and sandboxing",
@@ -561,5 +562,14 @@
   "metric.mo.live_running": "Jobs running now",
   "metric.mo.output_bytes": "Output size",
   "metric.mo.compression_ratio": "Size vs. the base model",
-  "metric.mo.duration_s": "Job duration"
+  "metric.mo.duration_s": "Job duration",
+  "nav.gym": "NeMo Gym",
+  "intro.gym": "Reinforcement-learning environments and rollouts, run contained: each Gym command runs in a client container on an internal network whose only way out is a router broker. A smoke run rolls out a few scored tasks through the router, so it spends tokens on a shared engine and asks first; it runs in the background and the console keeps only the numbers.",
+  "metric.gym.runs": "Smoke runs",
+  "metric.gym.runs_by_verdict": "Runs by verdict",
+  "metric.gym.live_running": "Runs running now",
+  "metric.gym.mean_reward": "Mean reward (last good run)",
+  "metric.gym.rollouts": "Rollouts (last good run)",
+  "metric.gym.pass_at_1": "pass@1 (last good run)",
+  "metric.gym.duration_s": "Run duration"
 }
