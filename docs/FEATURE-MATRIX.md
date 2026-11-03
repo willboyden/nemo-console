@@ -238,6 +238,16 @@ Dynamo `restart`, assistive technology, browsers other than headless Firefox and
 | The job directory as the contract | Implemented | fakes only | `<state>/modelopt/jobs/<job-id>/run.json`, read-only and size-capped. The console never writes a job's files and never stops a running job. |
 | REAP expert pruning with the stock `nvidia-modelopt` | Not planned for v1 | unverified | `nvidia-modelopt` does not cover REAP expert pruning: its pruning is Minitron/Puzzletron and needs the NeMo container plus Megatron-Bridge. The console drives the lab's wrapper and does not ship the compression code. |
 
+## NeMo Gym (addendum 10.10)
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| Status: the wrapper, the broker, the client network's containment, the image, the key file | Implemented | fakes only (`tests/gym_adapter.rs`) | Lab install `clients/nemo-gym/` (the `gym-local` wrapper, NeMo Gym 0.7.0 pinned to a scanned commit, internal network + router broker). A network that exists but is not internal is **down** (`gym.not_contained`); a stopped broker is normal. The key file is reported as `[set]`/`[missing]` only. |
+| `gym.*` metrics (runs, runs by verdict, running, mean reward, rollouts, pass@1, duration) | Implemented | fakes only | Every number comes from the console's own `run.json` of a finished smoke run, parsed from the wrapper's printed output; nothing is estimated. |
+| `smoke` action (a console-owned background run, one at a time), `verify`, `report` | Implemented | fakes only | `smoke` is **disruptive** (router tokens on a shared engine; 1-20 tasks); `verify` (the wrapper's read-only network check) and `report` are **safe**. A restart leaves a running run `interrupted`. |
+| Config | Not applicable | — | The Gym environment config belongs to the lab wrapper; no Configure tab. |
+| NeMo RL training on the rollouts | Not planned for v1 | — | Nothing to start or read yet. |
+
 ## Not planned for v1
 
 Editing Relay `plugins.toml` / `config.toml`; multi-user or per-user audit identity beyond the key

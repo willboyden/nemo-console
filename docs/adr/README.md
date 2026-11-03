@@ -24,3 +24,4 @@ its files (`*.py`), which map one to one to `backend/crates/nemo-console/src/**/
 | [0015](0015-guardrails-rails-editable-weakening-deliberate.md) | NeMo Guardrails rails configs are editable; weakening them needs an explicit marker (exception to 0007) |
 | [0016](0016-backend-rewritten-in-rust.md) | The backend is rewritten in Rust; the last Python backend stays the parity reference (amends 0002) |
 | [0017](0017-model-optimizer-is-a-background-job.md) | Model Optimizer is a background job the console starts and then only reads (addendum 10.9) |
+| [0018](0018-nemo-gym-smoke-is-a-console-owned-background-run.md) | A NeMo Gym smoke run is a background run the console owns; containment is part of health (addendum 10.10) |

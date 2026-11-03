@@ -15,6 +15,12 @@ implemented / verified-live / unverified defined in the README.
   fakes (`tests/modelopt_adapter.rs`). The status read path is also verified live (2026-11-03: against the lab's
   installed wrapper and its real `recipes.yaml` the system reports up, with no diagnostics); no compression job has
   been started from the console yet.
+- **NVIDIA NeMo Gym as the twelfth managed system** (addendum 10.10). Status from the lab's `gym-local` wrapper (the
+  broker, the client network's containment, the image, whether the key file exists), the `gym.*` metrics, a
+  disruptive `smoke` action that runs one bounded rollout of the `mcqa` environment through the router in the
+  background (one at a time, numbers only), and safe `verify` and `report` actions. A client network that is not
+  internal makes the system down and blocks a run ([ADR-0018](docs/adr/0018-nemo-gym-smoke-is-a-console-owned-background-run.md)).
+  Implemented with fakes only (`tests/gym_adapter.rs`).
 
 ### Fixed
 

@@ -397,6 +397,30 @@ above changes. Contract: feature "nvidia-five" (2026-10-24).
   after the tab closes) and `report` (SAFE: one job's `run.json`, redacted). No stop, no cancel: the console does not own
   the container's lifecycle. No playground.
 
+**10.10 (2026-11-03): one more system — `gym` (NVIDIA NeMo Gym).** Additive; nothing above changes. Contract: ADR-0018.
+* **Core:** `SystemId` gains `gym`; `adapters/mod.rs` registers `gym::GymAdapter` ("NeMo Gym"). Runner allowlist gains
+  `gym-local` (`gym-local smoke` gets a 3600 s cap; every other subcommand keeps 600 s). `ctx.paths` gains `gym_dir`;
+  `DEFAULT_LAYOUT` gains `("gym", "clients/nemo-gym")`. No env is forwarded and no key is read: the wrapper's broker
+  holds the router key, and the console reports only whether the key file exists (`[set]`/`[missing]`).
+* **The wrapper contract:** `gym-local status` (read-only: compose ps, the network's `Internal` flag via `verify`, the
+  image, the key file's presence) exits 0 whenever Docker answers; the console parses the broker row
+  (`nemo-gym-router-broker   Up ...|Exited ...`), `RESULT: PASS|FAIL — network ai-lab-nemo-gym ... Internal=<v>`,
+  `image: lab/nemo-gym:0.7.0 <id>|not built` and `key: <path> [set, N chars]|missing`, cached 15 s. `gym-local verify`
+  exits 0 when the network is internal. `gym-local smoke --model ALIAS --limit N` runs in the FOREGROUND and prints
+  `rollouts: N   with a reward: M   rewards: [..]   mean: X`, an `aggregate: {..}` line and a final `RESULT:` line.
+* **Background run (the console owns it, like AIPerf):** `smoke` writes `<state_dir>/gym/runs/<run_id>/run.json` (0600:
+  `run_id`, `model`, `limit`, `ts`, `verdict` in `running|succeeded|failed|error|interrupted`, `duration_ms`,
+  `metrics{rollouts, rewarded, mean_reward, pass_at_1}`, `rewards[]`, `error`); one run at a time, newest 50 kept. A
+  run a restart left at `running` reads as `interrupted`. Rollout text never leaves the wrapper's volume.
+* **Health:** down when the wrapper does not answer or the client network exists but is NOT internal
+  (`gym.not_contained`); degraded when the image or the key file is missing; a network not created yet and a stopped
+  broker are normal. Components stay within the contract's kinds (`process` gym-local with its image, `container` the
+  broker); the network and image facts are in the summary and the problems.
+* **Metric key prefix:** `gym.` — `gym.runs`, `gym.runs_by_verdict{verdict}`, `gym.live_running`, and from the newest
+  successful run `gym.mean_reward`, `gym.rollouts`, `gym.pass_at_1`, `gym.duration_s`. Event kind: `gym.smoke`.
+* **Config:** none (the Gym environment config is the lab wrapper's). **Actions:** `smoke` (DISRUPTIVE: router tokens
+  on a shared engine; model alias validated, 1-20 tasks), `verify` (SAFE) and `report` (SAFE). No playground.
+
 **9.9 (2026-10-24): shutdown ends SSE streams.** Additive. On SIGTERM/SIGINT the server (0.3: `main.ConsoleServer`, a
 `uvicorn.Server` subclass; 0.4: `server.rs`) calls the events service's `begin_shutdown` before its own exit handling: every open
 event stream sends `event: shutdown` (`data: {}`) and ends, releasing its slot, so the process exits at once (a

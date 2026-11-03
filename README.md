@@ -1,6 +1,6 @@
 # Nemo Console
 
-A local, single-user web console to **monitor, configure and interact with** eleven NVIDIA-ecosystem systems
+A local, single-user web console to **monitor, configure and interact with** twelve NVIDIA-ecosystem systems
 running on one workstation:
 
 - **NeMo Switchyard**: tier-based request routing (an HTTP server in a container).
@@ -22,6 +22,9 @@ running on one workstation:
 - **NVIDIA Model Optimizer** (new in 0.5.0): offline compression of a pinned checkpoint (quantization,
   REAP expert pruning or Minitron). A CLI, not a service: the console starts a job in the
   background and then reads its verdict, its output size and its compression ratio.
+- **NVIDIA NeMo Gym** (new in 0.5.0): reinforcement-learning environments and rollouts, run contained (an
+  internal-network client whose only way out is a router broker). The console checks the containment, runs a
+  bounded smoke rollout in the background and reads its rewards.
 - **NVIDIA NeMo Guardrails** (new in 0.3.0): a rails server (input and output self-checks) in an internal-network
   container; rails configs editable with validation and rollback; probe checks and a playground through the rails.
 - **NVIDIA NeMo Evaluator** (new in 0.3.0): offline benchmark suites (GSM8K, MMLU, ...) against router models, scores
@@ -83,7 +86,7 @@ flowchart LR
 ```
 
 *(Unrendered Mermaid.)* Details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (the locked contract),
-[`docs/adr/`](docs/adr/) (17 decisions with rejected alternatives), [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md),
+[`docs/adr/`](docs/adr/) (18 decisions with rejected alternatives), [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md),
 [`docs/OPERATIONS.md`](docs/OPERATIONS.md), [`docs/FEATURE-MATRIX.md`](docs/FEATURE-MATRIX.md), [`docs/PUBLISHING-CHECKLIST.md`](docs/PUBLISHING-CHECKLIST.md),
 [`CHANGELOG.md`](CHANGELOG.md).
 

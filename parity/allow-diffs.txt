@@ -3,8 +3,9 @@
 # (Line forms: "METHOD /template", a case id, or "stub:<system_id>"; see run.mjs.)
 params.dynamo.preview.nan  # D-6: NaN in params values, refused by the core check (Rust) or the adapter (Python)
 stub:modelopt  # D-7: the Python backend has no Model Optimizer adapter; the Rust one is new (ADR-0017)
-# D-7: the Rust backend has the Model Optimizer adapter (ADR-0017); the Python reference has not, so the
-# shared aggregate payloads (/health, /overview, /systems) carry one extra system. Every case below differs
+stub:gym  # D-8: the Python backend has no NeMo Gym adapter either; the Rust one is new (ADR-0018)
+# D-7/D-8: the Rust backend has the Model Optimizer (ADR-0017) and NeMo Gym (ADR-0018) adapters; the Python
+# reference has neither, so the shared aggregate payloads (/health, /overview, /systems) carry two extra systems. Every case below differs
 # only by that entry; each other difference on those routes still fails the gate.
 global.health.after  # D-7: the extra modelopt entry (the Python reference has no adapter)
 global.health.after.after  # D-7: the extra modelopt entry (the Python reference has no adapter)
