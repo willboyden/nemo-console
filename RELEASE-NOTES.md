@@ -2,26 +2,29 @@
 
 Notes for the most recent release only; history lives in CHANGELOG.md.
 
-## 0.4.0 — 2026-10-28
+## 0.5.0 — 2026-11-03
 
-The backend is rewritten in Rust. Nothing changes for the browser, the API, your settings or your state.
+Two more NVIDIA systems, the eleventh and twelfth. Both are driven through a lab wrapper on PATH, and both run their
+work in the background so a closed tab never stops it.
 
-- **One binary instead of a Python venv:** `make setup` (needs `rustup`; the toolchain is pinned) builds it, `make run`
-  serves on 127.0.0.1:8793 as before, `make release` writes `backend/target/release/nemo-console`. The API, the
-  `NEMO_CONSOLE_*` settings and `~/.config/nemo-console/env`, the state directory and its database, the `open` /
-  `stop` / `mint-key` commands, the log lines and the exit codes are the same: a 0.3 state directory is used as is.
-- **How it was checked:** every Python test was ported (936 of 936 mapped), and a differential harness runs 1,393
-  cases against the last Python backend and this one side by side, with fakes for every CLI and upstream: all equal but
-  one documented deviation. The Rust backend has **not** been run against the real Switchyard, Relay, Dynamo or the
-  other systems yet; the "verified live" claims in the docs were observed with the Python backend (FEATURE-MATRIX).
-- **Hardening before release:** roles are enforced by the request pipeline for every route, slow or idle clients and
-  connection floods are cut off (5 s for a request head, 30 s for a body, 256 connections), background-task panics
-  are contained, redaction fails closed, and run-file reads refuse symlinks (CHANGELOG; `backend/PORTING.md` A-9).
-- **Deliberate differences** are few and listed in the CHANGELOG and `backend/PORTING.md` §13 (fixed parser limits
-  instead of stack-dependent ones, offset-less timestamps read as UTC, a handful of edge cases); some Python bugs are
-  kept on purpose for now (CHANGELOG, "Known Python bugs kept").
+- **NVIDIA Model Optimizer** (ADR-0017): offline compression of a pinned checkpoint through the `modelopt-local`
+  wrapper. The page shows the wrapper, the recipe file and the last job, the `mo.*` metrics, an editor for
+  `recipes.yaml` (validated with the wrapper's own schema before the write; a file with any error runs nothing) and a
+  `run` action that starts a job in the background (disruptive: it takes a GPU). `report` reads a job's verdict. The
+  console reads each job's `run.json`; it never runs the compression code, never writes a job's files and never stops
+  a running job.
+- **NVIDIA NeMo Gym** (ADR-0018): reinforcement-learning environments and rollouts through the `gym-local` wrapper,
+  whose client runs on an internal network with a key-holding router broker as its only way out. The page shows the
+  wrapper, the broker, the client network's containment, the image and whether the key file exists, the `gym.*`
+  metrics, and a `smoke` action (disruptive, one at a time, 1-20 tasks) that runs one bounded rollout in the
+  background. `verify` and `report` are safe. A client network that is not internal makes the system down and blocks
+  a run.
+- **How it was checked:** offline tests with fakes for both wrappers, the browser suite over every page and tab, and
+  the parity harness against the last Python backend (the two new systems are the documented deviation D-31). Live,
+  the status pages of both systems were observed against the installed wrappers on the maintainer's workstation
+  (2026-11-03). No compression job and no smoke run has been started from the console yet.
+- **Also:** `make parity` now runs the same checks as CI, and the dependency cooldown has no exceptions left.
 
-Upgrade: `git pull`, `make setup`, stop the old console (`nemo-console stop` with the old binary, or the new one: either
-stops the other), start it again with `make run`, or re-run `make install-desktop` for the menu entry. If you use the
-systemd template, point `ExecStart` at `backend/target/release/nemo-console` (`deploy/nemo-console.service`). The old
-`backend/.venv` can be deleted.
+Upgrade: `git pull`, `make release`, then `backend/target/release/nemo-console stop` and `... open` (or `make run`).
+Restart after pulling: the frontend is served from disk, and a running 0.4 backend lacks the new systems' routes.
+Without `modelopt-local` / `gym-local` on PATH the two pages show the system as down, with the install step.

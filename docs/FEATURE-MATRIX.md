@@ -25,6 +25,10 @@ Two columns are kept apart on purpose.
 > pages and tabs with no error state, parity against the last Python backend 1,393 cases with 1,392 equal and the one
 > difference documented (PORTING D-6), all 936 pytest ids mapped to Rust tests, and the cross-implementation checks
 > (state directory, launcher, startup errors) passing; the clean-clone runs are in `backend/PORTING.md` A-8 and A-9.
+>
+> **0.5.0** adds the Model Optimizer and NeMo Gym (sections below). Their status read paths are the first rows
+> verified live with the Rust backend (2026-11-03, against the installed lab wrappers); their actions are fakes only.
+> Gates for 0.5.0 are in the README.
 
 Gates re-run for the 0.3 line on 2026-10-17 in the deployment checkout: backend `pytest -q` 470 passed /
 2 skipped (the skip count depends on the environment: live smoke tests run only where the stack is up), `ruff check`

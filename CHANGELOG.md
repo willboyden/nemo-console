@@ -3,7 +3,7 @@
 Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Claims use the labels
 implemented / verified-live / unverified defined in the README.
 
-## [Unreleased] - 2026-10-29
+## [0.5.0] - 2026-11-03
 
 ### Added
 
@@ -22,6 +22,20 @@ implemented / verified-live / unverified defined in the README.
   internal makes the system down and blocks a run ([ADR-0018](docs/adr/0018-nemo-gym-smoke-is-a-console-owned-background-run.md)).
   Tested with fakes (`tests/gym_adapter.rs`). The status read path is also verified live (2026-11-03: against the
   lab's installed wrapper the system reports up); the `smoke` action has not been run from the console yet.
+
+### Changed
+
+- **`make parity` runs what CI runs:** the route differential and also the persisted-state, startup-error and
+  launcher checks (`parity/xstate.mjs`, `startup.mjs`, `launcher.mjs`). It ran only the first, so a startup-error
+  difference failed in CI only.
+- **Parity deviation D-31** (`backend/PORTING.md` §13): the two systems added after the port are absent from the
+  Python reference, so the shared aggregate payloads carry two more entries and the "unknown layout key" settings
+  error names two more keys. Exactly those differences are allowed; any other still fails.
+- **Parity harness:** the console's own version is normalised only on the routes that report it (health, settings,
+  the OpenAPI document). It matched any equal string anywhere, so with the console at 0.5.0 it also rewrote the fake
+  SkillEvaluator's "0.5.0" on one side only.
+- **Dependency cooldown:** the two security exceptions (`rustls-webpki` 0.103.16, `webpki-root-certs` 1.0.10) are
+  removed; both versions have passed the 14-day cooldown.
 
 ### Fixed
 

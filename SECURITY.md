@@ -4,8 +4,9 @@
 
 | Version | Supported |
 |---|---|
-| 0.4.x (Rust backend) | Yes |
-| 0.3.x and older (Python backend) | No: upgrade to 0.4 |
+| 0.5.x (Rust backend) | Yes |
+| 0.4.x (Rust backend) | No: upgrade to 0.5 |
+| 0.3.x and older (Python backend) | No: upgrade to 0.5 |
 
 This is a single-maintainer project. Fixes land on `main` and in the next patch release.
 
