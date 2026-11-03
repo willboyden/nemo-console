@@ -32,9 +32,11 @@ The console is a **starter and a reader**, never the owner of a job.
 3. **Every metric is derived, never invented.** `mo.output_bytes`, `mo.compression_ratio` and `mo.duration_s`
    come from a finished job's `run.json`; `mo.jobs`, `mo.live_running` and `mo.jobs_by_verdict` are counted from
    the job directories. If there is no job, the console reports no job: it does not estimate.
-4. **`recipes.yaml` is the only editable file**, and it is the console's own schema (`version: 1`, one entry
-   per recipe, `method` in `reap` | `quantize` | `minitron`). It is validated before it is written and the
-   candidate is refused with line numbers. Which methods a lab actually implements is the lab's business: the
+4. **`recipes.yaml` is the only editable file.** Its schema is the lab tool's (`validate_recipes` in
+   `clients/modelopt/src/modelopt_core.py`: `version: 1`, one entry per recipe, `method` in `reap` | `quantize` |
+   `minitron`, an `org/name` base model, an output under `/runs/`), and the console enforces the same rules: it is
+   validated before it is written and the candidate is refused with line numbers. (Until 2026-11-03 the console
+   carried its own, different schema, so it called the lab's valid file broken; corrected in the CHANGELOG.) Which methods a lab actually implements is the lab's business: the
    console never ships the compression code itself.
 5. **A run is disruptive and asks first.** The `run` action is classified `disruptive` (it takes a GPU for
    hours); `report` is `safe`. There is no console action that stops, cancels or rewrites a running job: the

@@ -43,11 +43,11 @@ pub fn running_meta(job_id: &str, recipe: &str) -> String {
     m.insert("job_id".to_owned(), json!(job_id.to_owned()));
     m.insert("recipe".to_owned(), json!(recipe.to_owned()));
     m.insert("method".to_owned(), json!("reap".to_owned()));
-    m.insert("base_model".to_owned(), json!("GLM-5.3-Flash".to_owned()));
     m.insert(
-        "output".to_owned(),
-        json!("GLM-5.3-Flash-REAP25-NVFP4".to_owned()),
+        "base_model".to_owned(),
+        json!("zai-org/GLM-5.3-Flash".to_owned()),
     );
+    m.insert("output".to_owned(), json!("/runs/reap-glm53".to_owned()));
     m.insert("verdict".to_owned(), json!("running".to_owned()));
     m.insert("ts".to_owned(), json!(1767225600.0));
     m.insert("duration_ms".to_owned(), json!(0));
@@ -61,11 +61,11 @@ pub fn finished_meta(job_id: &str, recipe: &str) -> String {
     m.insert("job_id".to_owned(), json!(job_id.to_owned()));
     m.insert("recipe".to_owned(), json!(recipe.to_owned()));
     m.insert("method".to_owned(), json!("reap".to_owned()));
-    m.insert("base_model".to_owned(), json!("GLM-5.3-Flash".to_owned()));
     m.insert(
-        "output".to_owned(),
-        json!("GLM-5.3-Flash-REAP25-NVFP4".to_owned()),
+        "base_model".to_owned(),
+        json!("zai-org/GLM-5.3-Flash".to_owned()),
     );
+    m.insert("output".to_owned(), json!("/runs/reap-glm53".to_owned()));
     m.insert("verdict".to_owned(), json!("succeeded".to_owned()));
     m.insert("ts".to_owned(), json!(1767225600.0));
     m.insert("duration_ms".to_owned(), json!(2_820_000));

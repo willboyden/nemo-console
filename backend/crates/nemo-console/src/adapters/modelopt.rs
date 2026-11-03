@@ -11,7 +11,9 @@
 //!     model and never writes a checkpoint itself.
 //!   * A finished job writes the verdict, the duration and the size numbers. A job that dies keeps
 //!     "running": the wrapper cannot know either, so the console does not guess.
-//!   * recipes.yaml is this console's own schema: validated here, authoritative.
+//!   * recipes.yaml's schema is the lab tool's (`clients/modelopt/src/modelopt_core.py` `validate_recipes`):
+//!     the console accepts exactly what the tool accepts, refuses what it refuses, and, like the tool, runs
+//!     nothing from a file with any error.
 //!   * Compression is slow (hours) and takes a GPU, so a job is a disruptive action.
 //!
 //! Contract with the wrapper (the run.json the wrapper writes and the console reads):
@@ -61,7 +63,8 @@ pub const VERDICTS: [&str; 4] = ["running", "succeeded", "failed", "error"];
 /// The compression methods the wrapper knows.
 pub const METHODS: [&str; 3] = ["reap", "quantize", "minitron"];
 pub const MAX_RECIPES_BYTES: usize = 256 * 1024;
-pub const MAX_RECIPES: usize = 32;
+/// The tool's `MAX_RECIPES`.
+pub const MAX_RECIPES: usize = 64;
 /// The cap for the run.json the console reads (PORTING D-27 style cap).
 pub const MAX_RUN_BYTES: u64 = 64 * 1024;
 pub const LAB_INSTALLER: &str = "clients/modelopt/install.sh";
@@ -71,8 +74,9 @@ static RUN_ID_RE: LazyLock<Option<Regex>> =
     LazyLock::new(|| Regex::new(r"\A\d{8}T\d{6}-\d{3}-[a-z0-9][a-z0-9-]{0,39}\z").ok());
 static RECIPE_RE: LazyLock<Option<Regex>> =
     LazyLock::new(|| Regex::new(r"\A[a-z0-9][a-z0-9-]{0,39}\z").ok());
-static MODEL_RE: LazyLock<Option<Regex>> =
-    LazyLock::new(|| Regex::new(r"\A[A-Za-z0-9][A-Za-z0-9._:/@+\-]{0,127}\z").ok());
+/// A Hugging Face repo id, as the tool's `MODEL_RE` fullmatches it (org/name).
+static REPO_ID_RE: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"\A[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9._-]+\z").ok());
 
 fn is(re: &LazyLock<Option<Regex>>, s: &str) -> bool {
     re.as_ref().is_some_and(|r| r.is_match(s))
@@ -101,17 +105,17 @@ fn close(word: &str, options: &[&str]) -> String {
     }
 }
 
-/// The recipes file: the console's own schema, and the only thing that reads it.
+/// The recipes file: the lab tool's schema (the tool and this validator enforce the same rules).
 fn recipes_spec(has_path: bool) -> ConfigFileSpec {
     ConfigFileSpec {
         id: RECIPES_ID.into(),
         label: "Compression recipes".into(),
-        description: "Named compression recipes: the method (reap expert pruning, quantize or minitron), the base model it reads, the calibration data and the checkpoint it writes. Each recipe drives one offline job; a job takes a GPU for hours.".into(),
+        description: "Named compression recipes: the method (reap expert pruning, quantize or minitron), the Hugging Face model it reads (org/name, from the offline cache) and the path under /runs it writes; optional description, preset, sparsity and config. Each recipe drives one offline job; a job takes a GPU for hours.".into(),
         display_path: if has_path { "clients/modelopt/recipes.yaml".into() } else { RECIPES_ID.into() },
         format: "yaml".into(),
         editable: true,
         why_readonly: None,
-        validators: vec!["nemo-console modelopt recipes schema".into()],
+        validators: vec!["nemo-console modelopt recipes schema (the rules of clients/modelopt validate_recipes)".into()],
         authoritative: true,
         apply_effect: "takes effect on the next job; nothing to restart".into(),
     }
@@ -176,9 +180,9 @@ pub struct Recipe {
     pub method: String,
     pub base_model: String,
     pub output: String,
-    pub calibration: String,
-    pub scheme: String,
+    pub preset: String,
     pub sparsity: Option<f64>,
+    pub config: String,
     pub description: String,
 }
 
@@ -197,24 +201,25 @@ fn load_error(e: YamlError) -> AdapterError {
     }
 }
 
-/// recipes.yaml schema: the keys a recipe may carry.
-pub const RECIPE_KEYS: [&str; 8] = [
-    "description",
+/// recipes.yaml schema: the tool's REQUIRED_KEYS + EXTRA_KEYS; any other key is a hard error.
+pub const RECIPE_KEYS: [&str; 7] = [
     "method",
     "base_model",
     "output",
-    "calibration",
-    "scheme",
+    "description",
+    "preset",
     "sparsity",
-    "version",
+    "config",
 ];
 
 fn recipe_keys() -> Vec<&'static str> {
     RECIPE_KEYS.to_vec()
 }
 
-/// `parse_recipes(text)`: (valid recipes, diagnostics); a recipe with an error is dropped. A YAML error is a
-/// diagnostic; a non-YAML exception PyYAML lets through is returned as an error, as Python raises it.
+/// `parse_recipes(text)`: (runnable recipes, diagnostics). The rules are the lab tool's `validate_recipes`, and
+/// like the tool's `load_recipes` a file with ANY error runs nothing: the recipes come back empty while the
+/// diagnostics name every error with its line. A YAML error is a diagnostic; a non-YAML exception PyYAML lets
+/// through is returned as an error, as Python raises it.
 pub fn parse_recipes(
     text: &str,
 ) -> Result<(IndexMap<String, Recipe>, Vec<Diagnostic>), AdapterError> {
@@ -276,8 +281,9 @@ pub fn parse_recipes(
         }
     }
     let version = doc.get("version");
-    let version_ok =
-        matches!(version, Some(Yv::Int(1))) || matches!(version, Some(Yv::Float(f)) if *f == 1.0);
+    // the tool tests `doc.get("version") != 1`, and in Python 1 == 1.0 == True, so all three pass there too
+    let version_ok = matches!(version, Some(Yv::Int(1)) | Some(Yv::Bool(true)))
+        || matches!(version, Some(Yv::Float(f)) if *f == 1.0);
     if !version_ok {
         diags.push(diag(
             Severity::Error,
@@ -301,12 +307,15 @@ pub fn parse_recipes(
             Severity::Error,
             format!(
                 "at most {MAX_RECIPES} recipes are supported (found {})",
-                recipes.len()
+                pairs.len()
             ),
             line(&["recipes"]),
         ));
     }
     let keys = recipe_keys();
+    let mut allowed = keys.clone();
+    allowed.sort_unstable();
+    let allowed = allowed.join(", ");
     for (name_v, body) in pairs.iter().take(MAX_RECIPES) {
         let pname = name_v.py_str();
         let name = match name_v {
@@ -340,95 +349,72 @@ pub fn parse_recipes(
                 let ks = k.py_str();
                 diags.push(diag(
                     Severity::Error,
-                    format!("{name}: unknown key {}{}", k.repr(), close(&ks, &keys)),
+                    format!(
+                        "{name}: unknown key {} (allowed: {allowed}){}",
+                        k.repr(),
+                        close(&ks, &keys)
+                    ),
                     line(&["recipes", &pname, &ks]),
                 ));
             }
         }
-        let method = body
-            .get("method")
-            .cloned()
-            .unwrap_or_else(|| Yv::Str(String::new()));
-        let method_ok = matches!(&method, Yv::Str(m) if METHODS.contains(&m.as_str()));
-        if !method_ok {
-            diags.push(diag(
-                Severity::Error,
-                format!("{name}: 'method' must be one of {}", METHODS.join(", ")),
-                line(&["recipes", &pname, "method"]),
-            ));
-        }
-        let base_model = body
-            .get("base_model")
-            .cloned()
-            .unwrap_or_else(|| Yv::Str(String::new()));
-        if !matches!(&base_model, Yv::Str(m) if is(&MODEL_RE, m)) {
-            diags.push(diag(
-                Severity::Error,
-                format!(
-                    "{name}: 'base_model' is required: a model name (letters, digits and . _ : / @ + -)"
-                ),
-                line(&["recipes", &pname, "base_model"]),
-            ));
-        }
-        let output = body
-            .get("output")
-            .cloned()
-            .unwrap_or_else(|| Yv::Str(String::new()));
-        if !matches!(&output, Yv::Str(o) if is(&MODEL_RE, o)) {
-            diags.push(diag(
-                Severity::Error,
-                format!("{name}: 'output' is required: the name of the checkpoint it writes"),
-                line(&["recipes", &pname, "output"]),
-            ));
-        }
-        let scheme = body
-            .get("scheme")
-            .cloned()
-            .unwrap_or_else(|| Yv::Str(String::new()));
-        let calibration = body
-            .get("calibration")
-            .cloned()
-            .unwrap_or_else(|| Yv::Str(String::new()));
-        let desc = body
-            .get("description")
-            .cloned()
-            .unwrap_or_else(|| Yv::Str(String::new()));
-        let desc_ok = matches!(&desc, Yv::Str(s) if s.chars().count() <= 300 && !s.contains('\n'));
-        if !desc_ok {
-            diags.push(diag(
-                Severity::Error,
-                format!("{name}: 'description' must be a single line of at most 300 characters"),
-                line(&["recipes", &pname, "description"]),
-            ));
-        }
-        let sparsity = body.get("sparsity").cloned();
-        let sparsity_ok = match sparsity {
-            None => true,
-            Some(Yv::Float(f)) if (0.0..=1.0).contains(&f) => true,
-            Some(Yv::Int(i)) if (0..=1).contains(&i) => true,
-            _ => false,
+        let at = |key: &str| line(&["recipes", &pname, key]).or_else(|| line(&["recipes", &pname]));
+        let text_of = |key: &str| match body.get(key) {
+            Some(Yv::Str(v)) => Some(v.clone()),
+            _ => None,
         };
-        if !sparsity_ok {
-            diags.push(diag(
-                Severity::Error,
-                format!("{name}: 'sparsity' must be a number from 0 to 1"),
-                line(&["recipes", &pname, "sparsity"]),
-            ));
+        let mut err = |msg: String, key: &str| diags.push(diag(Severity::Error, msg, at(key)));
+        let method = text_of("method");
+        match &method {
+            None => err(format!("{name}: 'method' is required"), "method"),
+            Some(m) if !METHODS.contains(&m.as_str()) => err(
+                format!("{name}: 'method' must be one of {}", METHODS.join(", ")),
+                "method",
+            ),
+            Some(_) => {}
         }
-        let method_str = method.py_str();
-        if method_str == "reap" && sparsity.is_none() {
-            diags.push(diag(
-                Severity::Error,
-                format!("{name}: 'sparsity' is required for the reap method"),
-                line(&["recipes", &pname, "sparsity"]),
-            ));
+        let base_model = text_of("base_model");
+        match &base_model {
+            None => err(format!("{name}: 'base_model' is required"), "base_model"),
+            Some(m) if !is(&REPO_ID_RE, m) => err(
+                format!("{name}: 'base_model' must be a Hugging Face repo id (org/name)"),
+                "base_model",
+            ),
+            Some(_) => {}
         }
-        if method_str == "quantize" && !matches!(&scheme, Yv::Str(s) if !s.is_empty()) {
-            diags.push(diag(
-                Severity::Error,
-                format!("{name}: 'scheme' is required for the quantize method"),
-                line(&["recipes", &pname, "scheme"]),
-            ));
+        let output = text_of("output");
+        match &output {
+            None => err(format!("{name}: 'output' is required"), "output"),
+            Some(o) if !o.starts_with("/runs/") || o.chars().count() < 7 => err(
+                format!("{name}: 'output' must be a path under /runs (the job's run dir)"),
+                "output",
+            ),
+            Some(_) => {}
+        }
+        for (key, what) in [
+            ("description", "a string"),
+            ("preset", "a string"),
+            ("config", "a string (a file name in the run dir)"),
+        ] {
+            if body.get(key).is_some() && text_of(key).is_none() {
+                err(format!("{name}: '{key}' must be {what}"), key);
+            }
+        }
+        // a number (not a bool) from 0 inclusive to 1 exclusive; optional for every method (REAP defaults it)
+        #[allow(clippy::cast_precision_loss)]
+        let sparsity = match body.get("sparsity") {
+            None => None,
+            Some(Yv::Int(i)) => Some(*i as f64),
+            Some(Yv::Float(f)) => Some(*f),
+            Some(_) => Some(f64::NAN),
+        };
+        if let Some(v) = sparsity
+            && !(0.0..1.0).contains(&v)
+        {
+            err(
+                format!("{name}: 'sparsity' must be a number from 0 (inclusive) to 1 (exclusive)"),
+                "sparsity",
+            );
         }
         if diags
             .iter()
@@ -442,25 +428,25 @@ pub fn parse_recipes(
             name.clone(),
             Recipe {
                 name: name.clone(),
-                method: method_str,
-                base_model: base_model.py_str(),
-                output: output.py_str(),
-                calibration: calibration.py_str(),
-                scheme: scheme.py_str(),
-                sparsity: sparsity.and_then(|v| match v {
-                    Yv::Float(f) => Some(f),
-                    Yv::Int(i) => Some(i as f64),
-                    _ => None,
-                }),
-                description: desc.py_str(),
+                method: method.unwrap_or_default(),
+                base_model: base_model.unwrap_or_default(),
+                output: output.unwrap_or_default(),
+                preset: text_of("preset").unwrap_or_default(),
+                sparsity,
+                config: text_of("config").unwrap_or_default(),
+                description: text_of("description").unwrap_or_default(),
             },
         );
+    }
+    // the tool's load_recipes refuses the whole file on any error, so nothing in it is runnable here either
+    if diags.iter().any(|d| d.severity == Severity::Error) {
+        recipes.clear();
     }
     Ok((recipes, diags))
 }
 
-/// The exact modelopt-local argv for a job. The wrapper owns the model store, the calibration data and the
-/// offline policy; nothing secret is, or can be, in this list.
+/// The exact modelopt-local argv for a job. The wrapper owns the model store and the offline policy; nothing
+/// secret is, or can be, in this list.
 #[must_use]
 pub fn render_argv(job_id: &str, recipe: &str, run_dir: &Path) -> Vec<String> {
     wsb::argv(&[

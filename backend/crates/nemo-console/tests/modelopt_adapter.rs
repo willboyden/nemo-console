@@ -176,6 +176,115 @@ async fn modelopt_recipes_schema() {
     assert!(d3.iter().any(|x| x.message.contains("version")));
 }
 
+/// The rules are the lab tool's (`clients/modelopt/src/modelopt_core.py` `validate_recipes`): its real file
+/// validates clean, and each thing the tool refuses is refused here too, with a line.
+#[tokio::test]
+async fn modelopt_recipes_follow_the_lab_tools_schema() {
+    // fixtures/modelopt/recipes.yaml is a verbatim copy of the lab's clients/modelopt/recipes.yaml (lab 2fdcce2)
+    let lab = fx("modelopt", "recipes.yaml");
+    let (r, d) = parse_recipes(&lab).unwrap();
+    assert!(
+        d.is_empty(),
+        "the lab's own file must validate with no diagnostics: {d:?}"
+    );
+    assert_eq!(r.len(), 2);
+    let reap = &r["reap-glm53"];
+    assert_eq!(reap.base_model, "zai-org/GLM-5.3-Flash");
+    assert_eq!(reap.output, "/runs/reap-glm53");
+    assert_eq!(
+        reap.sparsity, None,
+        "sparsity is optional for reap (the worker defaults it)"
+    );
+    assert!(
+        r["quantize-glm53-nvfp4"].preset.is_empty(),
+        "preset is optional for quantize"
+    );
+    let ok_extras = "version: 1\nrecipes:\n  q:\n    method: quantize\n    base_model: org/m\n    output: /runs/q\n    preset: NVFP4\n    sparsity: 0\n    config: c.yaml\n    description: d\n";
+    let (r1, d1) = parse_recipes(ok_extras).unwrap();
+    assert!(d1.is_empty(), "{d1:?}");
+    assert_eq!(r1["q"].preset, "NVFP4");
+    let base = "version: 1\nrecipes:\n  a:\n    method: reap\n    base_model: org/m\n    output: /runs/a\n";
+    for (extra, needle) in [
+        ("    scheme: NVFP4\n", "unknown key 'scheme'"),
+        ("    calibration: ultrachat\n", "unknown key 'calibration'"),
+        (
+            "    sparsity: 1\n",
+            "'sparsity' must be a number from 0 (inclusive) to 1 (exclusive)",
+        ),
+        ("    sparsity: true\n", "'sparsity' must be a number"),
+        ("    preset: 4\n", "'preset' must be a string"),
+    ] {
+        let (rr, dd) = parse_recipes(&format!("{base}{extra}")).unwrap();
+        let e = dd
+            .iter()
+            .find(|x| x.severity == Severity::Error)
+            .unwrap_or_else(|| panic!("no error for {extra:?}"));
+        assert!(e.message.contains(needle), "{extra:?}: {}", e.message);
+        assert!(e.line.is_some(), "{extra:?} carries its line");
+        assert!(rr.is_empty());
+    }
+    for (body, needle) in [
+        (
+            "    method: reap\n    base_model: GLM-5.3-Flash\n    output: /runs/a\n",
+            "Hugging Face repo id",
+        ),
+        (
+            "    method: reap\n    base_model: org/m\n    output: GLM-5.3-Flash-NVFP4\n",
+            "a path under /runs",
+        ),
+        (
+            "    method: reap\n    base_model: org/m\n    output: /runs/\n",
+            "a path under /runs",
+        ),
+        (
+            "    method: reap\n    base_model: org/m\n    output: /tmp/out\n",
+            "a path under /runs",
+        ),
+        (
+            "    method: reap\n    base_model: org/m\n",
+            "'output' is required",
+        ),
+        (
+            "    base_model: org/m\n    output: /runs/a\n",
+            "'method' is required",
+        ),
+        (
+            "    method: prune\n    base_model: org/m\n    output: /runs/a\n",
+            "'method' must be one of",
+        ),
+    ] {
+        let (_, dd) = parse_recipes(&format!("version: 1\nrecipes:\n  a:\n{body}")).unwrap();
+        assert!(
+            dd.iter().any(|x| x.message.contains(needle)),
+            "{body:?}: {dd:?}"
+        );
+    }
+    // like the tool's load_recipes, one bad recipe means nothing in the file runs
+    let mixed =
+        format!("{base}  b:\n    method: reap\n    base_model: nope\n    output: /runs/b\n");
+    let (rm, dm) = parse_recipes(&mixed).unwrap();
+    assert!(rm.is_empty() && dm.iter().any(|x| x.message.starts_with("b:")));
+    // the tool's cap is 64, and the message counts the file's recipes
+    let many: String = (0..65)
+        .map(|i| {
+            format!("  r{i}:\n    method: reap\n    base_model: org/m\n    output: /runs/r{i}\n")
+        })
+        .collect();
+    let (_, dmany) = parse_recipes(&format!("version: 1\nrecipes:\n{many}")).unwrap();
+    assert!(
+        dmany
+            .iter()
+            .any(|x| x.message.contains("at most 64") && x.message.contains("found 65")),
+        "{dmany:?}"
+    );
+    let (_, d64) = parse_recipes(&format!(
+        "version: 1\nrecipes:\n{}",
+        &many[..many.rfind("  r64:").unwrap()]
+    ))
+    .unwrap();
+    assert!(d64.is_empty(), "64 recipes are fine: {d64:?}");
+}
+
 #[tokio::test]
 async fn modelopt_actions_and_the_argv_the_console_sends() {
     let e = MoEnv::new().await;

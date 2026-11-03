@@ -14,6 +14,16 @@ implemented / verified-live / unverified defined in the README.
   never stops a running job ([ADR-0017](docs/adr/0017-model-optimizer-is-a-background-job.md)). Implemented with
   fakes only (`tests/modelopt_adapter.rs`); nothing about it has been seen live yet.
 
+### Fixed
+
+- **Model Optimizer: `recipes.yaml` is validated with the lab tool's own schema.** The console had its own idea of
+  the file (a bare output name, `sparsity` required for reap, `scheme` required for quantize, `calibration` allowed),
+  so it reported the lab's valid file as degraded ("'output' is required: the name of the checkpoint it writes").
+  It now enforces exactly the rules of `validate_recipes` in `clients/modelopt/src/modelopt_core.py` (an `org/name`
+  base model, an output under `/runs/`, optional `description`/`preset`/`sparsity` (0 <= s < 1)/`config`, any other
+  key refused, at most 64 recipes) and, like the tool, runs nothing from a file with any error. The test fixture is
+  now a copy of the lab's real file, which validates with no diagnostics.
+
 ## [0.4.0] - 2026-10-28
 
 ### Changed

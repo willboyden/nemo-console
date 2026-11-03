@@ -1,19 +1,30 @@
-# Model Optimizer compression recipes: the console's own schema (clients/modelopt/recipes.yaml).
-# Each recipe drives one offline compression job: the method, the base model it reads, the calibration data
-# and the checkpoint it writes.
+# recipes.yaml — the compression recipes the Nemo Console's Model Optimizer adapter can start.
+#
+# Schema (enforced by clients/modelopt/src/modelopt_core.py AND by the console adapter — the same rules):
+#   version   1                                    (the only version this file format has)
+#   recipes   <name> -> <recipe>                     (1-64 recipes)
+#     name     [a-z0-9][a-z0-9-]{0,39}               (lower case, digits, dashes)
+#     method   reap | quantize | minitron           (what the job does)
+#     base_model  <org>/<name>                       (a Hugging Face repo id; read from the offline cache)
+#     output   /runs/<name>                         (container-side path the compressed model is written to;
+#              the job's run dir is mounted at /runs, so this stays inside the job)
+#   Optional extras, all optional: description (free text), preset (quantization preset name,
+#     e.g. NVFP4), sparsity (0..1, the fraction of weights REAP keeps), config (a file name
+#     in the run dir with the Minitron config).
+#   Any other key is a hard error: the file is refused, not silently ignored.
+#
+# The base model is read from the lab's READ-ONLY Hugging Face cache (mounted at /hf inside the
+# container). Nothing is downloaded: a recipe whose base model is not in that cache fails with
+# "base model not in the offline cache" instead of reaching the internet.
+#
+# Added 2026-10-28. Generated 2026-10-28, unverified (see README.md "What is verified").
 version: 1
 recipes:
   reap-glm53:
-    description: "REAP expert pruning 25% + NVFP4 for the GLM-5.3-Flash checkpoint"
     method: reap
-    base_model: GLM-5.3-Flash
-    sparsity: 0.25
-    calibration: ultrachat-200k
-    output: GLM-5.3-Flash-REAP25-NVFP4
+    base_model: zai-org/GLM-5.3-Flash
+    output: /runs/reap-glm53
   quantize-glm53-nvfp4:
-    description: "NVFP4 quantization of the GLM-5.3-Flash checkpoint"
     method: quantize
-    base_model: GLM-5.3-Flash
-    scheme: NVFP4
-    calibration: cnn-dailystories
-    output: GLM-5.3-Flash-NVFP4
+    base_model: zai-org/GLM-5.3-Flash
+    output: /runs/quantize-glm53-nvfp4

@@ -387,9 +387,12 @@ above changes. Contract: feature "nvidia-five" (2026-10-24).
 * **Metric key prefix:** `mo.` — `mo.jobs`, `mo.jobs_by_verdict{verdict}` (one point per verdict),
   `mo.live_running`, `mo.output_bytes`, `mo.compression_ratio`, `mo.duration_s`. Every number is read from a finished
   job's `run.json`; nothing is estimated. Event kind: `modelopt.job` (data: `job_id`, `recipe`, `verdict`).
-* **Config:** `clients/modelopt/recipes.yaml` is EDITABLE and authoritative (own schema: `version` must be 1, a recipe
-  needs `method` in `reap|quantize|minitron` plus `base_model` and `output`, names match `[a-z0-9][a-z0-9-]{0,39}`,
-  unknown keys are refused with their line number).
+* **Config:** `clients/modelopt/recipes.yaml` is EDITABLE and authoritative. Its schema is the lab tool's
+  (`clients/modelopt/src/modelopt_core.py` `validate_recipes`), and the console enforces exactly the same rules:
+  `version` must be 1; 1-64 recipes, names match `[a-z0-9][a-z0-9-]{0,39}`; a recipe needs `method` in
+  `reap|quantize|minitron`, `base_model` (a Hugging Face repo id, `org/name`) and `output` (a path under `/runs/`);
+  optional `description`, `preset`, `config` (strings) and `sparsity` (a number, 0 <= s < 1); any other key is refused
+  with its line number. Like the tool, the console runs nothing from a file with any error.
 * **Actions:** `run` (DISRUPTIVE: it takes a GPU for hours; the wrapper returns at once and the job keeps running
   after the tab closes) and `report` (SAFE: one job's `run.json`, redacted). No stop, no cancel: the console does not own
   the container's lifecycle. No playground.
