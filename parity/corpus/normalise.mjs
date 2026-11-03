@@ -73,6 +73,10 @@ function isoNowRe() {
  * Per-backend normaliser. side: {root, port, upstreamPorts:{name:port}}.
  * The id table lives as long as the side (one scenario run): ids get the same placeholder every time they recur.
  */
+/** The routes that report the console's own version: only their documents get the own-release rule. */
+export const OWN_VERSION_ROUTES = new Set(['GET /api/v1/health', 'GET /api/v1/settings', 'PUT /api/v1/settings',
+  'GET /api/v1/openapi.json']);
+
 export function makeNormaliser(side) {
   const ids = new Map();
   const counts = new Map();
@@ -80,9 +84,12 @@ export function makeNormaliser(side) {
   const roots = [...new Set([side.root, side.realRoot].filter(Boolean))].sort((a, b) => b.length - a.length);
   const portMap = new Map([[String(side.port), '<console>'], ...Object.entries(side.upstreamPorts || {}).map(([n, p]) => [String(p), `<up:${n}>`])]);
 
-  function str(s) {
+  // own-release: the console's own version, only where the console reports it (`own`: the routes in
+  // OWN_VERSION_ROUTES). A string equal to it anywhere else is data: the rule used to match everywhere, and once the
+  // console itself became 0.5.0 it also rewrote the fake SkillEvaluator's "0.5.0" on one side only (2026-11-03).
+  function str(s, own = false) {
     if (typeof s !== 'string' || !s) return s;
-    if (side.version && s === side.version) return '<version>';                                  // own-release
+    if (own && side.version && s === side.version) return '<version>';                           // own-release
     let out = s;
     for (const r of roots) out = out.split(r).join('<TMP>');                                    // tmp-paths
     out = out.replace(/(127\.0\.0\.1|localhost|\[::1\]):(\d{2,5})\b/g, (m, h, p) => (portMap.has(p) ? `${h}:${portMap.get(p)}` : m));  // ports
@@ -104,9 +111,9 @@ export function makeNormaliser(side) {
     return out;
   }
 
-  function json(tree) {
+  function json(tree, own = false) {
     return mapTree(tree, (node, _path, key) => {
-      if (node.k === 'str') return { k: 'str', v: str(node.v) };
+      if (node.k === 'str') return { k: 'str', v: str(node.v, own) };
       if (node.k === 'obj') {
         const p = node.v.get('path');                                                            // run-json-size
         const by = node.v.get('bytes');

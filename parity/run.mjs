@@ -26,7 +26,7 @@ import { send, parseSse } from './lib/http.mjs';
 import { parse, pointer, toPlain, stringify } from './lib/json.mjs';
 import { compareTrees, comparePlain, compareSets } from './lib/compare.mjs';
 import { PARITY } from './lib/seed.mjs';
-import { makeNormaliser, isCachedArgv, isCachedHttp } from './corpus/normalise.mjs';
+import { makeNormaliser, isCachedArgv, isCachedHttp, OWN_VERSION_ROUTES } from './corpus/normalise.mjs';
 import { SCENARIOS, casesFor } from './corpus/index.mjs';
 
 const CHOSEN_HEADERS = ['content-type', 'cache-control', 'etag', 'last-modified', 'content-security-policy',
@@ -148,7 +148,8 @@ function shape(c, view) {
 }
 
 /** Normalised view of one response: {status, headers, body:{kind, ...}} */
-function analyse(res, norm) {
+function analyse(res, norm, route) {
+  const own = OWN_VERSION_ROUTES.has(route);         // the own-release rule applies only to these documents
   const out = { status: res.status, error: res.error ? res.error.replace(/\d{2,5}/g, '<n>') : undefined, headers: {} };
   for (const h of CHOSEN_HEADERS) if (res.headers[h] !== undefined) out.headers[h] = h === 'etag' || h === 'last-modified' ? res.headers[h] : norm.str(res.headers[h]);
   const ct = (res.headers['content-type'] || '').toLowerCase();
@@ -158,12 +159,12 @@ function analyse(res, norm) {
     out.body = { kind: 'sse', events: parseSse(text).map((ev) => {
       const e = { ...ev };
       if (e.data !== undefined) {
-        try { e.data = norm.json(parse(e.data)); e.json = true; } catch { e.data = norm.str(e.data); }
+        try { e.data = norm.json(parse(e.data), own); e.json = true; } catch { e.data = norm.str(e.data, own); }
       }
       return e;
     }) };
   } else if (ct.includes('json')) {
-    try { out.body = { kind: 'json', tree: norm.json(parse(text)) }; } catch (e) { out.body = { kind: 'text', text: norm.str(text), note: `invalid JSON: ${e.message}` }; }
+    try { out.body = { kind: 'json', tree: norm.json(parse(text), own) }; } catch (e) { out.body = { kind: 'text', text: norm.str(text, own), note: `invalid JSON: ${e.message}` }; }
   } else if (ct.startsWith('text/plain') && /version=0\.0\.4|^# (HELP|TYPE) /m.test(ct + '\n' + text)) {
     out.body = { kind: 'prometheus', lines: norm.prometheus(text) };
   } else if (/^(text\/html|text\/css|text\/javascript|application\/javascript|image\/)/.test(ct)) {
@@ -332,11 +333,11 @@ async function runScenario(name, opts, allow, report) {
         if (pa.cliOut.code !== 0 || pb.cliOut.code !== 0) comparePlain(sa.norm.str(pa.cliOut.stderr), sb.norm.str(pb.cliOut.stderr), 'stderr', diffs);
       } else if (c.concurrent) {
         pa.res.forEach((r, i) => {
-          for (const d of compareResponses(analyse(r, sa.norm), analyse(pb.res[i], sb.norm))) diffs.push({ ...d, path: `[${i}] ${d.path}` });
+          for (const d of compareResponses(analyse(r, sa.norm, c.route), analyse(pb.res[i], sb.norm, c.route))) diffs.push({ ...d, path: `[${i}] ${d.path}` });
         });
       } else {
-        const ra = shape(c, analyse(pa.res, sa.norm));
-        const rb = shape(c, analyse(pb.res, sb.norm));
+        const ra = shape(c, analyse(pa.res, sa.norm, c.route));
+        const rb = shape(c, analyse(pb.res, sb.norm, c.route));
         diffs.push(...compareResponses(ra, rb));
         if (c.waitExit) comparePlain(pa.exit, pb.exit, 'process exit after the case', diffs);
         if (c.capture) {
@@ -365,7 +366,7 @@ async function runScenario(name, opts, allow, report) {
       if (!scenario.wholeRunCallsOnly) compareSets([...new Set(httpA.filter((x) => !isCachedHttp(httpKey(x))))], [...new Set(httpB.filter((x) => !isCachedHttp(httpKey(x))))], 'upstream-requests (set, cached excluded)', diffs);
       if (opts.dump) {
         const view = c.kind === 'cli' ? { code: pa.cliOut.code, stdout: sa.norm.str(pa.cliOut.stdout), stderr: sa.norm.str(pa.cliOut.stderr) }
-          : c.concurrent ? { status: pa.res.map((r) => r.status), body: pa.res.map((r) => dumpView(analyse(r, sa.norm)).body) } : dumpView(analyse(pa.res, sa.norm));
+          : c.concurrent ? { status: pa.res.map((r) => r.status), body: pa.res.map((r) => dumpView(analyse(r, sa.norm, c.route)).body) } : dumpView(analyse(pa.res, sa.norm, c.route));
         dump.push({ id: c.id, route: c.route, ...view, ...(c.waitExit ? { exit: pa.exit } : {}), argv: cliA.map((x) => JSON.parse(x).argv.join(' ')), upstream: httpA.map((x) => { const o = JSON.parse(x); return `${o.server} ${o.method} ${o.path}`; }) });
       }
       if (fallbackNote.length) diffs.push({ path: 'captured variable (an earlier answer differed)', a: fallbackNote.join('; '), b: '' });

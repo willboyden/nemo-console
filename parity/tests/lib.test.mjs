@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { parse, stringify, pointer } from '../lib/json.mjs';
 import { compareTrees, compareSets } from '../lib/compare.mjs';
 import { parseSse } from '../lib/http.mjs';
-import { makeNormaliser, isCachedArgv } from '../corpus/normalise.mjs';
+import { makeNormaliser, isCachedArgv, OWN_VERSION_ROUTES } from '../corpus/normalise.mjs';
 import { respond, initialWorld } from '../fakes/cli-table.mjs';
 import { FIXTURES } from '../lib/seed.mjs';
 import { ALL_SCENARIOS, casesFor } from '../corpus/index.mjs';
@@ -97,4 +97,21 @@ test('reference: python = python-final = the pinned last Python commit; other re
   assert.equal(resolveRef('python-final'), PYTHON_FINAL_COMMIT);   // the tag, when present, must name this commit
   assert.equal(resolveRef('v0.3.1'), 'v0.3.1');
   assert.throws(() => refTag('python@main'), /python-final, a tag vX.Y.Z or a commit id/);
+});
+
+test("normalise: the console's own version is replaced only on the routes that report it", () => {
+  // 2026-11-03: the rule matched any equal string, so a console at 0.5.0 also rewrote the fake SkillEvaluator's
+  // "0.5.0" on one side only. Own routes get <version>; the same string anywhere else stays data.
+  const n = makeNormaliser({ root: '/tmp/nc-x/a', port: 4321, version: '0.5.0' });
+  const own = (doc) => stringify(n.json(parse(doc), true));
+  const other = (doc) => stringify(n.json(parse(doc)));
+  assert.equal(own('{"status":"ok","version":"0.5.0"}'), '{"status":"ok","version":"<version>"}');
+  assert.equal(own('{"info":{"title":"Nemo Console","version":"0.5.0"}}'), '{"info":{"title":"Nemo Console","version":"<version>"}}');
+  assert.equal(own('{"version":"0.4.9"}'), '{"version":"0.4.9"}');               // another version is left alone
+  assert.equal(other('{"id":"skillevaluator","version":"0.5.0"}'), '{"id":"skillevaluator","version":"0.5.0"}');
+  assert.equal(n.str('0.5.0'), '0.5.0');
+  for (const r of ['GET /api/v1/health', 'GET /api/v1/settings', 'PUT /api/v1/settings', 'GET /api/v1/openapi.json']) {
+    assert.ok(OWN_VERSION_ROUTES.has(r), r);
+  }
+  assert.ok(!OWN_VERSION_ROUTES.has('GET /api/v1/systems/{system_id}/status'));
 });
