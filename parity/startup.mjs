@@ -66,7 +66,16 @@ function runOnce(kind, env, args) {
   });
 }
 
-/** Python's final exception message (or Rust's whole stderr), normalised per D-1. */
+// D-31: the Rust backend has two systems the Python reference predates (Model Optimizer, ADR-0017; NeMo Gym,
+// ADR-0018), so its "unknown layout key" error names two more keys. Exactly that tail is dropped from that one line;
+// any other difference in it, or anywhere else, still fails the comparison.
+const D31_TAIL = ', modelopt, gym) [type=value_error]';
+function d31(line) {
+  return line.startsWith('  Value error, unknown layout key ') && line.endsWith(D31_TAIL)
+    ? `${line.slice(0, -D31_TAIL.length)}) [type=value_error]` : line;
+}
+
+/** Python's final exception message (or Rust's whole stderr), normalised per D-1 (and D-31 for Rust). */
 function message(kind, err) {
   let text = err;
   if (kind === 'python') {
@@ -76,7 +85,8 @@ function message(kind, err) {
     text = i < 0 ? err : [lines[i].replace(/^[A-Za-z_][\w.]*: /, ''), ...lines.slice(i + 1)].join('\n');
   }
   return text.split('\n').filter((l) => !/^\s+For further information visit /.test(l))
-    .map((l) => l.replace(/, input_value=.*?, input_type=\w+\]$/, ']')).join('\n').trim();
+    .map((l) => l.replace(/, input_value=.*?, input_type=\w+\]$/, ']'))
+    .map((l) => (kind === 'rust' ? d31(l) : l)).join('\n').trim();
 }
 
 function setup(name, kind, extraEnv, file) {

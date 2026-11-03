@@ -503,6 +503,11 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
   before an older run (the clean-clone parity run caught it: a Data Designer run `…34-000` created after `…34-941`).
   Every Rust run id (`plumbing::run_stamp`) now takes both parts from one reading. The parity harness sends actions
   only between 50 and 700 ms into a second, so both stamps land in the request's second and the order compares.
+- **D-31 Systems added after the port (Model Optimizer, ADR-0017; NeMo Gym, ADR-0018).** The Python reference
+  (`aa2f810`) predates both adapters, so wherever the Rust backend lists its systems it has two more entries: the
+  shared aggregate payloads (`/health`, `/overview`, `/systems`; the case ids in `parity/allow-diffs.txt`) and the
+  layout keys named by the "unknown layout key" settings error (`parity/startup.mjs` drops exactly the `, modelopt,
+  gym` tail of that one line). Every other difference on those routes and in that message still fails the gate.
 - **Test-only (workstream B):** in the DCGM `post_apply` restart test the fake upstream answers 503 instead of refusing the
   connection.
 - **Moot since A-7 (the private copies are deleted):** workstream B's "alias expansion over 1,000,000 nodes raises

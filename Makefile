@@ -55,8 +55,11 @@ frontend-test:  ## node --test on the pure-logic modules (no npm install needed)
 e2e: build  ## browser end-to-end: real backend + headless Chrome, every page and tab; records a pass for the pre-push hook
 	scripts/e2e-gate.sh run
 
-parity: build  ## differential check against the last Python backend (parity/ref.mjs: git archive + uv, offline)
+parity: build  ## differential check against the last Python backend (parity/ref.mjs: git archive + uv, offline), as CI runs it
 	node parity/run.mjs --a python --b rust --allow-diff-routes parity/allow-diffs.txt
+	node parity/xstate.mjs
+	node parity/startup.mjs
+	node parity/launcher.mjs
 
 all: lint typecheck test deny audit crate-age frontend-test e2e  ## every gate
 
