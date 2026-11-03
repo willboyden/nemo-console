@@ -37,6 +37,7 @@ pub static ALLOWED_BINARIES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
         "guardrails-local",
         "evaluator-local",
         "modelopt-local",
+        "gym-local",
     ]
     .into_iter()
     .collect()
@@ -65,6 +66,9 @@ pub const EVALUATOR_BINARIES: [&str; 1] = ["evaluator-local"];
 pub const EVALUATOR_RUN: f64 = MAX_LIVE_EVAL_TIMEOUT;
 pub const MODELOPT_BINARIES: [&str; 1] = ["modelopt-local"];
 pub const MODELOPT_RUN: f64 = MAX_TIMEOUT;
+pub const GYM_BINARIES: [&str; 1] = ["gym-local"];
+/// `gym-local smoke` runs in the foreground (servers, Ray, the rollouts): up to an hour.
+pub const GYM_SMOKE: f64 = 3600.0;
 pub const STOP_GRACE: f64 = 5.0;
 pub const MAX_ARGS: usize = 64;
 pub const MAX_ARG_LEN: usize = 8192;
@@ -77,6 +81,7 @@ fn is_graceful(bin: &str) -> bool {
         || AIPERF_BINARIES.contains(&bin)
         || EVALUATOR_BINARIES.contains(&bin)
         || MODELOPT_BINARIES.contains(&bin)
+        || GYM_BINARIES.contains(&bin)
 }
 
 /// The cap for this argv: the long one only for a SkillEvaluator launcher's `tier3`, `data-designer-local create`,
@@ -99,6 +104,9 @@ pub fn max_timeout(argv: &[String]) -> f64 {
     }
     if MODELOPT_BINARIES.contains(&first) && second == Some("run") {
         return MODELOPT_RUN;
+    }
+    if GYM_BINARIES.contains(&first) && second == Some("smoke") {
+        return GYM_SMOKE;
     }
     MAX_TIMEOUT
 }

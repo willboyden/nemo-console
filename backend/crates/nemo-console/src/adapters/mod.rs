@@ -18,6 +18,7 @@ pub mod datadesigner;
 pub mod evaluator;
 pub mod skillevaluator;
 // workstream D
+pub mod gym;
 pub mod modelopt;
 
 use crate::adapters::base::{AdapterContext, AdapterError, AdapterRef};
@@ -25,7 +26,7 @@ use crate::config::Settings;
 use crate::domain::models::SystemId;
 
 /// Registry order (`SYSTEM_IDS`).
-pub const SYSTEM_IDS: [SystemId; 11] = SystemId::ALL;
+pub const SYSTEM_IDS: [SystemId; 12] = SystemId::ALL;
 
 /// The registry's build function type (tests may substitute one, like Python monkeypatching `_REGISTRY`).
 pub type BuildFn = fn(SystemId, &AdapterContext, &Settings) -> Result<AdapterRef, AdapterError>;
@@ -48,5 +49,6 @@ pub fn build_adapter(
         SystemId::Guardrails => guardrails::build(ctx, cfg),
         SystemId::Evaluator => evaluator::build(ctx, cfg),
         SystemId::Modelopt => modelopt::build(ctx, cfg),
+        SystemId::Gym => gym::build(ctx, cfg),
     }
 }
