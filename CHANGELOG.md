@@ -11,8 +11,10 @@ implemented / verified-live / unverified defined in the README.
   recipe file, the last job), the `mo.*` metrics, the editable `recipes.yaml`, a `run` action that starts a
   compression job in the background and a safe `report` action. The console starts the lab's `modelopt-local`
   wrapper and reads each job's `run.json`; it never runs the compression code, never writes a job's files and
-  never stops a running job ([ADR-0017](docs/adr/0017-model-optimizer-is-a-background-job.md)). Implemented with
-  fakes only (`tests/modelopt_adapter.rs`); nothing about it has been seen live yet.
+  never stops a running job ([ADR-0017](docs/adr/0017-model-optimizer-is-a-background-job.md)). Tested with
+  fakes (`tests/modelopt_adapter.rs`). The status read path is also verified live (2026-11-03: against the lab's
+  installed wrapper and its real `recipes.yaml` the system reports up, with no diagnostics); no compression job has
+  been started from the console yet.
 
 ### Fixed
 

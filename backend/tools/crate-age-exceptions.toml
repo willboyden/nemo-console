@@ -3,14 +3,5 @@
 # as Dependabot's security updates do; version updates never do. `crate-age.py` reports an entry as stale once the
 # version is old enough or no longer locked: then delete it. Adding an entry needs the integrator (PORTING.md A-7). Copied from Engine Console's file (same versions, same advisories).
 
-[[exception]]
-name = "rustls-webpki"
-version = "0.103.16"
-advisories = ["RUSTSEC-2026-0382"]
-reason = "0.103.15 may accept distrusted intermediates (patched: >=0.103.16); 0.103.16 published 2026-10-20"
-
-[[exception]]
-name = "webpki-root-certs"
-version = "1.0.10"
-advisories = ["RUSTSEC-2026-0383"]
-reason = "1.0.9 trusts distrusted emSign intermediates (patched: >=1.0.10); 1.0.10 published 2026-10-19"
+# No exceptions at the moment (2026-11-03: rustls-webpki 0.103.16 and webpki-root-certs 1.0.10 passed the 14-day
+# cooldown and were removed, as crate-age.py asked).
