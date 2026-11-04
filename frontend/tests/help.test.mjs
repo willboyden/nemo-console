@@ -10,8 +10,9 @@ import { ROUTES } from '../js/routes.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const doc = JSON.parse(fs.readFileSync(path.join(root, 'i18n/help.en.json'), 'utf8'));
 
-// The tab ids each system page can show (views/*.js; the generic view builds Config and Playground only when the
-// backend offers them). Every page also gets `start` and `faq` from system-page.js.
+// The tab ids each page can show (views/*.js; the generic view builds Config and Playground only when the backend
+// offers them). Every page also gets `start` and `faq` from system-page.js. CONSOLE_PAGES are the console's own.
+const CONSOLE_PAGES = { overview: ['status'], audit: ['log'], settings: ['settings'] };
 const HELP_TABS = ['start', 'faq'];
 const TABS = {
   switchyard: ['routing', 'config', 'playground', 'actions'],
@@ -21,7 +22,7 @@ const TABS = {
   datadesigner: ['status', 'scripts', 'actions', 'runs'],
   ...Object.fromEntries(SEVEN_IDS.map((id) => [id, ['status', 'config', 'playground', 'actions']])),
 };
-const tabsBySystem = Object.fromEntries(Object.entries(TABS).map(([k, v]) => [k, [...v, ...HELP_TABS]]));
+const tabsBySystem = Object.fromEntries(Object.entries({ ...TABS, ...CONSOLE_PAGES }).map(([k, v]) => [k, [...v, ...HELP_TABS]]));
 
 test('the tab table covers every managed system', () => {
   assert.deepEqual(Object.keys(TABS).sort(), [...SYSTEM_IDS].sort());
@@ -31,6 +32,7 @@ test('the tab table matches the tab ids the views define', () => {
   const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
   const ids = (src) => [...src.matchAll(/\{\s*id:\s*'([a-z_]+)',\s*label:\s*t\('tab\./g)].map((m) => m[1]);
   for (const id of ['switchyard', 'relay', 'dynamo', 'skillevaluator', 'datadesigner']) assert.deepEqual(ids(read(`js/views/${id}.js`)).sort(), [...TABS[id]].sort(), id);
+  for (const [id, tabs] of Object.entries(CONSOLE_PAGES)) assert.deepEqual(ids(read(`js/views/${id}.js`)), tabs, id);
   // The generic view: Status, then Config / Playground when offered, then Actions.
   const gen = read('js/components/generic-system.js');
   assert.deepEqual(ids(gen).sort(), ['actions', 'config', 'playground', 'status']);
@@ -38,18 +40,18 @@ test('the tab table matches the tab ids the views define', () => {
   assert.deepEqual(ids(read('js/components/system-page.js')), HELP_TABS);
 });
 
-test('help.en.json has a valid guide and FAQ for every system and the console questions', () => {
+test('help.en.json has a valid guide and FAQ for every system, Overview, Audit, Settings and the console questions', () => {
   assert.deepEqual(helpProblems(doc, tabsBySystem, ROUTES.map((r) => r.path)), []);
 });
 
 test('helpProblems catches the mistakes it is meant to catch', () => {
   const bad = {
     [CONSOLE_KEY]: { faq: [{ q: 'Q', a: 'A', tab: 'status' }] },
-    switchyard: { lead: 'x', steps: [{ title: 't', body: 'b', tab: 'nope' }], faq: [{ q: 'q', a: 'see https://example.org' }, { q: 'q', a: 'odd `tick' }, { q: 'r', a: 'a', route: '/nowhere' }, { q: 's', a: 'a', extra: 1 }] },
+    switchyard: { lead: 'x', steps: [{ title: 't', body: 'b', tab: 'nope' }], faq: [{ q: 'q', a: 'see https://example.org, not http://127.0.0.1:8793/' }, { q: 'q', a: 'odd `tick' }, { q: 'r', a: 'a', route: '/nowhere' }, { q: 's', a: 'a', extra: 1 }] },
     nosuch: {},
   };
   const out = helpProblems(bad, { switchyard: ['routing', 'start', 'faq'], relay: ['status'] }, ['/settings']);
-  for (const want of ['nosuch: not a system', 'only for system pages', 'fewer than 3 steps', 'external URL', 'unbalanced backtick', 'unknown route /nowhere', 'unknown key extra', 'duplicate question', 'relay: no entry']) {
+  for (const want of ['nosuch: not a page', 'only for a page', 'fewer than 3 steps', 'external URL', 'unbalanced backtick', 'unknown route /nowhere', 'unknown key extra', 'duplicate question', 'relay: no entry']) {
     assert.ok(out.some((p) => p.includes(want)), `${want} in ${JSON.stringify(out)}`);
   }
 });
@@ -70,4 +72,8 @@ test('filterFaq matches every word in question, answer or command, case-insensit
   assert.deepEqual(filterFaq(items, '409 stale').map((i) => i.q), ['Why 409?']);
   assert.deepEqual(filterFaq(items, 'docker').map((i) => i.q), ['Why 409?']);
   assert.deepEqual(filterFaq(items, 'timeout 409'), []);
+});
+
+test('the console pages are nav routes and every console-page help key has a route', () => {
+  for (const id of Object.keys(CONSOLE_PAGES)) assert.ok(ROUTES.some((r) => r.path === `/${id}`), id);
 });

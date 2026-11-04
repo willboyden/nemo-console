@@ -38,6 +38,163 @@
       }
     ]
   },
+  "overview": {
+    "lead": "The Overview is the console's front page: a map of how requests flow from the agent clients through the gateway and router to the engines, and one card per system with its health, version, components and problems. It refreshes every 5 seconds and changes nothing.",
+    "steps": [
+      {
+        "title": "Sign in",
+        "body": "Every page except the health check needs a key. On the first start the console writes an admin key to `bootstrap-admin.key` in its state directory; paste it with the key button in the top bar, or mint another on the host. The key stays in this tab only, so each new tab asks again.",
+        "cmd": "nemo-console mint-key admin"
+      },
+      {
+        "title": "Read the topology",
+        "body": "The topology card draws the path a request can take. Its edges are built from each system's health plus a few probes, so they show a plausible path, not observed traffic. Engines come from the `topology_engines` setting: one that is stopped on purpose is drawn off, a missing container off (not deployed).",
+        "tab": "status"
+      },
+      {
+        "title": "Scan the system cards",
+        "body": "Each card shows the system's health, version, a one-line summary, its components and its problems. Start with anything down, then degraded. Every problem carries one exact fix command with a Copy button."
+      },
+      {
+        "title": "Open a system",
+        "body": "The system's name or its Open button leads to its own page: status, config, actions and playground, and its own Getting started and FAQ tabs."
+      }
+    ],
+    "faq": [
+      {
+        "q": "Is the topology live traffic?",
+        "a": "No. It is drawn from health checks and probes (router liveness, the engine containers you list), so it shows where a request could go. To see where requests actually went, open Switchyard's Routing tab or the trace boards of your observability stack."
+      },
+      {
+        "q": "The topology shows an engine I never run.",
+        "a": "The engine nodes come from the `topology_engines` setting, whose default lists the author's engines. Set `NEMO_CONSOLE_TOPOLOGY_ENGINES` for your deployment and restart the console. A container that does not exist is drawn off (not deployed), not as a fault."
+      },
+      {
+        "q": "Every system looks absent and the paths look wrong.",
+        "a": "The console cannot find the systems' directories. Look for the problem `console.repo_root.missing` and set `NEMO_CONSOLE_REPO_ROOT` to the checkout that holds them, then restart the console."
+      },
+      {
+        "q": "A card says \"version unknown\".",
+        "a": "The system did not report a version, usually because it is not answering (check its health) or because that system does not expose one."
+      },
+      {
+        "q": "Can I start or stop systems from here?",
+        "a": "No. The Overview only reads. Actions, config edits and test requests live on each system's page, and each one asks you to confirm."
+      },
+      {
+        "q": "Does a screen reader hear when something changes?",
+        "a": "Yes. When a system's health changes between two refreshes, the console announces it in a live region."
+      }
+    ]
+  },
+  "audit": {
+    "lead": "The Audit log is the append-only record of every change made through the console: when, which key, which system, which action or file, the parameters (redacted) and the HTTP status. Chat text and file bodies are never stored. Only admins can read it.",
+    "steps": [
+      {
+        "title": "Sign in with an admin key",
+        "body": "A viewer key sees \"Admin only\". Mint an admin key on the host and paste it with the key button in the top bar.",
+        "cmd": "nemo-console mint-key admin"
+      },
+      {
+        "title": "Pick a system",
+        "body": "The Log tab shows the newest 200 calls. The filter narrows them to one system; Refresh reloads.",
+        "tab": "log"
+      },
+      {
+        "title": "Read a row",
+        "body": "When (UTC), the actor (the key's id) and its role, the system, the action or file, the redacted parameters and the HTTP status: green for success, red for 400 and above."
+      },
+      {
+        "title": "Keep a copy",
+        "body": "The log lives in `console.db` in the console's state directory. To back it up while the console runs, use SQLite's backup command, and treat the copy as sensitive: the database also holds key hashes and the stored config revisions.",
+        "cmd": "sqlite3 ~/.local/share/nemo-console/console.db \".backup /path/to/backup.db\""
+      }
+    ],
+    "faq": [
+      {
+        "q": "Which calls are recorded?",
+        "a": "Authenticated, authorised calls that change something: applies, rollbacks, actions, settings saves, playground requests. Reads are not recorded."
+      },
+      {
+        "q": "Why is a refused request missing from the log?",
+        "a": "Denied requests (401, 403, 421, 429) never reach the audit table. They are counted in `nemo_console_denied_requests_total` on the console's `/metrics`, kept in a 100-entry memory ring, and summarised in the console log at most once a minute."
+      },
+      {
+        "q": "Are secrets or my prompts in the log?",
+        "a": "No. Parameters are redacted, chat text and file contents are never stored, and credentials are only ever referenced by the name of their environment variable."
+      },
+      {
+        "q": "Can I see more than 200 rows?",
+        "a": "The page asks for 200. The API returns up to 500 at a time.",
+        "cmd": "curl -s -H \"Authorization: Bearer $KEY\" 'http://127.0.0.1:8793/api/v1/audit?limit=500'"
+      },
+      {
+        "q": "Can I edit or delete entries?",
+        "a": "Not through the console: the log is append-only. It is an ordinary SQLite table on the host, so anyone with access to the state directory can still change the file; protect that directory (it is created 0700)."
+      },
+      {
+        "q": "Who is the actor?",
+        "a": "The id of the key that made the call, with its role. The console has one user; give each tool or person its own key if you want to tell them apart."
+      }
+    ]
+  },
+  "settings": {
+    "lead": "Settings has three parts: how this browser shows the console (theme), the key this tab uses (session), and the console backend's own settings (system URLs, the poll interval and the names of the environment variables that hold the playground credentials).",
+    "steps": [
+      {
+        "title": "Pick a theme",
+        "body": "Dark, light or follow the system. The choice is kept in this browser.",
+        "tab": "settings"
+      },
+      {
+        "title": "Set the key for this tab",
+        "body": "Paste a bearer key and Save. It is kept in this tab's sessionStorage only, never in localStorage, and Clear forgets it. The line under it shows your role and the trust mode."
+      },
+      {
+        "title": "Check the system URLs",
+        "body": "Backend settings lists the URL the console uses for each system. They must be loopback addresses; anything else is refused. A saved change takes effect only after the console restarts."
+      },
+      {
+        "title": "Name the playground credentials",
+        "body": "Each playground uses a credential held in an environment variable of the console process. Enter the variable's NAME, not its value; the status next to it says `[set, N chars]` or `[unset]`. Allowed names are `LITELLM_*`, `NEMO_CONSOLE_PLAYGROUND_*` and `*_API_KEY`."
+      },
+      {
+        "title": "Restart to apply",
+        "body": "After saving URLs, restart the console so they take effect.",
+        "cmd": "backend/target/release/nemo-console stop && backend/target/release/nemo-console open"
+      }
+    ],
+    "faq": [
+      {
+        "q": "I saved a URL and nothing changed.",
+        "a": "URL changes need a console restart; the page says so after a save. Restart with `nemo-console stop` and `nemo-console open`."
+      },
+      {
+        "q": "A credential shows `[unset]`.",
+        "a": "The named variable is not in the console process's environment. Add it to `~/.config/nemo-console/env` (keep the file 0600) or the unit's environment, then restart the console."
+      },
+      {
+        "q": "Saving was refused with `invalid_setting`.",
+        "a": "Credential fields take an environment variable NAME from the allowed families (`LITELLM_*`, `NEMO_CONSOLE_PLAYGROUND_*`, `*_API_KEY`), never a value. Use a name in one of those families."
+      },
+      {
+        "q": "Why are the fields greyed out?",
+        "a": "Your key has the viewer role. Viewers can read the settings; saving needs an admin key."
+      },
+      {
+        "q": "Where do I change container names, paths or the repo root?",
+        "a": "Those are environment-only settings (`NEMO_CONSOLE_*`, for example `NEMO_CONSOLE_REPO_ROOT`), listed in section 2 of the operations guide. Set them in the env file and restart; this page does not edit them."
+      },
+      {
+        "q": "Why does every new tab ask for the key again?",
+        "a": "The key lives in each tab's sessionStorage, so it never reaches disk through the browser. That is deliberate."
+      },
+      {
+        "q": "What does the trust line mean?",
+        "a": "`bearer token` is the default: every call needs a key. `loopback admin` appears only if `NEMO_CONSOLE_TRUST_LOOPBACK=true` was set, which makes ANY local process an admin without a key; the console turns it off by itself when the host is not loopback or `NEMO_CONSOLE_ALLOWED_HOSTS` is set."
+      }
+    ]
+  },
   "switchyard": {
     "lead": "NeMo Switchyard routes each chat request to a tier (a fast model first, a capable one for hard turns) according to its `routes.toml`. Here you read its traffic, edit its routes with an automatic rollback and send test requests through it.",
     "steps": [

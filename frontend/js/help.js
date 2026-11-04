@@ -1,5 +1,5 @@
-// Getting started + FAQ content for the system pages (i18n/help.en.json). Pure logic, no DOM, so tests import it.
-// The file holds one entry per managed system ({lead, steps: [{title, body, cmd?, tab?}], faq: [{q, a, cmd?, tab?,
+// Getting started + FAQ content for the tabbed pages (i18n/help.en.json). Pure logic, no DOM, so tests import it.
+// The file holds one entry per page (the twelve systems, overview, audit, settings) ({lead, steps: [{title, body, cmd?, tab?}], faq: [{q, a, cmd?, tab?,
 // route?}]}) plus `_console` ({faq}), the questions that apply on every page. Text is plain text: `backticks` mark
 // inline code and a blank line splits paragraphs; nothing in it is ever parsed as HTML.
 
@@ -32,10 +32,10 @@ export function filterFaq(items, query) {
 }
 
 /**
- * Problems with a help document, for the tests: every system has a lead, at least three steps and four questions,
- * every field is a non-empty string, `tab` names a tab of that system's page and `route` a nav route.
+ * Problems with a help document, for the tests: every page has a lead, at least three steps and four questions,
+ * every field is a non-empty string, `tab` names a tab of that page, `route` a nav route, and no URL leaves loopback.
  * @param {object} doc  the parsed help file
- * @param {Record<string, string[]>} tabsBySystem  tab ids each system page can show
+ * @param {Record<string, string[]>} tabsBySystem  tab ids each page can show (keys: the pages)
  * @param {string[]} routes  nav paths (`/settings`, ...)
  */
 export function helpProblems(doc, tabsBySystem, routes) {
@@ -47,15 +47,15 @@ export function helpProblems(doc, tabsBySystem, routes) {
     for (const k of required) if (!str(it[k])) out.push(`${where}: ${k} missing or empty`);
     for (const k of ['cmd', 'tab', 'route']) if (k in it && !str(it[k])) out.push(`${where}: ${k} empty`);
     if (it.tab && tabs && !tabs.includes(it.tab)) out.push(`${where}: unknown tab ${it.tab}`);
-    if (it.tab && !tabs) out.push(`${where}: tab links are only for system pages`);
+    if (it.tab && !tabs) out.push(`${where}: tab links are only for a page's own entry`);
     if (it.route && !routes.includes(it.route)) out.push(`${where}: unknown route ${it.route}`);
     for (const [k, v] of Object.entries(it)) {
       if (typeof v !== 'string') continue;
-      if (/https?:\/\//.test(v)) out.push(`${where}.${k}: external URL`);
+      if (/https?:\/\/(?!(127\.0\.0\.1|localhost)[:/])/.test(v)) out.push(`${where}.${k}: external URL`);   // loopback examples are fine
       if ((v.match(/`/g) || []).length % 2) out.push(`${where}.${k}: unbalanced backtick`);
     }
   };
-  for (const id of Object.keys(doc || {})) if (id !== CONSOLE_KEY && !(id in tabsBySystem)) out.push(`${id}: not a system`);
+  for (const id of Object.keys(doc || {})) if (id !== CONSOLE_KEY && !(id in tabsBySystem)) out.push(`${id}: not a page`);
   const common = doc?.[CONSOLE_KEY];
   if (!Array.isArray(common?.faq) || !common.faq.length) out.push(`${CONSOLE_KEY}: faq missing`);
   else common.faq.forEach((it, i) => checkItem(`${CONSOLE_KEY}.faq[${i}]`, it, FAQ_KEYS, ['q', 'a'], null));

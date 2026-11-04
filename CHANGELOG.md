@@ -3,6 +3,19 @@
 Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Claims use the labels
 implemented / verified-live / unverified defined in the README.
 
+## [Unreleased]
+
+### Added
+
+- **Getting started and FAQ tabs on Overview, Audit and Settings too.** The console's own pages now have tabs like
+  the system pages: their content is the first tab (Status, Log, Settings), then Getting started and FAQ. Deep links
+  work the same way (`#/settings?tab=faq`); `/` still opens Overview on its first tab. The tab frame is one helper for
+  every page now (`helpTabs` in `frontend/js/components/system-page.js`), and Overview polls only while its first tab
+  is open. The console-wide questions skip the one whose link points at the page you are on. Tested by
+  `tests/help.test.mjs` (the three pages' entries and tab ids) and the browser suite (86 pages and tabs, was 77);
+  deep links, the `/` route, Overview's polling stopping on the help tabs and Settings' key save were also driven in
+  headless Chrome against the dev mock. No backend change.
+
 ## [0.6.1] - 2026-11-04
 
 ### Fixed

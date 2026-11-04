@@ -5,23 +5,28 @@ import { healthChanges } from '../status-util.js';
 import { card, healthBadge, compBadge, problemList, errorBox, skeleton, emptyBox, btn } from '../components/ui.js';
 import { topologyGraph } from '../components/topology.js';
 import { announce } from '../components/live.js';
+import { consolePage } from '../components/system-page.js';
 
 class NcOverview extends NcView {
   setup() {
-    this.topoHost = h('div', {}, skeleton(3)); this.tiles = h('div', { class: 'grid tiles' }, skeleton(3));
-    this.append(h('h1', t('nav.overview')), card(t('overview.topology'), this.topoHost, btn(t('common.refresh'), { size: 'sm', icon: 'restart', onClick: () => this.load() })),
-      h('h2', { class: 'section' }, t('overview.systems')), this.tiles);
-    this.load(); this.scope.every(5000, () => this.load());
+    consolePage(this, { page: 'overview', active: this.query?.tab, tabDefs: [{ id: 'status', label: t('tab.status'), render: (scope) => this.statusTab(scope) }] });
   }
-  async load() {
-    try {
-      const ov = await this.scope.api.overview();
-      if (!this.scope.alive) return;
-      for (const c of healthChanges(this.prev, ov)) announce(t('sys.health_changed', { name: t(`sys.${c.id}`), health: t(`health.${c.to}`) }));
-      this.prev = ov;
-      clear(this.topoHost).append(topologyGraph(ov.topology));
-      clear(this.tiles).append(...ov.systems.map((s) => this.tile(s)));
-    } catch (e) { if (this.scope.alive && !this.prev) { clear(this.topoHost).append(errorBox(e, () => this.load())); clear(this.tiles).append(emptyBox(t('overview.no_data'))); } }
+  /** Topology + one card per system, polled every 5 s while this tab is open. */
+  statusTab(scope) {
+    const topoHost = h('div', {}, skeleton(3)), tiles = h('div', { class: 'grid tiles' }, skeleton(3));
+    const load = async () => {
+      try {
+        const ov = await scope.api.overview();
+        if (!scope.alive) return;
+        for (const c of healthChanges(this.prev, ov)) announce(t('sys.health_changed', { name: t(`sys.${c.id}`), health: t(`health.${c.to}`) }));
+        this.prev = ov;
+        clear(topoHost).append(topologyGraph(ov.topology));
+        clear(tiles).append(...ov.systems.map((x) => this.tile(x)));
+      } catch (e) { if (scope.alive && !this.prev) { clear(topoHost).append(errorBox(e, load)); clear(tiles).append(emptyBox(t('overview.no_data'))); } }
+    };
+    load(); scope.every(5000, load);
+    return h('div', { class: 'stack-v' }, card(t('overview.topology'), topoHost, btn(t('common.refresh'), { size: 'sm', icon: 'restart', onClick: load })),
+      h('h2', { class: 'section' }, t('overview.systems')), tiles);
   }
   tile(s) {
     return h('section', { class: `card tile ${s.health}`, 'aria-label': t(`sys.${s.system}`) },

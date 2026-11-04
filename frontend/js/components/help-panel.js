@@ -1,4 +1,6 @@
-// The Getting started and FAQ tabs every system page gets (system-page.js). Content comes from i18n/help.en.json
+// The Getting started and FAQ tabs every tabbed page gets (system-page.js helpTabs: the twelve system pages and
+// Overview, Audit, Settings). `help` = { key: the entry in i18n/help.en.json, name: the page's display name, nav }.
+// Content comes from i18n/help.en.json
 // (see help.js); all of it is rendered as text nodes, `code` spans included. A step or answer may carry a command
 // (shown with a Copy button, never run), a link to another tab of the same page (shown only when the page has that
 // tab: Config and Playground are optional on some pages) and a link to another console page.
@@ -13,7 +15,7 @@ function paras(text, cls) {
   return richRuns(text).map((runs) => h('p', { class: cls }, inline(runs)));
 }
 
-/** Command, tab link and page link of a step or answer; `nav` comes from systemPage. */
+/** Command, tab link and page link of a step or answer; `nav` comes from helpTabs. */
 function extras(item, nav) {
   const links = [
     item.tab && nav.hasTab(item.tab) ? btn(t('help.open_tab', { tab: nav.tabLabel(item.tab) }), { size: 'sm', onClick: () => nav.goTab(item.tab) }) : null,
@@ -36,12 +38,12 @@ function helpHost(scope, build) {
   return host;
 }
 
-export function gettingStartedPanel(scope, system, nav) {
+export function gettingStartedPanel(scope, { key, name, nav }) {
   return helpHost(scope, (doc) => {
-    const e = doc[system];
+    const e = doc[key];
     if (!e?.steps?.length) return emptyBox(t('help.missing'));
     return [
-      card(t('help.start_title', { name: t(`sys.${system}`) }), h('div', { class: 'stack-v' },
+      card(t('help.start_title', { name }), h('div', { class: 'stack-v' },
         paras(e.lead, 'help-lead'),
         h('ol', { class: 'steps' }, e.steps.map((s) => h('li', { class: 'step' },
           h('h3', { class: 'step-title' }, s.title), h('div', { class: 'step-body' }, paras(s.body), extras(s, nav))))))),
@@ -52,13 +54,14 @@ export function gettingStartedPanel(scope, system, nav) {
 
 const faqItem = (it, nav) => h('details', { class: 'faq-item' }, h('summary', inline(richRuns(it.q).flat())), h('div', { class: 'faq-a' }, paras(it.a), extras(it, nav)));
 
-export function faqPanel(scope, system, nav) {
+export function faqPanel(scope, { key, name, nav }) {
   return helpHost(scope, (doc) => {
-    const own = doc[system]?.faq || [], common = doc[CONSOLE_KEY]?.faq || [];
+    // The console-wide questions follow, minus any whose only link is to this very page.
+    const own = doc[key]?.faq || [], common = (doc[CONSOLE_KEY]?.faq || []).filter((it) => it.route !== `/${key}`);
     const input = h('input', { type: 'search', class: 'help-filter', placeholder: t('help.filter_ph'), 'aria-label': t('help.filter'), autocomplete: 'off' });
     const status = h('p', { class: 'muted small', role: 'status', 'aria-live': 'polite' });
     const ownList = h('div', { class: 'faq' }), commonList = h('div', { class: 'faq' });
-    const ownCard = card(t('help.faq_title', { name: t(`sys.${system}`) }), ownList);
+    const ownCard = card(t('help.faq_title', { name }), ownList);
     const commonCard = card(t('help.faq_console'), commonList);
     const render = () => {
       const q = input.value.trim();

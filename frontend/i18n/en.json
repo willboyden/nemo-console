@@ -110,6 +110,8 @@
   "tab.runs": "Runs",
   "tab.start": "Getting started",
   "tab.faq": "FAQ",
+  "tab.log": "Log",
+  "tab.settings": "Settings",
   "help.start_title": "Getting started with {name}",
   "help.start_more": "Stuck, or seeing a problem code? The FAQ tab answers the common questions.",
   "help.faq_title": "{name} questions",
