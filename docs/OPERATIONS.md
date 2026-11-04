@@ -122,7 +122,7 @@ Logs are JSON lines on stderr (secrets and tracebacks scrubbed). The console's o
 
 ```bash
 curl -s http://127.0.0.1:8793/api/v1/health
-# {"status":"degraded","version":"0.6.0","trust":"bearer","role":"public","trust_notice":null,"systems":{...}}
+# {"status":"degraded","version":"0.6.1","trust":"bearer","role":"public","trust_notice":null,"systems":{...}}
 ```
 
 `status` is `ok` only when all three systems are `up`. A system that is down is reported, not an error.

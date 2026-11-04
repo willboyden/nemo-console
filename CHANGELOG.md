@@ -3,6 +3,15 @@
 Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Claims use the labels
 implemented / verified-live / unverified defined in the README.
 
+## [0.6.1] - 2026-11-04
+
+### Fixed
+
+- **The nav showed "Engines and load" twice.** The Model Optimizer route sat after the evaluation group in
+  `frontend/js/routes.js`, and the nav prints a section label whenever the group changes (since 0.5.0). It now sits
+  next to AIPerf. A new frontend test requires every nav group to be one consecutive run of routes; it fails on the
+  old order.
+
 ## [0.6.0] - 2026-11-04
 
 ### Added
