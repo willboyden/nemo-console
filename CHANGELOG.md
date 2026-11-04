@@ -3,7 +3,7 @@
 Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Claims use the labels
 implemented / verified-live / unverified defined in the README.
 
-## [Unreleased]
+## [0.7.0] - 2026-11-04
 
 ### Added
 
