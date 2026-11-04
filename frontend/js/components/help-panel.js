@@ -1,0 +1,81 @@
+// The Getting started and FAQ tabs every system page gets (system-page.js). Content comes from i18n/help.en.json
+// (see help.js); all of it is rendered as text nodes, `code` spans included. A step or answer may carry a command
+// (shown with a Copy button, never run), a link to another tab of the same page (shown only when the page has that
+// tab: Config and Playground are optional on some pages) and a link to another console page.
+import { h, clear, append } from '../dom.js';
+import { t } from '../i18n.js';
+import { loadHelp, richRuns, filterFaq, CONSOLE_KEY } from '../help.js';
+import { card, btn, emptyBox, errorBox, skeleton, fixBlock } from './ui.js';
+
+const inline = (runs) => runs.map((r) => (r.code ? h('code', r.text) : r.text));
+/** Text with `code` spans as one <p> per paragraph. */
+function paras(text, cls) {
+  return richRuns(text).map((runs) => h('p', { class: cls }, inline(runs)));
+}
+
+/** Command, tab link and page link of a step or answer; `nav` comes from systemPage. */
+function extras(item, nav) {
+  const links = [
+    item.tab && nav.hasTab(item.tab) ? btn(t('help.open_tab', { tab: nav.tabLabel(item.tab) }), { size: 'sm', onClick: () => nav.goTab(item.tab) }) : null,
+    item.route ? h('a', { class: 'btn sm', href: `#${item.route}` }, t('help.open_page', { page: t(`nav.${item.route.slice(1)}`) })) : null,
+  ].filter(Boolean);
+  return [item.cmd ? fixBlock(item.cmd, t('help.command')) : null, links.length ? h('div', { class: 'row gap wrap' }, links) : null];
+}
+
+/** Shared loader: skeleton, then build(doc), or an error box with Retry. */
+function helpHost(scope, build) {
+  const host = h('div', { class: 'stack-v' }, skeleton(3));
+  async function load() {
+    try {
+      const doc = await loadHelp();
+      if (!scope.alive) return;
+      append(clear(host), [build(doc)]);
+    } catch (e) { if (scope.alive) clear(host).append(errorBox(e, () => { clear(host).append(skeleton(3)); load(); })); }
+  }
+  load();
+  return host;
+}
+
+export function gettingStartedPanel(scope, system, nav) {
+  return helpHost(scope, (doc) => {
+    const e = doc[system];
+    if (!e?.steps?.length) return emptyBox(t('help.missing'));
+    return [
+      card(t('help.start_title', { name: t(`sys.${system}`) }), h('div', { class: 'stack-v' },
+        paras(e.lead, 'help-lead'),
+        h('ol', { class: 'steps' }, e.steps.map((s) => h('li', { class: 'step' },
+          h('h3', { class: 'step-title' }, s.title), h('div', { class: 'step-body' }, paras(s.body), extras(s, nav))))))),
+      h('div', { class: 'row gap wrap' }, h('span', { class: 'hint' }, t('help.start_more')), nav.hasTab('faq') ? btn(t('help.open_tab', { tab: nav.tabLabel('faq') }), { size: 'sm', onClick: () => nav.goTab('faq') }) : null),
+    ];
+  });
+}
+
+const faqItem = (it, nav) => h('details', { class: 'faq-item' }, h('summary', inline(richRuns(it.q).flat())), h('div', { class: 'faq-a' }, paras(it.a), extras(it, nav)));
+
+export function faqPanel(scope, system, nav) {
+  return helpHost(scope, (doc) => {
+    const own = doc[system]?.faq || [], common = doc[CONSOLE_KEY]?.faq || [];
+    const input = h('input', { type: 'search', class: 'help-filter', placeholder: t('help.filter_ph'), 'aria-label': t('help.filter'), autocomplete: 'off' });
+    const status = h('p', { class: 'muted small', role: 'status', 'aria-live': 'polite' });
+    const ownList = h('div', { class: 'faq' }), commonList = h('div', { class: 'faq' });
+    const ownCard = card(t('help.faq_title', { name: t(`sys.${system}`) }), ownList);
+    const commonCard = card(t('help.faq_console'), commonList);
+    const render = () => {
+      const q = input.value.trim();
+      const a = filterFaq(own, q), b = filterFaq(common, q);
+      append(clear(ownList), a.length ? a.map((it) => faqItem(it, nav)) : [emptyBox(q ? t('help.no_match') : t('help.missing'))]);
+      append(clear(commonList), b.map((it) => faqItem(it, nav)));
+      if (q) for (const d of [...ownList.children, ...commonList.children]) if (d.tagName === 'DETAILS') d.open = true;
+      commonCard.hidden = !b.length;
+      status.textContent = q ? t('help.match_count', { count: a.length + b.length }) : '';
+    };
+    input.addEventListener('input', render);
+    const toggle = (open) => { for (const d of [...ownList.children, ...commonList.children]) if (d.tagName === 'DETAILS') d.open = open; };
+    render();
+    return [
+      h('div', { class: 'row gap wrap between' }, input,
+        h('div', { class: 'row gap' }, btn(t('help.expand_all'), { size: 'sm', onClick: () => toggle(true) }), btn(t('help.collapse_all'), { size: 'sm', onClick: () => toggle(false) }))),
+      status, ownCard, commonCard,
+    ];
+  });
+}

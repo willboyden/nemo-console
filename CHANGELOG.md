@@ -3,6 +3,21 @@
 Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Claims use the labels
 implemented / verified-live / unverified defined in the README.
 
+## [Unreleased]
+
+### Added
+
+- **Getting started and FAQ tabs on every system page.** All twelve system pages end with two help tabs: Getting
+  started (what the system is, then numbered steps from install to first use) and FAQ (the system's common
+  questions and problem codes, plus questions about the console itself, with a filter and Expand all). Steps and
+  answers can carry a command with a Copy button (never run by the console), a link to another tab of the same page
+  (hidden when the page did not build that tab) and a link to another console page. The content is plain text in
+  `frontend/i18n/help.en.json`, loaded once when a help tab first opens and rendered as text nodes only; it was
+  written from `docs/OPERATIONS.md`, `docs/FEATURE-MATRIX.md` and the adapters' action specs. Tested by
+  `frontend/tests/help.test.mjs` (every system has a guide and FAQ, every tab link names a tab the view defines,
+  every page link a nav route, no external URLs) and the browser suite (77 pages and tabs, was 53); the filter,
+  Expand all and tab links were also driven in headless Chrome against the dev mock. Nothing changed in the backend.
+
 ## [0.5.0] - 2026-11-03
 
 ### Added

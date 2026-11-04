@@ -1,0 +1,714 @@
+{
+  "_console": {
+    "faq": [
+      {
+        "q": "Why are the buttons greyed out?",
+        "a": "Your role is viewer or public, and changes need an admin key. Mint one on the host with `nemo-console mint-key admin` (it prints the path of a 0600 key file, never the key), then paste the key with the key button in the top bar. The key is kept in this tab's sessionStorage only.",
+        "cmd": "nemo-console mint-key admin"
+      },
+      {
+        "q": "What is the difference between off, down and unknown?",
+        "a": "`off` is an opt-in system that is stopped on purpose (Dynamo, the OpenShell gateway): normal. `down` is a system that should answer and does not. `unknown` means the console's own status check failed, usually because a path is wrong; look for the problem `console.repo_root.missing` and set `NEMO_CONSOLE_REPO_ROOT`."
+      },
+      {
+        "q": "Does the console run the Fix command of a problem for me?",
+        "a": "No. Each problem shows one exact command with a Copy button; you run it in a terminal (from the repo root unless it says otherwise). Actions that the console does run are on the Actions or Lifecycle tab, and each asks you to confirm."
+      },
+      {
+        "q": "Why do some actions ask me to confirm?",
+        "a": "Every action has a danger level. Safe ones run at once; disruptive ones (they interrupt a running service or spend router tokens) and destructive ones (state is lost) open a dialog that states the exact effect. Config applies and rollbacks always ask too."
+      },
+      {
+        "q": "Where can I see what was changed, and by whom?",
+        "a": "The Audit page lists every mutating call with the key that made it. Parameters are redacted; chat text and file bodies are never stored. It needs an admin key.",
+        "route": "/audit"
+      },
+      {
+        "q": "The charts are empty after a restart. Is something broken?",
+        "a": "Usually not. The 15 minute history lives in memory and starts empty; the 1 h and 24 h windows come from rollups written once a minute. Wait a minute, or pick the 15 min window. A system that is not serving has no numbers to chart."
+      },
+      {
+        "q": "A page says \"Something went wrong\" right after an upgrade.",
+        "a": "If the message mentions a module that \"does not provide an export\", the browser mixed old and new console files. Reload once with Ctrl+Shift+R. Since 0.3.1 every frontend file is revalidated on each load, so this does not recur."
+      },
+      {
+        "q": "Where do I change URLs, the poll interval or the playground credential?",
+        "a": "On the Settings page. URL changes need a console restart. Credentials are stored as the NAME of an environment variable, never the value; the variable must be set in the console's own environment (for example `~/.config/nemo-console/env`).",
+        "route": "/settings"
+      }
+    ]
+  },
+  "switchyard": {
+    "lead": "NeMo Switchyard routes each chat request to a tier (a fast model first, a capable one for hard turns) according to its `routes.toml`. Here you read its traffic, edit its routes with an automatic rollback and send test requests through it.",
+    "steps": [
+      {
+        "title": "Check that it is running",
+        "body": "The header above the tabs shows its health. If it reads down with the problem `switchyard.down`, copy the fix shown there (a `docker compose up -d --no-build` in its compose directory) and run it."
+      },
+      {
+        "title": "Read the traffic",
+        "body": "The Routing tab shows requests, errors and tokens for the chosen window (15 min, 1 h, 24 h), the share by tier, route and model, and the routing decisions as they happen. The numbers come from the last 5,000 routing events.",
+        "tab": "routing"
+      },
+      {
+        "title": "Send a test request",
+        "body": "The Playground sends one chat request through a route you pick and streams the answer; nothing is stored. It needs an admin key, and the router credential named on the Settings page must be set in the console's environment.",
+        "tab": "playground"
+      },
+      {
+        "title": "Change a route",
+        "body": "On the Config tab open `routes.toml`, edit, then Validate: that checks the TOML, the route semantics and runs Switchyard's own dry-run in a throwaway container. Apply shows the diff, takes a backup, writes the file, recreates the container and rolls back by itself if the health check fails.",
+        "tab": "config"
+      },
+      {
+        "title": "Maintain it",
+        "body": "The Actions tab can recreate the container, reset the in-memory stats and dry-run the live `routes.toml`.",
+        "tab": "actions"
+      }
+    ],
+    "faq": [
+      {
+        "q": "What does \"capable tier dark\" mean?",
+        "a": "The capable model of a `stage_router` route maps to an engine container that exists but is not running, so hard turns cannot be served. Switchyard turns degraded and the fix is that engine's start command. Passthrough routes do not count. A running but broken engine is only noticed with the opt-in probe `NEMO_CONSOLE_CAPABLE_PROBE=true`, which sends one 1-token completion per capable alias at most every 5 minutes (real, billed router requests)."
+      },
+      {
+        "q": "Why are the \"served by\" badges in the Playground empty?",
+        "a": "The console looks for served-by headers whose names are guessed. Real Switchyard responses do not send them, so empty badges are normal, not an error."
+      },
+      {
+        "q": "Validate says \"dry-run could not start (image ... missing?)\".",
+        "a": "The dry-run uses the Switchyard image with `--pull never`, and the image is not on this machine. Start the service once (or build or load the image), then validate again."
+      },
+      {
+        "q": "Apply failed with \"the file changed since you loaded it\" (409).",
+        "a": "Someone, or an earlier apply, changed `routes.toml` after you opened it. Reload from disk, merge your edit again and re-apply. The write is compare-and-swap, so nothing was overwritten."
+      },
+      {
+        "q": "Why is my `base_url` rejected?",
+        "a": "Route targets must be loopback (`127.0.0.1`, `::1`, `localhost`) or a bare in-network service name without dots, and must not contain `user:pass@`. Point the route at a local engine or a service on the Docker network."
+      },
+      {
+        "q": "What does `switchyard.config.drift` mean?",
+        "a": "`routes.toml` on disk differs from the routes the running server loaded. Recreate the container (Actions, Recreate Switchyard) to load the file.",
+        "tab": "actions"
+      },
+      {
+        "q": "Why did the counters drop to zero?",
+        "a": "Reset stats zeroes the in-memory counters behind `/v1/stats`, and every apply or recreate restarts the server, which resets them too. The routing log (`routing.jsonl`) is not touched, so the Routing tab keeps its history."
+      },
+      {
+        "q": "The Playground answers 401.",
+        "a": "The router credential is wrong or missing. On the Settings page check which environment variable the Switchyard playground uses (default `LITELLM_API_KEY`) and that it holds a valid key in the console's environment.",
+        "route": "/settings"
+      }
+    ]
+  },
+  "relay": {
+    "lead": "NeMo Relay is the agent gateway: it forwards agent traffic to the router under a plugin policy and records ATOF events and ATIF trajectories. It runs as a systemd user unit (default `nemo-relay-gateway.service`). Here you read its health, policy findings and trace counts, edit its routes and run diagnostics.",
+    "steps": [
+      {
+        "title": "Check the gateway",
+        "body": "The Status tab shows the plugin attestation, the unit and gateway state, and how many ATOF files and ATIF trajectories exist. Any answer under 500 from the gateway's `/health` counts as up; a 404 is expected.",
+        "tab": "status"
+      },
+      {
+        "title": "Bring it back if it is down",
+        "body": "With `relay.gateway.down`, restart the unit. Diagnostics, Restart gateway does the same and waits for several healthy checks and a stable process id.",
+        "cmd": "systemctl --user restart nemo-relay-gateway.service",
+        "tab": "diagnostics"
+      },
+      {
+        "title": "Read the policy findings",
+        "body": "Problems such as a weak attestation, exporters off or PII redaction off come from `plugins.toml`. They are human decisions: the console reports them and never changes them."
+      },
+      {
+        "title": "Edit the routes",
+        "body": "On the Config tab only `routes.toml` is editable. Its validator is non-authoritative (a mirror of Relay's schema), so the gateway restart after apply is the real check. `plugins.toml` and `config.toml` are shown read-only.",
+        "tab": "config"
+      },
+      {
+        "title": "Run diagnostics",
+        "body": "Diagnostics runs Gateway status, Doctor (offline), List agents and Validate plugins. Passing doctor or validate does not prove the gateway starts; the restart does.",
+        "tab": "diagnostics"
+      }
+    ],
+    "faq": [
+      {
+        "q": "Why can't I edit `plugins.toml` or `config.toml`?",
+        "a": "They hold the signature-enforcement policy. A web console that could loosen it would be the easiest way around it, so both are read-only by design (an apply answers 403 `read_only`). Edit them by hand and restart the gateway."
+      },
+      {
+        "q": "What does `relay.config.newer_than_gateway` mean?",
+        "a": "`plugins.toml` changed after the gateway started, so the running gateway still uses the old policy. Restart the gateway.",
+        "cmd": "systemctl --user restart nemo-relay-gateway.service"
+      },
+      {
+        "q": "The gateway is up but shows `relay.gateway.upstream_error`.",
+        "a": "The router behind it does not answer `/health/liveliness`, so requests through the gateway will fail. Fix the router first. The console never polls `/v1/models` through the gateway, because the router would log every keyless call as an error."
+      },
+      {
+        "q": "What does `relay.atof.large` mean?",
+        "a": "The ATOF directory is over 1 GiB. Relay has no retention of its own; prune rotated files by hand."
+      },
+      {
+        "q": "Why is there no Playground tab?",
+        "a": "It appears only when the backend offers a playground for Relay. It sends the key named for Relay on the Settings page (default `LITELLM_API_KEY`), because the gateway's `/v1/*` answers 401 without a bearer."
+      },
+      {
+        "q": "A problem says `binary 'nemo-relay' not found on PATH`.",
+        "a": "The console searches `PATH` plus `NEMO_CONSOLE_EXTRA_BIN_DIRS` (default `~/.local/bin`). Add the directory that holds `nemo-relay` to that setting and restart the console."
+      }
+    ]
+  },
+  "dynamo": {
+    "lead": "NVIDIA Dynamo serves a model through a frontend and a vLLM worker (docker compose), pinned to a GPU. It is opt-in: while it is stopped its health is off, which is normal. The console starts and stops only Dynamo's own containers, after a preflight that names everything else on the card.",
+    "steps": [
+      {
+        "title": "Look at the state",
+        "body": "The Status tab shows the frontend and worker containers and, while serving, requests, in-flight requests, TTFT and ITL p95 and KV cache use. \"Loading\" (degraded) during a cold start is normal; it takes several minutes.",
+        "tab": "status"
+      },
+      {
+        "title": "Run the preflight",
+        "body": "On the Lifecycle tab, Preflight is a read-only check of what shares the worker's card and which router aliases go dark while Dynamo holds it. Every up, down and restart runs it first.",
+        "tab": "lifecycle"
+      },
+      {
+        "title": "Start it",
+        "body": "If the default model holds the card, Up is refused with `dynamo.up.exclusive_engine`: run the fix shown (the `NEMO_CONSOLE_DYNAMO_START` command) from the repo root, which stops the default model in the right order. Otherwise press Up on the Lifecycle tab and confirm.",
+        "tab": "lifecycle"
+      },
+      {
+        "title": "Tune it",
+        "body": "The Parameters tab is a form for the worker and frontend flags. Preview shows the compose override it would write; apply recreates the worker and rolls back if it does not become healthy.",
+        "tab": "params"
+      },
+      {
+        "title": "Send a test request",
+        "body": "The Playground talks to the Dynamo frontend directly, bypassing the router and any output filtering on it.",
+        "tab": "playground"
+      },
+      {
+        "title": "Stop it",
+        "body": "Down on the Lifecycle tab stops Dynamo's containers only. To give the card back to the default model, run its start command afterwards.",
+        "tab": "lifecycle"
+      }
+    ],
+    "faq": [
+      {
+        "q": "Up is refused: \"the worker's card is in use by ...\".",
+        "a": "Another container runs on the worker's card (`dynamo.up.card_in_use`). If it is the opt-in 27B engine, run Up again with \"stop\" ticked: the console stops that one label-verified container. For any other container, identify it with `docker inspect` and stop it with its own tooling; the console never stops the default model."
+      },
+      {
+        "q": "Up refused: \"the CPU mocker is running\" (or the real worker is).",
+        "a": "The mocker and the worker serve the same model name and cannot run together. Press Down first. Up mock starts a CPU-only stand-in that needs no VRAM, handy for checking the console without a GPU."
+      },
+      {
+        "q": "Up failed with \"timed out\".",
+        "a": "Up waits up to 600 s for the worker to serve, inside the action timeout (default 900 s, `NEMO_CONSOLE_ACTION_TIMEOUT_S`, or a `dynamo.up` entry in `NEMO_CONSOLE_ACTION_TIMEOUTS`). Check the Status tab first: \"loading\" means it is still starting. Raise the timeout if your model loads slower."
+      },
+      {
+        "q": "Parameters says the live stack runs from another compose file.",
+        "a": "A repo override file is in use (`dynamo.compose.override`, for example a variant stack). The console override would replace that stack's worker command, so Parameters refuses. Change the variant's compose file in git, or bring it down first."
+      },
+      {
+        "q": "What does `dynamo.compose.untrusted` mean?",
+        "a": "The running containers' compose label names a file outside the configured compose directory, a missing file or another project, or the containers disagree. Nothing ran and nothing falls back. Take that stack down with the files it was started from, or point `NEMO_CONSOLE_REPO_ROOT` at its checkout."
+      },
+      {
+        "q": "What does `dynamo.card.contended` mean?",
+        "a": "The worker runs or restarts while an exclusive engine is on one of its cards. They cannot share the VRAM, so the worker will crash-loop. Press Down, or stop the other engine first if you want Dynamo."
+      },
+      {
+        "q": "Why is there no Config tab?",
+        "a": "The backend exposes the compose file (read-only) and the generated override, but this page offers the Parameters form and Lifecycle instead, so the flags stay inside a checked allowlist."
+      },
+      {
+        "q": "Why do Dynamo events look like log lines?",
+        "a": "They are redacted container log lines, not an allowlist of metadata fields as for the other systems. Secrets are redacted, but treat them as raw logs."
+      }
+    ]
+  },
+  "skillevaluator": {
+    "lead": "NVIDIA SkillEvaluator scores agent skills (folders with a `SKILL.md`) for quality, security and duplication. It is a CLI, not a service: the console runs it on demand and keeps each report in its state directory.",
+    "steps": [
+      {
+        "title": "Check the launcher",
+        "body": "The Status tab shows whether `skillevaluator-local` (the lab wrapper) or `skillevaluator` was found on PATH (`~/.local/bin` is searched), its version, whether the router answers, and how many skills exist under `<repo>/.claude/skills/`.",
+        "tab": "status"
+      },
+      {
+        "title": "Evaluate one skill",
+        "body": "On the Evaluate tab run Evaluate a skill. `static` makes no model calls; `tier1` adds an LLM judge through the router; `tier1+2` adds embedding deduplication against the other skills.",
+        "tab": "evaluate"
+      },
+      {
+        "title": "Read the report",
+        "body": "Show a stored report opens a run (newest first) with the Tier 1 and Tier 2 findings. The verdict is the report's own `overall_status`.",
+        "tab": "evaluate"
+      },
+      {
+        "title": "Check the whole catalog",
+        "body": "Static check of every skill runs Tier 1 static checks on each skill, one run each, and prints a score table. About 2 s per skill.",
+        "tab": "evaluate"
+      },
+      {
+        "title": "Measure the Skill Lift (Tier 3)",
+        "body": "Tier 3 runs an agent on the skill's eval cases with and without the skill, in a sandboxed runner container, and a judge scores both. It needs the `skillevaluator-local` wrapper and the lab's runner, spends router tokens, runs in the background, one at a time, and takes minutes up to about an hour.",
+        "tab": "evaluate"
+      }
+    ],
+    "faq": [
+      {
+        "q": "Tier 3 says `skillevaluator.live.needs_wrapper`.",
+        "a": "Tier 3 was asked for with plain `skillevaluator`. Install the lab wrapper with `clients/skillevaluator/install.sh` in the lab repo."
+      },
+      {
+        "q": "A Tier 3 report says \"launch: NOT READY: ...\".",
+        "a": "The runner is missing a piece (image, network, broker or egress container). The lab's check names which one.",
+        "cmd": "clients/skillevaluator/runner/launch.py check"
+      },
+      {
+        "q": "Tier 2 reports `skillevaluator.tier2.no_embeddings`.",
+        "a": "Tier 2 could not get embeddings through the router. In the lab they come from Ollama: start it, then run Tier 2 again.",
+        "cmd": "cd inference/ollama && docker compose up -d"
+      },
+      {
+        "q": "A second Tier 3 run is refused as busy.",
+        "a": "One live run at a time (`skillevaluator.live.busy`). Watch the running one in the runs list on the Status tab; Show a stored report with its id shows its progress.",
+        "tab": "status"
+      },
+      {
+        "q": "A Tier 3 run is `interrupted`.",
+        "a": "The console stopped or restarted while it ran. Start it again. After a hard kill of the console, check for a leftover job container with `docker ps --filter label=ai-lab.skilleval.job`."
+      },
+      {
+        "q": "I use plain `skillevaluator`, not the wrapper. What does it need?",
+        "a": "`SKILL_EVAL_LLM_PROVIDER`, `SKILL_EVAL_LLM_BASE_URL`, `SKILL_EVAL_LLM_API_KEY`, `SKILL_EVAL_LLM_MODEL` and, for Tier 2, `SKILL_EVAL_EMBEDDING_MODEL` in the console's environment (a 0600 env file). Tier 3 needs the wrapper either way."
+      },
+      {
+        "q": "How many reports are kept?",
+        "a": "The newest 200 runs. Each `run.json` holds metadata and redacted error text only; the reports sit next to it in the console state directory."
+      }
+    ]
+  },
+  "datadesigner": {
+    "lead": "NVIDIA Data Designer generates synthetic datasets from config scripts through the lab router: validate, preview a few records, then create the full set. It is a CLI the console runs on demand; runs and their reports are kept in the console state directory.",
+    "steps": [
+      {
+        "title": "Check the launcher",
+        "body": "The Status tab shows the `data-designer-local` version, whether the router answers, the providers and model aliases from the tool's own config, and any create run in progress. Install it with the lab's `clients/data-designer/install.sh`.",
+        "tab": "status"
+      },
+      {
+        "title": "Open or write a script",
+        "body": "The Dataset scripts tab lists the config scripts. A script defines `load_config_builder()`. Validate and apply EXECUTE the script (that is how Data Designer loads it), so read it before you run either.",
+        "tab": "scripts"
+      },
+      {
+        "title": "Preview a few records",
+        "body": "Actions, Preview records runs the script for a small sample and keeps the report and the sample records.",
+        "tab": "actions"
+      },
+      {
+        "title": "Create the dataset",
+        "body": "Actions, Create a dataset runs in the background, one at a time, for up to an hour, and writes a copy in the format you pick (parquet, csv, jsonl or json) under `~/Datasets`.",
+        "tab": "actions"
+      },
+      {
+        "title": "Review the records",
+        "body": "The Runs tab shows each run's verdict, record count and destination; open a run for a records table and the list of files in its run directory.",
+        "tab": "runs"
+      }
+    ],
+    "faq": [
+      {
+        "q": "Which model generates my records?",
+        "a": "The model aliases named in the script, resolved through the providers that Show provider config lists. An alias that points at a cloud provider sends your prompts and records there; keep to local aliases for private data.",
+        "tab": "actions"
+      },
+      {
+        "q": "Why does the records table stop at 2,000 rows?",
+        "a": "The console keeps at most the first 2,000 records of a run (`records.jsonl`) for review. The dataset files in the run directory and the copy under `~/Datasets` always hold the full set."
+      },
+      {
+        "q": "Can I download the dataset from the console?",
+        "a": "No. The console lists the files of a run but does not serve them; open them on disk (the run detail shows each path)."
+      },
+      {
+        "q": "My create run is `interrupted`.",
+        "a": "The console stopped while it ran. Start Create a dataset again."
+      },
+      {
+        "q": "Check models asks for a script. Why?",
+        "a": "The CLI checks the models a config uses, so the action takes one of the dataset scripts.",
+        "tab": "actions"
+      },
+      {
+        "q": "How many runs are kept?",
+        "a": "The newest 100, in the console state directory."
+      }
+    ]
+  },
+  "openshell": {
+    "lead": "NVIDIA OpenShell is the sandbox gateway that contains Data Designer runs: limited filesystem access, a default-deny network and credentials held by the gateway. It starts on demand, so a stopped gateway is off, not down.",
+    "steps": [
+      {
+        "title": "Read the state",
+        "body": "The Status tab shows the CLI version, the gateway and forwarder containers, whether the CLI is connected, whether the sandbox network `openshell-docker` is internal, and whether any port is exposed.",
+        "tab": "status"
+      },
+      {
+        "title": "Check the prerequisites",
+        "body": "Actions, Run doctor validates the local prerequisites for a gateway (Docker reachable). Read-only.",
+        "tab": "actions"
+      },
+      {
+        "title": "Look at the sandboxes",
+        "body": "List sandboxes, Show a sandbox (phase and active policy), Sandbox logs and Gateway container logs are all read-only. Logs are redacted.",
+        "tab": "actions"
+      },
+      {
+        "title": "Prove the policy",
+        "body": "Prove sandbox policy checks the policy against the credential descriptor derived from the provider profile (no key is read). Its findings are for a human to review.",
+        "tab": "actions"
+      },
+      {
+        "title": "Start or stop the gateway",
+        "body": "Start the gateway refuses unless the sandbox network is internal. Stop the gateway refuses while sandboxes exist unless you force it. Delete a sandbox is destructive.",
+        "tab": "actions"
+      }
+    ],
+    "faq": [
+      {
+        "q": "Why can't I edit the gateway, policy or provider files?",
+        "a": "They are trust files. A web console never loosens a sandbox's trust policy, so they are shown read-only by design. Edit them in the lab repo and review the change there."
+      },
+      {
+        "q": "The gateway is off. Is that a fault?",
+        "a": "No. `data-designer-local` starts it on demand for each run, and Start the gateway starts it by hand. Off is the normal resting state."
+      },
+      {
+        "q": "What does `openshell.version.skew` mean?",
+        "a": "The CLI and the gateway report different versions. It is information, not a fault; upgrade them together when you next touch the install."
+      },
+      {
+        "q": "The status names a gateway registration. Which one is used?",
+        "a": "The console always passes `-g openshell`, the lab's registration, because the CLI can also hold other, stale registrations. Register the lab gateway under that name."
+      },
+      {
+        "q": "A sandbox phase shows as \"Other\".",
+        "a": "Only `Ready` is a phase name the console knows for sure; any other phase is grouped as Other. Show a sandbox gives its exact phase.",
+        "tab": "actions"
+      }
+    ]
+  },
+  "dcgm": {
+    "lead": "GPU telemetry from this host's dcgm-exporter and from every DCGM host the lab's Prometheus scrapes, plus per-GPU diagnostics in a throwaway container. Read-only, except the exporter's field list.",
+    "steps": [
+      {
+        "title": "Check the exporter",
+        "body": "The Status tab shows the exporter container and version, whether `/metrics` answers, that `/debug/pprof/` does NOT answer 200, and a table of every DCGM host with its up state.",
+        "tab": "status"
+      },
+      {
+        "title": "Read the GPUs",
+        "body": "Further down the Status tab: temperature, power, utilisation and memory per GPU, a trend chart per value for the chosen window, and a collapsed table with every value.",
+        "tab": "status"
+      },
+      {
+        "title": "Run a diagnostic",
+        "body": "Diagnostics run in a throwaway container from the full DCGM image, which you pull once yourself (the image named by the `dcgm_diag_image` setting; the console never pulls). Start with Actions, Discover GPUs, then Diagnostic, level 1 on one GPU.",
+        "tab": "actions"
+      },
+      {
+        "title": "Change which fields are collected",
+        "body": "On the Config tab edit `counters.csv`, Validate (a non-authoritative check against the field lists in the exporter image) and Apply. The exporter re-reads the file; tick restart if a field does not show up.",
+        "tab": "config"
+      }
+    ],
+    "faq": [
+      {
+        "q": "What does `dcgm.exporter.vulnerable` mean?",
+        "a": "The exporter is older than 4.8.3, which is affected by CVE-2026-47483. Upgrade the exporter image."
+      },
+      {
+        "q": "The exporter is not running. How do I start it?",
+        "a": "In the lab it is part of the observability stack's gpu profile.",
+        "cmd": "cd observability && docker compose --profile gpu up -d dcgm-exporter"
+      },
+      {
+        "q": "Will a diagnostic disturb a running model?",
+        "a": "It can. Both levels are marked disruptive because they exercise the GPU; level 2 runs longer. Prefer a card that is idle."
+      },
+      {
+        "q": "Is \"XID last\" a count of errors?",
+        "a": "No. It is the exporter's LAST XID code. The total is a separate value."
+      },
+      {
+        "q": "What happens when I restart the exporter?",
+        "a": "`/metrics` is unavailable for about 10 s and the profiling fields take 10 to 20 s to return, so Prometheus shows a short gap.",
+        "tab": "actions"
+      },
+      {
+        "q": "Why is there no version for the other hosts' exporters?",
+        "a": "Prometheus does not expose it, and the console does not guess. Only this host's exporter version is checked."
+      }
+    ]
+  },
+  "aiperf": {
+    "lead": "NVIDIA AIPerf load-tests router models from named presets, one run at a time, and reports TTFT, ITL, latency and throughput from each run.",
+    "steps": [
+      {
+        "title": "Install the wrapper",
+        "body": "In the lab, `clients/aiperf/install.sh` then `clients/aiperf/mint-key.sh` put `aiperf-local` on PATH with its own router key file. The Status tab then shows the wrapper, the router, the key file and the presets.",
+        "tab": "status"
+      },
+      {
+        "title": "Choose a preset",
+        "body": "The presets live in `profiles.yaml` on the Config tab. Validation is authoritative and there is nothing to restart after an apply.",
+        "tab": "config"
+      },
+      {
+        "title": "Run a load profile",
+        "body": "Actions, Run a load profile takes a preset and a model and runs in the background. It is disruptive: it loads a live engine that others may be using. Keep loads small on shared engines.",
+        "tab": "actions"
+      },
+      {
+        "title": "Read the results",
+        "body": "The Status tab charts TTFT, ITL, latency and throughput of the newest run; Actions, Show a stored run gives the full numbers of any run.",
+        "tab": "status"
+      }
+    ],
+    "faq": [
+      {
+        "q": "A second run is refused.",
+        "a": "One run at a time. Wait for the running one to finish; its report appears under Show a stored run.",
+        "tab": "actions"
+      },
+      {
+        "q": "My run failed with a 400 from the router.",
+        "a": "The model name is not one the router serves, or its engine is down. The report carries the router's own message; pick an alias whose engine is up."
+      },
+      {
+        "q": "Does a run download a tokenizer?",
+        "a": "No. The `builtin` tokenizer is vendored in the lab repo with a pinned checksum and installed by the wrapper before every run."
+      },
+      {
+        "q": "My run is `interrupted`.",
+        "a": "The console stopped while it ran. Start it again."
+      },
+      {
+        "q": "The numbers look far worse than usual.",
+        "a": "The engine may be busy with other traffic, or the run hit the AIPerf key's own rate limits on the router. Compare with a quiet moment and a smaller preset before drawing conclusions."
+      }
+    ]
+  },
+  "guardrails": {
+    "lead": "A NeMo Guardrails server (input and output self-check rails) in an internal-network container with no internet. Rails configs are editable with validation and rollback; probe checks and a playground go through the rails.",
+    "steps": [
+      {
+        "title": "Install and start it",
+        "body": "In the lab run `security/nemo-guardrails/mint-key.sh` and `install.sh`, then start it with `docker compose up -d` in that directory, or with Actions, Start Guardrails.",
+        "tab": "actions"
+      },
+      {
+        "title": "Check the state",
+        "body": "The Status tab shows the server, gateway and router-broker containers, `/v1/health`, the served configs and the isolation checks. An error appears if the server ever joins a non-internal network or publishes a port.",
+        "tab": "status"
+      },
+      {
+        "title": "Check the rails",
+        "body": "Actions, Check the rails sends fixed benign, jailbreak and harmful probes. Expect the benign one allowed and the other two blocked. It spends router tokens.",
+        "tab": "actions"
+      },
+      {
+        "title": "Edit a rails config",
+        "body": "On the Config tab edit a file, Validate (the candidate is loaded in a network-less container) and Apply (restart, a check that the config is served, rollback on failure). Run Check the rails afterwards.",
+        "tab": "config"
+      },
+      {
+        "title": "Try it",
+        "body": "The Playground sends a chat through the rails with the server's default config.",
+        "tab": "playground"
+      }
+    ],
+    "faq": [
+      {
+        "q": "My edit was refused for removing a rail.",
+        "a": "Removing rails weakens the safety checks, so a candidate that does it is refused unless it carries the line `# nemo-console: allow-weaken-rails`. Add it only when the weakening is deliberate."
+      },
+      {
+        "q": "Validation passed but the rails still misbehave.",
+        "a": "The load check does not call the model. Run Check the rails after every edit to see real verdicts.",
+        "tab": "actions"
+      },
+      {
+        "q": "Why can't I edit the Python files?",
+        "a": "Python in a rails config is code that runs in the server, so it is shown read-only. Change it in the repo."
+      },
+      {
+        "q": "What does restart or stop do?",
+        "a": "Restart restarts the server only; it refuses requests for about 10 s. Stop is a `docker compose stop` of the three containers: nothing is removed."
+      },
+      {
+        "q": "Are probe prompts stored?",
+        "a": "No. Events carry names and verdicts only, never prompt text."
+      }
+    ]
+  },
+  "evaluator": {
+    "lead": "NVIDIA NeMo Evaluator runs offline benchmark suites (GSM8K, MMLU, ...) against router aliases and reports scores per benchmark and model.",
+    "steps": [
+      {
+        "title": "Install the wrapper",
+        "body": "In the lab run `clients/nemo-evaluator/install.sh` and `mint-key.sh`. The Status tab then shows the wrapper, the router, the key file, the suites and the cached datasets.",
+        "tab": "status"
+      },
+      {
+        "title": "Fetch the datasets once",
+        "body": "Prefetch is the only step with internet access, so it is done by a human on the host and is not a console action. Name the benchmarks you need.",
+        "cmd": "evaluator-local prefetch gsm8k mmlu"
+      },
+      {
+        "title": "Choose a suite",
+        "body": "Suites live in `suites.yaml` on the Config tab. It is validated by its own schema and by the wrapper's own check.",
+        "tab": "config"
+      },
+      {
+        "title": "Run it",
+        "body": "Actions, Run a suite runs in the background, one at a time, takes minutes and spends router tokens.",
+        "tab": "actions"
+      },
+      {
+        "title": "Read the scores",
+        "body": "The Status tab shows the scores per benchmark and model; Actions, Show a stored run gives any run's summary.",
+        "tab": "status"
+      }
+    ],
+    "faq": [
+      {
+        "q": "Why is there no prefetch button?",
+        "a": "Prefetch needs the internet; everything else runs offline. Keeping it a deliberate host step means the console never opens a route out."
+      },
+      {
+        "q": "Is a repeated run just replayed from a cache?",
+        "a": "No. Every request asks the router to skip its cache, so a repeat is a fresh generation."
+      },
+      {
+        "q": "Which benchmarks can run?",
+        "a": "Rule-scored ones only: no benchmark that needs a Docker sandbox or an LLM judge."
+      },
+      {
+        "q": "How offline is a run?",
+        "a": "The wrapper switches the benchmark libraries offline, and a traced full run connected only to loopback. Prefetch is the one step that uses the internet."
+      },
+      {
+        "q": "My run is `interrupted`.",
+        "a": "The console stopped while it ran. Start it again."
+      }
+    ]
+  },
+  "modelopt": {
+    "lead": "NVIDIA Model Optimizer compresses a pinned checkpoint offline (quantization or REAP expert pruning). A job takes a GPU for hours and writes a new checkpoint; it runs in the background and the console reads its verdict, size and compression ratio.",
+    "steps": [
+      {
+        "title": "Install the wrapper",
+        "body": "In the lab, `clients/modelopt/install.sh` builds the offline container from checksum-pinned wheels and puts `modelopt-local` on PATH. The container has no network and no Hugging Face token; the model store is mounted read-only, so the base checkpoint must already be there.",
+        "tab": "status"
+      },
+      {
+        "title": "Write a recipe",
+        "body": "Recipes live in `recipes.yaml` on the Config tab: `version: 1`, and per recipe a `method` (`reap`, `quantize` or `minitron`), a `base_model` (`org/name`) and an `output` under `/runs/`, with optional `description`, `preset`, `sparsity` and `config`. Unknown keys are refused with their line number.",
+        "tab": "config"
+      },
+      {
+        "title": "Start a job",
+        "body": "Actions, Run a compression job is disruptive: it holds a GPU for hours and slows the engines that share it. The wrapper returns at once and the job keeps running after you close the tab.",
+        "tab": "actions"
+      },
+      {
+        "title": "Read the verdict",
+        "body": "Actions, Show a job gives the verdict, the recipe and the size numbers; the Status tab charts jobs, output size and the ratio to the base.",
+        "tab": "actions"
+      }
+    ],
+    "faq": [
+      {
+        "q": "Can I cancel a running job?",
+        "a": "Not from the console: it only starts jobs and reads verdicts, and the wrapper has no cancel verb. It never stops a running job."
+      },
+      {
+        "q": "A Minitron recipe is refused.",
+        "a": "Minitron needs Megatron-Core, which the lab's offline container does not ship. The wrapper refuses it with a clear message instead of pretending; it needs NVIDIA's NeMo container."
+      },
+      {
+        "q": "REAP failed on my model.",
+        "a": "REAP prunes the experts of a mixture-of-experts model; on a dense model it fails. Use `quantize` for dense checkpoints."
+      },
+      {
+        "q": "Does the compression ratio tell me the quality?",
+        "a": "No. Calibration uses synthetic data in the offline container, so a finished job proves the mechanics, not the quality. Benchmark the result before you serve it."
+      },
+      {
+        "q": "The job would not start: not enough free GPU memory.",
+        "a": "The wrapper refuses when the freest card has too little free memory, and it never stops an engine for itself. Free a card first, or wait."
+      },
+      {
+        "q": "Why are there no numbers?",
+        "a": "Every number comes from a finished job's `run.json`; nothing is estimated. With no job yet only the job count (0) is shown."
+      }
+    ]
+  },
+  "gym": {
+    "lead": "NVIDIA NeMo Gym runs reinforcement-learning environments and rollouts, contained: each Gym command runs in a client container on an internal network whose only way out is a router broker. A smoke run rolls out a few scored tasks and the console keeps the numbers.",
+    "steps": [
+      {
+        "title": "Install the wrapper",
+        "body": "In the lab run `clients/nemo-gym/gym-local build` and `gym-local key` (the pinned image and the wrapper's own router key, local aliases only), and link `gym-local` onto the console's PATH.",
+        "tab": "status"
+      },
+      {
+        "title": "Check the containment",
+        "body": "The Status tab shows the wrapper, the broker, the client network, the image and whether the key file is set. Actions, Check the containment confirms against Docker that the client network is internal. Read-only.",
+        "tab": "actions"
+      },
+      {
+        "title": "Run a smoke rollout",
+        "body": "Actions, Run a smoke rollout takes a model and 1 to 20 tasks. It is disruptive (router tokens on a shared engine), runs in the background and one at a time.",
+        "tab": "actions"
+      },
+      {
+        "title": "Read the rewards",
+        "body": "Actions, Show a run gives the verdict, model, rollouts and rewards; the Status tab charts runs, mean reward and pass@1.",
+        "tab": "status"
+      }
+    ],
+    "faq": [
+      {
+        "q": "The system is down with `gym.not_contained`.",
+        "a": "The client network exists but is not internal, so Gym could reach out past the broker. Fix the network in the lab (`clients/nemo-gym`), then run Check the containment again."
+      },
+      {
+        "q": "The broker is stopped. Is that a fault?",
+        "a": "No. A stopped broker is normal and is not counted as a fault."
+      },
+      {
+        "q": "Why is there no Config tab?",
+        "a": "The Gym environment config belongs to the lab wrapper, not to the console."
+      },
+      {
+        "q": "Can I train a model on the rollouts here?",
+        "a": "No. Training (NeMo RL) is not installed, so there is nothing to start or read yet."
+      },
+      {
+        "q": "My run is `interrupted`.",
+        "a": "The console restarted while it ran. Start it again."
+      },
+      {
+        "q": "Where do the reward numbers come from?",
+        "a": "From the console's own `run.json` of a finished smoke run, parsed from the wrapper's printed result. Nothing is estimated."
+      }
+    ]
+  }
+}

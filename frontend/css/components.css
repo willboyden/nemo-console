@@ -137,3 +137,17 @@ dialog.modal { width: min(600px, 92vw); }
 .dlg-head { display: flex; justify-content: space-between; align-items: center; padding: var(--s3) var(--s4); border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 1; } .dlg-body { padding: var(--s4); }
 nc-toasts { position: fixed; right: var(--s4); bottom: var(--s4); display: flex; flex-direction: column; gap: var(--s2); z-index: 200; max-width: min(420px, 92vw); }
 .toast { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s3) var(--s4); border-radius: var(--r2); background: var(--surface-3); border: 1px solid var(--border-strong); box-shadow: var(--shadow); } .toast.ok { border-color: var(--ok); } .toast.bad { border-color: var(--bad); } .toast.warn { border-color: var(--warn); }
+/* Getting started + FAQ tabs (components/help-panel.js). Numbered steps use a CSS counter so the number is a badge. */
+.help-lead { margin: 0; max-width: 78ch; }
+.steps { list-style: none; margin: 0; padding: 0; counter-reset: step; display: grid; gap: var(--s4); }
+.step { counter-increment: step; display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: var(--s3); row-gap: var(--s1); }
+.step::before { content: counter(step); grid-row: span 2; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: var(--fs-sm); }
+.step-title { align-self: center; }
+.step-body { display: grid; gap: var(--s2); min-width: 0; } .step-body p, .faq-a p { margin: 0; max-width: 78ch; overflow-wrap: anywhere; }
+.help-lead code, .step-body p code, .faq-a p code, .faq-item > summary code { font-size: .92em; padding: 0 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; }
+.faq { display: grid; }
+.faq-item { border-top: 1px solid var(--border); } .faq-item:first-child { border-top: 0; }
+.faq-item > summary { cursor: pointer; padding: var(--s3) 0; font-weight: 600; overflow-wrap: anywhere; }
+.faq-item > summary:hover { color: var(--accent); }
+.faq-a { display: grid; gap: var(--s2); padding: 0 0 var(--s3) var(--s4); min-width: 0; }
+.row > input.help-filter { flex: 1 1 260px; max-width: 420px; }

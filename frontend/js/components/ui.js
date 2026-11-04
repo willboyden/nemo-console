@@ -49,10 +49,10 @@ export function errorBox(err, retry) {
 export const emptyBox = (title, hint, action) => h('div', { class: 'state empty' }, h('strong', title), hint ? h('p', hint) : null, action || null);
 export const kv = (k, v) => h('div', { class: 'kv' }, h('dt', k), h('dd', v));
 
-/** A copy-pasteable command with a Copy button (fixes from Problem.fix). The command is text, never markup. */
-export function fixBlock(command) {
+/** A copy-pasteable command with a Copy button (fixes from Problem.fix, help commands). The command is text, never markup. */
+export function fixBlock(command, label = t('problem.fix')) {
   const b = btn(t('common.copy'), { icon: 'copy', size: 'sm', onClick: async () => { const ok = await copyText(command); toast(ok ? t('common.copied') : t('common.copy_failed'), { kind: ok ? 'ok' : 'bad', timeout: 1800 }); } });
-  return h('div', { class: 'fix' }, h('span', { class: 'fix-label' }, t('problem.fix')), h('code', { class: 'fix-cmd' }, command), b);
+  return h('div', { class: 'fix' }, h('span', { class: 'fix-label' }, label), h('code', { class: 'fix-cmd' }, command), b);
 }
 export function problemList(problems) {
   if (!problems?.length) return null;
@@ -61,7 +61,7 @@ export function problemList(problems) {
     p.fix ? fixBlock(p.fix) : null)));
 }
 
-/** ARIA tablist with roving tabindex + arrow keys. onSelect(id). */
+/** ARIA tablist with roving tabindex + arrow keys. onSelect(id). The returned element has selectTab(id). */
 export function tabs(defs, active, onSelect, label) {
   const list = h('div', { class: 'tabs', role: 'tablist', 'aria-label': label });
   const buttons = defs.map((d) => h('button', { type: 'button', class: `tab${d.id === active ? ' on' : ''}`, role: 'tab', id: `tab-${d.id}`, 'aria-selected': d.id === active ? 'true' : 'false',
@@ -79,6 +79,7 @@ export function tabs(defs, active, onSelect, label) {
     else if (e.key === 'End') { e.preventDefault(); select_(buttons.at(-1).dataset.tab, true); }
   });
   list.append(...buttons);
+  list.selectTab = (id) => select_(id, true);   // programmatic switch (help links), same path as a click
   return list;
 }
 export const stat = (label, value, sub) => h('div', { class: 'stat' }, h('span', { class: 'stat-label' }, label), h('strong', { class: 'stat-value num' }, value), sub ? h('span', { class: 'stat-sub muted small' }, sub) : null);
