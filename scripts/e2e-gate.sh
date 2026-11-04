@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ship gate for the browser end-to-end suite (frontend/e2e/run.mjs).
+# Ship gate for the browser end-to-end suite (frontend/e2e/run.mjs, then frontend/e2e/config-editor.mjs).
 #
 #   scripts/e2e-gate.sh run           build the backend (cargo build --locked), run the suite; on a pass with a clean
 #                                     backend/ and frontend/, record it
@@ -29,6 +29,7 @@ case "${1:-}" in
     # the suite runs backend/target/debug/nemo-console: build it from the working tree first
     (cd backend && cargo build --locked --quiet) || { echo "e2e-gate: cargo build failed" >&2; exit 1; }
     node frontend/e2e/run.mjs || exit 1
+    node frontend/e2e/config-editor.mjs || exit 1
     # The suite tested the working tree, so a pass only counts for a commit when backend/ and frontend/ match it.
     if [ -n "$(git status --porcelain -- backend frontend)" ]; then
       echo "e2e-gate: passed, but backend/ or frontend/ has uncommitted changes, so no pass was recorded." >&2

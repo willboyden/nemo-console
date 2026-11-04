@@ -67,6 +67,7 @@ jobs:
   e2e:
     # Every page and tab in a real headless Chrome against the real backend (frontend/e2e/run.mjs), hermetic: every
     # upstream URL closed, an empty PATH. Unit tests cannot see a view that fails to load in the browser; this job can.
+    # Then frontend/e2e/config-editor.mjs: the browser's live config checks must agree with the backend's validators.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -86,6 +87,8 @@ jobs:
           cargo build --locked
       - name: Browser end-to-end (google-chrome from the runner image)
         run: node frontend/e2e/run.mjs
+      - name: Config editor (browser checks vs the backend validators, then the editor in Chrome)
+        run: node frontend/e2e/config-editor.mjs
 
   parity:
     # The Rust backend against the last Python backend (tag python-final, pinned in parity/ref.mjs): every API route

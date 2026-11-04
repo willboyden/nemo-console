@@ -35,7 +35,7 @@ to loopback, with a zero-build, zero-npm browser UI. One adapter per
 system plugs into a system-agnostic core; the UI renders from descriptors (status, metrics, config files,
 parameters, actions, playground), so adding a system is one adapter file (SkillEvaluator was added that way).
 
-> **Status: v0.7.0** (Getting started and FAQ tabs on every page: the systems since 0.6.0, Overview, Audit and Settings since 0.7.0; [`CHANGELOG.md`](CHANGELOG.md)). Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
+> **Status: v0.8.0** (a config editor with a Form view and live edit checks; Getting started and FAQ tabs on every page since 0.6.0 and 0.7.0; [`CHANGELOG.md`](CHANGELOG.md)). Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
 > Nothing here has been used by anyone other than its author, on one workstation, against one set of pinned
 > versions (Switchyard 0.3.0, Relay 0.9.2, Dynamo 1.5.0 and a 1.6.0 dev build, SkillEvaluator 0.5.0, Data Designer
 > 0.9.3, OpenShell CLI 0.0.71 / gateway 0.0.77, dcgm-exporter 4.8.4 with DCGM 4.6.1, AIPerf 0.13.0, NeMo Guardrails

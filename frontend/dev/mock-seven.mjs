@@ -142,29 +142,39 @@ DCGM_FI_DEV_POWER_USAGE,   gauge, Power draw (in W).
 DCGM_FI_DEV_XID_ERRORS,    gauge, Value of the last XID error encountered.
 `;
 const AIPERF_PROFILES = `# AIPerf load presets (mock copy of clients/aiperf/profiles.yaml)
+# Schema: profiles.<name> -> model, endpoint_type (chat|completions), streaming, concurrency 1..64,
+# requests 1..2000, isl 1..32768, osl 1..4096, warmup_requests, timeout_s, seed.
 version: 1
 profiles:
   chat-short:
+    description: 200 short chats at concurrency 8 - the everyday load
     model: qwen3.8-flash-next
-    endpoint: chat
-    concurrency: 8
-    request_count: 200
-    input_tokens: { mean: 256, stddev: 32 }
-    output_tokens: { mean: 128, stddev: 16 }
+    endpoint_type: chat
+    streaming: true
+    concurrency: 8        # requests kept in flight
+    requests: 200
+    isl: 256
+    osl: 128
+    warmup_requests: 2
   chat-long:
+    description: long prompts, 60 requests at concurrency 4
     model: qwen3.8-flash-next
-    endpoint: chat
+    endpoint_type: chat
+    streaming: true
     concurrency: 4
-    request_count: 60
-    input_tokens: { mean: 8192, stddev: 512 }
-    output_tokens: { mean: 256, stddev: 32 }
+    requests: 60
+    isl: 8192
+    osl: 256
+    timeout_s: 300
   lightning-burst:
+    description: a burst of 400 small requests at concurrency 16 on Lightning
     model: nemotron-lightning
-    endpoint: chat
+    endpoint_type: chat
+    streaming: true
     concurrency: 16
-    request_count: 400
-    input_tokens: { mean: 512, stddev: 64 }
-    output_tokens: { mean: 64, stddev: 8 }
+    requests: 400
+    isl: 512
+    osl: 64
 `;
 const GR_CONFIG = `# Rails config lab_default (mock copy of security/nemo-guardrails/config/lab_default/config.yml)
 models:
@@ -192,20 +202,36 @@ prompts:
       Answer:
 `;
 const EV_SUITES = `# NeMo Evaluator suites (mock copy of clients/nemo-evaluator/suites.yaml)
+# Every suite names a router model and 1-8 benchmarks; max_problems is required (a bounded, shuffled sample).
 version: 1
 suites:
   smoke:
+    description: 50 GSM8K problems - proves the whole path in seconds
     model: qwen3.8-flash-next
-    benchmarks: [gsm8k]
-    limit_samples: 50
+    benchmarks:
+      - bench: gsm8k
+        max_problems: 50
+        max_tokens: 1024
   quick:
+    description: GSM8K + MMLU, 200 each
     model: qwen3.8-flash-next
-    benchmarks: [gsm8k, ifeval]
-    limit_samples: 200
+    benchmarks:
+      - bench: gsm8k
+        max_problems: 200
+      - bench: mmlu
+        max_problems: 200
   full:
+    description: three benchmarks at 500 problems, twice each
     model: qwen3.8-flash-next
-    benchmarks: [gsm8k, ifeval, mmlu_pro]
-    limit_samples: null
+    benchmarks:
+      - bench: gsm8k
+        max_problems: 500
+        repeats: 2
+      - bench: mmlu
+        max_problems: 500
+      - bench: mmlu_pro
+        max_problems: 500
+        temperature: 0.0
 `;
 const OS_GATEWAY = `# OpenShell gateway.toml (mock copy). Read-only in the console.
 [gateway]

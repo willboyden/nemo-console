@@ -19,6 +19,10 @@
         "a": "Every action has a danger level. Safe ones run at once; disruptive ones (they interrupt a running service or spend router tokens) and destructive ones (state is lost) open a dialog that states the exact effect. Config applies and rollbacks always ask too."
       },
       {
+        "q": "What do the Form view and the Edit checks on a Config tab do?",
+        "a": "TOML and YAML files open as a form: one control per value, typed (a number field takes only numbers, true/false is a switch, fixed choices are a list). A form edit rewrites only that value in the file, so comments and layout stay; the Text view and the diff show exactly what changed.\n\nEdit checks update as you type: syntax errors with their line, the rules of AIPerf profiles, Model Optimizer recipes, Evaluator suites and Switchyard routes, and secret-looking values the console would refuse to save. They are early warnings. The server's own validator still decides: Check (or Ctrl+S) runs it, and Apply always runs it first."
+      },
+      {
         "q": "Where can I see what was changed, and by whom?",
         "a": "The Audit page lists every mutating call with the key that made it. Parameters are redacted; chat text and file bodies are never stored. It needs an admin key.",
         "route": "/audit"
@@ -214,7 +218,7 @@
       },
       {
         "title": "Change a route",
-        "body": "On the Config tab open `routes.toml`, edit, then Validate: that checks the TOML, the route semantics and runs Switchyard's own dry-run in a throwaway container. Apply shows the diff, takes a backup, writes the file, recreates the container and rolls back by itself if the health check fails.",
+        "body": "On the Config tab open `routes.toml`, edit it in the Form or the Text view (the Edit checks panel flags unknown targets and clients as you type), then Check: that checks the TOML, the route semantics and runs Switchyard's own dry-run in a throwaway container. Apply shows the diff, takes a backup, writes the file, recreates the container and rolls back by itself if the health check fails.",
         "tab": "config"
       },
       {
@@ -233,7 +237,7 @@
         "a": "The console looks for served-by headers whose names are guessed. Real Switchyard responses do not send them, so empty badges are normal, not an error."
       },
       {
-        "q": "Validate says \"dry-run could not start (image ... missing?)\".",
+        "q": "Check says \"dry-run could not start (image ... missing?)\".",
         "a": "The dry-run uses the Switchyard image with `--pull never`, and the image is not on this machine. Start the service once (or build or load the image), then validate again."
       },
       {
@@ -459,7 +463,7 @@
       },
       {
         "title": "Open or write a script",
-        "body": "The Dataset scripts tab lists the config scripts. A script defines `load_config_builder()`. Validate and apply EXECUTE the script (that is how Data Designer loads it), so read it before you run either.",
+        "body": "The Dataset scripts tab lists the config scripts. A script defines `load_config_builder()`. Check and Apply EXECUTE the script (that is how Data Designer loads it), so read it before you run either.",
         "tab": "scripts"
       },
       {
@@ -580,7 +584,7 @@
       },
       {
         "title": "Change which fields are collected",
-        "body": "On the Config tab edit `counters.csv`, Validate (a non-authoritative check against the field lists in the exporter image) and Apply. The exporter re-reads the file; tick restart if a field does not show up.",
+        "body": "On the Config tab edit `counters.csv`, Check (a non-authoritative check against the field lists in the exporter image) and Apply. The exporter re-reads the file; tick restart if a field does not show up.",
         "tab": "config"
       }
     ],
@@ -681,7 +685,7 @@
       },
       {
         "title": "Edit a rails config",
-        "body": "On the Config tab edit a file, Validate (the candidate is loaded in a network-less container) and Apply (restart, a check that the config is served, rollback on failure). Run Check the rails afterwards.",
+        "body": "On the Config tab edit a file, Check (the candidate is loaded in a network-less container) and Apply (restart, a check that the config is served, rollback on failure). Run Check the rails afterwards.",
         "tab": "config"
       },
       {

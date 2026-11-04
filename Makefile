@@ -52,7 +52,7 @@ crate-age:  ## dependency cooldown: every locked crate at least 14 days old, sec
 frontend-test:  ## node --test on the pure-logic modules (no npm install needed)
 	cd $(FRONTEND) && node --test tests/*.test.mjs
 
-e2e: build  ## browser end-to-end: real backend + headless Chrome, every page and tab; records a pass for the pre-push hook
+e2e: build  ## browser end-to-end: every page and tab, then the config editor (browser checks vs backend validators); records a pass
 	scripts/e2e-gate.sh run
 
 parity: build  ## differential check against the last Python backend (parity/ref.mjs: git archive + uv, offline), as CI runs it

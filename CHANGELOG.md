@@ -3,6 +3,29 @@
 Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Claims use the labels
 implemented / verified-live / unverified defined in the README.
 
+## [0.8.0] - 2026-11-04
+
+### Added
+
+- **A config editor with live edit checks.** TOML and YAML files open in a **Form** view: one section per table or
+  mapping, a typed control per value (switches for true/false, drop-downs for fixed choices and for Switchyard
+  targets and clients, number fields that refuse anything that is not a number), the comment on each line as its
+  hint, a search box and Changed / With problems filters, and a per-value revert. A Form edit rewrites only that
+  value's characters, so comments and layout survive and the diff shows exactly what changed. The **Text** view has
+  line numbers that mark problem lines, Tab / Shift+Tab indent, Enter keeps the indentation, and Ctrl/Cmd+S runs the
+  server check. An **Edit checks** panel beside the editor updates as you type: syntax errors with their line, the
+  schema rules of AIPerf profiles, Model Optimizer recipes and Evaluator suites, Switchyard cross-references and
+  `base_url` rules, and secret-looking literals the backend would refuse. The server's validator still decides: it
+  runs on Check and before every Apply, and the panel says when its last result is older than the draft (ADR 0019).
+- **Unsaved drafts are kept** when you switch files or leave the page and come back (memory only, for the session;
+  reloading the tab asks first).
+- **`frontend/e2e/config-editor.mjs`** (run by `make e2e` and CI): the browser checks must agree with the real
+  backend validators on seeded random mutations of each schema file, then the editor is driven in Chrome.
+
+### Changed
+
+- The dev mock's AIPerf profiles and Evaluator suites now use the real file formats.
+
 ## [0.7.0] - 2026-11-04
 
 ### Added
