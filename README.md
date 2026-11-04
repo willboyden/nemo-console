@@ -51,10 +51,11 @@ Every feature claim in this repo is one of:
 | **verified-live** | Exercised against a real Switchyard 0.3.0, Relay 0.9.2 and Dynamo 1.5.0 on one workstation (evidence is stated in [`docs/FEATURE-MATRIX.md`](docs/FEATURE-MATRIX.md)). |
 | **unverified** | Only fakes have run it. It may work; nobody has watched it work. |
 
-Gate results (2026-11-04, the 0.7.0 tree, from a clean clone): `cargo test --locked` 862 passed / 0 failed (the live
+Gate results (2026-11-04, the 0.8.0 tree, from a clean clone): `cargo test --locked` 862 passed / 0 failed (the live
 smoke tests return early without `NEMO_LIVE` / `NEMO_CONSOLE_LIVE`), rustfmt and clippy `-D warnings` clean,
 cargo-deny and cargo-audit clean, crate-age 265 locked crates with 0 too new and 0 exceptions, frontend `node --test`
-130 passed, browser suite (headless Chrome 151) 15 routes and 86 pages and tabs with no error state, parity against
+152 passed, browser suite (headless Chrome 151) 15 routes and 86 pages and tabs with no error state, the config-editor
+check (browser checks equal to the backend validators on 600 mutated files, the editor driven in Chrome), parity against
 the last Python backend 1,393 cases with 1,350 equal and the 43 differences documented (PORTING D-6 and D-31), all 936
 pytest ids mapped to Rust tests, and the cross-implementation checks (state directory, launcher, startup errors)
 passing. The 0.4.0 clean-clone runs are in `backend/PORTING.md` A-8 and A-9. Mermaid diagrams in these docs were **not
