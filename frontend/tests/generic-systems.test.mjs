@@ -153,3 +153,9 @@ test('generic view helpers: grouping, preferred chart keys with a fallback, labe
   assert.deepEqual(pickChartKeys({ tables: ['ap.runs'] }, g), ['ap.ttft_ms', 'zz.new'], 'no list: first keys that exist, tables excluded');
   assert.equal(metricLabel('ap.ttft_ms'), 'Time to first token'); assert.equal(metricLabel('zz.new'), 'zz.new'); assert.equal(t('nav.dcgm'), 'GPU telemetry');
 });
+
+test('each nav group is one consecutive run of routes, so its label appears once', () => {
+  // app.js prints a section label whenever the group changes; a split group showed "Engines and load" twice (0.6.0).
+  const runs = ROUTES.filter((r) => !r.hidden && r.group).map((r) => r.group).filter((g, i, a) => g !== a[i - 1]);
+  assert.deepEqual(runs, [...new Set(runs)]);
+});
