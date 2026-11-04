@@ -35,7 +35,7 @@ to loopback, with a zero-build, zero-npm browser UI. One adapter per
 system plugs into a system-agnostic core; the UI renders from descriptors (status, metrics, config files,
 parameters, actions, playground), so adding a system is one adapter file (SkillEvaluator was added that way).
 
-> **Status: v0.4.0** (the backend rewritten in Rust; [`CHANGELOG.md`](CHANGELOG.md)). Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
+> **Status: v0.6.0** (Getting started and FAQ tabs on every system page; [`CHANGELOG.md`](CHANGELOG.md)). Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
 > Nothing here has been used by anyone other than its author, on one workstation, against one set of pinned
 > versions (Switchyard 0.3.0, Relay 0.9.2, Dynamo 1.5.0 and a 1.6.0 dev build, SkillEvaluator 0.5.0, Data Designer
 > 0.9.3, OpenShell CLI 0.0.71 / gateway 0.0.77, dcgm-exporter 4.8.4 with DCGM 4.6.1, AIPerf 0.13.0, NeMo Guardrails
@@ -51,10 +51,10 @@ Every feature claim in this repo is one of:
 | **verified-live** | Exercised against a real Switchyard 0.3.0, Relay 0.9.2 and Dynamo 1.5.0 on one workstation (evidence is stated in [`docs/FEATURE-MATRIX.md`](docs/FEATURE-MATRIX.md)). |
 | **unverified** | Only fakes have run it. It may work; nobody has watched it work. |
 
-Gate results (2026-11-03, the 0.5.0 tree, from a clean clone): `cargo test --locked` 862 passed / 0 failed (the live
+Gate results (2026-11-04, the 0.6.0 tree, from a clean clone): `cargo test --locked` 862 passed / 0 failed (the live
 smoke tests return early without `NEMO_LIVE` / `NEMO_CONSOLE_LIVE`), rustfmt and clippy `-D warnings` clean,
 cargo-deny and cargo-audit clean, crate-age 265 locked crates with 0 too new and 0 exceptions, frontend `node --test`
-122 passed, browser suite (headless Chrome 151) 15 routes and 53 pages and tabs with no error state, parity against
+128 passed, browser suite (headless Chrome 151) 15 routes and 77 pages and tabs with no error state, parity against
 the last Python backend 1,393 cases with 1,350 equal and the 43 differences documented (PORTING D-6 and D-31), all 936
 pytest ids mapped to Rust tests, and the cross-implementation checks (state directory, launcher, startup errors)
 passing. The 0.4.0 clean-clone runs are in `backend/PORTING.md` A-8 and A-9. Mermaid diagrams in these docs were **not

@@ -2,29 +2,25 @@
 
 Notes for the most recent release only; history lives in CHANGELOG.md.
 
-## 0.5.0 — 2026-11-03
+## 0.6.0 — 2026-11-04
 
-Two more NVIDIA systems, the eleventh and twelfth. Both are driven through a lab wrapper on PATH, and both run their
-work in the background so a closed tab never stops it.
+Help inside the console: every one of the twelve system pages now ends with a **Getting started** tab and a **FAQ**
+tab.
 
-- **NVIDIA Model Optimizer** (ADR-0017): offline compression of a pinned checkpoint through the `modelopt-local`
-  wrapper. The page shows the wrapper, the recipe file and the last job, the `mo.*` metrics, an editor for
-  `recipes.yaml` (validated with the wrapper's own schema before the write; a file with any error runs nothing) and a
-  `run` action that starts a job in the background (disruptive: it takes a GPU). `report` reads a job's verdict. The
-  console reads each job's `run.json`; it never runs the compression code, never writes a job's files and never stops
-  a running job.
-- **NVIDIA NeMo Gym** (ADR-0018): reinforcement-learning environments and rollouts through the `gym-local` wrapper,
-  whose client runs on an internal network with a key-holding router broker as its only way out. The page shows the
-  wrapper, the broker, the client network's containment, the image and whether the key file exists, the `gym.*`
-  metrics, and a `smoke` action (disruptive, one at a time, 1-20 tasks) that runs one bounded rollout in the
-  background. `verify` and `report` are safe. A client network that is not internal makes the system down and blocks
-  a run.
-- **How it was checked:** offline tests with fakes for both wrappers, the browser suite over every page and tab, and
-  the parity harness against the last Python backend (the two new systems are the documented deviation D-31). Live,
-  the status pages of both systems were observed against the installed wrappers on the maintainer's workstation
-  (2026-11-03). No compression job and no smoke run has been started from the console yet.
-- **Also:** `make parity` now runs the same checks as CI, and the dependency cooldown has no exceptions left.
+- **Getting started:** what the system is and what the console does with it, then numbered steps from install to first
+  use. Steps carry the exact command where one helps (with a Copy button; the console never runs it) and a button that
+  opens the tab the step talks about.
+- **FAQ:** the system's common questions, mostly the problem codes and refusals the status and actions can show, and
+  below them the questions that apply on every page (greyed-out buttons, off / down / unknown, the audit trail, empty
+  charts after a restart, the one-time reload after an upgrade). A filter narrows the list and opens what matches.
+- **How it is built:** the content is one plain-text file, `frontend/i18n/help.en.json`, loaded the first time a help
+  tab opens and rendered as text only. The tabs are added once in the shared page frame, so a future system page gets
+  them too. A link to a tab that a page did not build (Config and Playground are optional on some pages) is not shown.
+- **How it was checked:** a new frontend test checks that every system has a guide and an FAQ and that every tab and
+  page link is real; the browser suite now opens 77 pages and tabs (53 before); the filter, Expand all and the tab
+  links were driven in headless Chrome. The text was written from the operations guide and the feature matrix, not
+  re-checked against every live system.
+- **Unchanged:** the backend's behaviour. Only its version number moved.
 
 Upgrade: `git pull`, `make release`, then `backend/target/release/nemo-console stop` and `... open` (or `make run`).
-Restart after pulling: the frontend is served from disk, and a running 0.4 backend lacks the new systems' routes.
-Without `modelopt-local` / `gym-local` on PATH the two pages show the system as down, with the install step.
+A browser tab that was open across the upgrade picks up the new files on its next load.
