@@ -836,3 +836,26 @@ async fn an_unreachable_host_is_said_so_never_shown_as_absent() {
         "unknown"
     );
 }
+
+/// 0.10.0 re-audit N7: an action keeps the last report for polls (stale, not deleted), and "Show every target" waits
+/// for a report collected after it was asked.
+#[tokio::test]
+async fn show_every_target_waits_for_a_fresh_report_while_polls_keep_the_old_one() {
+    let e = Env::new();
+    let r = runner(&all_stopped(&[], &[]));
+    let a = e.make(Arc::clone(&r), &[]);
+    a.set_status_ttl(3600.0);
+    a.status().await.unwrap();
+    r.clear();
+    r.on_prefix(
+        &[L, "status-json"],
+        fixed(ok(&all_stopped(&["new-gb202.safetensors"], &[]))),
+    );
+    let res = a.run_action("targets", &Map::new()).await.unwrap();
+    assert!(
+        res.ok && res.output.contains("new-gb202.safetensors"),
+        "{}",
+        res.output
+    );
+    assert_eq!(r.count(&[L, "status-json"]), 2); // the first status, then exactly one fresh run
+}

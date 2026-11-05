@@ -208,6 +208,10 @@ struct Inner {
     start: Mutex<Option<StartRun>>,
     /// Single flight: at most one `status-json` runs, in the background, whatever polls (pages, the metrics loop).
     refreshing: std::sync::atomic::AtomicBool,
+    /// After an action the report is stale but kept: polls still get it at once while a refresh runs.
+    expired: std::sync::atomic::AtomicBool,
+    /// Bumped by every finished refresh (an action that needs a fresh report waits for the next one).
+    generation: std::sync::atomic::AtomicU64,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -248,8 +252,9 @@ impl Inner {
     /// killed before it caches anything, and the next poll would start it again).
     async fn probe(self: &Arc<Self>, wait: f64) -> Probe {
         let ttl = *lock(&self.ttl);
+        let expired = self.expired.load(std::sync::atomic::Ordering::SeqCst);
         let stale = match lock(&self.cache).as_ref() {
-            Some((at, p)) if at.elapsed().as_secs_f64() < ttl => return p.clone(),
+            Some((at, p)) if !expired && at.elapsed().as_secs_f64() < ttl => return p.clone(),
             Some((_, p)) => Some(p.clone()),
             None => None,
         };
@@ -262,6 +267,9 @@ impl Inner {
                 let task = async {
                     let p = me.run_status().await;
                     *lock(&me.cache) = Some((Instant::now(), p));
+                    me.expired.store(false, std::sync::atomic::Ordering::SeqCst);
+                    me.generation
+                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 };
                 crate::services::common::contained("flare status", task).await;
                 me.refreshing
@@ -317,8 +325,30 @@ impl Inner {
         }
     }
 
+    /// Mark the report stale (after an action changed something): the next poll starts a refresh.
     fn forget(&self) {
-        *lock(&self.cache) = None;
+        self.expired
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// A report collected after this call (up to `wait` seconds), else the last one.
+    async fn probe_fresh(self: &Arc<Self>, wait: f64) -> Probe {
+        let g0 = self.generation.load(std::sync::atomic::Ordering::SeqCst);
+        self.forget();
+        let t0 = Instant::now();
+        let mut p = self.probe(wait).await;
+        while self.generation.load(std::sync::atomic::Ordering::SeqCst) == g0
+            && t0.elapsed().as_secs_f64() < wait
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            p = self.probe(0.0).await;
+        }
+        if let Some((_, fresh)) = lock(&self.cache).as_ref()
+            && self.generation.load(std::sync::atomic::Ordering::SeqCst) != g0
+        {
+            p = fresh.clone();
+        }
+        p
     }
 
     fn base_url(&self) -> String {
@@ -350,6 +380,8 @@ impl FlareAdapter {
                 ttl: Mutex::new(STATUS_TTL),
                 start: Mutex::new(None),
                 refreshing: std::sync::atomic::AtomicBool::new(false),
+                expired: std::sync::atomic::AtomicBool::new(false),
+                generation: std::sync::atomic::AtomicU64::new(0),
             }),
         }
     }
@@ -1049,6 +1081,14 @@ impl SystemAdapter for FlareAdapter {
         let mut chosen: Option<Target> = None;
         if needs_target {
             let p = inner.probe(30.0).await;
+            if p.checking {
+                return Ok(done(
+                    t0,
+                    false,
+                    "Still checking the targets (the first report is running): try again in a few seconds.",
+                    Vec::new(),
+                ));
+            }
             if !p.ran || !p.err.is_empty() {
                 let why = if p.err.is_empty() {
                     format!("{LAUNCHER} is not on PATH")
@@ -1134,8 +1174,15 @@ impl SystemAdapter for FlareAdapter {
         };
         match action_id {
             "targets" => {
-                inner.forget();
-                let p = inner.probe(60.0).await;
+                let p = inner.probe_fresh(60.0).await;
+                if p.checking {
+                    return Ok(done(
+                        t0,
+                        false,
+                        "Still checking the targets (the first report is running): try again in a few seconds.",
+                        Vec::new(),
+                    ));
+                }
                 if !p.ran || !p.err.is_empty() {
                     let why = if p.err.is_empty() {
                         format!("{LAUNCHER} is not on PATH")
