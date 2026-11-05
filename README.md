@@ -25,6 +25,9 @@ running on one workstation:
 - **NVIDIA NeMo Gym** (new in 0.5.0): reinforcement-learning environments and rollouts, run contained (an
   internal-network client whose only way out is a router broker). The console checks the containment, runs a
   bounded smoke rollout in the background and reads its rewards.
+- **NVIDIA Flare** (new in 0.10.0): NVIDIA's research-prototype inference server, on sm120 GPUs (RTX PRO 6000,
+  RTX 5090) and sm121 GPUs (one DGX Spark, or all four as one engine). Every start goes through the lab launcher,
+  which refuses unless the target's GPUs are free; the console shows each target, starts and stops it, and probes it.
 - **NVIDIA NeMo Guardrails** (new in 0.3.0): a rails server (input and output self-checks) in an internal-network
   container; rails configs editable with validation and rollback; probe checks and a playground through the rails.
 - **NVIDIA NeMo Evaluator** (new in 0.3.0): offline benchmark suites (GSM8K, MMLU, ...) against router models, scores
@@ -35,7 +38,7 @@ to loopback, with a zero-build, zero-npm browser UI. One adapter per
 system plugs into a system-agnostic core; the UI renders from descriptors (status, metrics, config files,
 parameters, actions, playground), so adding a system is one adapter file (SkillEvaluator was added that way).
 
-> **Status: v0.9.0** (field help on every setting of the config editor's Form view, and security-audit fixes; the Form view and live edit checks since 0.8.0; Getting started and FAQ tabs on every page since 0.6.0 and 0.7.0; [`CHANGELOG.md`](CHANGELOG.md)). Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
+> **Status: v0.10.0** (an NVIDIA Flare page for sm120 and sm121 GPUs; field help on every config setting since 0.9.0; the Form view and live edit checks since 0.8.0; Getting started and FAQ tabs on every page since 0.6.0 and 0.7.0; [`CHANGELOG.md`](CHANGELOG.md)). Read the [status vocabulary](#status-vocabulary) before trusting any claim in these docs.
 > Nothing here has been used by anyone other than its author, on one workstation, against one set of pinned
 > versions (Switchyard 0.3.0, Relay 0.9.2, Dynamo 1.5.0 and a 1.6.0 dev build, SkillEvaluator 0.5.0, Data Designer
 > 0.9.3, OpenShell CLI 0.0.71 / gateway 0.0.77, dcgm-exporter 4.8.4 with DCGM 4.6.1, AIPerf 0.13.0, NeMo Guardrails

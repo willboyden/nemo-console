@@ -19,13 +19,13 @@ after(() => { server.closeAllConnections?.(); server.close(); });
 const get = (p) => fetch(`${base}/api/v1${p}`);
 const post = (p, body) => fetch(`${base}/api/v1${p}`, { method: 'POST', headers: H, body: JSON.stringify(body) });
 const dev = (u) => fetch(`${base}${u}`, { headers: { 'X-Console': '1' } });
-const PREFIX = { openshell: 'os.', dcgm: 'dcgm.', aiperf: 'ap.', guardrails: 'gr.', evaluator: 'ev.', modelopt: 'mo.', gym: 'gym.' };
+const PREFIX = { openshell: 'os.', dcgm: 'dcgm.', aiperf: 'ap.', guardrails: 'gr.', evaluator: 'ev.', modelopt: 'mo.', gym: 'gym.', flare: 'flare.' };
 
-test('twelve system ids; every one has an i18n name, a route (except none missing) and an audit option', () => {
-  assert.equal(SYSTEM_IDS.length, 12); assert.equal(new Set(SYSTEM_IDS).size, 12);
+test('thirteen system ids; every one has an i18n name, a route (except none missing) and an audit option', () => {
+  assert.equal(SYSTEM_IDS.length, 13); assert.equal(new Set(SYSTEM_IDS).size, 13);
   for (const id of SYSTEM_IDS) { assert.ok(`sys.${id}` in en, id); assert.ok(ROUTES.some((r) => r.path === `/${id}`), `route ${id}`); }
   for (const id of SEVEN_IDS) assert.ok(SYSTEM_IDS.includes(id));
-  assert.deepEqual(SIX_IDS, SEVEN_IDS.filter((id) => id !== 'gym')); assert.deepEqual(FIVE_IDS, SIX_IDS.filter((id) => id !== 'modelopt'));
+  assert.deepEqual(SIX_IDS, SEVEN_IDS.filter((id) => id !== 'gym' && id !== 'flare')); assert.deepEqual(FIVE_IDS, SIX_IDS.filter((id) => id !== 'modelopt'));
   const audit = fs.readFileSync(path.join(root, 'js/views/audit.js'), 'utf8');
   assert.match(audit, /SYSTEM_IDS\.map/, 'the audit filter is built from the twelve-id list, not a hardcoded subset');
 });
@@ -68,7 +68,8 @@ test('metrics: documented prefixes only, labels (never in the key), the real key
     aiperf: ['ap.ttft_ms', 'ap.itl_ms', 'ap.latency_ms', 'ap.output_tps', 'ap.request_tps', 'ap.error_rate', 'ap.runs', 'ap.runs_by_verdict', 'ap.live_running'],
     guardrails: ['gr.up', 'gr.configs'], evaluator: ['ev.suites', 'ev.runs', 'ev.live_running', 'ev.runs_by_verdict', 'ev.score'],
     modelopt: ['mo.jobs', 'mo.jobs_by_verdict', 'mo.live_running', 'mo.output_bytes', 'mo.compression_ratio', 'mo.duration_s'],
-    gym: ['gym.runs', 'gym.live_running', 'gym.runs_by_verdict', 'gym.mean_reward', 'gym.rollouts', 'gym.pass_at_1', 'gym.duration_s'] };
+    gym: ['gym.runs', 'gym.live_running', 'gym.runs_by_verdict', 'gym.mean_reward', 'gym.rollouts', 'gym.pass_at_1', 'gym.duration_s'],
+    flare: ['flare.targets_serving', 'flare.packages', 'flare.generated_total', 'flare.prefill_total', 'flare.active_requests', 'flare.pending_requests', 'flare.requests_completed_total', 'flare.requests_failed_total', 'flare.cache_reused_total', 'flare.draft_acceptance', 'flare.max_model_len'] };
   for (const id of SEVEN_IDS) {
     const m = await (await get(`/systems/${id}/metrics`)).json(); assert.equal(m.available, true);
     const keys = new Set(m.points.map((p) => p.key));
@@ -107,7 +108,8 @@ test('actions: the real ids, params and danger levels; non-safe need confirm', a
   const want = { openshell: { doctor: 'safe', list_sandboxes: 'safe', sandbox_get: 'safe', sandbox_logs: 'safe', gateway_logs: 'safe', prove_policy: 'safe', gateway_up: 'disruptive', gateway_stop: 'disruptive', delete_sandbox: 'destructive' },
     dcgm: { diag: 'disruptive', diag_level2: 'disruptive', discovery: 'safe', restart_exporter: 'disruptive' }, aiperf: { profile: 'disruptive', report: 'safe' },
     guardrails: { up: 'disruptive', restart: 'disruptive', stop: 'disruptive', check: 'disruptive' }, evaluator: { run: 'disruptive', report: 'safe' },
-    modelopt: { run: 'disruptive', report: 'safe' }, gym: { smoke: 'disruptive', verify: 'safe', report: 'safe' } };
+    modelopt: { run: 'disruptive', report: 'safe' }, gym: { smoke: 'disruptive', verify: 'safe', report: 'safe' },
+    flare: { targets: 'safe', preflight: 'safe', up: 'disruptive', down: 'disruptive', probe: 'safe', log: 'safe', stage: 'disruptive', last_start: 'safe', prepare_help: 'safe' } };
   for (const [id, m] of Object.entries(want)) {
     const acts = await (await get(`/systems/${id}/actions`)).json();
     assert.deepEqual(acts.map((a) => a.id).sort(), Object.keys(m).sort(), id);

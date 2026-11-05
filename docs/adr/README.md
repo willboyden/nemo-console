@@ -26,3 +26,4 @@ its files (`*.py`), which map one to one to `backend/crates/nemo-console/src/**/
 | [0017](0017-model-optimizer-is-a-background-job.md) | Model Optimizer is a background job the console starts and then only reads (addendum 10.9) |
 | [0018](0018-nemo-gym-smoke-is-a-console-owned-background-run.md) | A NeMo Gym smoke run is a background run the console owns; containment is part of health (addendum 10.10) |
 | [0019](0019-live-config-checks-mirror-the-backend.md) | Live config checks in the browser mirror the backend validators (drift-tested); the backend still decides |
+| [0020](0020-flare-runs-through-the-lab-launcher-on-sm120-and-sm121.md) | NVIDIA Flare runs through the lab launcher on sm120 and sm121 targets; the console never talks to a remote engine |

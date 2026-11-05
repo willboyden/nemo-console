@@ -113,7 +113,7 @@ pub const DEFAULT_DYNAMO_CONTAINERS: [(&str, &str); 4] = [
 ];
 pub const GUARDRAILS_COMPOSE_PROJECT: &str = "ai-lab-nemo-guardrails";
 pub const DCGM_COMPOSE_PROJECT: &str = "ai-lab-observability";
-pub const DEFAULT_LAYOUT: [(&str, &str); 14] = [
+pub const DEFAULT_LAYOUT: [(&str, &str); 15] = [
     ("switchyard", "inference/switchyard"),
     ("relay", "clients/nemo-relay"),
     ("dynamo", "inference/dynamo"),
@@ -128,6 +128,7 @@ pub const DEFAULT_LAYOUT: [(&str, &str); 14] = [
     ("ollama", "inference/ollama"),
     ("modelopt", "clients/modelopt"),
     ("gym", "clients/nemo-gym"),
+    ("flare", "inference/flare"),
 ];
 
 #[allow(clippy::expect_used)]
@@ -1047,6 +1048,7 @@ impl Settings {
         put("modelopt_dir", lay("modelopt"));
         put("modelopt_recipes", lay("modelopt").join("recipes.yaml"));
         put("gym_dir", lay("gym"));
+        put("flare_dir", lay("flare"));
         put(
             "evaluator_key_file",
             home.join(".config")

@@ -66,10 +66,10 @@ function runOnce(kind, env, args) {
   });
 }
 
-// D-31: the Rust backend has two systems the Python reference predates (Model Optimizer, ADR-0017; NeMo Gym,
-// ADR-0018), so its "unknown layout key" error names two more keys. Exactly that tail is dropped from that one line;
-// any other difference in it, or anywhere else, still fails the comparison.
-const D31_TAIL = ', modelopt, gym) [type=value_error]';
+// D-31 and D-33: the Rust backend has three systems the Python reference predates (Model Optimizer, ADR-0017; NeMo
+// Gym, ADR-0018; NVIDIA Flare, ADR-0020), so its "unknown layout key" error names three more keys. Exactly that tail is
+// dropped from that one line; any other difference in it, or anywhere else, still fails the comparison.
+const D31_TAIL = ', modelopt, gym, flare) [type=value_error]';
 function d31(line) {
   return line.startsWith('  Value error, unknown layout key ') && line.endsWith(D31_TAIL)
     ? `${line.slice(0, -D31_TAIL.length)}) [type=value_error]` : line;

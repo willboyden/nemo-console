@@ -6,6 +6,7 @@ export const ROUTES = [
   { path: '/switchyard', tag: 'nc-switchyard', mod: 'switchyard', nav: 'switchyard', icon: 'switchyard', group: 'routing' },
   { path: '/relay', tag: 'nc-relay', mod: 'relay', nav: 'relay', icon: 'relay', group: 'routing' },
   { path: '/dynamo', tag: 'nc-dynamo', mod: 'dynamo', nav: 'dynamo', icon: 'dynamo', group: 'engines' },
+  { path: '/flare', tag: 'nc-flare', mod: 'flare', nav: 'flare', icon: 'flare', group: 'engines' },
   { path: '/dcgm', tag: 'nc-dcgm', mod: 'dcgm', nav: 'dcgm', icon: 'gpu', group: 'engines' },
   { path: '/aiperf', tag: 'nc-aiperf', mod: 'aiperf', nav: 'aiperf', icon: 'gauge', group: 'engines' },
   { path: '/modelopt', tag: 'nc-modelopt', mod: 'modelopt', nav: 'modelopt', icon: 'compress', group: 'engines' },

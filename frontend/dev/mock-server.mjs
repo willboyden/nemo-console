@@ -441,6 +441,7 @@ const PLAY = {
   switchyard: { wire: 'openai_chat', models: ['auto-local', 'auto-flashnext', 'direct-lightning', 'direct-27b'], default_model: 'auto-local', note: 'Sent to Switchyard on :4010 with the console credential resolved server-side.' },
   relay: { wire: 'anthropic_messages', models: ['auto-local'], default_model: 'auto-local', note: 'Sent through the Relay gateway on :4040 (Anthropic Messages wire).' },
   dynamo: { wire: 'openai_chat', models: ['unsloth/Qwen3.8-27B-NVFP4'], default_model: 'unsloth/Qwen3.8-27B-NVFP4', note: 'Sent to the Dynamo frontend on :8020.' },
+  flare: { wire: 'openai_chat', models: ['flare'], default_model: 'flare', note: 'Chats with Flare on the local target (127.0.0.1:8035). Flare ignores the model name: the loaded package always answers. (mock)' },
 };
 async function playgroundChat(req, res, system, body) {
   const spec = PLAY[system];

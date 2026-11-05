@@ -111,6 +111,21 @@
       ]
     },
     {
+      "system": "flare",
+      "file": "compose*",
+      "catalogs": [
+        "flare_compose",
+        "compose"
+      ]
+    },
+    {
+      "system": "flare",
+      "file": "ignition",
+      "catalogs": [
+        "flare_ignition"
+      ]
+    },
+    {
       "system": "*",
       "file": "*compose*",
       "catalogs": [
@@ -1041,6 +1056,68 @@
       "services.*.environment.*": {
         "what": "An environment variable for the service.",
         "change": "The service reads the new value when it is recreated."
+      }
+    },
+    "flare_compose": {
+      "services.flare.command.#": {
+        "what": "One argument of `flare run`: the package path, `--offline` (never fetch the publisher from the internet), `--trust-store`, `--gpus` (container-local indices; their count must equal the package's TP size), `--host`, `--port`.",
+        "change": "Flare starts with the changed argument the next time flare.sh starts it."
+      },
+      "services.*.init": {
+        "what": "Whether Docker inserts an init process. false: Flare is PID 1 and handles SIGTERM itself (upstream container doc).",
+        "change": "true adds an init in front of Flare's own signal handling."
+      },
+      "services.*.stop_grace_period": {
+        "what": "How long Docker waits after SIGTERM before killing the container (60 s upstream: graph replay drains before CUDA teardown).",
+        "change": "Shorter can kill Flare mid-teardown; longer makes a stop slower."
+      },
+      "services.*.ulimits.*": {
+        "what": "A resource limit inside the container."
+      },
+      "services.*.ulimits.*.soft": {
+        "what": "The soft limit (memlock: bytes of locked memory). Upstream wants unlimited (-1) for pinned transfer buffers; a rootless Docker daemon cannot raise it that far.",
+        "change": "A value above what the daemon allows makes the container fail to start."
+      },
+      "services.*.ulimits.*.hard": {
+        "what": "The hard limit (the ceiling the soft limit may rise to).",
+        "change": "It must be at least the soft limit."
+      },
+      "services.*.networks.*.aliases.#": {
+        "what": "An extra name other containers on that network reach this one by (`flare` on the ai-lab bus: the router uses flare:8000).",
+        "change": "Clients that use the old name (the router alias's URL) stop reaching it."
+      },
+      "services.*.deploy.resources.reservations.devices.#.driver": {
+        "what": "The device driver for the GPU reservation (`nvidia`).",
+        "change": "Another driver gets no NVIDIA GPU."
+      },
+      "services.*.deploy.resources.reservations.devices.#.device_ids.#": {
+        "what": "A host GPU index given to the container.",
+        "change": "The engine runs on other cards; their count must match the package's TP size."
+      },
+      "services.*.deploy.resources.reservations.devices.#.capabilities.#": {
+        "what": "What the container may use of the GPU: `compute` (libcuda) and `utility` (nvidia-smi / NVML, used to detect the GPU revision).",
+        "change": "Without compute Flare cannot load the GPU at all."
+      }
+    },
+    "flare_ignition": {
+      "paths": {
+        "what": "Where Ignition keeps its inputs and caches inside the preparation container."
+      },
+      "paths.hub_cache": {
+        "what": "The Hugging Face cache Ignition reads checkpoints from (the lab's own cache; preparation runs with downloads off).",
+        "change": "Ignition looks for checkpoints elsewhere; a recipe whose checkpoint is not there fails instead of downloading."
+      },
+      "paths.kernel_cache": {
+        "what": "Where tuned kernels are kept between exports.",
+        "change": "A new location starts tuning from scratch (slower first export)."
+      },
+      "paths.package_cache": {
+        "what": "Where Ignition writes prepared package cache entries before they are converted into a package file.",
+        "change": "Exports land elsewhere; `flare.sh convert` must be pointed there."
+      },
+      "paths.cuda": {
+        "what": "The CUDA toolkit inside the preparation image (13.2).",
+        "change": "A wrong path breaks kernel compilation during export."
       }
     }
   }

@@ -508,6 +508,9 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
   shared aggregate payloads (`/health`, `/overview`, `/systems`; the case ids in `parity/allow-diffs.txt`) and the
   layout keys named by the "unknown layout key" settings error (`parity/startup.mjs` drops exactly the `, modelopt,
   gym` tail of that one line). Every other difference on those routes and in that message still fails the gate.
+- **D-33 NVIDIA Flare (ADR-0020), a third system added after the port.** Like D-31: the Python reference has no Flare
+  adapter (`stub:flare` in `parity/allow-diffs.txt`), the aggregate payloads carry one more entry (the same case ids as
+  D-31), and the "unknown layout key" error names `flare` after `gym` (`parity/startup.mjs` drops exactly that tail).
 - **D-32 Secret masks stop at the end of a line (0.9.0 security audit).** The Python reference's Bearer and
   key=value masks let `\s` cross a newline, so a line ending in "bearer" swallowed the next line (an OpenShell provider
   profile read back as `auth_style: bearer [redacted]: authorization`). The Rust masks match within one line, so

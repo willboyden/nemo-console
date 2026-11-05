@@ -26,10 +26,12 @@ no test or run. A test proves the control against its fake, not against every re
 | Audit log and config revisions | Accountability and rollback | SQLite `console.db` in the state dir |
 | Console availability | Loss means no console, not loss of serving | Process |
 
-| **Model Optimizer wrapper** (`modelopt-local`): a local CLI that starts a compression job in an offline
-| **NeMo Gym wrapper** (`gym-local`): a local CLI that runs each Gym command in a client container on an internal network, its only way out a router broker holding the wrapper's own key. It runs with the operator's privileges; the console starts it, reads what it prints and writes its own run record, nothing more (ADR-0018). |
-  container and writes the job's verdict to a file. It runs with the operator's privileges; the console starts it and
-  reads its files, nothing more (ADR-0017).
+Local launchers the console runs (each with the operator's privileges; the console passes only validated argv):
+
+- **Model Optimizer wrapper** (`modelopt-local`): a local CLI that starts a compression job in an offline container and writes the job's verdict to a file. It runs with the operator's privileges; the console starts it and reads its files, nothing more (ADR-0017).
+- **NeMo Gym wrapper** (`gym-local`): a local CLI that runs each Gym command in a client container on an internal network, its only way out a router broker holding the wrapper's own key. It runs with the operator's privileges; the console starts it, reads what it prints and writes its own run record, nothing more (ADR-0018).
+- **Flare launcher** (`flare-local`, ADR-0020): a local script that starts and stops NVIDIA Flare on the console host and, over ssh, on a second GPU box and the DGX Sparks. It refuses to start while a target's GPU looks busy (remote: a running container with a GPU request or a CUDA process; local: more than 3 GiB used) and never stops another engine; remote engines need a serving key it keeps 0600. It runs with the operator's privileges and ssh access; the console passes it only validated argv and reads its JSON status.
+
 ## 2. Trust boundaries
 
 ```mermaid
@@ -129,6 +131,7 @@ same-origin policy and CSP; no remote network access to the port (see residual r
 | E-13 | A deployment-name setting injects an option or a path into `docker` / `systemctl` argv | Tampering / Elevation | Every name is validated with a full match at start (container, compose project and service, `.service` unit, absolute in-container path without `..`, relative layout directory with plain segments); they are not writable through the API; argv lists only, never a shell | `tests/core_deployment_settings.rs` |
 | E-15 | The Model Optimizer wrapper's container reaches the internet or a host secret, or a job writes outside its own directory | Info disclosure / Tampering | The wrapper's container has no egress (the model store is a read-only mount), no `trust_remote_code` and no `HF_TOKEN`; the wheels are sha256-pinned and installed offline; the console passes only argv (job id, recipe, run dir), never an env value, and reads each job's `run.json` read-only and size-capped | `tests/modelopt_adapter.rs` (console), `clients/modelopt/tests/` (lab repo) |
 | E-16 | A NeMo Gym client reaches the internet, or a smoke run's prompts and completions leak through the console | Info disclosure | The client container sits on one internal network whose only peer is the wrapper's router broker (it holds the key; the client and the console never do); the console treats a non-internal network as DOWN and refuses to start a run; it passes only argv (model alias, task count), keeps only the numbers the wrapper prints, and reads its own `run.json` read-only and size-capped | `tests/gym_adapter.rs` (console), `clients/nemo-gym/gym-local egress` (lab repo) |
+| E-17 | Through the Flare page, an admin starts an engine on a remote host, reaches a remote engine directly, or stops someone else's engine | EoP / Tampering / Info disclosure | Only `flare-local` with argv the launcher itself listed (target, mode) and a package-name pattern, checked before anything runs; the launcher refuses while a target's GPU looks busy (remote: a running container with a GPU request or a CUDA process; local: more than 3 GiB used) and never stops one; container names are exact per target kind (a single-Spark stop cannot hit a four-Spark rank); the console's HTTP stays loopback-only (remote status and probes go through the launcher); remote engines require a serving key that is never printed or passed as an argument | `tests/flare_adapter.rs` (console); `inference/flare/flare.sh status-json` read-only against the real hosts; the remote start paths are **unverified** until a package is served |
 
 ## 4. Residual risks (stated honestly)
 

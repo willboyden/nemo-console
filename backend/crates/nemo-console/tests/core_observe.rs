@@ -19,7 +19,7 @@ use nemo_console::services::missing::MissingAdapter;
 use nemo_console::services::routing::summarize;
 use serde_json::{Value, json};
 
-const ALL_IDS: [&str; 12] = [
+const ALL_IDS: [&str; 13] = [
     "switchyard",
     "relay",
     "dynamo",
@@ -32,6 +32,7 @@ const ALL_IDS: [&str; 12] = [
     "evaluator",
     "modelopt",
     "gym",
+    "flare",
 ];
 
 #[tokio::test]
@@ -48,7 +49,7 @@ async fn test_health_overview_systems_topology() {
         .collect();
     assert_eq!(systems, ALL_IDS.into_iter().collect());
     let o = env.get("/api/v1/overview").send().await.json();
-    assert_eq!(o["systems"].as_array().unwrap().len(), 12);
+    assert_eq!(o["systems"].as_array().unwrap().len(), 13);
     let nodes: BTreeSet<&str> = o["topology"]["nodes"]
         .as_array()
         .unwrap()
@@ -68,7 +69,7 @@ async fn test_health_overview_systems_topology() {
             .as_array()
             .unwrap()
             .len(),
-        12
+        13
     );
     assert_eq!(
         env.get("/api/v1/systems/dynamo/status").send().await.json()["system"],

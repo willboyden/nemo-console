@@ -875,5 +875,73 @@
         "a": "From the console's own `run.json` of a finished smoke run, parsed from the wrapper's printed result. Nothing is estimated."
       }
     ]
+  },
+  "flare": {
+    "lead": "NVIDIA Flare is NVIDIA's research-prototype inference server, written in Rust. It serves a package prepared ahead of time (kernels, CUDA graphs and weights), once per GPU family and tensor-parallel size, on that family. The console runs it on two chip families: sm120 (RTX PRO 6000, RTX 5090) and sm121 (one DGX Spark, or several as one engine). It is an experiment lane, off by default; upstream says it is not a replacement for production engines.",
+    "steps": [
+      {
+        "title": "Link the launcher",
+        "body": "Every action runs the lab launcher `flare-local`, which is `inference/flare/flare.sh`. Link it onto the console's PATH once; the Status tab then lists every target with its chip, package family, container, image, packages and whether its GPUs are free.",
+        "cmd": "ln -s <lab>/inference/flare/flare.sh ~/.local/bin/flare-local",
+        "tab": "status"
+      },
+      {
+        "title": "Pick a target",
+        "body": "The launcher defines the targets: each has its hosts, a chip (sm120 takes gb202 packages, sm121 gb10) and the tensor-parallel sizes it can run (for example tp1 and tp2 on two local cards, tp1 on one remote card or one Spark, tp4 across four Sparks). Actions, Show every target prints the table; the action forms offer exactly those names.",
+        "tab": "actions"
+      },
+      {
+        "title": "Prepare a package on that family",
+        "body": "Ignition prepares a package on the real GPUs of its family, offline, and it needs them to itself for hours. Actions, How to prepare a package prints the sequence for the checkpoints on hand. The lab never downloads the community's ready packages: their licence is not accepted.",
+        "cmd": "flare-local prepare-help",
+        "tab": "actions"
+      },
+      {
+        "title": "Stage a remote target",
+        "body": "A remote host loads the serving image from the console host's share (amd64 or arm64) and gets a trust dir, the io_uring seccomp profile, the public publisher key and the serving key. Create the serving key once on the console host first; it is never printed.",
+        "cmd": "flare-local key && flare-local stage <target>",
+        "tab": "actions"
+      },
+      {
+        "title": "Check, then start",
+        "body": "Check a start runs every precondition and changes nothing. Start Flare refuses unless every GPU of the target is free, and never stops another engine: free the cards yourself. Loading runs in the background (for a multi-host target a peer transfer over the fabric too); then Show the last start.",
+        "tab": "actions"
+      },
+      {
+        "title": "Prove it",
+        "body": "Probe sends one real completion; /health alone is not proof. The Status tab charts tokens, running requests and draft acceptance per target while it serves; Stop Flare frees the GPUs.",
+        "tab": "actions"
+      }
+    ],
+    "faq": [
+      {
+        "q": "Why can a package not run on every target?",
+        "a": "A package is fixed to a GPU family and a tensor-parallel size when it is prepared: gb202 (RTX PRO 6000 and RTX 5090, sm120) or gb10 (DGX Spark, sm121), and tp1, tp2 or tp4. A tp2 package cannot load as tp1, and an sm120 package fails the architecture check on a Spark. Prepare one per target family on that family's GPUs."
+      },
+      {
+        "q": "Start Flare refuses: a GPU is busy.",
+        "a": "That is on purpose. The launcher never stops another engine, because whatever holds the GPUs is someone's work. A GPU counts as busy when, on a remote host, a running container has a GPU request (other than Flare's own or the DCGM exporter) or a CUDA process runs on it, and on the console host when a card has more than 3 GiB in use. Stop that engine yourself with its own script, then start Flare."
+      },
+      {
+        "q": "Why is the playground only for the local target?",
+        "a": "The console's own HTTP stays on loopback, and only the local target listens there. Remote targets serve on the private fabric with a serving key; use Probe for them, which runs through the launcher."
+      },
+      {
+        "q": "Does stopping one Spark touch the multi-Spark engine?",
+        "a": "No. A single-host engine and a multi-host engine use different container names, and `down` only stops the kind its target names. Starting either refuses while the other runs on that host."
+      },
+      {
+        "q": "Why can I not edit the compose files here?",
+        "a": "Flare is started only through `flare.sh`, which checks the GPUs first; a bare compose start skips those checks. The files are shown read-only and change in git."
+      },
+      {
+        "q": "The status says the image is not loaded on a remote target.",
+        "a": "Save the serving image to the console host's share once (`flare-local save-image amd64` for an x86 host; the arm64 image for the Sparks is built on a Spark), then Stage that target. Stage loads the tarball only if its digest matches the one `save-image` kept on the console host, off the share."
+      },
+      {
+        "q": "A target says it could not be checked.",
+        "a": "Its host did not answer ssh within a few seconds. The page keeps showing the last report and checks again about once a minute; the launcher never waits long on a dead host."
+      }
+    ]
   }
 }

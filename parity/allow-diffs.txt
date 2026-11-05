@@ -4,6 +4,7 @@
 params.dynamo.preview.nan  # D-6: NaN in params values, refused by the core check (Rust) or the adapter (Python)
 stub:modelopt  # D-7: the Python backend has no Model Optimizer adapter; the Rust one is new (ADR-0017)
 stub:gym  # D-8: the Python backend has no NeMo Gym adapter either; the Rust one is new (ADR-0018)
+stub:flare  # D-33: nor an NVIDIA Flare adapter; the Rust one is new (ADR-0020)
 # D-31: the Rust backend has the Model Optimizer (ADR-0017) and NeMo Gym (ADR-0018) adapters; the Python
 # reference has neither, so the shared aggregate payloads (/health, /overview, /systems) carry two extra systems. Every case below differs
 # only by that entry; each other difference on those routes still fails the gate.

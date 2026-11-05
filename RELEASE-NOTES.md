@@ -2,25 +2,20 @@
 
 Notes for the most recent release only; history lives in CHANGELOG.md.
 
-## 0.9.0 — 2026-11-05
+## 0.10.0 — 2026-11-05
 
-Field help in the config editor, and the fixes from a security audit.
+An NVIDIA Flare page, for both GPU families the lab runs: sm120 and sm121.
 
-- **An info button (ⓘ) on every setting of the Form view.** Its pop-up says what the setting is, what changing it
-  does, the values it accepts and when a change takes effect, or why the file is read-only. Sections the console knows
-  have an "About this section" button. Every setting of the Switchyard, Relay, AIPerf, Evaluator, Model Optimizer,
-  Guardrails and OpenShell files has a description; a Dynamo command-line flag also shows its entry from the Params
-  tab. A setting without a description still shows its type, accepted values and the comment from the file.
-- **Secret masks stop at the end of the line.** A line ending in "bearer" no longer swallows the next line into
-  `[redacted]` (an OpenShell provider profile was shown corrupted), and the save-time secret scan no longer refuses
-  such files.
-- **Apply refuses a file the console shows masked** (409 `hidden_content`) instead of writing the mask over the real
-  text, and a config read hashes exactly the bytes it showed, so a concurrent change is never overwritten.
-- **The editor survives hostile files** (absurd nesting, very long lines of spaces, keys named `constructor`), the Form
-  writer handles a few more YAML corner cases exactly, and a large paste no longer makes the diff use gigabytes.
-- **How it was checked:** an independent security audit and a re-audit of the fixes; new Rust tests for the masks,
-  the hidden-content refusal and the read retry; new frontend tests that every setting of every mock file and every
-  schema key has a description, plus regression tests for each editor fix; the config-editor browser check opens and
-  closes a pop-up.
+- **NVIDIA Flare** is NVIDIA's research-prototype inference server in Rust. It serves a package prepared once per GPU
+  family and tensor-parallel size, on that family. The new page shows every target the lab launcher defines (local
+  RTX PRO 6000s, a remote RTX 5090, one DGX Spark, or several Sparks as one engine) with its chip, packages, image and
+  whether its GPUs are free, plus Flare's own counters while it serves.
+- **Guarded starts:** every action runs the launcher, which refuses to start while a target's GPUs look busy (a GPU counts as busy when the launcher sees, on a remote host, a running container with a GPU request (other than Flare's own or the DCGM exporter) or a CUDA process, and on the console host more than 3 GiB of memory used on a card) and never stops another engine. The console passes only names the launcher listed and a mode the target
+  offers. Remote engines need a serving key, and the console never calls them itself.
+- **Start in the background, one at a time;** then Probe sends one real completion. The lane's files are read-only,
+  with field help.
+- **Not yet proven on hardware:** no package has been prepared or served yet, because production engines held the
+  GPUs. The start paths follow upstream's documentation.
 
 Upgrade: `git pull`, `make release`, then `backend/target/release/nemo-console stop` and `... open` (or `make run`).
+Then link the launcher once: `ln -s <lab>/inference/flare/flare.sh ~/.local/bin/flare-local`.

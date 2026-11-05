@@ -23,11 +23,12 @@ pub enum SystemId {
     Evaluator,
     Modelopt,
     Gym,
+    Flare,
 }
 
 impl SystemId {
     /// Registry order: overview, /systems and /health list systems in exactly this order.
-    pub const ALL: [SystemId; 12] = [
+    pub const ALL: [SystemId; 13] = [
         SystemId::Switchyard,
         SystemId::Relay,
         SystemId::Dynamo,
@@ -40,6 +41,7 @@ impl SystemId {
         SystemId::Evaluator,
         SystemId::Modelopt,
         SystemId::Gym,
+        SystemId::Flare,
     ];
 
     #[must_use]
@@ -57,6 +59,7 @@ impl SystemId {
             SystemId::Evaluator => "evaluator",
             SystemId::Modelopt => "modelopt",
             SystemId::Gym => "gym",
+            SystemId::Flare => "flare",
         }
     }
 

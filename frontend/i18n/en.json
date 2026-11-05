@@ -601,6 +601,7 @@
   "sys.evaluator": "NeMo Evaluator",
   "sys.modelopt": "NVIDIA Model Optimizer",
   "sys.gym": "NeMo Gym",
+  "sys.flare": "NVIDIA Flare",
   "group.routing": "Routing",
   "group.engines": "Engines and load",
   "group.safety": "Safety and sandboxing",
@@ -679,5 +680,18 @@
   "metric.gym.mean_reward": "Mean reward (last good run)",
   "metric.gym.rollouts": "Rollouts (last good run)",
   "metric.gym.pass_at_1": "pass@1 (last good run)",
-  "metric.gym.duration_s": "Run duration"
+  "metric.gym.duration_s": "Run duration",
+  "nav.flare": "NVIDIA Flare",
+  "intro.flare": "NVIDIA's research-prototype inference server (Rust), on sm120 GPUs (RTX PRO 6000, RTX 5090) and sm121 GPUs (one DGX Spark, or several as one engine). It serves a package prepared once per GPU family and tensor-parallel size, on that family. Every action goes through the lab launcher, which defines the targets, refuses to start unless a target's GPUs are free and never stops another engine. An experiment lane, off by default; the version shown is the pinned upstream commit.",
+  "metric.flare.targets_serving": "Targets serving",
+  "metric.flare.packages": "Packages per target",
+  "metric.flare.generated_total": "Generated tokens",
+  "metric.flare.prefill_total": "Prefill tokens",
+  "metric.flare.active_requests": "Requests running",
+  "metric.flare.pending_requests": "Requests waiting",
+  "metric.flare.requests_completed_total": "Requests completed",
+  "metric.flare.requests_failed_total": "Requests failed",
+  "metric.flare.cache_reused_total": "Tokens reused from the prefix cache",
+  "metric.flare.draft_acceptance": "Draft acceptance",
+  "metric.flare.max_model_len": "Context length"
 }

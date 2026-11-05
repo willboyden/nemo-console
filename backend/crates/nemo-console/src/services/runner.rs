@@ -38,6 +38,7 @@ pub static ALLOWED_BINARIES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
         "evaluator-local",
         "modelopt-local",
         "gym-local",
+        "flare-local",
     ]
     .into_iter()
     .collect()
@@ -69,6 +70,9 @@ pub const MODELOPT_RUN: f64 = MAX_TIMEOUT;
 pub const GYM_BINARIES: [&str; 1] = ["gym-local"];
 /// `gym-local smoke` runs in the foreground (servers, Ray, the rollouts): up to an hour.
 pub const GYM_SMOKE: f64 = 3600.0;
+pub const FLARE_BINARIES: [&str; 1] = ["flare-local"];
+/// `flare-local up` waits up to 30 minutes for a remote engine's /health (crate::adapters::flare::UP_TIMEOUT).
+pub const FLARE_UP: f64 = 1900.0;
 pub const STOP_GRACE: f64 = 5.0;
 pub const MAX_ARGS: usize = 64;
 pub const MAX_ARG_LEN: usize = 8192;
@@ -82,6 +86,7 @@ fn is_graceful(bin: &str) -> bool {
         || EVALUATOR_BINARIES.contains(&bin)
         || MODELOPT_BINARIES.contains(&bin)
         || GYM_BINARIES.contains(&bin)
+        || FLARE_BINARIES.contains(&bin)
 }
 
 /// The cap for this argv: the long one only for a SkillEvaluator launcher's `tier3`, `data-designer-local create`,
@@ -107,6 +112,9 @@ pub fn max_timeout(argv: &[String]) -> f64 {
     }
     if GYM_BINARIES.contains(&first) && second == Some("smoke") {
         return GYM_SMOKE;
+    }
+    if FLARE_BINARIES.contains(&first) && second == Some("up") {
+        return FLARE_UP;
     }
     MAX_TIMEOUT
 }

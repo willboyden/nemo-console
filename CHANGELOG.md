@@ -3,6 +3,38 @@
 Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Claims use the labels
 implemented / verified-live / unverified defined in the README.
 
+## [0.10.0] - 2026-11-05
+
+### Added
+
+- **NVIDIA Flare**, a thirteenth system (ADR-0020): NVIDIA's research-prototype inference server, on sm120 GPUs (RTX
+  PRO 6000, RTX 5090) and sm121 GPUs (one DGX Spark, or several as one engine). Everything goes through the lab
+  launcher `flare-local`, which defines the targets, refuses to start while a target's GPUs look busy (on a remote host a
+  running container with a GPU request or a CUDA process; on the console host more than 3 GiB used on a card), never
+  stops another engine and reaches remote hosts over ssh. The page shows every target (chip, package family, hosts,
+  container, image, packages, whether its GPUs are free), Flare's own counters while a target serves, and the
+  actions Show every target, Check a start, Start Flare (in the background, one at a time), Stop Flare, Probe, Show
+  the log, Stage a remote target, Show the last start and How to prepare a package. The lane's compose files and
+  Ignition config are shown read-only, with field help. The playground talks only to the local target.
+- The console learns targets, chips and tensor-parallel sizes from the launcher's report and passes only names it
+  listed, with a package-name pattern and a mode the target offers, checked before anything runs.
+
+### Security
+
+- The console's own HTTP stays loopback-only: remote engines are read and probed through the launcher. Remote targets
+  run with a serving key that is created 0600, never printed and never passed as a process argument; it is sent only to
+  an engine whose /health answers, over the private fabric in cleartext.
+- From an independent audit of this feature: the status check runs once at a time in the background with hard ssh
+  deadlines (an unreachable host is reported as such, and a poll never waits on it), the launcher's JSON is written
+  by Python with only the fields the console reads, remote images are loaded only when their digest matches one kept
+  off the shared disk, remote containers drop every capability (the RDMA ranks get IPC_LOCK back), never pull and run
+  as the host user, and a failed multi-host start removes only the ranks it created.
+
+### Unverified
+
+- No Flare package has been prepared or served on any target yet (their GPUs were held by production engines), and the
+  arm64 serving image for the Sparks is not built: the start paths are written against upstream's documentation.
+
 ## [0.9.0] - 2026-11-05
 
 ### Added

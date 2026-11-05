@@ -58,6 +58,7 @@ const ICONS = {
   compress: 'M12 3v6M12 15v6M4 9h16M4 15h16M7 6l2 3M17 6l-2 3M7 18l2-3M17 18l-2-3',
   cycle: 'M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4M12 8v4l3 2',
   info: 'M12 21a9 9 0 110-18 9 9 0 010 18zM12 11v5M12 7.5h.01',
+  flare: 'M12 3c1 4 5 5 5 10a5 5 0 01-10 0c0-2 1-3.5 2-4.5.5 2 1.5 3 3 3-1-3-1-6 0-8.5z',
 };
 export function icon(name, size = 18) {
   const ns = 'http://www.w3.org/2000/svg';
