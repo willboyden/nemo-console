@@ -99,25 +99,62 @@ picker = "efficient_first"
 confidence_threshold = 0.5
 `;
 
-export const RELAY_PLUGINS = `# ~/.config/nemo-relay/plugins.toml (mock, read-only in the console)
-[[plugin]]
-name = "switchyard"
-path = "~/.local/share/nemo-relay/plugins/switchyard.so"
-signature = "required"
-public_key_env = "NEMO_RELAY_PLUGIN_PUBKEY"
+export const RELAY_PLUGINS = `# ~/.config/nemo-relay/plugins.toml (mock, read-only in the console; same shape as nemo-relay 0.9)
+version = 1
+
+# Switchyard deployment. schema_version-1 TOML, the SAME language switchyard-server reads.
+[[plugins.dynamic]]
+manifest = "~/.local/share/nemo-relay/plugins/switchyard/relay-plugin.toml"
+
+[plugins.dynamic.config]
+priority = 100
+switchyard_config_path = "clients/nemo-relay/routes.toml"
+
+# Require a real signature rather than the integrity_only downgrade.
+[plugins.policy.defaults]
+attestation = "signature"
+trusted_public_keys = ["mock-ed25519-public-key-not-a-real-key"]
+
+[[components]]
+kind = "pii_redaction"
+enabled = true
+
+[components.config]
+version = 1
+
+[[components.config.profiles]]
+[components.config.profiles.builtin]
+detector = "email"
+action = "replace"
+replacement = "[EMAIL]"
+
+[[components]]
+kind = "observability"
+enabled = true
+
+[components.config]
+version = 1
+enable_full_payloads = false
+
+[components.config.opentelemetry]
+enabled = true
+
+[[components.config.opentelemetry.endpoints]]
+type = "otlp"
+endpoint = "http://127.0.0.1:4318/v1/traces"
+transport = "http"
+service_name = "nemo-relay"
+
+[components.config.opentelemetry.metrics]
+enabled = true
+export_interval_millis = 15000
 `;
 
 export const RELAY_CONFIG = `# ~/.config/nemo-relay/config.toml (mock, read-only in the console)
-[gateway]
-listen = "127.0.0.1:4040"
+[agents]
 
-[attestation]
-mode = "enforce"
-
-[atof]
-enabled = true
-[atif]
-enabled = true
+[agents.claude]
+command = "claude"
 `;
 
 export const DYNAMO_CATALOG = [

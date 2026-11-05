@@ -18,6 +18,7 @@ import { announce } from './live.js';
 import { describeError } from '../errors.js';
 import { codeArea } from './code-area.js';
 import { configForm } from './config-form.js';
+import { loadFieldHelp, catalogsFor } from '../cfg-help.js';
 
 export function lineOffset(text, line) {
   let idx = 0;
@@ -90,6 +91,18 @@ export function configEditor(scope, systemId) {
   const st = { specs: [], file: null, draft: '', validation: null, validatedText: null, checking: false, diffMode: 'split', showDiff: true, outcome: null, conflict: null, busy: false,
     history: null, historyOpen: false, view: savedView() === 'text' ? 'text' : 'form', checks: null, restored: null, ui: null };
   const pickerHost = h('div'), bodyHost = h('div', { class: 'stack-v' });
+  // Field descriptions for the Form view's info pop-ups, and (for a file whose catalog asks) the system's Params, so a
+  // command-line flag can be explained. Both are GETs (no audit row) and optional: the Form works without them.
+  const help = { doc: null, loading: true, failed: false, params: null, paramsAsked: false };
+  const helpReady = loadFieldHelp().then((d) => { help.doc = d; }, () => { help.failed = true; }).finally(() => { help.loading = false; });
+  const fileHelp = () => {
+    const cat = help.doc && st.file ? catalogsFor(help.doc, systemId, st.file.spec.id) : null;
+    if (cat?.flags && !help.paramsAsked) {
+      help.paramsAsked = true;
+      scope.api.params(systemId).then((r) => { help.params = Array.isArray(r?.catalog) ? r.catalog : Array.isArray(r) ? r : null; }, () => { /* no Params: flags are simply not explained */ });
+    }
+    return { cat, params: cat?.flags ? help.params : null, file: st.file?.spec, admin: isAdmin(), loading: help.loading, failed: help.failed };
+  };
   root.append(pickerHost, bodyHost);
 
   const key = (id = st.file?.spec.id) => `${systemId}/${id}`;
@@ -138,7 +151,7 @@ export function configEditor(scope, systemId) {
   async function loadFile(id, { keepDraft = false, keepOutcome = false } = {}) {
     clear(bodyHost).append(skeleton(4));
     try {
-      const f = await scope.api.config(systemId, id);
+      const [f] = await Promise.all([scope.api.config(systemId, id), Promise.race([helpReady, new Promise((r) => setTimeout(r, 3000))])]);
       if (!scope.alive) return;
       const prevDraft = st.draft, sameFile = st.file?.spec.id === id;
       st.file = f; st.validation = null; st.validatedText = null; st.history = null; st.restored = null;
@@ -181,13 +194,14 @@ export function configEditor(scope, systemId) {
     const viewHost = h('div', { class: 'cfg-view' });
     const code = codeArea({ value: st.draft, label: editable() ? t('cfg.editor_label', { file: sp.label }) : t('cfg.viewer_label', { file: sp.label }), readOnly: !editable(), format: sp.format,
       onInput: (v) => onDraft(v), onSave: () => onValidate(true) });
-    const form = structured() ? configForm({ format: sp.format, getText: () => st.draft, setText: (v) => onDraft(v), baseText: () => st.file.content, getSchema: () => (st.checks?.parse.root ? st.checks.schema : null), editable: editable(),
+    const form = structured() ? configForm({ format: sp.format, getText: () => st.draft, setText: (v) => onDraft(v), baseText: () => st.file.content, getSchema: () => (st.checks?.parse.root ? st.checks.schema : null), editable: editable(), getHelp: fileHelp,
       onGoToLine: (n) => { setView('text'); code.focusLine(n); }, onSave: () => onValidate(true) }) : null;
     let viewSwitch = null;
     if (form) {
       viewSwitch = h('div', { class: 'seg-control', role: 'group', 'aria-label': t('cfg.view') }, ['form', 'text'].map((v) => h('button', { type: 'button', 'aria-pressed': 'false', dataset: { view: v }, onClick: () => { setView(v); saveView(v); } }, t(`cfg.view_${v}`))));
     }
     function setView(v) {
+      form?.closePop();
       st.view = form ? v : 'text';
       viewSwitch?.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === st.view)));
       clear(viewHost);
@@ -214,13 +228,17 @@ export function configEditor(scope, systemId) {
     if (st.conflict) outHost.append(conflictBox());
     if (st.outcome) outHost.append(outcomeBanner(st.outcome.res, st.outcome.opts));
 
-    const refreshStatus = () => {
+    // stats=false: the cheap part only (badge, Apply button). The line diff runs debounced with the checks, never
+    // on every keystroke: a big paste would otherwise diff the whole file per input event.
+    const refreshStatus = (stats = true) => {
       const head = contentCard.querySelector('.card-head .cfg-status');
       head?.replaceWith(statusEl());
       if (applyBtn && isAdmin()) applyBtn.disabled = st.busy || !dirty();
-      const s = diffStats(diffLines(st.file.content, st.draft));
-      clear(diffStat);
-      if (s.changed) diffStat.append(h('span', { class: 'add-text' }, `+${s.add}`), ' ', h('span', { class: 'del-text' }, `-${s.del}`), ' ', t('diff.lines'));
+      if (stats) {
+        const s = diffStats(diffLines(st.file.content, st.draft));
+        clear(diffStat);
+        if (s.changed) diffStat.append(h('span', { class: 'add-text' }, `+${s.add}`), ' ', h('span', { class: 'del-text' }, `-${s.del}`), ' ', t('diff.lines'));
+      }
       markPicker();
     };
     const refreshDiff = () => {
@@ -253,8 +271,8 @@ export function configEditor(scope, systemId) {
     st.draft = v;
     st.restored = st.restored && dirty() ? st.restored : null;
     clearTimeout(timer);
-    timer = setTimeout(() => { if (!scope.alive || !st.ui) return; runChecks(); st.ui.refreshDiff(); }, 150);
-    st.ui?.refreshStatus();
+    timer = setTimeout(() => { if (!scope.alive || !st.ui) return; runChecks(); st.ui.refreshDiff(); st.ui.refreshStatus(); }, 150);
+    st.ui?.refreshStatus(false);
   }
   scope.own(() => clearTimeout(timer));
   const serverFresh = () => !!st.validation && st.validatedText === st.draft;
@@ -360,7 +378,8 @@ export function configEditor(scope, systemId) {
       // After a successful write the file on disk equals our draft; after a rollback it equals the old content and the draft is kept for fixing.
       await loadFile(sp.id, { keepDraft: !res.ok || res.rolled_back, keepOutcome: true });
     } catch (e) {
-      if (e.status === 409) { st.conflict = { at: Date.now() }; announce(t('conflict.title')); renderBody(); }
+      // 409 hidden_content = the file holds text the console masks: reloading cannot help, so say what the server said
+      if (e.status === 409 && e.code !== 'hidden_content') { st.conflict = { at: Date.now() }; announce(t('conflict.title')); renderBody(); }
       else { toastError(e); clear(outHost).append(h('div', { class: 'note bad', role: 'alert' }, describeError(e))); }
     } finally { st.busy = false; st.ui?.refreshStatus(); }
   }

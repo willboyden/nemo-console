@@ -33,10 +33,28 @@ const mkScalar = (type, value, text, start, end, line, style) => ({ kind: 'scala
 /** The entry for a key; with a duplicated YAML key the LAST one wins, as in PyYAML (TOML refuses duplicates). */
 export const entryOf = (map, key) => map.entries.findLast((e) => e.key === key);
 
+export const MAX_DEPTH = 64;
 export function parseConfig(format, text) {
-  if (format === 'toml') return parseToml(text);
-  if (format === 'yaml') return parseYaml(text);
-  return { root: null, errors: [], warnings: [], unsupported: null };
+  if (format !== 'toml' && format !== 'yaml') return { root: null, errors: [], warnings: [], unsupported: null };
+  // A file nested deeper than any real config (e.g. 20,000 `[`) would overflow the recursive parser and every walker
+  // after it; the Form view does not model it, the Text view and the server check still work.
+  const deep = { root: null, errors: [], warnings: [], unsupported: `nesting deeper than ${MAX_DEPTH} levels` };
+  let r;
+  try { r = format === 'toml' ? parseToml(text) : parseYaml(text); } catch (e) { if (e instanceof RangeError) return deep; throw e; }
+  return r.root && depthOf(r.root) > MAX_DEPTH ? deep : r;
+}
+/** The nesting depth of a parsed tree, without recursion. */
+function depthOf(root) {
+  let max = 0;
+  const stack = [[root, 1]];
+  while (stack.length) {
+    const [n, d] = stack.pop();
+    if (d > max) max = d;
+    if (d > MAX_DEPTH) return d;
+    if (n.kind === 'map') for (const e of n.entries) stack.push([e.node, d + 1]);
+    else if (n.kind === 'seq') for (const x of n.items) stack.push([x, d + 1]);
+  }
+  return max;
 }
 
 // ------------------------------------------------------------------------------------------------------------ TOML

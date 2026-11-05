@@ -10,6 +10,8 @@
 // modelopt.rs RECIPE_KEYS / METHODS, evaluator.rs SUPPORTED_BENCHMARKS / REFUSED_BENCHMARKS / limits);
 // tests/cfg-checks.test.mjs reads those constants from the Rust source and fails when the two drift.
 import { parseConfig, entryOf } from './cfg-parse.js';
+/** A schema table's OWN entry for a file-controlled key: `constructor`, `__proto__` or `toString` never hit Object.prototype. */
+const own = (obj, k) => (obj && Object.hasOwn(obj, k) ? obj[k] : undefined);
 
 // ---------------------------------------------------------------------------------------------- schema vocabulary
 // map:  fixed keys (closed: unknown keys are errors), `pattern` keys matched by a regex, required keys
@@ -167,7 +169,7 @@ export function specAt(schema, path) {
   let s = schema;
   for (const k of path) {
     if (!s) return null;
-    if (s.t === 'map') s = s.keys[k] || s.pattern?.find(([re]) => re.test(String(k)))?.[1] || null;
+    if (s.t === 'map') s = own(s.keys, k) || s.pattern?.find(([re]) => re.test(String(k)))?.[1] || null;
     else if (s.t === 'dict') s = s.values;
     else if (s.t === 'list') s = s.items;
     else return null;
@@ -222,7 +224,7 @@ export function checkSchema(schema, root, report) {
       if (node.kind !== 'map') { report('error', `${where(path)}must be a mapping (found ${nodeLabel(node)})`, node.line ?? line, path); return; }
       for (const e of node.entries) {
         if (entryOf(node, e.key) !== e) continue;   // shadowed by a later duplicate (already warned about)
-        const sub = spec.keys[e.key] || spec.pattern?.find(([re]) => re.test(e.key))?.[1];
+        const sub = own(spec.keys, e.key) || spec.pattern?.find(([re]) => re.test(e.key))?.[1];
         if (sub) walk(sub, e.node, [...path, e.key], e.line);
         else if (spec.closed) {
           const near = closest(e.key, Object.keys(spec.keys));
@@ -280,7 +282,7 @@ export function checkSchema(schema, root, report) {
     if (spec.t === 'bool') { if (node.type !== 'bool') report('error', `${where(path)}must be true or false (found ${nodeLabel(node)})`, at, path); return; }
     if (spec.t === 'str') {
       if (node.type !== 'string') { report('error', `${where(path)}must be text (found ${nodeLabel(node)}${node.type !== 'null' ? `: quote it, "${node.raw}"` : ''})`, at, path); return; }
-      if (spec.refused?.[v]) { report('error', `${where(path)}${show(v)} is not supported: ${spec.refused[v]}`, at, path); return; }
+      if (own(spec.refused, v)) { report('error', `${where(path)}${show(v)} is not supported: ${spec.refused[v]}`, at, path); return; }
       if (spec.choices && !spec.choices.includes(v)) { const near = closest(v, spec.choices); report('error', `${where(path)}must be one of ${spec.choices.join(', ')}${near ? ` (did you mean '${near}'?)` : ''}`, at, path); return; }
       if (spec.ref) {
         const keys = refKeys(spec.ref);
@@ -337,7 +339,8 @@ export function contentChecks(text) {
   const invisible = /[\u00a0\u200b-\u200d\u2060\ufeff]/;
   const bad = lines.findIndex((l, i) => invisible.test(i === 0 ? l.replace(/^\ufeff/, '') : l));
   if (bad >= 0) out.push({ severity: 'warn', line: bad + 1, source: 'lint', message: 'an invisible character (no-break space or zero-width space) that looks like a plain space but is not one' });
-  const trailing = lines.reduce((a, l, i) => (/[ \t]+\r?$/.test(l) ? [...a, i + 1] : a), []);
+  const trailing = [];                       // linear: one character test per line, no backtracking, no array copies
+  lines.forEach((l, i) => { const e = l.endsWith('\r') ? l.length - 2 : l.length - 1; if (l[e] === ' ' || l[e] === '\t') trailing.push(i + 1); });
   if (trailing.length) out.push({ severity: 'info', line: trailing[0], source: 'lint', message: `trailing spaces on ${trailing.length === 1 ? 'this line' : `${trailing.length} lines (first here)`}` });
   return out;
 }

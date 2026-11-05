@@ -397,19 +397,20 @@ static DOCKER_TS: LazyLock<regex::Regex> =
 static LEVEL: LazyLock<regex::Regex> =
     LazyLock::new(|| re(r"\b(TRACE|DEBUG|INFO|WARNING|WARN|ERROR|CRITICAL|FATAL)\b"));
 static SECRET_BEARER: LazyLock<regex::Regex> =
-    LazyLock::new(|| re(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{6,}"));
+    LazyLock::new(|| re(r"(?i)\bbearer[^\S\r\n]+[A-Za-z0-9._~+/=-]{6,}"));
 static SECRET_SK: LazyLock<regex::Regex> = LazyLock::new(|| re(r"\bsk-[A-Za-z0-9_-]{8,}"));
 static SECRET_HF: LazyLock<regex::Regex> = LazyLock::new(|| re(r"\bhf_[A-Za-z0-9]{10,}"));
 static SECRET_KV: LazyLock<regex::Regex> = LazyLock::new(|| {
-    re(r"(?i)\b(api[_-]?key|token|secret|password|authorization)\b(\s*[=:]\s*)\S+")
+    re(r"(?i)\b(api[_-]?key|token|secret|password|authorization)\b([^\S\r\n]*[=:][^\S\r\n]*)\S+")
 });
 #[allow(clippy::expect_used)]
 static ABS_PATH: LazyLock<fancy_regex::Regex> = LazyLock::new(|| {
     fancy_regex::Regex::new(r"(?<![\w:/.~-])(?:/[\w.@+=,-]+){2,}/?").expect("static regex")
 });
 static NOISE: LazyLock<regex::Regex> = LazyLock::new(|| re(r"http response sent.*status\W*200"));
-static OVERRIDE_SECRET: LazyLock<regex::Regex> =
-    LazyLock::new(|| re(r"(?i)(\bsk-[A-Za-z0-9_-]{8,}|bearer\s+\S{6,}|\bhf_[A-Za-z0-9]{10,})"));
+static OVERRIDE_SECRET: LazyLock<regex::Regex> = LazyLock::new(|| {
+    re(r"(?i)(\bsk-[A-Za-z0-9_-]{8,}|bearer[^\S\r\n]+\S{6,}|\bhf_[A-Za-z0-9]{10,})")
+});
 
 /// Strip ANSI, mask secrets and collapse absolute paths to `<path>/leaf` (no host layout leaks).
 #[must_use]

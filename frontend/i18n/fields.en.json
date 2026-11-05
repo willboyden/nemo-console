@@ -1,0 +1,1047 @@
+{
+  "_about": "Field help for the config editor's Form view: what each key is and what changing it does. 'files' maps a system and file id (glob: * = any text) to the catalogs it uses, first listed wins on a tie. In a pattern, * = any one key, # = any list index, ** = any number of further levels. Text may use `code`. Where a system's behaviour is not documented, say less rather than guess.",
+  "files": [
+    {
+      "system": "switchyard",
+      "file": "routes",
+      "catalogs": [
+        "switchyard_routes"
+      ]
+    },
+    {
+      "system": "relay",
+      "file": "routes",
+      "catalogs": [
+        "switchyard_routes"
+      ]
+    },
+    {
+      "system": "relay",
+      "file": "plugins",
+      "catalogs": [
+        "relay_plugins"
+      ]
+    },
+    {
+      "system": "relay",
+      "file": "config",
+      "catalogs": [
+        "relay_config"
+      ]
+    },
+    {
+      "system": "dynamo",
+      "file": "override",
+      "catalogs": [
+        "dynamo_override",
+        "compose"
+      ],
+      "flags": true
+    },
+    {
+      "system": "dynamo",
+      "file": "compose",
+      "catalogs": [
+        "compose"
+      ],
+      "flags": true
+    },
+    {
+      "system": "openshell",
+      "file": "gateway",
+      "catalogs": [
+        "openshell_gateway"
+      ]
+    },
+    {
+      "system": "openshell",
+      "file": "policy",
+      "catalogs": [
+        "openshell_policy"
+      ]
+    },
+    {
+      "system": "openshell",
+      "file": "provider-profile",
+      "catalogs": [
+        "openshell_profile"
+      ]
+    },
+    {
+      "system": "openshell",
+      "file": "compose",
+      "catalogs": [
+        "openshell_compose",
+        "compose"
+      ]
+    },
+    {
+      "system": "aiperf",
+      "file": "profiles",
+      "catalogs": [
+        "aiperf_profiles"
+      ]
+    },
+    {
+      "system": "evaluator",
+      "file": "suites.yaml",
+      "catalogs": [
+        "evaluator_suites"
+      ]
+    },
+    {
+      "system": "modelopt",
+      "file": "recipes",
+      "catalogs": [
+        "modelopt_recipes"
+      ]
+    },
+    {
+      "system": "guardrails",
+      "file": "*--config.y*ml",
+      "catalogs": [
+        "guardrails_config"
+      ]
+    },
+    {
+      "system": "guardrails",
+      "file": "*--prompts.y*ml",
+      "catalogs": [
+        "guardrails_prompts"
+      ]
+    },
+    {
+      "system": "*",
+      "file": "*compose*",
+      "catalogs": [
+        "compose"
+      ]
+    }
+  ],
+  "catalogs": {
+    "switchyard_routes": {
+      "schema_version": {
+        "what": "The version of the routes file format. Switchyard and the Relay plugin read version `1`.",
+        "change": "Any other value makes the whole file fail to load; leave it at 1."
+      },
+      "llm_clients.*": {
+        "what": "An upstream connection: the address, wire format and credential that the targets naming this block use. Each target picks one with `llm_client`."
+      },
+      "llm_clients.*.format": {
+        "what": "The API format spoken to this upstream: `openai_chat` (`/v1/chat/completions`), `openai_responses` or `anthropic_messages` (`/v1/messages`).",
+        "change": "Requests to every target on this client are sent in the new format, so the upstream must serve it (LiteLLM serves `openai_chat` and `anthropic_messages`). The Relay plugin does not translate between formats: there, the client format must match what the calling agent speaks, or its requests fail."
+      },
+      "llm_clients.*.base_url": {
+        "what": "Where requests for this client go: the upstream's base URL (http or https, loopback or an in-network service name such as `litellm`).",
+        "change": "Every target on this client starts calling the new address. An address outside the lab is refused here: reaching it needs an egress-allowlist change, not a routes edit."
+      },
+      "llm_clients.*.api_key_env": {
+        "what": "The NAME of the environment variable holding the key sent upstream. The file never holds the key itself. Cannot be combined with `forward_auth`.",
+        "change": "The new variable must exist and be non-empty in Switchyard's (or the Relay gateway's) environment when it starts, or the file fails to load and calls through this client are refused."
+      },
+      "llm_clients.*.forward_auth": {
+        "what": "true = pass each caller's own `Authorization` header upstream instead of a stored key (default false).",
+        "change": "true: no key lives in Switchyard, and every caller must send `Authorization: Bearer <key>`, which the router then checks. false: the client needs `api_key_env` and a key in the environment."
+      },
+      "llm_clients.*.max_retries": {
+        "what": "How many times a failed upstream call is retried before the request fails (0–10, default 2).",
+        "change": "Higher rides over brief engine hiccups but makes real failures slower and repeats load on a struggling engine; 0 fails on the first error."
+      },
+      "llm_clients.*.extra_headers": {
+        "what": "HTTP headers added to every request on this client."
+      },
+      "llm_clients.*.extra_headers.*": {
+        "what": "One HTTP header added to every request on this client.",
+        "change": "The upstream receives the new header value on every call. A header owned by the auth mode (such as Authorization) is refused."
+      },
+      "llm_clients.*.timeout_ms": {
+        "what": "How long one upstream call may take, in milliseconds (unset = no limit).",
+        "change": "Lower fails slow calls sooner (long generations may be cut off); higher waits longer on a stuck engine."
+      },
+      "targets.*": {
+        "what": "A target: one model reached through one llm client. Routes name targets, never models. Its identity is the pair (`id`, `llm_client`)."
+      },
+      "targets.*.id": {
+        "what": "The exact model name sent upstream: a router (LiteLLM) alias.",
+        "change": "Every route using this target is served by the new model. Two targets with the same (`id`, `llm_client`) pair are collapsed and one is dropped with only a warning, taking its `system_prompt` with it."
+      },
+      "targets.*.llm_client": {
+        "what": "Which `[llm_clients.*]` block this target is reached through.",
+        "change": "Changes the address, wire format and credential used for this target. It must name an existing client."
+      },
+      "targets.*.system_prompt": {
+        "what": "A system prompt prepended whenever this target serves a completion.",
+        "change": "The steering changes for EVERY route that uses this target, including `direct-*` passthroughs. Judge (classifier) calls do not receive it."
+      },
+      "targets.*.reasoning_effort": {
+        "what": "A reasoning effort forced on every request to this target, replacing the caller's value.",
+        "change": "Every request served by this target uses the new effort: higher thinks longer (slower, more tokens), lower answers faster."
+      },
+      "targets.*.extra_body": {
+        "what": "Extra JSON fields merged into each upstream request body for this target, when the request does not already set them."
+      },
+      "targets.*.extra_body.**": {
+        "what": "A request-body field sent upstream for this target (for example `chat_template_kwargs.enable_thinking`), unless the caller sets it.",
+        "change": "The engine receives the new value on every request through this target."
+      },
+      "routes.*": {
+        "what": "A route: a model name clients can call. Its `type` decides how each request picks a target."
+      },
+      "routes.*.id": {
+        "what": "The public model name clients send to use this route (for example `auto-local`). Keep it equal to the block's key.",
+        "change": "Clients still calling the old name stop matching this route: Switchyard answers unknown model, and Relay passes the name through unrouted. Every client config that names the route must change too."
+      },
+      "routes.*.type": {
+        "what": "How the route chooses a target: `passthrough` (always one target), `stage_router` (starts on one tier, escalates on tool-activity signals), `llm_classifier` (a judge model grades the request), `random`, `noop`, `auto` and others.",
+        "change": "Each type takes a different set of keys; switching type means rewriting the route's other fields, and keys that do not belong to the new type are refused at load."
+      },
+      "routes.*.target": {
+        "what": "passthrough: the one target this route always uses.",
+        "change": "All calls to this route go to the new target's model."
+      },
+      "routes.*.context_window": {
+        "what": "The context window advertised for this route in `/v1/models` (Relay also exports it to Claude Code). It does not enforce a limit.",
+        "change": "Clients plan their prompts against the new number. Keep it the SMALLEST window among the targets that can serve the route: if it is larger, long prompts fail on the smaller engine (often before they can escalate)."
+      },
+      "routes.*.tool_calling": {
+        "what": "Whether the route accepts tool calls. false = tool definitions and tool history are refused with HTTP 400; true or unset = no restriction.",
+        "change": "false breaks every agent that sends tools to this route; true only advertises the capability."
+      },
+      "routes.*.reasoning": {
+        "what": "Whether the route accepts reasoning controls. false = reasoning parameters are refused with HTTP 400.",
+        "change": "false makes requests that set a reasoning effort fail on this route."
+      },
+      "routes.*.vision": {
+        "what": "Whether the route accepts images. false = image inputs are refused with HTTP 400; also shown as `capabilities.vision` in `/v1/models`.",
+        "change": "true advertises image support: only set it when every target of the route accepts images."
+      },
+      "routes.*.capable_target": {
+        "what": "stage_router: the stronger (slower, costlier) tier that takes escalated turns.",
+        "change": "Escalated turns go to the new target. Its window must be at least the route's `context_window`."
+      },
+      "routes.*.efficient_target": {
+        "what": "stage_router: the fast tier. With `picker = efficient_first` it answers every turn that is not escalated.",
+        "change": "Most traffic on the route moves to the new target. Keep the route's `context_window` no larger than its window."
+      },
+      "routes.*.picker": {
+        "what": "stage_router: the default tier. `efficient_first` starts on the efficient tier and escalates only when signals (or the classifier) clearly say so; `capable_first` (experimental) does the reverse.",
+        "change": "Swapping it flips which tier serves the undecided turns, so cost, latency and answer quality all move."
+      },
+      "routes.*.confidence_threshold": {
+        "what": "stage_router: the width of the 'undecided' band (0–1) on the tool-signal score. Turns with a score outside the band are decided by the signals; turns inside it go to the classifier, then to the picker's default tier.",
+        "change": "Raising it sends more turns to the classifier and the default tier (with `efficient_first`: fewer escalations); lowering it lets the tool signals decide more turns. Without a `classifier` block nothing escalates whatever this is."
+      },
+      "routes.*.recent_turn_window": {
+        "what": "stage_router: how many of the latest tool results the escalation signals look at (default 3).",
+        "change": "Larger reacts to a longer history of tool failures and successes; smaller reacts only to the latest ones."
+      },
+      "routes.*.capable_hold_turns": {
+        "what": "stage_router: how many requests stay on the capable tier after an escalation (default 2; 0 = none, -1 = for the rest of the session).",
+        "change": "Higher keeps a hard task on the strong model longer (more cost); lower drops back to the efficient tier sooner."
+      },
+      "routes.*.handoff_notes": {
+        "what": "Notes added to the conversation when the route switches tier."
+      },
+      "routes.*.handoff_notes.escalation_note": {
+        "what": "Text appended when a turn escalates to the capable tier, so that model knows it is continuing another model's work.",
+        "change": "The capable model reads the new wording on every escalation; without a note it tends to redo work the efficient tier already did."
+      },
+      "routes.*.handoff_notes.deescalation_note": {
+        "what": "Text appended when the route drops back to the efficient tier.",
+        "change": "The efficient model reads the new wording whenever it takes over again."
+      },
+      "routes.*.classifier": {
+        "what": "stage_router: the judge that decides the undecided turns. WITHOUT THIS BLOCK THE ROUTE NEVER ESCALATES: every turn reports confidence 0 and falls through to the default tier."
+      },
+      "routes.*.classifier.target": {
+        "what": "The judge: the target asked to grade each undecided turn. It is not a routing destination.",
+        "change": "The new model grades the turns. A reasoning model that spends its budget thinking returns empty verdicts; a fast model with thinking off is the safe choice."
+      },
+      "routes.*.classifier.base_threshold": {
+        "what": "The lowest judged probability that the efficient tier can solve the turn (`p_solve`, 0–1) that still keeps it on the efficient tier; below it the turn escalates.",
+        "change": "Raising it escalates more turns to the capable tier (better answers, more cost and latency); lowering it keeps more on the efficient tier."
+      },
+      "routes.*.classifier.threshold_step": {
+        "what": "Added to `base_threshold` for uncertain or unmatched verdicts (twice for unsupported ones).",
+        "change": "Raising it sends doubtful turns to the capable tier more readily."
+      },
+      "routes.*.classifier.max_output_tokens": {
+        "what": "The token budget for the judge's verdict (default 4096).",
+        "change": "Too small and a judge that thinks before answering returns nothing usable, so the turn takes the fallback; larger costs more judge time per turn."
+      },
+      "routes.*.classifier.classify_trigger": {
+        "what": "When the judge runs: `every_request`, or (on builds that accept it) `new_session` to judge once per conversation.",
+        "change": "`new_session` cuts judge calls to one per conversation, at the price of keeping the first decision for the whole session."
+      },
+      "routes.*.mode": {
+        "what": "llm_classifier: what the judge decides. `capability` = can the weak model solve this (`p_solve`); also `escalation`, `custom`, `direct`.",
+        "change": "Each mode takes different keys; changing it usually means rewriting the route."
+      },
+      "routes.*.classifier_target": {
+        "what": "llm_classifier: the judge target that grades each request. It is not a routing destination.",
+        "change": "The new model grades requests; if it fails or returns an unusable verdict, the request goes to `strong_target`."
+      },
+      "routes.*.strong_target": {
+        "what": "llm_classifier: the capable tier, used when the judge says the weak model is unlikely to solve the request, and on any judge failure.",
+        "change": "Hard requests (and every judge failure) go to the new target."
+      },
+      "routes.*.weak_target": {
+        "what": "llm_classifier: the fast tier, used when the judged `p_solve` is at least the threshold.",
+        "change": "Requests judged easy go to the new target."
+      },
+      "routes.*.base_threshold": {
+        "what": "llm_classifier: the lowest judged solve probability (`p_solve`, 0–1) that routes to `weak_target`.",
+        "change": "Raising it sends more traffic to `strong_target` (better answers, more cost and latency); lowering it sends more to `weak_target`. `base_threshold + 2 x threshold_step` must stay at most 1."
+      },
+      "routes.*.threshold_step": {
+        "what": "llm_classifier: added to the threshold once for uncertain verdicts and twice for unsupported ones (default 0).",
+        "change": "Raising it sends doubtful requests to `strong_target` more readily."
+      },
+      "routes.*.classify_trigger": {
+        "what": "llm_classifier: when the judge runs. `every_request` (default, including tool continuations), `user_turn` (each new user message), `new_session` (once per conversation, then the target is kept).",
+        "change": "Fewer judge calls mean less latency and judge load, but an early decision is kept for longer."
+      },
+      "routes.*.message_hash_fallback": {
+        "what": "llm_classifier: when the client sends no session id, key the session on a hash of the first user message (needs `classify_trigger` `new_session` or `user_turn`).",
+        "change": "true lets clients without session headers be judged once per conversation; false judges them again on every request."
+      },
+      "routes.*.fail_open": {
+        "what": "What happens when the judge fails or times out.",
+        "change": "Changes whether a broken judge falls back to the default tier or fails the request."
+      },
+      "routes.*.max_output_tokens": {
+        "what": "llm_classifier: the token budget for the judge's verdict (default 4096).",
+        "change": "Too small and a thinking judge returns nothing usable (the request then goes to `strong_target`)."
+      },
+      "llm_clients": {
+        "what": "The upstream connections, one block per client."
+      },
+      "targets": {
+        "what": "The targets (model + client pairs) routes can use, one block per target."
+      },
+      "routes": {
+        "what": "The routes (callable model names), one block per route. At least one is required."
+      }
+    },
+    "relay_plugins": {
+      "version": {
+        "what": "The version of the plugins file format.",
+        "change": "Another value makes Relay refuse the file."
+      },
+      "plugins": {
+        "what": "The plugins Relay loads and the policy their signatures must meet."
+      },
+      "plugins.dynamic.#": {
+        "what": "One native plugin Relay loads at start (here: the Switchyard routing plugin)."
+      },
+      "plugins.dynamic.#.manifest": {
+        "what": "Path to the plugin's manifest, which names its library file and checksum.",
+        "change": "Relay loads a different plugin build at the next gateway start; it must pass the signature policy below."
+      },
+      "plugins.dynamic.#.config": {
+        "what": "Settings handed to this plugin."
+      },
+      "plugins.dynamic.#.config.priority": {
+        "what": "The plugin's place in Relay's processing order: plugins with a lower number run first.",
+        "change": "Moves routing before or after the other components (for example PII redaction), which changes what each one sees."
+      },
+      "plugins.dynamic.#.config.switchyard_config_path": {
+        "what": "The routes file the Switchyard plugin reads (`clients/nemo-relay/routes.toml`).",
+        "change": "The gateway routes with the other file after its next restart."
+      },
+      "plugins.policy.defaults.attestation": {
+        "what": "How strictly plugin signatures are checked. `signature` requires a valid signature from a trusted key; `integrity_only` checks only the checksum.",
+        "change": "`integrity_only` would let anyone who can write the plugin directory replace the library and its checksum together. Security policy: edit it on the host, not here."
+      },
+      "plugins.policy.defaults.trusted_public_keys.#": {
+        "what": "A public key whose plugin signatures Relay trusts.",
+        "change": "Adding a key trusts every plugin it signs; removing the key that signed the installed plugin stops Relay from loading it."
+      },
+      "components.#": {
+        "what": "A built-in Relay component and its settings."
+      },
+      "components.#.kind": {
+        "what": "Which component this block configures, for example `pii_redaction` or `observability`.",
+        "change": "Changing it makes Relay read this block's config as a different component; usually wrong."
+      },
+      "components.#.enabled": {
+        "what": "Whether this component runs.",
+        "change": "false switches it off at the next gateway start (for PII redaction: payloads are no longer masked)."
+      },
+      "components.#.config.version": {
+        "what": "The version of this component's config format.",
+        "change": "Another value makes the component refuse its config."
+      },
+      "components.#.config.profiles.#": {
+        "what": "One redaction rule: a detector and what to do with what it finds."
+      },
+      "components.#.config.profiles.#.builtin.detector": {
+        "what": "The built-in detector this rule uses (for example email, phone number, API key).",
+        "change": "The rule starts matching a different kind of data."
+      },
+      "components.#.config.profiles.#.builtin.action": {
+        "what": "What happens to a match (for example replace it).",
+        "change": "Changes how matches are treated in prompts and responses passing through Relay."
+      },
+      "components.#.config.profiles.#.builtin.replacement": {
+        "what": "The text a match is replaced with.",
+        "change": "The model and the logs see the new placeholder instead of the matched value."
+      },
+      "components.#.config.enable_full_payloads": {
+        "what": "Whether observability events carry full request and response payloads.",
+        "change": "true puts prompt and answer text into the exported events; the lab keeps it off so content is not exported."
+      },
+      "components.#.config.atof.enabled": {
+        "what": "Whether raw ATOF events (Relay's own event log) are written.",
+        "change": "false stops the raw event files."
+      },
+      "components.#.config.atof.sinks.#.type": {
+        "what": "Where ATOF events go (for example `file`).",
+        "change": "Events are written to the other sink type."
+      },
+      "components.#.config.atof.sinks.#.output_directory": {
+        "what": "The directory ATOF event files are written to.",
+        "change": "New events land in the other directory."
+      },
+      "components.#.config.atof.sinks.#.filename": {
+        "what": "The ATOF event file name.",
+        "change": "New events go to the other file."
+      },
+      "components.#.config.atof.sinks.#.mode": {
+        "what": "How the file is written (for example append).",
+        "change": "Changes whether old events are kept when the gateway restarts."
+      },
+      "components.#.config.atif.enabled": {
+        "what": "Whether ATIF trajectories (one file per agent run) are written.",
+        "change": "false stops the trajectory files."
+      },
+      "components.#.config.atif.agent_name": {
+        "what": "The agent name recorded in each trajectory.",
+        "change": "New trajectories carry the new name."
+      },
+      "components.#.config.atif.output_directory": {
+        "what": "The directory trajectory files are written to.",
+        "change": "New trajectories land in the other directory."
+      },
+      "components.#.config.atif.filename_template": {
+        "what": "The file name pattern for trajectories.",
+        "change": "New trajectories are named by the new pattern."
+      },
+      "components.#.config.opentelemetry.enabled": {
+        "what": "Whether Relay exports OpenTelemetry traces and metrics.",
+        "change": "false empties the Relay routing board in Grafana and the Relay traces."
+      },
+      "components.#.config.opentelemetry.endpoints.#.type": {
+        "what": "The kind of exporter (for example `otlp`).",
+        "change": "Telemetry is sent with the other exporter."
+      },
+      "components.#.config.opentelemetry.endpoints.#.endpoint": {
+        "what": "The collector address traces are sent to (the metrics address is derived from it).",
+        "change": "Telemetry goes to the new collector; a wrong address silently drops it."
+      },
+      "components.#.config.opentelemetry.endpoints.#.transport": {
+        "what": "The OTLP transport, for example `http` or `grpc`.",
+        "change": "It must match what the collector listens for at that address."
+      },
+      "components.#.config.opentelemetry.endpoints.#.service_name": {
+        "what": "The service name on Relay's traces; it becomes the Prometheus `job` label of its metrics.",
+        "change": "Dashboards that filter on the old name stop showing Relay."
+      },
+      "components.#.config.opentelemetry.metrics.enabled": {
+        "what": "Whether metrics are exported as well as traces.",
+        "change": "false empties the metric panels of the Relay board."
+      },
+      "components.#.config.opentelemetry.metrics.export_interval_millis": {
+        "what": "How often metrics are pushed, in milliseconds.",
+        "change": "Lower makes the board fresher at a little more overhead; higher makes it lag."
+      }
+    },
+    "relay_config": {
+      "agents": {
+        "what": "The agents Relay can launch, by name."
+      },
+      "agents.*.command": {
+        "what": "The program Relay starts for this agent (for example `claude`).",
+        "change": "`nemo-relay` runs the other program for this agent."
+      }
+    },
+    "aiperf_profiles": {
+      "version": {
+        "what": "The format version of the presets file; must be 1.",
+        "change": "Any other value makes the whole file invalid."
+      },
+      "profiles.*": {
+        "what": "A load preset: one named, repeatable load test you can run from the Actions tab."
+      },
+      "profiles.*.description": {
+        "what": "A one-line note shown next to the preset.",
+        "change": "Only the label in the console changes."
+      },
+      "profiles.*.model": {
+        "what": "The router alias the load is sent to.",
+        "change": "The next run loads a different engine. Keep loads small on engines other people use."
+      },
+      "profiles.*.endpoint_type": {
+        "what": "Which API the synthetic requests use (`chat` by default).",
+        "change": "The next run measures the other endpoint."
+      },
+      "profiles.*.streaming": {
+        "what": "Whether responses are streamed. Time to first token and inter-token latency need streaming.",
+        "change": "false: the run reports only whole-request latency and throughput."
+      },
+      "profiles.*.concurrency": {
+        "what": "How many requests are kept in flight at once.",
+        "change": "Higher puts more load on the engine: throughput rises until it saturates, then latency climbs. Other users of the engine feel it."
+      },
+      "profiles.*.requests": {
+        "what": "How many requests are measured.",
+        "change": "More requests give steadier numbers but the run takes longer."
+      },
+      "profiles.*.warmup_requests": {
+        "what": "Requests sent first and not measured, so caches and graphs are warm.",
+        "change": "0 lets cold-start effects into the results."
+      },
+      "profiles.*.isl": {
+        "what": "Input sequence length: the mean number of synthetic input tokens per request.",
+        "change": "Longer inputs weigh on time to first token (prefill)."
+      },
+      "profiles.*.osl": {
+        "what": "Output sequence length: the mean number of output tokens requested.",
+        "change": "Longer outputs weigh on decode time and total run time."
+      },
+      "profiles.*.timeout_s": {
+        "what": "How long one request may take before it counts as failed, in seconds.",
+        "change": "Too low turns slow answers into errors; too high lets a stuck engine hold the run."
+      },
+      "profiles.*.seed": {
+        "what": "The seed for the synthetic prompts (default 42), so two runs send the same prompts.",
+        "change": "A different seed sends different prompts, so results are no longer directly comparable with runs made under the old seed."
+      },
+      "profiles": {
+        "what": "The named load presets, one block per preset (at most 32)."
+      }
+    },
+    "evaluator_suites": {
+      "version": {
+        "what": "The format version of the suites file; must be 1.",
+        "change": "Any other value makes the whole file invalid."
+      },
+      "suites.*": {
+        "what": "A benchmark suite: a named set of benchmarks run against one model."
+      },
+      "suites.*.description": {
+        "what": "A short note shown with the suite (at most 200 characters).",
+        "change": "Only the label in the console changes."
+      },
+      "suites.*.model": {
+        "what": "The router alias the suite evaluates.",
+        "change": "The next run scores a different model."
+      },
+      "suites.*.benchmarks.#": {
+        "what": "One benchmark in the suite."
+      },
+      "suites.*.benchmarks.#.bench": {
+        "what": "Which benchmark to run. Its dataset must have been prefetched (runs are offline).",
+        "change": "The next run uses the other benchmark; one that was never prefetched fails."
+      },
+      "suites.*.benchmarks.#.max_problems": {
+        "what": "How many problems are sampled (shuffled with a fixed seed, so runs are comparable).",
+        "change": "More problems give a steadier score but spend more router tokens and time."
+      },
+      "suites.*.benchmarks.#.max_tokens": {
+        "what": "The answer length limit per problem.",
+        "change": "Too low cuts reasoning answers short and lowers the score; higher costs more tokens."
+      },
+      "suites.*.benchmarks.#.repeats": {
+        "what": "How many times each problem is asked (1–8, default 1).",
+        "change": "More repeats average out sampling noise at a multiple of the cost."
+      },
+      "suites.*.benchmarks.#.temperature": {
+        "what": "Sampling temperature for the model's answers (0–2; empty = the run's default).",
+        "change": "Higher makes answers more varied and the score noisier from run to run; 0 makes them as repeatable as the engine allows."
+      },
+      "suites": {
+        "what": "The named benchmark suites, one block per suite (at most 20)."
+      },
+      "suites.*.benchmarks": {
+        "what": "The benchmarks the suite runs (at most 8)."
+      }
+    },
+    "modelopt_recipes": {
+      "version": {
+        "what": "The format version of the recipes file; must be 1.",
+        "change": "Any other value makes the whole file invalid."
+      },
+      "recipes.*": {
+        "what": "A compression recipe: what a Model Optimizer job does to which checkpoint."
+      },
+      "recipes.*.method": {
+        "what": "What the job does: `reap` (prune MoE experts), `quantize` (lower precision, e.g. NVFP4) or `minitron` (refused here).",
+        "change": "The next job runs a different method and needs that method's keys."
+      },
+      "recipes.*.base_model": {
+        "what": "The Hugging Face repo id of the checkpoint to compress, read from the offline cache.",
+        "change": "The next job compresses a different model; it must already be in the cache."
+      },
+      "recipes.*.output": {
+        "what": "Where the compressed checkpoint is written, under `/runs/`.",
+        "change": "The next job writes elsewhere."
+      },
+      "recipes.*.description": {
+        "what": "A note shown with the recipe.",
+        "change": "Only the label changes."
+      },
+      "recipes.*.preset": {
+        "what": "quantize: the quantization preset, for example `NVFP4`.",
+        "change": "The output checkpoint uses the other number format (size, speed and accuracy all move)."
+      },
+      "recipes.*.sparsity": {
+        "what": "reap: the fraction of weights kept, from 0 up to (not including) 1.",
+        "change": "Lower makes a smaller, faster model that loses more accuracy."
+      },
+      "recipes.*.config": {
+        "what": "minitron: a config file name in the run directory.",
+        "change": "The job reads the other file."
+      },
+      "recipes": {
+        "what": "The named compression recipes, one block per recipe."
+      }
+    },
+    "guardrails_config": {
+      "models.#": {
+        "what": "A model the rails use."
+      },
+      "models.#.type": {
+        "what": "What this model is used for: `main` is the model being guarded (and, without other entries, the one that runs the self-check prompts).",
+        "change": "Assigns the model to another role."
+      },
+      "models.#.engine": {
+        "what": "How Guardrails talks to the model (`openai` = any OpenAI-compatible API, here the router).",
+        "change": "Guardrails uses another client library to reach the model."
+      },
+      "models.#.model": {
+        "what": "The model name: a router alias.",
+        "change": "The guarded answers (and the self checks) come from the other model."
+      },
+      "models.#.parameters": {
+        "what": "Parameters passed to the model client."
+      },
+      "models.#.parameters.base_url": {
+        "what": "Where the model is reached: the key-injecting router broker on Guardrails' internal network.",
+        "change": "Another address bypasses the broker; the server has no route anywhere else."
+      },
+      "models.#.parameters.temperature": {
+        "what": "Sampling temperature for this model.",
+        "change": "Higher makes answers (and self-check verdicts) more varied; lower more repeatable."
+      },
+      "models.#.parameters.*": {
+        "what": "A parameter passed to the model client.",
+        "change": "The model receives the new value on its next call."
+      },
+      "passthrough": {
+        "what": "true = the guarded model answers directly, with no Colang dialog step in between (no embedding model needed).",
+        "change": "false turns on dialog rails, which need flows and an embedding model."
+      },
+      "rails": {
+        "what": "The rails: checks run before and after the model."
+      },
+      "rails.input.flows.#": {
+        "what": "An input rail: a check run on each user message before the model sees it (for example `self check input`).",
+        "change": "Removing one stops that check, so more prompts reach the model; the console refuses a removal unless the file says `# nemo-console: allow-weaken-rails`."
+      },
+      "rails.output.flows.#": {
+        "what": "An output rail: a check run on the model's answer before it is returned.",
+        "change": "Removing one lets unchecked answers through; the console refuses a removal unless the file says `# nemo-console: allow-weaken-rails`."
+      },
+      "rails.output.streaming.enabled": {
+        "what": "Whether output rails check a streamed answer chunk by chunk. A streaming chat needs it when output rails exist.",
+        "change": "false: streaming requests with output rails fail."
+      },
+      "rails.output.streaming.chunk_size": {
+        "what": "How many tokens are collected before each output-rail check.",
+        "change": "Smaller checks more often (more judge calls, smoother streaming); larger checks less often (bigger pauses)."
+      },
+      "rails.output.streaming.context_size": {
+        "what": "Tokens of the previous chunk included with each check, so a phrase split between chunks is still seen.",
+        "change": "Larger catches more split content at a little more cost per check."
+      },
+      "rails.output.streaming.stream_first": {
+        "what": "false = check each chunk BEFORE it is sent; true = send first and check after.",
+        "change": "true makes streaming faster but can show text a rail later blocks."
+      },
+      "instructions.#.content": {
+        "what": "General instructions for the main model.",
+        "change": "The model's behaviour changes on the next request after a restart."
+      },
+      "sample_conversation": {
+        "what": "An example conversation given to the model.",
+        "change": "Changes the style the model imitates."
+      }
+    },
+    "guardrails_prompts": {
+      "prompts.#": {
+        "what": "A prompt template for one rail task."
+      },
+      "prompts.#.task": {
+        "what": "Which rail task this template is for (for example `self_check_input`).",
+        "change": "The template is used by the other task; a task with no template falls back to the built-in prompt."
+      },
+      "prompts.#.content": {
+        "what": "The prompt the checking model is given. `{{ user_input }}` or `{{ bot_response }}` is replaced by the text being checked; the answer must be Yes (block) or No.",
+        "change": "Changes what gets blocked: a looser prompt lets more through. Test it in the Playground after a restart."
+      },
+      "prompts.#.models.#": {
+        "what": "The models this template applies to.",
+        "change": "The template is used only with the listed models."
+      }
+    },
+    "openshell_gateway": {
+      "openshell.version": {
+        "what": "The gateway config format version (1 in this build).",
+        "change": "Another value makes the gateway refuse its config."
+      },
+      "openshell.gateway.compute_drivers.#": {
+        "what": "The backend that runs sandboxes (`docker`).",
+        "change": "Sandboxes would be started by another driver."
+      },
+      "openshell.gateway.host_gateway_ip": {
+        "what": "The IP every sandbox reaches the gateway at (`host.openshell.internal`): the gateway container's static address on the internal network.",
+        "change": "A wrong address leaves sandboxes unable to reach the gateway."
+      },
+      "openshell.drivers.docker.network_name": {
+        "what": "The Docker network sandboxes are attached to: an INTERNAL network with no route off the box.",
+        "change": "A non-internal network would give sandboxes a way out."
+      },
+      "openshell.drivers.docker.supervisor_image": {
+        "what": "The supervisor image injected into every sandbox (it enforces the policy), pinned by digest.",
+        "change": "Every new sandbox runs the other supervisor; an unscanned image is a trust change."
+      },
+      "openshell.drivers.docker.image_pull_policy": {
+        "what": "Whether images may be pulled at run time. `Never` keeps every image local and pinned.",
+        "change": "Allowing pulls would let the Docker daemon download images, which is egress outside the allowlist."
+      }
+    },
+    "openshell_policy": {
+      "version": {
+        "what": "The policy format version.",
+        "change": "Another value makes sandbox creation fail."
+      },
+      "filesystem_policy.include_workdir": {
+        "what": "Whether the sandbox's work directory is writable.",
+        "change": "false leaves the workload nowhere to write its output."
+      },
+      "filesystem_policy.read_only.#": {
+        "what": "A path the workload may read but not write (enforced by Landlock).",
+        "change": "Adding a path exposes it to untrusted dataset scripts; removing one may break the tools that read it."
+      },
+      "filesystem_policy.read_write.#": {
+        "what": "A path the workload may write.",
+        "change": "Every writable path is somewhere an untrusted script can leave files."
+      },
+      "network_policies.*": {
+        "what": "A named network allowance: which endpoints which programs in the sandbox may reach. Everything else is denied."
+      },
+      "network_policies.*.endpoints.#.host": {
+        "what": "The host this allowance permits.",
+        "change": "Sandboxes may reach the other host instead."
+      },
+      "network_policies.*.endpoints.#.port": {
+        "what": "The port this allowance permits.",
+        "change": "Sandboxes may reach the other port instead."
+      },
+      "network_policies.*.endpoints.#.protocol": {
+        "what": "How traffic is inspected (`rest` = HTTP requests matched against the rules).",
+        "change": "Changes what the supervisor can check."
+      },
+      "network_policies.*.endpoints.#.enforcement": {
+        "what": "`enforce` blocks what the rules do not allow; an audit mode only logs.",
+        "change": "Anything but enforce lets traffic through."
+      },
+      "network_policies.*.endpoints.#.allowed_ips.#": {
+        "what": "The IP range the host may resolve to.",
+        "change": "A wider range lets the name point somewhere else."
+      },
+      "network_policies.*.endpoints.#.rules.#.allow.method": {
+        "what": "HTTP methods allowed (`*` = any).",
+        "change": "Narrower blocks other methods."
+      },
+      "network_policies.*.endpoints.#.rules.#.allow.path": {
+        "what": "URL paths allowed (`/v1/**` = the router's API only).",
+        "change": "Wider paths reach more of the router (for example its admin API)."
+      },
+      "network_policies.*.binaries.#.path": {
+        "what": "The program allowed to use this endpoint; other programs in the sandbox are refused.",
+        "change": "Another program gains the network access."
+      }
+    },
+    "openshell_profile": {
+      "id": {
+        "what": "The provider type id; sandboxes attach a provider of this type.",
+        "change": "Existing providers stop matching the profile."
+      },
+      "display_name": {
+        "what": "The name shown in OpenShell.",
+        "change": "Only the label changes."
+      },
+      "description": {
+        "what": "A description shown in OpenShell.",
+        "change": "Only the label changes."
+      },
+      "category": {
+        "what": "The provider category (`inference`).",
+        "change": "Changes how OpenShell lists it."
+      },
+      "inference_capable": {
+        "what": "Whether the provider serves model inference.",
+        "change": "Changes which commands offer it."
+      },
+      "credentials.#.name": {
+        "what": "The credential's name inside the profile.",
+        "change": "Endpoints and discovery that name it must change too."
+      },
+      "credentials.#.description": {
+        "what": "What the credential is.",
+        "change": "Only the label changes."
+      },
+      "credentials.#.env_vars.#": {
+        "what": "The environment variable the credential VALUE is read from when the provider is created. The value is stored by the gateway, never in the sandbox.",
+        "change": "The provider must be created again from the new variable."
+      },
+      "credentials.#.required": {
+        "what": "Whether a provider can be created without this credential.",
+        "change": "false allows providers with no key."
+      },
+      "credentials.#.auth_style": {
+        "what": "How the credential is sent (`bearer`).",
+        "change": "The upstream receives the key in another form."
+      },
+      "credentials.#.header_name": {
+        "what": "The header the supervisor writes the credential into.",
+        "change": "The key goes in another header."
+      },
+      "discovery.credentials.#": {
+        "what": "Credentials offered for discovery.",
+        "change": "Changes which credentials are discoverable."
+      },
+      "endpoints.#.host": {
+        "what": "A host the credential may be injected for.",
+        "change": "The key would be sent to another host."
+      },
+      "endpoints.#.port": {
+        "what": "The port for that host.",
+        "change": "The key would be sent to another port."
+      },
+      "endpoints.#.path": {
+        "what": "The URL paths the credential is injected on.",
+        "change": "Wider paths send the key with more requests."
+      },
+      "endpoints.#.protocol": {
+        "what": "How requests are inspected.",
+        "change": "Changes what the supervisor checks."
+      },
+      "endpoints.#.enforcement": {
+        "what": "`enforce` = only matching requests get the key.",
+        "change": "Anything else loosens it."
+      },
+      "endpoints.#.allowed_ips.#": {
+        "what": "The IP range the host may resolve to.",
+        "change": "A wider range lets the name point elsewhere."
+      },
+      "endpoints.#.rules.#.allow.method": {
+        "what": "HTTP methods that get the credential.",
+        "change": "Wider sends the key with more requests."
+      },
+      "endpoints.#.rules.#.allow.path": {
+        "what": "URL paths that get the credential.",
+        "change": "Wider sends the key with more requests."
+      },
+      "binaries.#": {
+        "what": "The program whose requests get the credential.",
+        "change": "Another program would receive the injected key."
+      }
+    },
+    "compose": {
+      "name": {
+        "what": "The Compose project name; container, network and volume names derive from it.",
+        "change": "A new name makes Compose treat it as a different project: the old containers keep running beside new ones."
+      },
+      "services.*": {
+        "what": "One container Compose runs."
+      },
+      "services.*.image": {
+        "what": "The image the container runs, pinned by tag and digest.",
+        "change": "The service runs different software on its next recreate; a new image should be scanned first."
+      },
+      "services.*.container_name": {
+        "what": "The container's fixed name.",
+        "change": "Scripts and health checks that use the old name stop finding it."
+      },
+      "services.*.user": {
+        "what": "The user the container runs as.",
+        "change": "Changes what the process may read and write."
+      },
+      "services.*.cap_drop.#": {
+        "what": "A Linux capability removed from the container (`ALL` = every one).",
+        "change": "Removing an entry gives the container that capability back."
+      },
+      "services.*.cap_add.#": {
+        "what": "A Linux capability added to the container.",
+        "change": "Each added capability widens what the container can do."
+      },
+      "services.*.security_opt.#": {
+        "what": "A security option, for example `no-new-privileges:true`.",
+        "change": "Removing it can let processes gain privileges."
+      },
+      "services.*.read_only": {
+        "what": "Whether the container's root filesystem is read-only.",
+        "change": "false lets the process modify its own image files."
+      },
+      "services.*.restart": {
+        "what": "When Docker restarts the container (`unless-stopped`, `no`, ...).",
+        "change": "Changes whether it comes back after a crash or reboot."
+      },
+      "services.*.volumes.#": {
+        "what": "A mount: `source:target[:ro]`.",
+        "change": "Changes what host files the container sees (or can write, without `:ro`)."
+      },
+      "services.*.environment": {
+        "what": "Environment variables set in the container."
+      },
+      "services.*.environment.*": {
+        "what": "An environment variable set in the container.",
+        "change": "The service reads the new value when it is recreated."
+      },
+      "services.*.env_file.#": {
+        "what": "A file environment variables are read from.",
+        "change": "The service reads other variables."
+      },
+      "services.*.ports.#": {
+        "what": "A published port: `host-ip:host-port:container-port`.",
+        "change": "Opens the service on another host port or address; anything but 127.0.0.1 exposes it to the network."
+      },
+      "services.*.command": {
+        "what": "The command the container runs (replaces the image default).",
+        "change": "The service starts with the new command line."
+      },
+      "services.*.command.#": {
+        "what": "One argument of the container's command line.",
+        "change": "The service starts with the changed argument."
+      },
+      "services.*.entrypoint": {
+        "what": "The program the container starts (replaces the image default).",
+        "change": "The container starts a different program."
+      },
+      "services.*.networks.*": {
+        "what": "A network the container joins."
+      },
+      "services.*.networks.*.ipv4_address": {
+        "what": "The container's fixed IP on this network.",
+        "change": "Anything that reaches the service by this IP must change too."
+      },
+      "services.*.networks.*.gw_priority": {
+        "what": "Which network provides the default route (highest wins).",
+        "change": "Moves the container's default route to another network."
+      },
+      "services.*.depends_on.#": {
+        "what": "A service started before this one.",
+        "change": "Changes the start order."
+      },
+      "services.*.mem_limit": {
+        "what": "The container's memory limit.",
+        "change": "Lower can get it killed under load."
+      },
+      "services.*.cpus": {
+        "what": "How many CPUs the container may use.",
+        "change": "Changes how fast it can run under load."
+      },
+      "services.*.profiles.#": {
+        "what": "A Compose profile: the service starts only when that profile is selected.",
+        "change": "Changes when the service starts."
+      },
+      "networks.*": {
+        "what": "A network the project uses."
+      },
+      "networks.*.external": {
+        "what": "true = the network is created outside this file and must already exist.",
+        "change": "false makes Compose create (and remove) it itself."
+      },
+      "networks.*.name": {
+        "what": "The network's real Docker name.",
+        "change": "Containers join a different network."
+      },
+      "networks.*.internal": {
+        "what": "true = the network has no route off the box.",
+        "change": "false gives everything on it a way out."
+      },
+      "networks.*.ipam.config.#.subnet": {
+        "what": "The network's address range.",
+        "change": "Fixed IPs on it must change too; a range that overlaps another network fails."
+      },
+      "volumes.*": {
+        "what": "A named volume the project uses."
+      }
+    },
+    "openshell_compose": {
+      "services.gateway.environment.OPENSHELL_COMPUTE_DRIVER": {
+        "what": "The driver the gateway runs sandboxes with (`docker`).",
+        "change": "Sandboxes would be started another way."
+      },
+      "services.gateway.environment.OPENSHELL_GRPC_ENDPOINT": {
+        "what": "The address the gateway listens on for the CLI and the sandbox supervisors.",
+        "change": "Clients configured for the old address stop connecting."
+      },
+      "services.gateway.environment.OPENSHELL_DB_URL": {
+        "what": "Where the gateway keeps its state database.",
+        "change": "The gateway starts with another (possibly empty) database."
+      },
+      "services.gateway.environment.OPENSHELL_LOCAL_TLS_DIR": {
+        "what": "The directory with the gateway's TLS material.",
+        "change": "The gateway looks for its certificates elsewhere."
+      },
+      "services.gateway.environment.OPENSHELL_TLS_CERT": {
+        "what": "The gateway's TLS certificate file.",
+        "change": "Clients must trust the new certificate."
+      },
+      "services.gateway.environment.OPENSHELL_TLS_KEY": {
+        "what": "The gateway's TLS private key file (a path, not the key).",
+        "change": "The gateway serves with the other key."
+      },
+      "services.gateway.environment.OPENSHELL_TLS_CLIENT_CA": {
+        "what": "The CA client certificates must be signed by.",
+        "change": "Changes which clients can connect."
+      },
+      "services.gateway.environment.OPENSHELL_ENABLE_MTLS_AUTH": {
+        "what": "Whether clients must present a certificate (mutual TLS).",
+        "change": "false lets any local client talk to the gateway."
+      },
+      "services.gateway.environment.OPENSHELL_TELEMETRY_ENABLED": {
+        "what": "OpenShell's own telemetry (off).",
+        "change": "true would try to send usage data (the internal network blocks it anyway)."
+      },
+      "services.gateway.environment.NEMO_TELEMETRY_ENABLED": {
+        "what": "NeMo telemetry, passed into every sandbox (off).",
+        "change": "true would try to send usage data."
+      },
+      "services.gateway.environment.HOME": {
+        "what": "The gateway's home directory: the Docker driver resolves the paths it mounts into sandboxes from it.",
+        "change": "Sandbox mounts point at other host paths."
+      }
+    },
+    "dynamo_override": {
+      "services": {
+        "what": "The services whose settings the console overrides. Only `command` and `environment` may be overridden."
+      },
+      "services.*": {
+        "what": "A Dynamo service (worker or frontend) whose command line or environment the console manages."
+      },
+      "services.*.command.#": {
+        "what": "One argument of the service's command line. The Params tab writes these; only allowlisted flags are accepted and `--model` stays pinned.",
+        "change": "The service starts with the changed argument when it is recreated."
+      },
+      "services.*.environment.*": {
+        "what": "An environment variable for the service.",
+        "change": "The service reads the new value when it is recreated."
+      }
+    }
+  }
+}

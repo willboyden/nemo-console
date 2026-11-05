@@ -77,3 +77,16 @@ test('flattenFields lists every scalar with its path, in document order', () => 
   const f = flattenFields(parseConfig('yaml', 'a: 1\nb:\n  - x\n  - k: v\n').root);
   assert.deepEqual(f.map((x) => x.path), [['a'], ['b', 0], ['b', 1, 'k']]);
 });
+
+test('0.9.0 audit: values PyYAML would read differently are escaped, refused or normalised', () => {
+  const q = edit('yaml', 'a: "x"\n', ['a'], 'a\u0085b\u2028c\u2029d');
+  assert.equal(q.node.value, 'a\u0085b\u2028c\u2029d');                                   // escaped, not folded to spaces
+  assert.match(q.out, /\\u0085/);
+  assert.equal(edit('yaml', "a: 'x'\n", ['a'], 'p\u2028q').node.value, 'p\u2028q');        // single quotes cannot carry it
+  assert.equal(edit('yaml', 'a: x\n', ['a'], '=').out, 'a: "="\n');                        // a bare = is the YAML value tag
+  assert.equal(edit('yaml', 'a: 0.5\n', ['a'], '-.5').node.value, -0.5);                   // -.5 is text to PyYAML
+  assert.equal(edit('yaml', 'a: x\n', ['a'], '<<').out, 'a: "<<"\n');                      // the merge key tag
+  assert.match(edit('yaml', 'a: 0.5\n', ['a'], '-.').error, /not a number/);               // a half-typed number is not -0.
+  assert.match(edit('yaml', 'p: |\n  x\nz: 1\n', ['p'], '  indented\nnot').error, /first line/);
+  assert.equal(edit('yaml', 'p: |\n  x\nz: 1\n', ['p'], '\nfirst\n  second').node.value, '\nfirst\n  second\n');
+});

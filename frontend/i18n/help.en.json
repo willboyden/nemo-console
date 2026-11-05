@@ -23,6 +23,10 @@
         "a": "TOML and YAML files open as a form: one control per value, typed (a number field takes only numbers, true/false is a switch, fixed choices are a list). A form edit rewrites only that value in the file, so comments and layout stay; the Text view and the diff show exactly what changed.\n\nEdit checks update as you type: syntax errors with their line, the rules of AIPerf profiles, Model Optimizer recipes, Evaluator suites and Switchyard routes, and secret-looking values the console would refuse to save. They are early warnings. The server's own validator still decides: Check (or Ctrl+S) runs it, and Apply always runs it first."
       },
       {
+        "q": "What does the (i) button next to a setting do?",
+        "a": "It opens a short description of that setting: what it is, what changing it does, the values it accepts and when a change takes effect (or why the file is read-only here). Esc or a click outside closes it. Sections the console knows have an About this section button too. The descriptions are the console's own (`i18n/fields.en.json`); for a Dynamo command-line flag the pop-up also shows that flag's entry from the Params tab. A key the console has no description for still shows its type, accepted values and its comment from the file."
+      },
+      {
         "q": "Where can I see what was changed, and by whom?",
         "a": "The Audit page lists every mutating call with the key that made it. Parameters are redacted; chat text and file bodies are never stored. It needs an admin key.",
         "route": "/audit"

@@ -121,3 +121,11 @@ test('describeSpec explains a field for the Form view', () => {
   assert.match(describeSpec(specAt(sp, ['profiles', 'x', 'endpoint_type'])), /^one of chat, completions/);
   assert.equal(specAt(sp, ['profiles', 'x', 'nope']), null);
 });
+
+test('0.9.0 audit: keys named like Object.prototype members are unknown keys, not schema hits; trailing spaces are linear', () => {
+  const r = checkConfig({ system: 'aiperf', file: 'profiles', format: 'yaml', text: 'version: 1\nprofiles:\n  p:\n    model: m\n    concurrency: 1\n    requests: 1\n    isl: 1\n    osl: 1\n    constructor: 1\n    toString: 2\n' });
+  assert.equal(r.diagnostics.filter((d) => /unknown key/.test(d.message)).length, 2, JSON.stringify(r.diagnostics));
+  const t0 = Date.now();
+  checkConfig({ system: 'x', file: 'y', format: 'yaml', text: `${' '.repeat(200000)}x\n` + 'k: v \n'.repeat(40000) });
+  assert.ok(Date.now() - t0 < 2000, `took ${Date.now() - t0} ms`);
+});

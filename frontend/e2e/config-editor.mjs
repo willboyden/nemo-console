@@ -107,6 +107,14 @@ async function browser(backend, profile) {
     if (!await until(`document.querySelectorAll('.cfg-form .ff').length > 10`, 'the Form view', 12000)) { failures.push(`page shows: ${(await ev(`document.querySelector('#main')?.innerText`) || '').replace(/\s+/g, ' ').slice(0, 400)}`); return failures; }
     expect(await ev(`document.querySelector('[data-view=form]').getAttribute('aria-pressed') === 'true'`), 'Form is not the default view for a YAML file');
     expect(await ev(`/syntax OK/.test(document.querySelector('.chk-summary').innerText) && /no problems/.test(document.querySelector('.chk-summary').innerText)`), 'the unchanged file does not report "syntax OK, no problems"');
+    // Every field has an info button; its pop-up says what the key is and what a change does, and Esc closes it.
+    expect(await ev(`document.querySelectorAll('.cfg-form .ff').length === document.querySelectorAll('.cfg-form .ff .ff-info').length`), 'a Form field has no info button');
+    const info = JSON.stringify(JSON.stringify(['profiles', 'chat-short', 'concurrency']));
+    await ev(`document.querySelector('.ff[data-path=' + JSON.stringify(${info}) + '] .ff-info').click(); true`);
+    await until(`document.querySelector('.ff-pop').matches(':popover-open') && /What it is/i.test(document.querySelector('.ff-pop').innerText) && /If you change it/i.test(document.querySelector('.ff-pop').innerText)`, 'the info pop-up for concurrency to open with its description') || failures.push(`  pop-up shows: ${(await ev(`document.querySelector('.ff-pop')?.innerText || '(none)'`)).replace(/\s+/g, ' ').slice(0, 300)}`);
+    expect(await ev(`/next profile run/.test(document.querySelector('.ff-pop').innerText)`), 'the info pop-up does not say when a change takes effect');
+    await s('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }); await s('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    await until(`!document.querySelector('.ff-pop').matches(':popover-open') && document.activeElement?.classList.contains('ff-info')`, 'Esc to close the info pop-up and return focus to its button');
     const conc = JSON.stringify(JSON.stringify(['profiles', 'chat-short', 'concurrency']));
     const set = (v) => ev(`(() => { const i = document.querySelector('.ff[data-path=' + JSON.stringify(${conc}) + '] input'); i.value = ${JSON.stringify(v)}; i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
     await set('100');
@@ -156,7 +164,7 @@ export async function main() {
     if (backend) console.error(`backend log tail:\n${backend.log().slice(-1200)}`);
     return 1;
   }
-  console.log(`e2e config editor: browser checks agree with the backend validators (${summary}); Form, Text, checks and draft restore work in Chrome`);
+  console.log(`e2e config editor: browser checks agree with the backend validators (${summary}); Form, Text, checks, info pop-ups and draft restore work in Chrome`);
   return 0;
 }
 

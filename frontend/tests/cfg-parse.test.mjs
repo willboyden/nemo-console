@@ -97,3 +97,11 @@ test('YAML: valid files it does not model are "unsupported", never an error', ()
 test('other formats are not parsed', () => {
   assert.deepEqual(parseConfig('text', 'anything'), { root: null, errors: [], warnings: [], unsupported: null });
 });
+
+test('0.9.0 audit: absurd nesting is "unsupported", never a crash; real depth is fine', () => {
+  for (const [fmt, text] of [['yaml', `a: ${'['.repeat(20000)}`], ['toml', `a = ${'['.repeat(20000)}${']'.repeat(20000)}`], ['yaml', `a: ${'['.repeat(100)}${']'.repeat(100)}`]]) {
+    const r = parseConfig(fmt, text);
+    assert.equal(r.root, null); assert.match(r.unsupported || r.errors[0]?.message || '', /nesting deeper|never closed/);
+  }
+  ok('yaml', 'a:\n  b:\n    c:\n      - d: [1, [2, {e: 3}]]\n');
+});

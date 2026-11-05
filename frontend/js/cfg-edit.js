@@ -13,8 +13,12 @@ const TOML_DATE = /^\d{4}-\d{2}-\d{2}(?:[Tt ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|
 const DEC_INT = /^[-+]?(?:0|[1-9][0-9_]*)$/;
 const DEC_FLOAT = /^[-+]?(?:\d[\d_]*)?\.\d[\d_]*(?:[eE][-+]?\d+)?$|^[-+]?\d[\d_]*\.(?:[eE][-+]?\d+)?$|^[-+]?\d[\d_]*[eE][-+]?\d+$/;
 
-/** JSON string escaping is valid in TOML basic strings and YAML double-quoted strings alike. */
-const dq = (s) => JSON.stringify(s);
+/**
+ * JSON string escaping is valid in TOML basic strings and YAML double-quoted strings alike. JSON leaves DEL, NEL and the
+ * Unicode line/paragraph separators raw; YAML folds NEL/LS/PS into spaces and refuses DEL, so they are escaped too.
+ */
+const dq = (s) => JSON.stringify(s).replace(/[\u007f\u0085\u2028\u2029]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+const YAML_SQ_BAD = /[\n\r\t\u0000-\u001f\u007f\u0085\u2028\u2029]/;   // what a YAML single-quoted string cannot carry as typed
 
 function tomlString(node, v) {
   if (/[\u0000-\u0008\u000b-\u001f\u007f]/.test(v) && !/\n/.test(v)) return dq(v);
@@ -26,14 +30,14 @@ function tomlString(node, v) {
 
 /** Can v be written as a YAML plain scalar that PyYAML reads back as exactly this string? */
 export function yamlPlainSafe(v) {
-  return v !== '' && v === v.trim() && yamlPlainType(v).type === 'string' && !/^(?:[,[\]{}#&*!|>'"%@`]|[-?:](?:\s|$))/.test(v)
+  return v !== '' && v !== '=' && v !== '<<' && v === v.trim() && yamlPlainType(v).type === 'string' && !/^(?:[,[\]{}#&*!|>'"%@`]|[-?:](?:\s|$))/.test(v)
     && !/:(?:\s|$)|\s#|[\t\n\r]|[\u0000-\u001f\u007f\u0085\u2028\u2029\ufeff]/.test(v) && !/^(?:---|\.\.\.)(?:\s|$)/.test(v);
 }
 function yamlString(node, v) {
   // inside [ ] or { } a plain value also ends at , [ ] { } and :, so only simple words stay unquoted there
-  if (node.flow) return /^[A-Za-z0-9_./+-]+(?: [A-Za-z0-9_./+-]+)*$/.test(v) && yamlPlainSafe(v) ? v : node.style === 'single' && !/[\n\r\t\u0000-\u001f\u007f]/.test(v) ? `'${v.replace(/'/g, "''")}'` : dq(v);
+  if (node.flow) return /^[A-Za-z0-9_./+-]+(?: [A-Za-z0-9_./+-]+)*$/.test(v) && yamlPlainSafe(v) ? v : node.style === 'single' && !YAML_SQ_BAD.test(v) ? `'${v.replace(/'/g, "''")}'` : dq(v);
   if ((node.style === 'plain' || node.style === 'empty') && yamlPlainSafe(v)) return v;
-  if (node.style === 'single' && !/[\n\r\t\u0000-\u001f\u007f]/.test(v)) return `'${v.replace(/'/g, "''")}'`;
+  if (node.style === 'single' && !YAML_SQ_BAD.test(v)) return `'${v.replace(/'/g, "''")}'`;
   if (node.style === 'plain' || node.style === 'empty') return yamlPlainSafe(v) ? v : dq(v);
   return dq(v);
 }
@@ -64,11 +68,17 @@ export function encodeValue(format, node, input, spec = null) {
   if (node.type === 'null' && s.trim() === '' && format === 'yaml') return { raw: node.raw };   // still empty
   if (type === 'string') {
     if (format === 'toml') return { raw: tomlString(node, s) };
-    if (node.style === 'block') return { block: s };
+    if (node.style === 'block') {
+      // PyYAML takes a block's indentation from its first non-blank line: an indented first line would lose its
+      // indentation (or break the file), so it is refused rather than written.
+      if (/^[ \t]/.test(s.split('\n').find((l) => l.trim() !== '') ?? '')) return { error: 'the first line of this text cannot start with a space or tab here; use the Text view' };
+      return { block: s };
+    }
     if (s.includes('\n')) return { raw: dq(s) };
     return { raw: yamlString(node, s) };
   }
-  const v = s.trim();
+  let v = s.trim();
+  if (format === 'yaml') v = v.replace(/^([-+])\.(?=\d)/, '$10.');   // PyYAML reads -.5 as text, -0.5 as a number
   if (type === 'int' || type === 'float') {
     const intOk = format === 'toml' ? TOML_INT.test(v) : DEC_INT.test(v);
     const floatOk = format === 'toml' ? TOML_FLOAT.test(v) && /[.eEn]/.test(v) : DEC_FLOAT.test(v);

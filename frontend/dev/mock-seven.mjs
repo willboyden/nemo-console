@@ -233,39 +233,81 @@ suites:
         max_problems: 500
         temperature: 0.0
 `;
-const OS_GATEWAY = `# OpenShell gateway.toml (mock copy). Read-only in the console.
-[gateway]
-listen = "127.0.0.1:8443"
-tls = true
-mtls_required = true
-[runtime]
-network = "openshell-docker"
+const OS_GATEWAY = `# OpenShell gateway.toml (mock copy, same shape as the runner's config/gateway.toml). Read-only in the console.
+[openshell]
+version = 1
+
+[openshell.gateway]
+compute_drivers = ["docker"]
+host_gateway_ip = "172.16.0.2"
+
+[openshell.drivers.docker]
+network_name = "openshell-docker"
+supervisor_image = "ghcr.io/nvidia/openshell/supervisor@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+image_pull_policy = "Never"
 `;
 const OS_POLICY = `# OpenShell sandbox policy (mock copy). Read-only in the console.
 version: 1
-default: deny
-filesystem:
-  read: [/sandbox/inputs]
-  write: [/sandbox/outputs]
-network:
-  allow:
-    - host: litellm
-      port: 4000
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /opt/dd-config
+    - /usr
+  read_write:
+    - /sandbox
+network_policies:
+  lab_router:
+    endpoints:
+      - host: 172.16.0.5
+        port: 4000
+        protocol: rest
+        enforcement: enforce
+        allowed_ips:
+          - 172.16.0.5/32
+        rules:
+          - allow:
+              method: "*"
+              path: "/v1/**"
+    binaries:
+      - path: /usr/local/bin/python3.13
 `;
 const OS_PROVIDER = `# OpenShell provider profile (mock copy). Read-only in the console.
-name: lab-router
-type: openai
-base_url: http://litellm:4000/v1
-credential: held-by-gateway   # the sandbox never sees the key
+id: lab-litellm-dd
+display_name: Lab LiteLLM Router (Data Designer)
+category: inference
+inference_capable: true
+credentials:
+  - name: litellm_dd_key
+    env_vars: [LITELLM_DD_KEY]
+    required: true
+    header_name: authorization
+endpoints:
+  - host: 172.16.0.5
+    port: 4000
+    path: /v1/**
+    protocol: rest
+    enforcement: enforce
+binaries:
+  - /usr/local/bin/python3.13
 `;
 const OS_COMPOSE = `# OpenShell gateway compose (mock copy). Read-only in the console.
+name: ai-lab-dd
 services:
-  openshell-gateway:
-    image: openshell-gateway:0.9.4-mock
-    networks: [openshell-docker]
+  gateway:
+    image: ghcr.io/nvidia/openshell/gateway:0.0.77-mock
+    container_name: ai-lab-dd-openshell
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks:
+      openshell-docker:
+        ipv4_address: 172.16.0.2
+    environment:
+      OPENSHELL_COMPUTE_DRIVER: docker
+      OPENSHELL_ENABLE_MTLS_AUTH: "true"
+      OPENSHELL_TELEMETRY_ENABLED: "false"
 networks:
   openshell-docker:
-    internal: true
+    external: true
 `;
 const OS_WHY = 'A web console must never loosen a sandbox trust policy (ADR 0007). Edit it by hand in the repo, then restart the gateway; Prove policy checks it without changing anything.';
 

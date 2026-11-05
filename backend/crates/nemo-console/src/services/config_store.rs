@@ -166,18 +166,37 @@ impl ConfigStore {
     pub async fn read(&self, a: &AdapterRef, file_id: &str) -> Result<ConfigFile, ApiError> {
         self.spec(a, file_id)?;
         let path = self.path(a, file_id)?;
-        let mut cf = match a.read_config(file_id).await {
-            Ok(cf) => cf,
-            Err(AdapterError::FileNotFound(_)) => {
+        // The hash must be of the bytes the content came from: read the raw bytes before and after the adapter's read
+        // and retry while another writer changed the file in between (else the UI would hold old content under the
+        // new hash, and an Apply would pass the stale-base check and overwrite the other writer's change).
+        let mut attempt = 0;
+        let (mut cf, data) = loop {
+            // An unreadable or oversize file is left to the adapter first, which answers it as before (e.g. 404).
+            let before = self.read_raw(&path).ok();
+            let cf = match a.read_config(file_id).await {
+                Ok(cf) => cf,
+                Err(AdapterError::FileNotFound(_)) => {
+                    return Err(ApiError::new(
+                        404,
+                        "not_found",
+                        "config file does not exist",
+                    ));
+                }
+                Err(_) => return Err(ApiError::internal()),
+            };
+            let after = self.read_raw(&path)?;
+            attempt += 1;
+            if before.as_ref() == Some(&after) {
+                break (cf, after);
+            }
+            if attempt >= 3 {
                 return Err(ApiError::new(
-                    404,
-                    "not_found",
-                    "config file does not exist",
+                    409,
+                    "file_changing",
+                    "the file kept changing while it was read; try again",
                 ));
             }
-            Err(_) => return Err(ApiError::internal()),
         };
-        let data = self.read_raw(&path)?;
         cf.sha256 = sha256_hex(&data);
         cf.mtime = std::fs::metadata(&path)
             .ok()
@@ -296,6 +315,19 @@ impl ConfigStore {
         let lock = self.file_lock(a.id(), file_id);
         let _held = lock.lock().await;
         let path = self.path(a, file_id)?;
+        // An adapter that hides text on read (Relay masks secret-looking values for every role) hands the editor a
+        // view that is not the file: applying an edit of that view would write the mask over the real text.
+        // Line endings do not count: some adapters read with universal newlines (CRLF and CR become LF).
+        let lf = |s: &str| s.replace("\r\n", "\n").replace('\r', "\n");
+        if let Ok(view) = a.read_config(file_id).await
+            && lf(&view.content) != lf(&String::from_utf8_lossy(&self.read_raw(&path)?))
+        {
+            return Err(ApiError::new(
+                409,
+                "hidden_content",
+                "this file contains text the console hides (a secret-looking value); edit it by hand",
+            ));
+        }
         let vr = self.validate_inner(a, file_id, content).await?;
         if !vr.ok {
             let msgs: Vec<&str> = vr

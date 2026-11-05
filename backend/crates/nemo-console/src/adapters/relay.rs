@@ -85,13 +85,13 @@ static TS_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| re(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?(Z|[+-]\d\d:\d\d)$"));
 static TOML_LINE: LazyLock<regex::Regex> = LazyLock::new(|| re(r"line (\d+)"));
 
-static SECRET_SK: LazyLock<regex::Regex> = LazyLock::new(|| re(r"sk-[A-Za-z0-9_\-]{16,}"));
+static SECRET_SK: LazyLock<regex::Regex> = LazyLock::new(|| re(r"\bsk-[A-Za-z0-9_\-]{16,}"));
 static SECRET_BEARER: LazyLock<regex::Regex> =
-    LazyLock::new(|| re(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=\-]{8,}"));
+    LazyLock::new(|| re(r"(?i)\bBearer[^\S\r\n]+[A-Za-z0-9._~+/=\-]{8,}"));
 #[allow(clippy::expect_used)]
 static SECRET_KV: LazyLock<fancy_regex::Regex> = LazyLock::new(|| {
     fancy_regex::Regex::new(
-        r#"(?im)^(\s*(?:api_key|apikey|secret|password|token|access_key|private_key)\s*=\s*)(["'])(?!\[REDACTED)[^"'\n]+\2"#,
+        r#"(?im)^(\s*(?:api_key|apikey|secret|password|token|access_key|private_key)[^\S\r\n]*=[^\S\r\n]*)(["'])(?!\[REDACTED)[^"'\n]+\2"#,
     )
     .expect("static regex")
 });

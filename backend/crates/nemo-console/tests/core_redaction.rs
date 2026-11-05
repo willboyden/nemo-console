@@ -270,3 +270,28 @@ fn test_redaction_still_hides_non_json_forms() {
         );
     }
 }
+
+/// 0.9.0 audit: the Bearer and key=value patterns stop at the end of the line. Before, `\\s+` crossed the newline and
+/// swallowed the next line into the mask, so a viewed (and applied) file came back corrupted.
+#[test]
+fn test_redaction_never_crosses_a_line_break() {
+    for text in [
+        "credentials:\n  - auth_style: bearer\n    header_name: authorization\n",
+        "# send the key as a Bearer\nbase_url = \"http://litellm:4000\"\n",
+        "api_key:\n  from_env: LITELLM_KEY\n",
+        "token =\nnext = 1\n",
+    ] {
+        assert_eq!(redact(text), text, "{text:?}");
+        assert!(find_secret(text).is_none(), "{text:?}");
+    }
+    // still masked on one line, with a space, a tab or a no-break space as the separator
+    for text in [
+        "Authorization: Bearer abcdefghijkl123",
+        "Bearer\tabcdefghijkl123",
+        "Bearer\u{a0}abcdefghijkl123",
+    ] {
+        assert!(!redact(text).contains("abcdefghijkl123"), "{text:?}");
+        assert!(find_secret(text).is_some(), "{text:?}");
+    }
+    assert!(!redact("api_key: abcdefghijkl123\n").contains("abcdefghijkl123"));
+}

@@ -32,9 +32,10 @@ verifying the systemd unit.
 
 ## 2. Scrub personal and machine-specific data
 
-Test fixtures were captured from a real workstation and still contain usernames, home directories and other host
-identifiers. Review each file, replace with neutral placeholders (`/home/user`, `example`, zero UUIDs), and re-run the
-tests (parsers must not depend on the real values):
+Done before the first publish; re-checked on tracked HEAD on 2026-11-05 (no usernames, home directories, e-mail
+addresses or GPU UUIDs). Repeat it whenever fixtures are captured from a real workstation again: replace host
+identifiers with neutral placeholders (`/home/user`, `example`, zero UUIDs) and re-run the tests (parsers must not
+depend on the real values). The files that held them originally:
 
 - `backend/crates/nemo-console/tests/fixtures/switchyard/inspect.json`
 - `backend/crates/nemo-console/tests/fixtures/switchyard/routes.good.toml` (around lines 93-107 and 220)

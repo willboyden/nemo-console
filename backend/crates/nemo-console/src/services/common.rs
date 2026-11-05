@@ -65,7 +65,8 @@ fn re(p: &str) -> Regex {
 static PRIVATE_KEY: LazyLock<Regex> = LazyLock::new(|| {
     re(r"(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\z)")
 });
-static BEARER: LazyLock<Regex> = LazyLock::new(|| re(r"(?i)\b(Bearer)\s+[A-Za-z0-9._~+/=\-]{8,}"));
+static BEARER: LazyLock<Regex> =
+    LazyLock::new(|| re(r"(?i)\b(Bearer)[^\S\r\n]+[A-Za-z0-9._~+/=\-]{8,}"));
 static PREFIXED: LazyLock<Regex> = LazyLock::new(|| {
     re(r"(?<![A-Za-z0-9])(?:sk-|nck_|hf_|ghp_|gho_|xox[bap]-|AKIA)[A-Za-z0-9_\-]{8,}")
 });
@@ -75,7 +76,7 @@ static JWT: LazyLock<Regex> =
 /// the unquoted alternative never swallows the closing quote of an enclosing JSON string.
 static KEYVAL: LazyLock<Regex> = LazyLock::new(|| {
     re(concat!(
-        r#"(?i)(?P<pre>(?<![A-Za-z0-9])[\w.\-]{0,40}?(?:api[_\-]?key|secret|token|passw(?:or)?d|authorization)["']?\s*[=:]\s*)"#,
+        r#"(?i)(?P<pre>(?<![A-Za-z0-9])[\w.\-]{0,40}?(?:api[_\-]?key|secret|token|passw(?:or)?d|authorization)["']?[^\S\r\n]*[=:][^\S\r\n]*)"#,
         r#"(?P<val>"[^"\n]*"|'[^'\n]*'|(?:[^\s,;#}\]"']|["'](?![,;\]}\s]|$))+)"#
     ))
 });

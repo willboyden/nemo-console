@@ -10,7 +10,11 @@ feature-depth = 1
 
 [advisories]
 # Every RustSec advisory (vulnerability, unsound, unmaintained, yanked) fails the check unless listed here with a
-# reason and a review date.
+# reason and a review date. Stated explicitly rather than left to cargo-deny's defaults (yanked is only a warning
+# by default).
+unmaintained = "all"
+unsound = "all"
+yanked = "deny"
 ignore = []
 
 [licenses]

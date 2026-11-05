@@ -212,3 +212,21 @@ nc-toasts { position: fixed; right: var(--s4); bottom: var(--s4); display: flex;
 .faq-item > summary:hover { color: var(--accent); }
 .faq-a { display: grid; gap: var(--s2); padding: 0 0 var(--s3) var(--s4); min-width: 0; }
 .row > input.help-filter { flex: 1 1 260px; max-width: 420px; }
+
+/* Config editor: field info pop-ups (config-form.js). A manual popover in the top layer, positioned by script
+   (style.top/left, which the CSP allows), or a fixed box where the browser has no Popover API. */
+.ff-head { display: flex; gap: var(--s1); align-items: center; min-width: 0; } .ff-head > .ff-key { flex: 1; min-width: 0; }
+.ff-info { display: inline-flex; align-items: center; gap: 6px; flex: none; min-width: 28px; min-height: 28px; justify-content: center; padding: 0 4px; border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--text-3); cursor: pointer; font: inherit; font-size: var(--fs-sm); }
+.ff-info:hover, .ff-info[aria-expanded=true] { color: var(--accent); background: var(--accent-soft); }
+.ff-info:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sec-info { border-radius: var(--r1); padding: 0 var(--s2); }
+.sec-about { display: flex; gap: var(--s2); align-items: flex-start; justify-content: space-between; padding: var(--s2) var(--s3) 0; } .sec-about > .sec-note { margin: 0; flex: 1; }
+.ff-pop { position: fixed; inset: auto; margin: 0; z-index: 300; box-sizing: border-box; overflow: auto; padding: 0; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r2); box-shadow: var(--shadow); }
+.ff-pop[hidden] { display: none; }
+.ff-pop:focus { outline: none; } .ff-pop:focus-visible { outline: 2px solid var(--accent); }
+.fh-head { display: flex; gap: var(--s2); align-items: flex-start; justify-content: space-between; padding: var(--s2) var(--s2) var(--s2) var(--s3); border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
+.fh-title { margin: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; padding-top: 4px; }
+.fh-body { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s3); font-size: var(--fs-sm); }
+.fh-block h4 { margin: 0 0 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); }
+.fh-block p { margin: 0; overflow-wrap: anywhere; } .fh-block p + p { margin-top: 4px; }
+.fh-body > .note { margin: 0; }

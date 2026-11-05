@@ -2,9 +2,13 @@
 // rewrites only that value's characters in the draft (cfg-edit.js), so comments and layout survive and the Text view
 // and the diff show exactly what changed. A value that does not fit its type is shown as an error and never written.
 // Problems from the live checks (and the last server check) are shown on the field or section they belong to.
+// Every field (and every section the catalog knows) has an info button: a pop-up says what the key is, what changing
+// it does, what it accepts and when a change takes effect (i18n/fields.en.json via cfg-help.js).
 import { h, clear, icon } from '../dom.js';
 import { t } from '../i18n.js';
-import { parseConfig } from '../cfg-parse.js';
+import { parseConfig, entryOf } from '../cfg-parse.js';
+import { lookupHelp, flagFor, envFor } from '../cfg-help.js';
+import { richRuns } from '../help.js';
 import { encodeValue, spliceValue, spliceBlock, displayValue, flattenFields, pathKey } from '../cfg-edit.js';
 import { specAt, describeSpec, choicesFor } from '../cfg-checks.js';
 import { btn, emptyBox, sevBadge } from './ui.js';
@@ -40,6 +44,7 @@ function sectionsOf(root) {
     const fields = [], kids = [];
     if (node.kind === 'map') {
       for (const e of node.entries) {
+        if (entryOf(node, e.key) !== e) continue;   // a duplicate key that a later one overrides: the loader ignores it
         if (e.node.kind === 'scalar') fields.push({ path: [...path, e.key], label: e.key, node: e.node });
         else if (e.node.kind === 'seq' && e.node.items.every((x) => x.kind === 'scalar')) e.node.items.forEach((x, i) => fields.push({ path: [...path, e.key, i], label: `${e.key} [${i + 1}]`, node: x }));
         else kids.push([e.node, [...path, e.key], e.line]);
@@ -61,6 +66,8 @@ const crumb = (path) => path.map((p) => (typeof p === 'number' ? `#${p + 1}` : p
  * @param o.editable  false = every control is read-only
  * @param o.onGoToLine(line)  open the Text view at a line
  * @param o.onSave()  Ctrl/Cmd+S
+ * @param o.getHelp() { cat: catalogsFor(...) or null, params: the system's Params (for command-line flags) or null,
+ *                    file: the file's spec (editable, why_readonly, apply_effect), admin: may the viewer edit }
  */
 export function configForm(o) {
   const root = h('div', { class: 'cfg-form stack-v' });
@@ -68,6 +75,7 @@ export function configForm(o) {
   const lines = () => o.getText().split('\n');
 
   function build() {
+    closePop(false);
     clear(root);
     const res = parseConfig(o.format, o.getText());
     if (res.unsupported) { root.append(emptyBox(t('form.unsupported'), t('form.unsupported_hint', { what: res.unsupported }))); return false; }
@@ -89,7 +97,7 @@ export function configForm(o) {
     const ls = lines();
     for (const s of sections) body.append(sectionEl(s, ls));
     const none = h('p', { class: 'note info form-none', hidden: true }, t('form.no_match'));
-    root.append(h('div', { class: 'row gap wrap between form-bar' }, h('div', { class: 'row gap wrap' }, search, seg), count), body, none);
+    root.append(h('div', { class: 'row gap wrap between form-bar' }, h('div', { class: 'row gap wrap' }, search, seg), count), body, none, pop);
     root._count = count; root._none = none;
     refresh(diags);
     return true;
@@ -103,7 +111,11 @@ export function configForm(o) {
     for (const f of s.fields) grid.append(fieldEl(f, ls));
     const head = h('summary', { class: 'sec-head' }, h('span', { class: 'sec-title' }, title.map((c, i) => [i ? h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '›') : null, h('span', { class: i === title.length - 1 ? 'crumb last' : 'crumb' }, String(c))])),
       h('span', { class: 'sec-meta muted small' }, s.fields.length ? t('form.n_values', { count: s.fields.length }) : ''), h('span', { class: 'sec-flag' }));
-    const el = h('details', { class: 'sec', open: true, dataset: { path: pathKey(s.path) } }, head, note ? h('p', { class: 'hint sec-note' }, note) : null, msg, s.empty ? h('p', { class: 'muted small' }, t('form.empty_section')) : grid);
+    const about = s.path.length && lookupHelp(o.getHelp?.()?.cat, s.path)
+      ? h('button', { type: 'button', class: 'ff-info sec-info', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', onClick: (e) => togglePop(e.currentTarget, { section: s }) }, icon('info', 15), h('span', t('form.info_section')))
+      : null;
+    const top = note || about ? h('div', { class: 'sec-about' }, note ? h('p', { class: 'hint sec-note' }, note) : h('span'), about) : null;
+    const el = h('details', { class: 'sec', open: true, dataset: { path: pathKey(s.path) } }, head, top, msg, s.empty ? h('p', { class: 'muted small' }, t('form.empty_section')) : grid);
     s.el = el; s.msg = msg; s.flag = head.lastChild;
     return el;
   }
@@ -136,12 +148,14 @@ export function configForm(o) {
     }
     const typeTag = n.type === 'null' ? t('form.type_null') : t(`form.type_${n.type}`);
     const revert = o.editable ? btn('', { icon: 'history', size: 'sm', kind: 'ghost', title: t('form.revert'), onClick: () => revertField(k) }) : null;
+    const info = h('button', { type: 'button', class: 'ff-info', 'aria-label': t('form.info', { key: crumb(f.path).join(' › ') }), title: t('form.info', { key: String(f.label) }),
+      'aria-haspopup': 'dialog', 'aria-expanded': 'false', onClick: (e) => togglePop(e.currentTarget, { key: k }) }, icon('info', 15));
     const row = h('div', { class: 'ff', dataset: { path: k } },
-      h('label', { class: 'ff-key', for: id }, h('code', String(f.label)), h('span', { class: 'ff-dot', title: t('form.changed') }), h('span', { class: 'ff-type' }, typeTag)),
+      h('div', { class: 'ff-head' }, h('label', { class: 'ff-key', for: id }, h('code', String(f.label)), h('span', { class: 'ff-dot', title: t('form.changed') }), h('span', { class: 'ff-type' }, typeTag)), info),
       h('div', { class: 'ff-ctl' }, ctl, revert),
       hint ? h('div', { class: 'hint ff-hint', id: `${id}-hint` }, hint) : h('span', { id: `${id}-hint`, hidden: true }),
       msg, h('div', { class: 'ff-local', role: 'alert' }));
-    fields.set(k, { ...f, spec, row, ctl, msg, local: row.lastChild, revert, label: String(f.label), hay: `${crumb(f.path).join(' ')} ${displayValue(n)}`.toLowerCase() });
+    fields.set(k, { ...f, spec, row, ctl, msg, local: row.lastChild, revert, info, comment, label: String(f.label), hay: `${crumb(f.path).join(' ')} ${displayValue(n)}`.toLowerCase() });
     return row;
   }
 
@@ -264,6 +278,108 @@ export function configForm(o) {
     return false;
   }
 
+  // ---- the info pop-up: one per form, filled for the button that opened it. A manual popover (top layer) where the
+  // browser has the Popover API, else a fixed box; both close on Esc, on a click outside, and on the same button again.
+  const popId = `ffpop${++uid}`;
+  const pop = h('div', { class: 'ff-pop', id: popId, role: 'dialog', 'aria-labelledby': `${popId}-t`, tabindex: '-1', hidden: true });
+  const hasPopover = typeof pop.showPopover === 'function';
+  if (hasPopover) { pop.setAttribute('popover', 'manual'); pop.hidden = false; }
+  let popFor = null;   // the button the pop-up belongs to
+  const isOpen = () => (hasPopover ? pop.matches(':popover-open') : !pop.hidden);
+  const rich = (text) => richRuns(text).map((runs) => h('p', runs.map((r) => (r.code ? h('code', r.text) : r.text))));
+  const block = (title, ...body) => h('section', { class: 'fh-block' }, h('h4', title), ...body);
+
+  function place() {
+    if (!popFor || !isOpen()) return;
+    const a = popFor.getBoundingClientRect(), vw = document.documentElement.clientWidth, vh = window.innerHeight, m = 8;
+    const w = Math.min(420, vw - 2 * m);
+    pop.style.width = `${w}px`;
+    pop.style.maxHeight = `${Math.max(160, vh - 2 * m)}px`;
+    const left = Math.min(Math.max(m, a.right - w), vw - w - m);
+    const ph = pop.offsetHeight;
+    const below = a.bottom + 6, above = a.top - 6 - ph;
+    const top = below + ph <= vh - m || above < m ? Math.min(below, Math.max(m, vh - m - ph)) : above;
+    pop.style.left = `${left}px`; pop.style.top = `${top}px`;
+  }
+  const onKey = (e) => { if (!root.isConnected) { closePop(false); return; } if (e.key === 'Escape' && isOpen()) { e.preventDefault(); e.stopPropagation(); closePop(true); } };
+  const onDown = (e) => { if (!root.isConnected) { closePop(false); return; } if (isOpen() && !pop.contains(e.target) && e.target !== popFor && !popFor?.contains(e.target)) closePop(false); };
+  function closePop(refocus) {
+    if (!popFor) return;
+    const b = popFor; popFor = null;
+    b.setAttribute('aria-expanded', 'false');
+    if (hasPopover) { if (pop.matches(':popover-open')) pop.hidePopover(); } else pop.hidden = true;
+    document.removeEventListener('keydown', onKey, true);
+    document.removeEventListener('pointerdown', onDown, true);
+    window.removeEventListener('resize', place);
+    window.removeEventListener('scroll', place, true);
+    if (refocus || pop.contains(document.activeElement) || document.activeElement === document.body) b.focus();
+  }
+  function togglePop(btnEl, what) {
+    if (popFor === btnEl) { closePop(true); return; }
+    closePop(false);
+    fillPop(what);
+    popFor = btnEl;
+    btnEl.setAttribute('aria-expanded', 'true');
+    btnEl.setAttribute('aria-controls', popId);
+    if (hasPopover) pop.showPopover(); else pop.hidden = false;
+    place();
+    document.addEventListener('keydown', onKey, true);
+    document.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    pop.focus({ preventScroll: true });
+  }
+
+  /** The pop-up's content for a field ({key}) or a section ({section}). */
+  function fillPop(what) {
+    clear(pop);
+    const hp = o.getHelp?.() || {};
+    const f = what.key ? fields.get(what.key) : null;
+    const path = f ? f.path : what.section.path;
+    const entry = lookupHelp(hp.cat, path);
+    const title = h('h3', { id: `${popId}-t`, class: 'fh-title' }, h('code', crumb(path).join(' › ')));
+    pop.append(h('div', { class: 'fh-head' }, title, btn('', { icon: 'close', size: 'sm', kind: 'ghost', title: t('fh.close'), onClick: () => closePop(true) })));
+    const bodyEl = h('div', { class: 'fh-body' });
+    pop.append(bodyEl);
+    if (hp.loading) bodyEl.append(h('p', { class: 'muted' }, t('fh.loading')));
+    else if (hp.failed) bodyEl.append(h('p', { class: 'note warn' }, t('fh.unavailable')));
+    if (entry?.what) bodyEl.append(block(t('fh.what'), ...rich(entry.what)));
+    if (entry?.change) bodyEl.append(block(t('fh.change'), ...rich(entry.change)));
+    if (f) {
+      const fl = !hp.params ? null : typeof path.at(-1) === 'number' ? flagFor(hp.params, siblings(path), path.at(-1)) : path.at(-2) === 'environment' ? envFor(hp.params, path.at(-1)) : null;
+      if (fl) {
+        const p = fl.param, extra = [];
+        if (p.min != null && p.max != null) extra.push(t('fh.flag_range', { min: p.min, max: p.max }));
+        if (p.default != null && p.default !== '') extra.push(t('fh.flag_default', { v: typeof p.default === 'object' ? JSON.stringify(p.default) : p.default }));
+        bodyEl.append(block(t('fh.flag', { flag: fl.flag }), h('p', h('strong', p.label), ' — ', p.help), fl.isValue ? h('p', { class: 'muted small' }, t('fh.flag_value', { flag: fl.flag })) : null,
+          extra.length ? h('p', { class: 'muted small' }, extra.join(' ')) : null));
+      }
+      if (!entry && !fl && !hp.loading && !hp.failed) bodyEl.append(h('p', { class: 'note info' }, t('fh.missing')));
+      const accepts = describeSpec(f.spec) || (choicesFor(f.spec, doc)?.join(', ')) || (f.node.type === 'null' ? t('form.type_null') : t(`form.type_${f.node.type}`));
+      const disk = base.get(what.key);
+      const now = displayValue(f.node), was = disk ? displayValue(disk) : null;
+      bodyEl.append(block(t('fh.accepts'), h('p', accepts),
+        disk && was !== now ? h('p', { class: 'muted small' }, t('fh.now', { v: short(now), disk: short(was) })) : null));
+      const said = `${accepts} ${entry?.what || ''} ${entry?.change || ''}`.toLowerCase();
+      if (f.comment && !said.includes(f.comment.toLowerCase())) bodyEl.append(block(t('fh.comment'), h('p', { class: 'mono small' }, f.comment)));
+    }
+    const file = hp.file;
+    if (file) {
+      if (!file.editable) bodyEl.append(block(t('fh.readonly'), h('p', file.why_readonly || '')));
+      else {
+        if (file.apply_effect) bodyEl.append(block(t('fh.effect'), h('p', file.apply_effect)));
+        if (hp.admin === false) bodyEl.append(h('p', { class: 'muted small' }, t('fh.viewer')));
+      }
+    }
+  }
+  const short = (v) => { const s = String(v ?? '').replace(/\s+/g, ' '); return s === '' ? t('form.empty') : s.length > 60 ? `${s.slice(0, 57)}…` : s; };
+  /** The scalar values of the list a field sits in (a command line), for flag lookups. */
+  function siblings(path) {
+    let n = doc;
+    for (const p of path.slice(0, -1)) { n = typeof p === 'number' ? n?.items?.[p] : n?.kind === 'map' ? entryOf(n, p)?.node : null; if (!n) return []; }
+    return n?.kind === 'seq' ? n.items.map((x) => (x.kind === 'scalar' ? displayValue(x) : null)) : [];
+  }
+
   root.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { e.preventDefault(); o.onSave?.(); } });
-  return { el: root, build, refresh, focusLine };
+  return { el: root, build, refresh, focusLine, closePop: () => closePop(false) };
 }

@@ -3,6 +3,50 @@
 Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Claims use the labels
 implemented / verified-live / unverified defined in the README.
 
+## [0.9.0] - 2026-11-05
+
+### Added
+
+- **An info button on every setting of the config editor's Form view.** Its pop-up says what the setting is, what
+  changing it does, the values it accepts and when a change takes effect (or why the file is read-only here); sections
+  the console knows have an "About this section" button too. The descriptions are the console's own catalog
+  (`frontend/i18n/fields.en.json`, looked up by `frontend/js/cfg-help.js`): Switchyard and Relay routes, Relay plugins
+  and config, AIPerf profiles, Evaluator suites, Model Optimizer recipes, Guardrails configs and prompts, OpenShell
+  gateway, policy, provider profile and compose files, and the Dynamo override, whose command-line flags and
+  environment variables also show their entry from the Params tab. A key without a description still shows its type,
+  accepted values and its comment from the file. Esc, a click outside or the same button closes it.
+- Tests: every field of every mock config file and every key the four known schemas accept must have a description
+  (`tests/cfg-help.test.mjs`); the config-editor browser check opens a pop-up and closes it with Esc.
+
+### Fixed
+
+- **Secret masks no longer cross a line break.** The Bearer and key=value masks (and the save-time secret scan) let
+  `\s` match a newline, so a line ending in "bearer" (an OpenShell provider profile's `auth_style: bearer`, a comment
+  ending in "Bearer") swallowed the next line into `[redacted]`: the editor showed a corrupted file and the save scan
+  refused some legitimate files without a line number. They now stop at the end of the line (tabs and no-break spaces
+  still count as separators).
+- **Apply refuses a file the console shows masked.** When an adapter hides text on read (Relay masks secret-looking
+  values for every role), an edit of that view would have written the mask over the real text; Apply now answers 409
+  `hidden_content` and the file is not touched, and the editor shows the server's reason instead of a "file changed"
+  box. Relay's `sk-` mask no longer matches inside ordinary names such as `task-classification-judge`.
+- **A config read hashes the bytes its content came from.** The file is read before and after the adapter's read and
+  the read is retried when another writer changed it in between, so an Apply can no longer pass the stale-base check
+  and overwrite that change (409 `file_changing` after three tries).
+- The config editor survives hostile files: nesting deeper than 64 levels is reported as "unsupported" instead of
+  overflowing the parser, the trailing-space check is linear, and keys named like `constructor` or `toString` are
+  unknown keys, not schema hits.
+- The Form writer: values with NEL, line/paragraph separators or DEL are escaped instead of being folded or refused by
+  the loader; a bare `=` or `<<` is quoted; `-.5` is written as `-0.5` so it stays a number; a block of text whose first line
+  is indented is refused instead of losing its indentation; a duplicate YAML key that a later one overrides is no
+  longer shown as an editable field (editing it changed the later line).
+- The line diff keeps only what its backtrack needs and shows edits of more than 3,000 lines as a whole replacement
+  (a large paste could use gigabytes), and the diff counter is updated with the checks, not on every keystroke.
+
+### Changed
+
+- `deny.toml` states the advisory policy explicitly: unmaintained and unsound crates and yanked versions fail.
+- The dev mock's Relay plugins/config and OpenShell files use the real file formats.
+
 ## [0.8.0] - 2026-11-04
 
 ### Added

@@ -2,30 +2,25 @@
 
 Notes for the most recent release only; history lives in CHANGELOG.md.
 
-## 0.8.0 — 2026-11-04
+## 0.9.0 — 2026-11-05
 
-A config editor with live edit checks. Every Config tab now has a **Form** view and a **Text** view of the same
-draft, and an **Edit checks** panel that updates as you type.
+Field help in the config editor, and the fixes from a security audit.
 
-- **Form view (TOML and YAML):** one section per table or mapping and a typed control per value: switches for
-  true/false, drop-downs for fixed choices and for the targets and clients a Switchyard routes file defines, number
-  fields that refuse anything that is not a number. Each field shows what it accepts and the comment from its line.
-  Search, Changed / With problems filters and a per-value revert. An edit rewrites only that value's characters, so
-  comments and layout survive and the diff shows exactly what changed.
-- **Text view:** line numbers that mark problem lines, Tab / Shift+Tab indent, Enter keeps the indentation,
-  Ctrl/Cmd+S runs the server check.
-- **Edit checks:** syntax errors with their line; the rules of AIPerf profiles, Model Optimizer recipes and NeMo
-  Evaluator suites; Switchyard cross-references and `base_url` rules; secret-looking literals the console would refuse
-  to save. Click a problem to jump to its line or field.
-- **The server still decides:** the browser checks are early warnings. The backend's validator runs on Check and
-  before every Apply, and the panel says when its last result is older than the draft (ADR 0019).
-- **Drafts are kept** when you switch files or leave the page and come back (memory only, for the session; reloading
-  the tab asks first).
-- **How it was checked:** new unit tests for the parser, the checks and the in-place writer, including a test that
-  reads the schema constants from the Rust adapters; a new browser check (`frontend/e2e/config-editor.mjs`, in
-  `make e2e` and CI) in which the browser checks must agree with the real backend validators on seeded random
-  mutations of each schema file, then the editor is driven in Chrome. Files that use YAML features the browser parser
-  does not model (anchors, tags, several documents, multi-line lists or strings) open in the Text view.
-- **Unchanged:** the backend's behaviour and API (only its version number moved).
+- **An info button (ⓘ) on every setting of the Form view.** Its pop-up says what the setting is, what changing it
+  does, the values it accepts and when a change takes effect, or why the file is read-only. Sections the console knows
+  have an "About this section" button. Every setting of the Switchyard, Relay, AIPerf, Evaluator, Model Optimizer,
+  Guardrails and OpenShell files has a description; a Dynamo command-line flag also shows its entry from the Params
+  tab. A setting without a description still shows its type, accepted values and the comment from the file.
+- **Secret masks stop at the end of the line.** A line ending in "bearer" no longer swallows the next line into
+  `[redacted]` (an OpenShell provider profile was shown corrupted), and the save-time secret scan no longer refuses
+  such files.
+- **Apply refuses a file the console shows masked** (409 `hidden_content`) instead of writing the mask over the real
+  text, and a config read hashes exactly the bytes it showed, so a concurrent change is never overwritten.
+- **The editor survives hostile files** (absurd nesting, very long lines of spaces, keys named `constructor`), the Form
+  writer handles a few more YAML corner cases exactly, and a large paste no longer makes the diff use gigabytes.
+- **How it was checked:** an independent security audit and a re-audit of the fixes; new Rust tests for the masks,
+  the hidden-content refusal and the read retry; new frontend tests that every setting of every mock file and every
+  schema key has a description, plus regression tests for each editor fix; the config-editor browser check opens and
+  closes a pop-up.
 
 Upgrade: `git pull`, `make release`, then `backend/target/release/nemo-console stop` and `... open` (or `make run`).

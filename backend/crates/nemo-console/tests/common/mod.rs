@@ -91,6 +91,12 @@ pub struct Knobs {
     pub playground_url: Option<String>,
     /// `metrics()` panics (with a credential in the message): the poller must contain it (audit finding 3).
     pub metrics_panic: bool,
+    /// `read_config()` masks the word `SECRETVALUE` the way Relay masks secret-looking values for every role.
+    pub mask_on_read: bool,
+    /// `read_config()` turns CRLF into LF, like the adapters that read with universal newlines.
+    pub lf_on_read: bool,
+    /// The next N `read_config()` calls rewrite the file (another writer racing the read).
+    pub mutate_reads: u32,
 }
 
 pub struct FakeAdapter {
@@ -221,9 +227,22 @@ impl SystemAdapter for FakeAdapter {
     async fn read_config(&self, _file_id: &str) -> Result<ConfigFile, AdapterError> {
         let p = self.cfg_file.clone().unwrap();
         let data = std::fs::read(&p).map_err(|e| AdapterError::FileNotFound(e.to_string()))?;
+        {
+            let mut k = self.knobs();
+            if k.mutate_reads > 0 {
+                k.mutate_reads -= 1;
+                std::fs::write(&p, format!("a = {}\n", 100 + k.mutate_reads)).unwrap();
+            }
+        }
         Ok(ConfigFile {
             spec: self.config_files()?.remove(0),
-            content: String::from_utf8_lossy(&data).into_owned(),
+            content: if self.knobs().mask_on_read {
+                String::from_utf8_lossy(&data).replace("SECRETVALUE", "[REDACTED]")
+            } else if self.knobs().lf_on_read {
+                String::from_utf8_lossy(&data).replace("\r\n", "\n")
+            } else {
+                String::from_utf8_lossy(&data).into_owned()
+            },
             sha256: "adapter-sha-ignored".to_owned(),
             mtime: 0.0,
         })

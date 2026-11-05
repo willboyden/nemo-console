@@ -393,3 +393,51 @@ async fn test_apply_is_audited_without_content() {
             .contains("chars]")
     );
 }
+
+/// 0.9.0 audit: an adapter that masks text on read hands the editor a view that is not the file. Applying an edit of
+/// that view would write the mask over the real text, so Apply refuses (409) and the file stays as it was.
+#[tokio::test]
+async fn test_apply_refuses_a_file_whose_view_hides_text() {
+    let env = Env::new(Some("http://127.0.0.1:9"));
+    std::fs::write(&env.cfg_file, "a = 1\n# SECRETVALUE\n").unwrap();
+    env.a(SystemId::Switchyard).knobs().mask_on_read = true;
+    let r = env.get(URL).send().await;
+    assert_eq!(r.status, 200);
+    assert!(r.json()["content"].as_str().unwrap().contains("[REDACTED]"));
+    let (code, body) = apply(&env, "a = 2\n# [REDACTED]\n", None, json!({})).await;
+    assert_eq!(code, 409, "{body}");
+    assert_eq!(body["error"]["code"], "hidden_content");
+    assert_eq!(read(&env), "a = 1\n# SECRETVALUE\n");
+    assert!(post_calls(&env).is_empty());
+    env.a(SystemId::Switchyard).knobs().mask_on_read = false; // nothing hidden: the same apply goes through
+    let (code, body) = apply(&env, "a = 2\n", None, json!({})).await;
+    assert_eq!(code, 200, "{body}");
+}
+
+/// 0.9.0 re-audit: line endings are not "hidden text" (some adapters read with universal newlines).
+#[tokio::test]
+async fn test_apply_accepts_a_crlf_file_read_with_universal_newlines() {
+    let env = Env::new(Some("http://127.0.0.1:9"));
+    std::fs::write(&env.cfg_file, "a = 1\r\nb = 2\r\n").unwrap();
+    env.a(SystemId::Switchyard).knobs().lf_on_read = true;
+    let (code, body) = apply(&env, "a = 2\nb = 2\n", None, json!({})).await;
+    assert_eq!(code, 200, "{body}");
+}
+
+/// 0.9.0 audit: a read hashes the bytes its content came from. A writer racing the read makes it retry; one that
+/// never stops gets 409 file_changing instead of content paired with another version's hash.
+#[tokio::test]
+async fn test_read_retries_while_the_file_changes_and_hashes_what_it_showed() {
+    let env = Env::new(Some("http://127.0.0.1:9"));
+    env.a(SystemId::Switchyard).knobs().mutate_reads = 1;
+    let r = env.get(URL).send().await;
+    assert_eq!(r.status, 200);
+    let body = r.json();
+    let content = body["content"].as_str().unwrap().to_owned();
+    assert_eq!(content, read(&env)); // the retry read the settled file
+    assert_eq!(body["sha256"], env.sha());
+    env.a(SystemId::Switchyard).knobs().mutate_reads = 10;
+    let r = env.get(URL).send().await;
+    assert_eq!(r.status, 409);
+    assert_eq!(r.json()["error"]["code"], "file_changing");
+}

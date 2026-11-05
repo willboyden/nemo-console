@@ -29,16 +29,20 @@ export function diffLines(oldText, newText) {
   return ops;
 }
 
+/** Past this many changed lines the diff is shown as "replace everything": Myers' trace grows with D^2. */
+export const MAX_EDIT_DISTANCE = 3000;
 function myers(a, b) {
   const N = a.length, M = b.length;
   if (!N) return b.map((text) => ({ type: 'add', text }));
   if (!M) return a.map((text) => ({ type: 'del', text }));
   const max = N + M, off = max;
   let v = new Array(2 * max + 2).fill(0);
-  const trace = [];
+  const trace = [];   // per step d, only the window [off-d-1, off+d+1] the backtrack reads (O(D^2), not O(D*(N+M)))
   let found = false;
   for (let d = 0; d <= max && !found; d++) {
-    trace.push(v.slice());
+    if (d > MAX_EDIT_DISTANCE) return [...a.map((text) => ({ type: 'del', text })), ...b.map((text) => ({ type: 'add', text }))];
+    const lo = Math.max(0, off - d - 1);
+    trace.push({ lo, w: v.slice(lo, off + d + 2) });
     for (let k = -d; k <= d; k += 2) {
       let x = (k === -d || (k !== d && v[off + k - 1] < v[off + k + 1])) ? v[off + k + 1] : v[off + k - 1] + 1;
       let y = x - k;
@@ -51,9 +55,9 @@ function myers(a, b) {
   const out = [];
   let x = N, y = M;
   for (let d = trace.length - 1; d > 0; d--) {
-    const tv = trace[d], k = x - y;
-    const prevK = (k === -d || (k !== d && tv[off + k - 1] < tv[off + k + 1])) ? k + 1 : k - 1;
-    const prevX = tv[off + prevK], prevY = prevX - prevK;
+    const t = trace[d], k = x - y, at = (i) => t.w[i - t.lo] ?? 0;
+    const prevK = (k === -d || (k !== d && at(off + k - 1) < at(off + k + 1))) ? k + 1 : k - 1;
+    const prevX = at(off + prevK), prevY = prevX - prevK;
     while (x > prevX && y > prevY) { out.push({ type: 'eq', text: a[x - 1] }); x--; y--; }
     if (x === prevX) { out.push({ type: 'add', text: b[y - 1] }); y--; } else { out.push({ type: 'del', text: a[x - 1] }); x--; }
   }

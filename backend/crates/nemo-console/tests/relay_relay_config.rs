@@ -297,3 +297,16 @@ fn test_repo_switchyard_server_routes_toml_validates_clean() {
     let text = std::fs::read_to_string(real).unwrap();
     assert!(!errs(&text).iter().any(|m| m.contains("base_url")));
 }
+
+/// 0.9.0 audit: Relay's read-side mask stops at the end of the line, so a comment ending in "Bearer" no longer
+/// swallows the next line (the editor showed, and Apply could write, `Bearer [REDACTED] = "http://..."`).
+#[tokio::test]
+async fn test_read_config_mask_never_swallows_the_next_line() {
+    let r = Router::new().await;
+    let m = make_adapter(&r, None, None, None, |_| {});
+    let p = m.a.config_path("config").unwrap();
+    let text =
+        "# send the key as a Bearer\nbase_url = \"http://127.0.0.1:4000\"\napi_key =\n\"x\"\n";
+    std::fs::write(&p, text).unwrap();
+    assert_eq!(m.a.read_config("config").await.unwrap().content, text);
+}
