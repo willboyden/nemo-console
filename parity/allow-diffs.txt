@@ -34,3 +34,5 @@ sec.host.localhost  # D-7: the extra modelopt entry (the Python reference has no
 sec.host.localhost-upper  # D-7: the extra modelopt entry (the Python reference has no adapter)
 sec.origin.cross-on-get  # D-7: the extra modelopt entry (the Python reference has no adapter)
 
+cfgread.openshell.provider-profile  # D-32: masks stop at the end of a line (the Python reference swallows the next line)
+cfgread.openshell.provider-profile.viewer  # D-32: masks stop at the end of a line (the Python reference swallows the next line)
