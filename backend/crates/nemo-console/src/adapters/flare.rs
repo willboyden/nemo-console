@@ -212,6 +212,8 @@ struct Inner {
     expired: std::sync::atomic::AtomicBool,
     /// Bumped by every finished refresh (an action that needs a fresh report waits for the next one).
     generation: std::sync::atomic::AtomicU64,
+    /// Bumped by every forget(): a refresh that started before it does not count as fresh.
+    forgets: std::sync::atomic::AtomicU64,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -265,11 +267,16 @@ impl Inner {
             let me = Arc::clone(self);
             tokio::spawn(async move {
                 let task = async {
+                    // a run that an action overtook (forget() during it) may predate that action: keep its
+                    // report for polls, but it neither clears `expired` nor counts as fresh
+                    let f0 = me.forgets.load(std::sync::atomic::Ordering::SeqCst);
                     let p = me.run_status().await;
                     *lock(&me.cache) = Some((Instant::now(), p));
-                    me.expired.store(false, std::sync::atomic::Ordering::SeqCst);
-                    me.generation
-                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    if me.forgets.load(std::sync::atomic::Ordering::SeqCst) == f0 {
+                        me.expired.store(false, std::sync::atomic::Ordering::SeqCst);
+                        me.generation
+                            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    }
                 };
                 crate::services::common::contained("flare status", task).await;
                 me.refreshing
@@ -327,6 +334,8 @@ impl Inner {
 
     /// Mark the report stale (after an action changed something): the next poll starts a refresh.
     fn forget(&self) {
+        self.forgets
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.expired
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
@@ -382,6 +391,7 @@ impl FlareAdapter {
                 refreshing: std::sync::atomic::AtomicBool::new(false),
                 expired: std::sync::atomic::AtomicBool::new(false),
                 generation: std::sync::atomic::AtomicU64::new(0),
+                forgets: std::sync::atomic::AtomicU64::new(0),
             }),
         }
     }
