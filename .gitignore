@@ -20,7 +20,7 @@ __pycache__/
 htmlcov/
 dist/
 *.egg-info/
-# node (frontend has no runtime deps; only the node:test runner is used)
+# node (frontend has no runtime deps; Prettier is its only devDependency, installed by `make setup`)
 node_modules/
 # local artifacts
 *.log

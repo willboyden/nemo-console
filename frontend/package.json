@@ -2,10 +2,13 @@
   "name": "nemo-console-frontend",
   "private": true,
   "version": "0.0.0",
-  "description": "Zero-dependency, zero-build SPA. This file exists only so Node treats js/ as ES modules and `npm test` works; there are no dependencies.",
+  "description": "Zero-runtime-dependency, zero-build SPA. This file exists so Node treats js/ as ES modules and `npm test` works; its only devDependency is Prettier (the format gate, `make fmt-check`), which is never served or built into the binary.",
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "mock": "node dev/mock-server.mjs"
+  },
+  "devDependencies": {
+    "prettier": "3.9.10"
   }
 }

@@ -19,7 +19,7 @@ its files (`*.py`), which map one to one to `backend/crates/nemo-console/src/**/
 | [0010](0010-events-carry-metadata-only.md) | Events carry metadata only |
 | [0011](0011-playground-proxied-never-persisted.md) | Playground chat is proxied, streamed, never persisted |
 | [0012](0012-sqlite-wal-and-sse.md) | SQLite (WAL) for state, SSE for live streams |
-| [0013](0013-zero-build-zero-npm-frontend.md) | Zero-build, zero-npm frontend with a strict CSP |
+| [0013](0013-zero-build-zero-npm-frontend.md) | Zero-build frontend with zero runtime npm dependencies and a strict CSP |
 | [0014](0014-localhost-security-baseline.md) | Localhost-service security baseline applied in full |
 | [0015](0015-guardrails-rails-editable-weakening-deliberate.md) | NeMo Guardrails rails configs are editable; weakening them needs an explicit marker (exception to 0007) |
 | [0016](0016-backend-rewritten-in-rust.md) | The backend is rewritten in Rust; the last Python backend stays the parity reference (amends 0002) |

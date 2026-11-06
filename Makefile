@@ -1,22 +1,26 @@
-# Nemo Console developer tasks. Nothing here touches Docker or systemd; the only network use is cargo fetching crates
-# and the crate-age gate asking crates.io.
+# Nemo Console developer tasks. Nothing here touches Docker or systemd; the only network use is cargo fetching crates,
+# the crate-age gate asking crates.io and `make setup` installing the pinned Prettier (npm ci, frontend/package-lock.json).
 # Backend: Rust (backend/, a Cargo workspace; the toolchain is pinned in backend/rust-toolchain.toml and rustup
-# installs it on first use). Frontend: plain ES modules, no build, no npm dependencies.
+# installs it on first use). Frontend: plain ES modules, no build, zero runtime npm dependencies (Prettier, the only
+# devDependency, formats the code; nothing from npm is served or built into the binary).
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 BACKEND  := backend
 FRONTEND := frontend
 CARGO    := cargo
 BIN      := $(BACKEND)/target/release/nemo-console
+PRETTIER := $(FRONTEND)/node_modules/.bin/prettier
 
-.PHONY: help setup hooks build release run test lint typecheck deny audit crate-age frontend-test e2e parity all \
+.PHONY: help setup hooks build release run test lint typecheck deny audit crate-age frontend-test fmt fmt-check \
+        prettier-installed e2e parity all \
         install-desktop uninstall-desktop
 
 help:  ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*## /\t/'
 
-setup:  ## build the backend (debug) from Cargo.lock; enable the git hooks
+setup:  ## build the backend (debug) from Cargo.lock; install the pinned Prettier (npm ci); enable the git hooks
 	cd $(BACKEND) && $(CARGO) build --locked
+	cd $(FRONTEND) && npm ci --ignore-scripts --no-audit --no-fund
 	if git rev-parse --git-dir >/dev/null 2>&1; then $(MAKE) --no-print-directory hooks; fi
 
 hooks:  ## use the versioned git hooks in .githooks (pre-push refuses code without a recorded e2e pass)
@@ -52,6 +56,17 @@ crate-age:  ## dependency cooldown: every locked crate at least 14 days old, sec
 frontend-test:  ## node --test on the pure-logic modules (no npm install needed)
 	cd $(FRONTEND) && node --test tests/*.test.mjs
 
+# Prettier formats code and JSON only (js, mjs, cjs, ts, tsx, css, html, json); Markdown, YAML, fixtures, goldens and
+# the parity harness's recorded data are left alone (.prettierignore). Options: .prettierrc.json.
+prettier-installed:
+	test -x $(PRETTIER) || { echo "Prettier is not installed: run 'make setup' (or: cd $(FRONTEND) && npm ci)" >&2; exit 1; }
+
+fmt: prettier-installed  ## format the code and JSON in place with Prettier
+	$(PRETTIER) --write --log-level warn .
+
+fmt-check: prettier-installed  ## Prettier check: fails and lists every file that is not formatted (`make fmt` fixes them)
+	$(PRETTIER) --check --log-level warn .
+
 e2e: build  ## browser end-to-end: every page and tab, then the config editor (browser checks vs backend validators); records a pass
 	scripts/e2e-gate.sh run
 
@@ -61,7 +76,7 @@ parity: build  ## differential check against the last Python backend (parity/ref
 	node parity/startup.mjs
 	node parity/launcher.mjs
 
-all: lint typecheck test deny audit crate-age frontend-test e2e  ## every gate
+all: lint fmt-check typecheck test deny audit crate-age frontend-test e2e  ## every gate
 
 # Paths go into a .desktop Exec line and a sed replacement, so the checkout path is limited to a safe character set.
 install-desktop: release  ## add "Nemo Console" to your app menu (starts the console if needed, then opens the UI)

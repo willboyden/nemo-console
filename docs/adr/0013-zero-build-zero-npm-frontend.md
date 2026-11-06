@@ -1,4 +1,4 @@
-# ADR-0013: Zero-build, zero-npm frontend with a strict CSP
+# ADR-0013: Zero-build frontend with zero runtime npm dependencies and a strict CSP
 
 Status: Accepted (v0.1.0)
 
@@ -20,8 +20,12 @@ The DOM helper `h()` refuses a `style` attribute and builds text via `textConten
 
 ## Consequences
 
-- No supply-chain surface from npm at runtime; `package.json` exists only so Node treats `js/` as ES modules
+- No supply-chain surface from npm at runtime; `package.json` exists so Node treats `js/` as ES modules
   for `node --test`.
+- Addendum (after 0.10.0): Prettier is the one devDependency, pinned exactly (3.9.10, no dependencies of its own)
+  with a committed `package-lock.json`. It formats and checks the source (`make fmt`, `make fmt-check`, CI) and
+  nothing else: `node_modules/` is outside the static allowlist, so nothing from npm is ever served, and there is
+  still no build step. The frontend keeps zero runtime dependencies.
 - `frontend/tests/static-guards.test.mjs` fails the build on inline handlers, style attributes, `eval`,
   external origins, `innerHTML` outside `dom.js`, missing i18n keys, and unresolved imports.
 - Browser coverage: frontend rendered against the real backend in headless Firefox (verified live). Other

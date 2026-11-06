@@ -34,7 +34,7 @@ running on one workstation:
   per benchmark and model.
 
 It is a single host-run binary (Rust, since 0.4.0; the Python backend before it is the behavioural reference) bound
-to loopback, with a zero-build, zero-npm browser UI. One adapter per
+to loopback, with a zero-build browser UI that has zero runtime npm dependencies. One adapter per
 system plugs into a system-agnostic core; the UI renders from descriptors (status, metrics, config files,
 parameters, actions, playground), so adding a system is one adapter file (SkillEvaluator was added that way).
 
@@ -103,9 +103,9 @@ works and is what the author used), the three systems deployed the way the adapt
 and the browser end-to-end suite.
 
 ```bash
-make setup          # cargo build --locked (backend/), enable the git hooks
+make setup          # cargo build --locked (backend/), npm ci (the pinned Prettier), enable the git hooks
 make run            # release build, then serves API + UI on http://127.0.0.1:8793
-make all            # rustfmt + clippy + cargo test + cargo-deny + cargo-audit + crate-age + node --test + browser e2e
+make all            # rustfmt + Prettier check + clippy + cargo test + cargo-deny + cargo-audit + crate-age + node --test + browser e2e
 make install-desktop  # optional (Linux): "Nemo Console" in your app menu; see docs/OPERATIONS.md section 3
 ```
 
@@ -234,11 +234,12 @@ docs/           ARCHITECTURE.md, adr/, THREAT-MODEL.md, OPERATIONS.md, FEATURE-M
 
 | Target | Does |
 |---|---|
-| `make setup` | `cargo build --locked`, enable the git hooks (`make hooks`) |
+| `make setup` | `cargo build --locked`, `npm ci` in frontend/ (Prettier, the only devDependency), enable the git hooks (`make hooks`) |
 | `make run` | release build, then serve on 127.0.0.1:8793 (`make release` builds `backend/target/release/nemo-console`) |
 | `make test` / `lint` / `typecheck` | `cargo test`, `cargo fmt --check`, `cargo clippy -D warnings` |
 | `make deny` / `audit` / `crate-age` | cargo-deny, cargo-audit, the 14-day dependency cooldown (security fixes excepted) |
 | `make frontend-test` | `node --test` on the pure-logic modules |
+| `make fmt` / `fmt-check` | Prettier 3.9.10 (pinned in `frontend/package-lock.json`) formats / checks the code and JSON (js, mjs, cjs, ts, tsx, css, html, json); Markdown, YAML, test fixtures, goldens and the parity harness's recorded data are left as written (`.prettierignore`). Run `make fmt` before committing; CI fails on an unformatted file |
 | `make e2e` | builds, then every page and tab in headless Chrome against the real backend; records a pass for the pre-push hook |
 | `make parity` | the differential harness against the last Python backend (needs `uv` and its cache; see `parity/README.md`) |
 | `make all` | every gate except parity |
