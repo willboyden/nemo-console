@@ -2,8 +2,11 @@
 export function normalizeCounts(input) {
   let rows = [];
   if (Array.isArray(input)) {
-    rows = input.map((r) => (Array.isArray(r) ? { name: String(r[0]), value: Number(r[1]) }
-      : { name: String(r.name ?? r.route ?? r.model ?? r.tier ?? r.key ?? ''), value: Number(r.value ?? r.calls ?? r.count ?? r.requests ?? 0) }));
+    rows = input.map((r) =>
+      Array.isArray(r)
+        ? { name: String(r[0]), value: Number(r[1]) }
+        : { name: String(r.name ?? r.route ?? r.model ?? r.tier ?? r.key ?? ''), value: Number(r.value ?? r.calls ?? r.count ?? r.requests ?? 0) },
+    );
   } else if (input && typeof input === 'object') {
     rows = Object.entries(input).map(([name, v]) => ({ name, value: Number(typeof v === 'object' && v !== null ? (v.calls ?? v.count ?? v.requests ?? v.value ?? 0) : v) }));
   }
@@ -21,11 +24,17 @@ export function sharePercents(input) {
 export function roundedShares(input, decimals = 1) {
   const rows = sharePercents(input);
   if (!rows.length || rows.every((r) => r.value === 0)) return rows.map((r) => ({ ...r, label: 0 }));
-  const f = 10 ** decimals, target = 100 * f;
-  const scaled = rows.map((r) => r.pct * f), floors = scaled.map(Math.floor);
+  const f = 10 ** decimals,
+    target = 100 * f;
+  const scaled = rows.map((r) => r.pct * f),
+    floors = scaled.map(Math.floor);
   let rest = target - floors.reduce((a, b) => a + b, 0);
   const order = scaled.map((s, i) => ({ i, frac: s - floors[i] })).sort((a, b) => b.frac - a.frac);
-  for (const o of order) { if (rest <= 0) break; floors[o.i]++; rest--; }
+  for (const o of order) {
+    if (rest <= 0) break;
+    floors[o.i]++;
+    rest--;
+  }
   return rows.map((r, i) => ({ ...r, label: floors[i] / f }));
 }
 
@@ -33,8 +42,10 @@ export function roundedShares(input, decimals = 1) {
 export function topN(input, n, otherName = 'other') {
   const rows = sharePercents(input);
   if (rows.length <= n) return rows;
-  const head = rows.slice(0, n), tail = rows.slice(n);
-  const value = tail.reduce((s, r) => s + r.value, 0), total = rows.reduce((s, r) => s + r.value, 0);
+  const head = rows.slice(0, n),
+    tail = rows.slice(n);
+  const value = tail.reduce((s, r) => s + r.value, 0),
+    total = rows.reduce((s, r) => s + r.value, 0);
   return [...head, { name: otherName, value, pct: total ? (value / total) * 100 : 0, other: true }];
 }
 

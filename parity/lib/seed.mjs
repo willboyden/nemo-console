@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 export const PARITY = dirname(dirname(fileURLToPath(import.meta.url)));
 export const FIXTURES = join(PARITY, '..', 'backend', 'crates', 'nemo-console', 'tests', 'fixtures');
-export const SEED_MTIME = 1_790_000_000;          // 2026-09-21: every seeded file and dir gets this mtime
+export const SEED_MTIME = 1_790_000_000; // 2026-09-21: every seeded file and dir gets this mtime
 const DUMMY_KEY = 'parity-dummy-not-a-key-0000000000\n';
 
 const fx = (...p) => join(FIXTURES, ...p);
@@ -40,8 +40,7 @@ export function seedRepo(repo, outside) {
   copy(fx('dynamo', 'base_compose.yml'), join(repo, 'inference/dynamo/docker-compose.yml'));
   // Switchyard
   copy(fx('switchyard', 'routes.good.toml'), join(repo, 'inference/switchyard/routes.toml'));
-  write(join(repo, 'inference/switchyard/docker-compose.yml'),
-    'services:\n  switchyard:\n    image: ai-lab-switchyard:0.3.0\n    ports: ["127.0.0.1:4010:4010"]\n');
+  write(join(repo, 'inference/switchyard/docker-compose.yml'), 'services:\n  switchyard:\n    image: ai-lab-switchyard:0.3.0\n    ports: ["127.0.0.1:4010:4010"]\n');
   // the engine that shares Dynamo's card (its compose dir is the working_dir label of the fake container)
   write(join(repo, 'inference/vllm-qwen38/docker-compose.yml'), 'services:\n  vllm:\n    image: vllm/vllm-openai:v0.27.1\n');
   write(join(repo, 'inference/ollama/docker-compose.yml'), 'services:\n  ollama:\n    image: ollama/ollama:0.12.0\n');
@@ -60,8 +59,7 @@ export function seedRepo(repo, outside) {
   write(join(repo, 'clients/data-designer/install.sh'), '#!/bin/sh\necho parity\n', 0o755);
   cpSync(fx('openshell', 'runner'), join(repo, 'clients/data-designer/runner'), { recursive: true });
   // Observability / DCGM
-  write(join(repo, 'observability/docker-compose.yml'),
-    'services:\n  dcgm-exporter:\n    image: nvcr.io/nvidia/k8s/dcgm-exporter:4.6.1-4.8.4-ubuntu22.04\n');
+  write(join(repo, 'observability/docker-compose.yml'), 'services:\n  dcgm-exporter:\n    image: nvcr.io/nvidia/k8s/dcgm-exporter:4.6.1-4.8.4-ubuntu22.04\n');
   copy(fx('dcgm', 'counters.good.csv'), join(repo, 'observability/dcgm/counters.csv'));
   // AIPerf: profiles + the vendored tokenizer cache file the adapter checks for
   copy(fx('aiperf', 'profiles.yaml'), join(repo, 'clients/aiperf/profiles.yaml'));
@@ -69,8 +67,7 @@ export function seedRepo(repo, outside) {
   // NeMo Guardrails: the real lab config tree plus the awkward entries of the Python tests (gr_helpers.build_tree)
   const gr = join(repo, 'security/nemo-guardrails');
   cpSync(fx('guardrails', 'config-tree'), join(gr, 'config'), { recursive: true });
-  write(join(gr, 'docker-compose.yml'),
-    'services:\n  guardrails:\n    command: ["server", "--config", "/config", "--default-config-id", "lab-input-output", "--port", "8000"]\n');
+  write(join(gr, 'docker-compose.yml'), 'services:\n  guardrails:\n    command: ["server", "--config", "/config", "--default-config-id", "lab-input-output", "--port", "8000"]\n');
   const lio = join(gr, 'config/lab-input-output');
   write(join(lio, 'actions.py'), 'def hello():\n    return 1\n');
   write(join(lio, 'Notes.md'), 'upper-case names are not valid ids\n');
@@ -99,7 +96,7 @@ export function seedHome(home, outside) {
   const scripts = join(home, 'Datasets/data-designer/scripts');
   write(join(scripts, 'reviews_smoke.py'), '"""Smoke config (fixture)."""\n\n\ndef load_config_builder():\n    raise NotImplementedError\n');
   write(join(scripts, 'tiny.yaml'), 'columns:\n  - name: product_category\n    column_type: sampler\n');
-  write(join(scripts, 'UPPER.py'), '# uppercase names are outside the core\'s id shape\n');
+  write(join(scripts, 'UPPER.py'), "# uppercase names are outside the core's id shape\n");
   write(join(scripts, 'notes.txt'), 'wrong extension\n');
   mkdirSync(join(scripts, 'subdir.py'), { recursive: true });
   write(join(outside, 'outside.py'), 'secret = True\n');
@@ -135,4 +132,10 @@ export function makeTree(sideDir, { seed }) {
   return p;
 }
 
-export const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
+export const isDir = (p) => {
+  try {
+    return statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+};

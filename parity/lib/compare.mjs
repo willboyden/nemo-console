@@ -31,14 +31,17 @@ export function compareTrees(a, b, path = '', out = [], limit = 50) {
     return out;
   }
   switch (a.k) {
-    case 'null': return out;
+    case 'null':
+      return out;
     case 'bool':
       if (a.v !== b.v) out.push({ path: path || '/', a: show(a), b: show(b) });
       return out;
     case 'str':
       if (a.v !== b.v) {
-        if (a.v.length + b.v.length > 300) { const [wa, wb] = strWindow(a.v, b.v); out.push({ path: path || '/', a: wa, b: wb }); }
-        else out.push({ path: path || '/', a: show(a), b: show(b) });
+        if (a.v.length + b.v.length > 300) {
+          const [wa, wb] = strWindow(a.v, b.v);
+          out.push({ path: path || '/', a: wa, b: wb });
+        } else out.push({ path: path || '/', a: show(a), b: show(b) });
       }
       return out;
     case 'int':
@@ -89,8 +92,10 @@ export function compareSets(a, b, path, out) {
   const onlyB = [...cb.keys()].filter((k) => !ca.has(k)).sort();
   if (onlyA.length || onlyB.length) {
     // pair up the closest lines so the report shows WHERE they differ
-    if (onlyA.length === 1 && onlyB.length === 1) { const [wa, wb] = strWindow(onlyA[0], onlyB[0]); out.push({ path, a: [wa], b: [wb] }); }
-    else out.push({ path, a: onlyA.length ? onlyA : '(none extra)', b: onlyB.length ? onlyB : '(none extra)' });
+    if (onlyA.length === 1 && onlyB.length === 1) {
+      const [wa, wb] = strWindow(onlyA[0], onlyB[0]);
+      out.push({ path, a: [wa], b: [wb] });
+    } else out.push({ path, a: onlyA.length ? onlyA : '(none extra)', b: onlyB.length ? onlyB : '(none extra)' });
   }
   return out;
 }

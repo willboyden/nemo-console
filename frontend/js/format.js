@@ -5,8 +5,12 @@ const isNum = (n) => typeof n === 'number' && Number.isFinite(n);
 export function fmtBytes(n, digits = 1) {
   if (!isNum(n)) return '–';
   const u = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
-  let i = 0, v = Math.abs(n);
-  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  let i = 0,
+    v = Math.abs(n);
+  while (v >= 1024 && i < u.length - 1) {
+    v /= 1024;
+    i++;
+  }
   return `${n < 0 ? '-' : ''}${i === 0 ? v.toFixed(0) : v.toFixed(digits)} ${u[i]}`;
 }
 export const fmtInt = (n) => (isNum(n) ? Math.round(n).toLocaleString('en-US') : '–');
@@ -25,7 +29,10 @@ export const fmtMs = (ms) => (isNum(ms) ? (ms < 1000 ? `${ms < 10 ? ms.toFixed(1
 export function fmtDuration(sec) {
   if (!isNum(sec) || sec < 0) return '–';
   sec = Math.round(sec);
-  const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  const d = Math.floor(sec / 86400),
+    h = Math.floor((sec % 86400) / 3600),
+    m = Math.floor((sec % 3600) / 60),
+    s = sec % 60;
   if (d) return `${d}d ${h}h`;
   if (h) return `${h}h ${String(m).padStart(2, '0')}m`;
   if (m) return `${m}m ${String(s).padStart(2, '0')}s`;
@@ -42,8 +49,14 @@ export function timeAgo(ts, now = Date.now()) {
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
 }
-export function fmtDate(ts) { const t = toMs(ts); return isNum(t) ? new Date(t).toISOString().replace('T', ' ').slice(0, 19) : '–'; }
-export function fmtTime(ts) { const t = toMs(ts); return isNum(t) ? new Date(t).toISOString().slice(11, 19) : '–'; }
+export function fmtDate(ts) {
+  const t = toMs(ts);
+  return isNum(t) ? new Date(t).toISOString().replace('T', ' ').slice(0, 19) : '–';
+}
+export function fmtTime(ts) {
+  const t = toMs(ts);
+  return isNum(t) ? new Date(t).toISOString().slice(11, 19) : '–';
+}
 export function fmtClock(ts) {
   const d = new Date(toMs(ts));
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -52,7 +65,10 @@ export function fmtClock(ts) {
 export const shortSha = (s) => (typeof s === 'string' && s ? s.slice(0, 8) : '–');
 export function debounce(fn, ms) {
   let id;
-  const d = (...a) => { clearTimeout(id); id = setTimeout(() => fn(...a), ms); };
+  const d = (...a) => {
+    clearTimeout(id);
+    id = setTimeout(() => fn(...a), ms);
+  };
   d.cancel = () => clearTimeout(id);
   return d;
 }
@@ -69,19 +85,33 @@ export function fmtUnit(v, unit = '') {
   if (!isNum(v)) return '–';
   const num = (d) => (Number.isInteger(v) ? String(v) : v.toFixed(d));
   switch (unit) {
-    case 'ms': return fmtMs(v);
-    case 'ratio': return fmtRatio(v, 0);
-    case '%': return `${v.toFixed(0)}%`;
-    case 'B': return fmtBytes(v);
-    case 'MiB': return `${fmtInt(v)} MiB`;
-    case 'W': return `${v.toFixed(0)} W`;
-    case 'C': return `${v.toFixed(0)} °C`;
-    case 's': return fmtDuration(v);
-    case 'MHz': return `${fmtInt(v)} MHz`;
-    case 'B/s': return `${fmtBytes(v)}/s`;
-    case 'tok/s': return `${v.toFixed(1)} tok/s`;
-    case 'req/s': return `${v.toFixed(2)} req/s`;
-    case 'tok': return fmtCompact(v);
-    default: return Math.abs(v) >= 1000 ? fmtCompact(v) : num(2);
+    case 'ms':
+      return fmtMs(v);
+    case 'ratio':
+      return fmtRatio(v, 0);
+    case '%':
+      return `${v.toFixed(0)}%`;
+    case 'B':
+      return fmtBytes(v);
+    case 'MiB':
+      return `${fmtInt(v)} MiB`;
+    case 'W':
+      return `${v.toFixed(0)} W`;
+    case 'C':
+      return `${v.toFixed(0)} °C`;
+    case 's':
+      return fmtDuration(v);
+    case 'MHz':
+      return `${fmtInt(v)} MHz`;
+    case 'B/s':
+      return `${fmtBytes(v)}/s`;
+    case 'tok/s':
+      return `${v.toFixed(1)} tok/s`;
+    case 'req/s':
+      return `${v.toFixed(2)} req/s`;
+    case 'tok':
+      return fmtCompact(v);
+    default:
+      return Math.abs(v) >= 1000 ? fmtCompact(v) : num(2);
   }
 }

@@ -4,6 +4,8 @@ import { genericSystemView } from '../components/generic-system.js';
 // per-verdict; the reward numbers are those of the newest smoke run that succeeded.
 const DESC = { system: 'gym', charts: ['gym.runs', 'gym.live_running', 'gym.mean_reward', 'gym.pass_at_1'], tables: ['gym.runs_by_verdict'] };
 class NcGym extends NcView {
-  setup() { genericSystemView(this, DESC); }
+  setup() {
+    genericSystemView(this, DESC);
+  }
 }
 customElements.define('nc-gym', NcGym);

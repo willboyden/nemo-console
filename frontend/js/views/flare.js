@@ -5,6 +5,8 @@ import { genericSystemView } from '../components/generic-system.js';
 // counters exist only while a target serves.
 const DESC = { system: 'flare', charts: ['flare.targets_serving', 'flare.generated_total', 'flare.active_requests', 'flare.draft_acceptance'], tables: ['flare.packages'] };
 class NcFlare extends NcView {
-  setup() { genericSystemView(this, DESC); }
+  setup() {
+    genericSystemView(this, DESC);
+  }
 }
 customElements.define('nc-flare', NcFlare);

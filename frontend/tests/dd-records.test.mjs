@@ -11,7 +11,10 @@ test('runsFromEvents: one entry per run, the latest event wins, newest first, ca
     ev(300, 'b', 'succeeded', { mode: 'create', num_records: 10, duration_ms: 5000 }),
     ev(200, 'a', 'failed', { mode: 'preview' }),
   ]);
-  assert.deepEqual(runs.map((r) => r.id), ['b', 'a']);
+  assert.deepEqual(
+    runs.map((r) => r.id),
+    ['b', 'a'],
+  );
   assert.equal(runs[0].verdict, 'succeeded');
   assert.equal(runs[0].duration_ms, 5000);
   assert.equal(runs[1].verdict, 'failed');
@@ -21,8 +24,17 @@ test('runsFromEvents: one entry per run, the latest event wins, newest first, ca
   assert.equal(merged.dataset_name, 'ds');
   assert.equal(merged.verdict, 'interrupted');
   // Non-dd.run events and events without a run_id are ignored; cap limits the list.
-  assert.equal(runsFromEvents([{ ts: 1, kind: 'routing.decision', data: { run_id: 'z' } }, { ts: 2, kind: 'dd.run', data: {} }]).length, 0);
-  const many = runsFromEvents(Array.from({ length: 300 }, (_, i) => ev(i, `r${i}`, 'succeeded')), { cap: 5 });
+  assert.equal(
+    runsFromEvents([
+      { ts: 1, kind: 'routing.decision', data: { run_id: 'z' } },
+      { ts: 2, kind: 'dd.run', data: {} },
+    ]).length,
+    0,
+  );
+  const many = runsFromEvents(
+    Array.from({ length: 300 }, (_, i) => ev(i, `r${i}`, 'succeeded')),
+    { cap: 5 },
+  );
   assert.equal(many.length, 5);
   assert.equal(many[0].id, 'r299');
   // The UI's list is newest-first: an older event must never overwrite a newer verdict.
@@ -33,7 +45,10 @@ test('runsFromEvents: one entry per run, the latest event wins, newest first, ca
 
 test('liveRuns/verdictKind: only "running" is live; unknown verdicts get the muted badge', () => {
   const runs = runsFromEvents([ev(1, 'a', 'running'), ev(2, 'b', 'succeeded'), ev(3, 'c', 'weird')]);
-  assert.deepEqual(liveRuns(runs).map((r) => r.id), ['a']);
+  assert.deepEqual(
+    liveRuns(runs).map((r) => r.id),
+    ['a'],
+  );
   assert.equal(verdictKind('succeeded'), 'ok');
   assert.equal(verdictKind('failed'), 'bad');
   assert.equal(verdictKind('interrupted'), 'warn');
@@ -43,17 +58,26 @@ test('liveRuns/verdictKind: only "running" is live; unknown verdicts get the mut
 
 test('pageMeta: clamps the offset and derives the pager flags', () => {
   const pm = pageMeta(120, 50, 0);
-  assert.equal(pm.offset, 0); assert.equal(pm.from, 1); assert.equal(pm.to, 50);
-  assert.equal(pm.hasPrev, false); assert.equal(pm.hasNext, true); assert.equal(pm.pages, 3);
+  assert.equal(pm.offset, 0);
+  assert.equal(pm.from, 1);
+  assert.equal(pm.to, 50);
+  assert.equal(pm.hasPrev, false);
+  assert.equal(pm.hasNext, true);
+  assert.equal(pm.pages, 3);
   assert.deepEqual(pageMeta(120, 50, 50), { offset: 50, from: 51, to: 100, total: 120, hasPrev: true, hasNext: true, pages: 3 });
   const last = pageMeta(120, 50, 100);
-  assert.equal(last.to, 120); assert.equal(last.hasPrev, true); assert.equal(last.hasNext, false);
+  assert.equal(last.to, 120);
+  assert.equal(last.hasPrev, true);
+  assert.equal(last.hasNext, false);
   // Offsets past the end and negatives clamp instead of producing an empty page silently.
   assert.equal(pageMeta(120, 50, 999).offset, 119);
   assert.equal(pageMeta(120, 50, -5).offset, 0);
   // Empty run: no rows, no flags.
   const empty = pageMeta(0, 50, 0);
-  assert.equal(empty.from, 0); assert.equal(empty.to, 0); assert.equal(empty.hasPrev, false); assert.equal(empty.hasNext, false);
+  assert.equal(empty.from, 0);
+  assert.equal(empty.to, 0);
+  assert.equal(empty.hasPrev, false);
+  assert.equal(empty.hasNext, false);
   // A short last page and non-integer/garbage inputs.
   assert.equal(pageMeta(7, 50, 0).to, 7);
   assert.equal(pageMeta('x', 'y', null).offset, 0);
@@ -90,6 +114,7 @@ test('cellText/truncateCell/rowJson: null stays "null", objects become JSON, tru
   assert.deepEqual(truncateCell('short'), { text: 'short', full: 'short' });
   assert.deepEqual(truncateCell(null), { text: '', full: '' });
   assert.equal(rowJson({ id: 1, body: 'a"b' }), '{\n  "id": 1,\n  "body": "a\\"b"\n}');
-  const circular = {}; circular.self = circular;
+  const circular = {};
+  circular.self = circular;
   assert.equal(typeof rowJson(circular), 'string'); // unserializable rows fall back to String()
 });

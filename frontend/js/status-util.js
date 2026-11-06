@@ -38,21 +38,35 @@ export function parsePreflight(output) {
     const m = /^\s*([A-Za-z][\w .-]*?)\s*:\s*(.+?)\s*$/.exec(line);
     if (m) rows.push({ key: m[1], value: m[2] });
   }
-  const pick = (key, re) => { const exact = rows.filter((r) => r.key === key); return exact.length ? exact : rows.filter((r) => re.test(r.key)).slice(0, 1); };
+  const pick = (key, re) => {
+    const exact = rows.filter((r) => r.key === key);
+    return exact.length ? exact : rows.filter((r) => re.test(r.key)).slice(0, 1);
+  };
   const entry = (value) => {
     const name = (/[a-z][\w.-]*-\d+/i.exec(value) || [null])[0];
     return name ? { name, running: /running|up\b/i.test(value) && !/not running|stopped/i.test(value) } : null;
   };
-  const sharers = pick('shares_card', /shar/i).map((r) => entry(r.value)).filter(Boolean);
+  const sharers = pick('shares_card', /shar/i)
+    .map((r) => entry(r.value))
+    .filter(Boolean);
   const stopRow = rows.find((r) => r.key === 'stoppable');
   const stoppable = stopRow ? entry(stopRow.value) : null;
   const dark = pick('router_aliases_dark', /dark|alias/i)[0];
   const first = sharers[0] || null;
   return {
-    rows, sharers, container: first ? first.name : null, sharingRunning: !!first && first.running,
+    rows,
+    sharers,
+    container: first ? first.name : null,
+    sharingRunning: !!first && first.running,
     // Older backends have no `stoppable:` line: then the first sharer is the candidate (the previous behaviour).
-    stoppable: stopRow ? (stoppable && stoppable.running ? stoppable : null) : (first && first.running ? first : null),
-    darkAliases: dark && !/^none$/i.test(dark.value) ? dark.value.split(/[,;]/).map((x) => x.trim().replace(/\s*\(.*\)$/, '')).filter(Boolean) : [],
+    stoppable: stopRow ? (stoppable && stoppable.running ? stoppable : null) : first && first.running ? first : null,
+    darkAliases:
+      dark && !/^none$/i.test(dark.value)
+        ? dark.value
+            .split(/[,;]/)
+            .map((x) => x.trim().replace(/\s*\(.*\)$/, ''))
+            .filter(Boolean)
+        : [],
     parsed: rows.length > 0,
   };
 }
@@ -73,4 +87,6 @@ export function auditLabel(row) {
 }
 
 /** /health `role`: "admin" | "viewer" | "public" (unauthenticated off-loopback: needs a key). Absent -> admin (the server enforces 403s). */
-export function normalizeRole(v) { return v === 'viewer' ? 'viewer' : v === 'public' ? 'public' : 'admin'; }
+export function normalizeRole(v) {
+  return v === 'viewer' ? 'viewer' : v === 'public' ? 'public' : 'admin';
+}

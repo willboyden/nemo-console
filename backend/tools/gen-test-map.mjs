@@ -25,9 +25,16 @@ const OUT = join(RUST, 'TEST-MAP.md');
 
 const WS_OF_DIR = {
   core: 'core',
-  switchyard: 'workstream A', relay: 'workstream A', dynamo: 'workstream A',
-  dcgm: 'workstream B', aiperf: 'workstream B', guardrails: 'workstream B', openshell: 'workstream B',
-  datadesigner: 'workstream C', evaluator: 'workstream C', skillevaluator: 'workstream C',
+  switchyard: 'workstream A',
+  relay: 'workstream A',
+  dynamo: 'workstream A',
+  dcgm: 'workstream B',
+  aiperf: 'workstream B',
+  guardrails: 'workstream B',
+  openshell: 'workstream B',
+  datadesigner: 'workstream C',
+  evaluator: 'workstream C',
+  skillevaluator: 'workstream C',
 };
 // tests of tests/core/ that exercise an adapter (owned by its workstream) or several (integration, after the merges)
 const CORE_OVERRIDES = {
@@ -83,9 +90,9 @@ function rsFiles(dir) {
 }
 
 export function scan() {
-  const fns = new Map();       // relative file -> Set(fn names)
-  const maps = new Map();      // id or base -> "file::fn"
-  const nas = new Map();       // id or base -> reason
+  const fns = new Map(); // relative file -> Set(fn names)
+  const maps = new Map(); // id or base -> "file::fn"
+  const nas = new Map(); // id or base -> reason
   for (const f of [...rsFiles(TESTS), ...rsFiles(join(CRATE, 'src'))]) {
     const rel = relative(CRATE, f);
     const text = readFileSync(f, 'utf8');
@@ -97,7 +104,10 @@ export function scan() {
 }
 
 export function build() {
-  const ids = readFileSync(IDS, 'utf8').split('\n').map((s) => s.trim()).filter(Boolean);
+  const ids = readFileSync(IDS, 'utf8')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const { fns, maps, nas } = scan();
   const rows = [];
   const counts = { mapped: 0, na: 0, unmapped: 0 };
@@ -134,8 +144,9 @@ export function build() {
     if (rows[i].endsWith('| mapped |')) byOwner[o].mapped++;
     else if (rows[i].includes('| N/A: ')) byOwner[o].na++;
   });
-  const ownerLines = Object.entries(byOwner).sort().map(([o, c]) =>
-    `| ${o} | ${c.total} | ${c.mapped} | ${c.na} | ${c.total - c.mapped - c.na} |`);
+  const ownerLines = Object.entries(byOwner)
+    .sort()
+    .map(([o, c]) => `| ${o} | ${c.total} | ${c.mapped} | ${c.na} | ${c.total - c.mapped - c.na} |`);
   const md = [
     '# TEST-MAP: every pytest node id -> its Rust test',
     '',

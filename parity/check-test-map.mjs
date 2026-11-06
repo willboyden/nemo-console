@@ -19,13 +19,16 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const RUST = resolve(HERE, '..', 'backend');   // the Cargo workspace (TEST-MAP.md, crates/)
+const RUST = resolve(HERE, '..', 'backend'); // the Cargo workspace (TEST-MAP.md, crates/)
 const argv = process.argv.slice(2);
 const allowUnmapped = argv.includes('--allow-unmapped');
-const noPending = argv.includes('--no-pending');     // integration gate: every `pending WS-` ignore must be gone
+const noPending = argv.includes('--no-pending'); // integration gate: every `pending WS-` ignore must be gone
 const list = argv.includes('--list');
 const mapPath = argv.includes('--map') ? resolve(argv[argv.indexOf('--map') + 1]) : join(RUST, 'TEST-MAP.md');
-const ids = readFileSync(join(HERE, 'pytest-ids.txt'), 'utf8').split('\n').map((l) => l.trimEnd()).filter(Boolean);
+const ids = readFileSync(join(HERE, 'pytest-ids.txt'), 'utf8')
+  .split('\n')
+  .map((l) => l.trimEnd())
+  .filter(Boolean);
 const idSet = new Set(ids);
 
 /** Split a markdown table row into cells: `|` separates unless escaped as `\|`. */
@@ -34,8 +37,16 @@ function cells(line) {
   let cur = '';
   const body = line.trim().replace(/^\|/, '').replace(/\|$/, '');
   for (let i = 0; i < body.length; i++) {
-    if (body[i] === '\\' && body[i + 1] === '|') { cur += '|'; i++; continue; }
-    if (body[i] === '|') { out.push(cur.trim()); cur = ''; continue; }
+    if (body[i] === '\\' && body[i + 1] === '|') {
+      cur += '|';
+      i++;
+      continue;
+    }
+    if (body[i] === '|') {
+      out.push(cur.trim());
+      cur = '';
+      continue;
+    }
     cur += body[i];
   }
   out.push(cur.trim());
@@ -47,7 +58,7 @@ function codeSpan(cell) {
   const m = /^(`+)([\s\S]*?)\1$/.exec(cell);
   if (!m) return null;
   let t = m[2];
-  if (t.length > 1 && t.startsWith(' ') && t.endsWith(' ') && t.trim()) t = t.slice(1, -1);   // CommonMark padding
+  if (t.length > 1 && t.startsWith(' ') && t.endsWith(' ') && t.trim()) t = t.slice(1, -1); // CommonMark padding
   return t;
 }
 
@@ -62,7 +73,10 @@ function testFnsIn(text) {
     if (!m) continue;
     for (let k = i - 1; k >= 0; k--) {
       const l = lines[k].trim();
-      if (/^#\[(?:tokio::)?test\b/.test(l)) { names.add(m[1]); break; }
+      if (/^#\[(?:tokio::)?test\b/.test(l)) {
+        names.add(m[1]);
+        break;
+      }
       if (l === '' || l.startsWith('//') || l.startsWith('#[') || l.startsWith('#![') || /^[)\]},"\w =:.]*\)\]$/.test(l)) continue;
       break;
     }
@@ -115,9 +129,15 @@ lines.forEach((line, n) => {
   if (!line.trim().startsWith('|')) return;
   const c = cells(line);
   const id = codeSpan(c[0] || '');
-  if (id === null) return;                                    // header / separator / prose rows
-  if (c.length < 3) { malformed.push(`line ${n + 1}: fewer than 3 columns`); return; }
-  if (rows.has(id)) { duplicates.push(`line ${n + 1}: ${id}`); return; }
+  if (id === null) return; // header / separator / prose rows
+  if (c.length < 3) {
+    malformed.push(`line ${n + 1}: fewer than 3 columns`);
+    return;
+  }
+  if (rows.has(id)) {
+    duplicates.push(`line ${n + 1}: ${id}`);
+    return;
+  }
   rows.set(id, { line: n + 1, owner: c[1] || '', tests: c[2] || '', status: c[3] || '' });
 });
 
@@ -129,7 +149,10 @@ function pendingIgnores() {
   const walk = (dir) => {
     for (const e of readdirSync(dir)) {
       const p = join(dir, e);
-      if (statSync(p).isDirectory()) { if (e !== 'target') walk(p); continue; }
+      if (statSync(p).isDirectory()) {
+        if (e !== 'target') walk(p);
+        continue;
+      }
       if (!e.endsWith('.rs')) continue;
       const text = readFileSync(p, 'utf8');
       const crateDir = p.slice(root.length + 1).split('/')[0];
@@ -149,23 +172,37 @@ const pendingFns = pendingIgnores();
 const result = { mapped: [], na: [], unmapped: [], pending: [] };
 for (const id of ids) {
   const r = rows.get(id);
-  if (!r) { result.unmapped.push({ id, why: 'no row in TEST-MAP.md' }); continue; }
+  if (!r) {
+    result.unmapped.push({ id, why: 'no row in TEST-MAP.md' });
+    continue;
+  }
   const cell = r.tests.replace(/<br\s*\/?>/gi, ' ').trim();
   const status = r.status.trim();
-  if (/^N\/A:\s*\S/i.test(cell) || /^N\/A:\s*\S/i.test(status)) { result.na.push({ id }); continue; }
-  if (/^N\/A/i.test(cell) || /^N\/A/i.test(status)) { result.unmapped.push({ id, why: `line ${r.line}: N/A needs a reason (N/A: <reason>)` }); continue; }
+  if (/^N\/A:\s*\S/i.test(cell) || /^N\/A:\s*\S/i.test(status)) {
+    result.na.push({ id });
+    continue;
+  }
+  if (/^N\/A/i.test(cell) || /^N\/A/i.test(status)) {
+    result.unmapped.push({ id, why: `line ${r.line}: N/A needs a reason (N/A: <reason>)` });
+    continue;
+  }
   // `tests/x.rs::fn` code spans (the generator's format): the fn must exist in THAT file (relative to the crate);
   // bare identifiers: the fn must exist somewhere under backend/crates
   const spans = [...cell.matchAll(/`([^`]+)`/g)].map((m) => m[1].trim());
-  const named = spans.length ? spans
-    : [...cell.matchAll(/[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*/g)].map((m) => m[0]);
-  if (!named.length) { result.unmapped.push({ id, why: `line ${r.line}: no Rust test named` }); continue; }
+  const named = spans.length ? spans : [...cell.matchAll(/[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*/g)].map((m) => m[0]);
+  if (!named.length) {
+    result.unmapped.push({ id, why: `line ${r.line}: no Rust test named` });
+    continue;
+  }
   const absent = named.filter((t) => {
     const m = /^(.+\.rs)::([A-Za-z_][A-Za-z0-9_]*)$/.exec(t);
     if (m) return !fnInFile(m[1], m[2]);
     return !fns.has(t.split('::').pop());
   });
-  if (absent.length) { result.unmapped.push({ id, why: `line ${r.line}: not found: ${absent.join(', ')}` }); continue; }
+  if (absent.length) {
+    result.unmapped.push({ id, why: `line ${r.line}: not found: ${absent.join(', ')}` });
+    continue;
+  }
   const pend = named.map((t) => pendingFns.get(t)).find(Boolean);
   if (pend) result.pending.push({ id, owner: r.owner, dep: pend.dep, why: pend.why });
   result.mapped.push({ id });
@@ -175,15 +212,22 @@ const extra = [...rows.keys()].filter((id) => !idSet.has(id));
 console.log(`TEST-MAP: ${ids.length} pytest ids · ${result.mapped.length} mapped · ${result.na.length} N/A · ${result.unmapped.length} unmapped · ${result.pending.length} pending`);
 if (result.pending.length) {
   const by = {};
-  for (const p of result.pending) { const k = `${p.owner} waits on ${p.dep}`; by[k] = (by[k] || 0) + 1; }
-  console.log(`  pending (mapped tests marked #[ignore = "pending WS-..."]): ${Object.entries(by).map(([k, n]) => `${k}: ${n}`).join(', ')}`);
+  for (const p of result.pending) {
+    const k = `${p.owner} waits on ${p.dep}`;
+    by[k] = (by[k] || 0) + 1;
+  }
+  console.log(
+    `  pending (mapped tests marked #[ignore = "pending WS-..."]): ${Object.entries(by)
+      .map(([k, n]) => `${k}: ${n}`)
+      .join(', ')}`,
+  );
 }
 const missingRows = result.unmapped.filter((u) => u.why === 'no row in TEST-MAP.md');
 if (missingRows.length) console.log(`  ${missingRows.length} id(s) have no row in the map`);
 const show = (title, xs, fmt) => {
   if (!xs.length) return;
   console.log(`\n${title} (${xs.length}):`);
-  for (const x of (list ? xs : xs.slice(0, 30))) console.log(`  ${fmt(x)}`);
+  for (const x of list ? xs : xs.slice(0, 30)) console.log(`  ${fmt(x)}`);
   if (!list && xs.length > 30) console.log(`  ... ${xs.length - 30} more (--list shows all)`);
 };
 show('unmapped', result.unmapped, (u) => `${u.id}  — ${u.why}`);

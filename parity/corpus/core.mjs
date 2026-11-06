@@ -61,10 +61,22 @@ export function securityCases() {
   R('PUT /api/v1/settings', { id: 'sec.body.json-too-deep', method: 'PUT', path: `${API}/settings`, body: '['.repeat(20000) + ']'.repeat(20000), contentType: 'application/json' });
   // the exact body that aborted the Rust process before A-6 (workstream C's report): 200,000 nested arrays, about 400 KB
   R('PUT /api/v1/settings', { id: 'sec.body.json-attack-400k', method: 'PUT', path: `${API}/settings`, body: '['.repeat(200000) + ']'.repeat(200000), contentType: 'application/json' });
-  R('POST /api/v1/systems/{system_id}/actions/{action}', { id: 'sec.body.json-attack-400k.action', method: 'POST', path: `${API}/systems/datadesigner/actions/preview`, body: '['.repeat(200000) + ']'.repeat(200000), contentType: 'application/json' });
+  R('POST /api/v1/systems/{system_id}/actions/{action}', {
+    id: 'sec.body.json-attack-400k.action',
+    method: 'POST',
+    path: `${API}/systems/datadesigner/actions/preview`,
+    body: '['.repeat(200000) + ']'.repeat(200000),
+    contentType: 'application/json',
+  });
   R('PUT /api/v1/settings', { id: 'sec.body.json-deep-ok', method: 'PUT', path: `${API}/settings`, body: '['.repeat(500) + ']'.repeat(500), contentType: 'application/json' });
   R('PUT /api/v1/settings', { id: 'sec.body.json-deep-object-ok', method: 'PUT', path: `${API}/settings`, body: '{"a":'.repeat(500) + '1' + '}'.repeat(500), contentType: 'application/json' });
-  R('PUT /api/v1/settings', { id: 'sec.body.json-deep-in-field', method: 'PUT', path: `${API}/settings`, body: '{"urls":' + '{"a":'.repeat(499) + '1' + '}'.repeat(500), contentType: 'application/json' });
+  R('PUT /api/v1/settings', {
+    id: 'sec.body.json-deep-in-field',
+    method: 'PUT',
+    path: `${API}/settings`,
+    body: '{"urls":' + '{"a":'.repeat(499) + '1' + '}'.repeat(500),
+    contentType: 'application/json',
+  });
   R('PUT /api/v1/settings', { id: 'sec.body.json-int-4301-digits', method: 'PUT', path: `${API}/settings`, body: `{"poll_interval_s": ${'1'.repeat(4301)}}`, contentType: 'application/json' });
   // methods: HEAD / OPTIONS / unknown, on API and static routes
   R('GET /api/v1/systems', { id: 'sec.method.head-api', method: 'HEAD', path: `${API}/systems` });
@@ -252,7 +264,10 @@ export function roleSweepCases() {
     const route = `${r.method} ${r.path}`;
     const base = { route, method: r.method, path, ...(r.method === 'GET' || r.method === 'HEAD' ? {} : { json: {} }) };
     if (path.endsWith('/events/stream')) base.readMs = 500;
-    const slug = `${r.method.toLowerCase()}.${r.path.replace(/^\/api\/v1\//, '').replace(/[{}]/g, '').replace(/\//g, '.')}`;
+    const slug = `${r.method.toLowerCase()}.${r.path
+      .replace(/^\/api\/v1\//, '')
+      .replace(/[{}]/g, '')
+      .replace(/\//g, '.')}`;
     c.push({ ...base, id: `roles.none.${slug}`, auth: 'none' });
     if (r.auth === 'admin') c.push({ ...base, id: `roles.viewer.${slug}`, auth: 'viewer' });
   }

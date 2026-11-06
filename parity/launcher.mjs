@@ -39,11 +39,24 @@ function setup(name) {
 
 function envFor(s, port, extra = {}) {
   return {
-    HOME: s.home, PATH: s.bin, LANG: 'C.UTF-8', NEMO_CONSOLE_NO_USER_ENV: '1', NEMO_CONSOLE_PORT: String(port),
-    NEMO_CONSOLE_STATE_DIR: s.state, NEMO_CONSOLE_REPO_ROOT: join(s.dir, 'repo'), NEMO_CONSOLE_BACKGROUND_TASKS: 'false',
-    NEMO_CONSOLE_URLS: JSON.stringify({ litellm: 'http://127.0.0.1:9', switchyard: 'http://127.0.0.1:9', relay: 'http://127.0.0.1:9',
-      dynamo: 'http://127.0.0.1:9', dcgm: 'http://127.0.0.1:9', prometheus: 'http://127.0.0.1:9', guardrails: 'http://127.0.0.1:9',
-      dynamo_worker_metrics: 'http://127.0.0.1:9' }),
+    HOME: s.home,
+    PATH: s.bin,
+    LANG: 'C.UTF-8',
+    NEMO_CONSOLE_NO_USER_ENV: '1',
+    NEMO_CONSOLE_PORT: String(port),
+    NEMO_CONSOLE_STATE_DIR: s.state,
+    NEMO_CONSOLE_REPO_ROOT: join(s.dir, 'repo'),
+    NEMO_CONSOLE_BACKGROUND_TASKS: 'false',
+    NEMO_CONSOLE_URLS: JSON.stringify({
+      litellm: 'http://127.0.0.1:9',
+      switchyard: 'http://127.0.0.1:9',
+      relay: 'http://127.0.0.1:9',
+      dynamo: 'http://127.0.0.1:9',
+      dcgm: 'http://127.0.0.1:9',
+      prometheus: 'http://127.0.0.1:9',
+      guardrails: 'http://127.0.0.1:9',
+      dynamo_worker_metrics: 'http://127.0.0.1:9',
+    }),
     ...extra,
   };
 }
@@ -52,17 +65,27 @@ function cli(kind, args, env) {
   return new Promise((resolve) => {
     const [cmd, ...pre] = CLI[kind];
     const p = spawn(cmd, [...pre, ...args], { cwd: CWD[kind], env, stdio: ['ignore', 'pipe', 'pipe'] });
-    let stdout = ''; let stderr = '';
-    p.stdout.on('data', (d) => { stdout += d; });
-    p.stderr.on('data', (d) => { stderr += d; });
+    let stdout = '';
+    let stderr = '';
+    p.stdout.on('data', (d) => {
+      stdout += d;
+    });
+    p.stderr.on('data', (d) => {
+      stderr += d;
+    });
     const t = setTimeout(() => p.kill('SIGKILL'), 60_000);
-    p.on('exit', (code) => { clearTimeout(t); resolve({ code, stdout, stderr }); });
+    p.on('exit', (code) => {
+      clearTimeout(t);
+      resolve({ code, stdout, stderr });
+    });
   });
 }
 
-const norm = (text, s, port) => text
-  .replaceAll(s.dir, '<DIR>').replaceAll(String(port), '<port>')
-  .replace(/pid \d+/g, 'pid <pid>');
+const norm = (text, s, port) =>
+  text
+    .replaceAll(s.dir, '<DIR>')
+    .replaceAll(String(port), '<port>')
+    .replace(/pid \d+/g, 'pid <pid>');
 
 /** Stop whatever console the pid file names, if its command line is a console's (only processes this run started). */
 async function cleanup(s) {
@@ -71,17 +94,32 @@ async function cleanup(s) {
   const pid = Number(readFileSync(f, 'utf8').trim());
   if (!pid) return;
   let cmdline = '';
-  try { cmdline = readFileSync(`/proc/${pid}/cmdline`, 'utf8'); } catch { return; }
+  try {
+    cmdline = readFileSync(`/proc/${pid}/cmdline`, 'utf8');
+  } catch {
+    return;
+  }
   if (!cmdline.includes('nemo_console.main')) return;
-  try { process.kill(pid, 'SIGTERM'); } catch { return; }
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    return;
+  }
   for (let i = 0; i < 100 && existsSync(`/proc/${pid}`); i++) await sleep(100);
-  try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ }
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch {
+    /* gone */
+  }
 }
 
 /** A foreign HTTP server on the port (answers `{}` to /api/v1/health). */
 function foreign(port) {
   return new Promise((resolve) => {
-    const srv = createServer((_q, r) => { r.writeHead(200, { 'content-type': 'application/json' }); r.end('{}'); });
+    const srv = createServer((_q, r) => {
+      r.writeHead(200, { 'content-type': 'application/json' });
+      r.end('{}');
+    });
     srv.listen(port, '127.0.0.1', () => resolve(srv));
   });
 }
@@ -89,7 +127,10 @@ function foreign(port) {
 /** One case: steps of [kind-or-role, args, extraEnv?]; roles 'A'/'B' are the two implementations in this order. */
 async function runCase(name, steps, { before } = {}) {
   const results = {};
-  for (const order of [['python', 'rust'], ['rust', 'python']]) {
+  for (const order of [
+    ['python', 'rust'],
+    ['rust', 'python'],
+  ]) {
     const s = setup(`${name}-${order[0]}-${order[1]}`);
     const port = await freePort();
     const ctx = { s, port };
@@ -140,17 +181,51 @@ async function cross(name, steps, want) {
 
 try {
   await same('stop-nothing-recorded', [['A', ['stop']]]);
-  await same('stop-garbage-pid', [['A', ['stop']]], { before: ({ s }) => { mkdirSync(s.state, { recursive: true }); writeFileSync(join(s.state, 'console.pid'), 'abc\n'); } });
-  await same('stop-dead-pid', [['A', ['stop']]], { before: ({ s }) => { mkdirSync(s.state, { recursive: true }); writeFileSync(join(s.state, 'console.pid'), '4194300\n'); } });
-  await same('stop-stranger-pid', [['A', ['stop']]], { before: ({ s }) => { mkdirSync(s.state, { recursive: true }); writeFileSync(join(s.state, 'console.pid'), `${process.pid}\n`); } });
+  await same('stop-garbage-pid', [['A', ['stop']]], {
+    before: ({ s }) => {
+      mkdirSync(s.state, { recursive: true });
+      writeFileSync(join(s.state, 'console.pid'), 'abc\n');
+    },
+  });
+  await same('stop-dead-pid', [['A', ['stop']]], {
+    before: ({ s }) => {
+      mkdirSync(s.state, { recursive: true });
+      writeFileSync(join(s.state, 'console.pid'), '4194300\n');
+    },
+  });
+  await same('stop-stranger-pid', [['A', ['stop']]], {
+    before: ({ s }) => {
+      mkdirSync(s.state, { recursive: true });
+      writeFileSync(join(s.state, 'console.pid'), `${process.pid}\n`);
+    },
+  });
   await same('open-usage', [['A', ['open', 'extra']]]);
   await same('stop-usage', [['A', ['stop', 'now']]]);
   await same('open-non-loopback-host', [['A', ['open'], { NEMO_CONSOLE_HOST: '8.8.8.8' }]]);
   await same('open-foreign-listener', [['A', ['open']]], { before: ({ port }) => foreign(port) });
-  await same('open-then-stop', [['A', ['open']], ['A', ['open']], ['A', ['stop']], ['A', ['stop']]]);
-  await cross('cross-open-then-stop', [['A', ['open']], ['B', ['open']], ['B', ['stop']], ['A', ['stop']]],
-    (p) => p.outs[0].code === 0 && /started Nemo Console/.test(p.outs[0].stdout) && p.outs[1].code === 0 && !p.outs[1].stdout
-      && p.outs[2].code === 0 && /stopped Nemo Console/.test(p.outs[2].stdout) && p.outs[3].code === 1);
+  await same('open-then-stop', [
+    ['A', ['open']],
+    ['A', ['open']],
+    ['A', ['stop']],
+    ['A', ['stop']],
+  ]);
+  await cross(
+    'cross-open-then-stop',
+    [
+      ['A', ['open']],
+      ['B', ['open']],
+      ['B', ['stop']],
+      ['A', ['stop']],
+    ],
+    (p) =>
+      p.outs[0].code === 0 &&
+      /started Nemo Console/.test(p.outs[0].stdout) &&
+      p.outs[1].code === 0 &&
+      !p.outs[1].stdout &&
+      p.outs[2].code === 0 &&
+      /stopped Nemo Console/.test(p.outs[2].stdout) &&
+      p.outs[3].code === 1,
+  );
 } catch (e) {
   failures.push(`harness: ${e.stack || e.message}`);
 } finally {

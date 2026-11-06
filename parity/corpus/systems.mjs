@@ -112,25 +112,41 @@ export function sseCases(readMs = 1500) {
 export function concurrencyCases() {
   const sse = { method: 'GET', path: sys('relay', '/events/stream'), readMs: 2500 };
   return [
-    { id: 'conc.busy-409', route: 'POST /api/v1/systems/{system_id}/actions/{action}', concurrent: [
-      { method: 'POST', path: sys('relay', '/actions/gateway_restart'), json: { confirm: true }, timeoutMs: 120_000 },
-      { method: 'POST', path: sys('relay', '/actions/gateway_status'), json: {}, delayMs: 700 },
-    ] },
-    { id: 'conc.sse-cap-429', route: 'GET /api/v1/systems/{system_id}/events/stream', concurrent: [
-      ...Array.from({ length: 8 }, () => sse),
-      { method: 'GET', path: sys('relay', '/events/stream'), readMs: 500, delayMs: 1200 },
-    ] },
+    {
+      id: 'conc.busy-409',
+      route: 'POST /api/v1/systems/{system_id}/actions/{action}',
+      concurrent: [
+        { method: 'POST', path: sys('relay', '/actions/gateway_restart'), json: { confirm: true }, timeoutMs: 120_000 },
+        { method: 'POST', path: sys('relay', '/actions/gateway_status'), json: {}, delayMs: 700 },
+      ],
+    },
+    {
+      id: 'conc.sse-cap-429',
+      route: 'GET /api/v1/systems/{system_id}/events/stream',
+      concurrent: [...Array.from({ length: 8 }, () => sse), { method: 'GET', path: sys('relay', '/events/stream'), readMs: 500, delayMs: 1200 }],
+    },
   ];
 }
 
 /** Relay follow_events tails the active ATOF file: a line appended while the stream is open must arrive as an event. */
 export function sseAppendCases() {
-  const line = JSON.stringify({ kind: 'event', name: 'llm.request', category: 'llm', timestamp: '2026-10-01T10:00:00Z',
-    session_id: 'parity-session', data: { model: 'auto-local', route: 'auto-local', status: 200 } });
-  return [{
-    id: 'sse.relay.append', route: 'GET /api/v1/systems/{system_id}/events/stream', path: sys('relay', '/events/stream'), readMs: 4000,
-    during: { afterMs: 1200, run: (side) => appendFileSync(join(side.vars.home, '.local/share/nemo-relay/atof/relay-events.jsonl'), `${line}\n`) },
-  }];
+  const line = JSON.stringify({
+    kind: 'event',
+    name: 'llm.request',
+    category: 'llm',
+    timestamp: '2026-10-01T10:00:00Z',
+    session_id: 'parity-session',
+    data: { model: 'auto-local', route: 'auto-local', status: 200 },
+  });
+  return [
+    {
+      id: 'sse.relay.append',
+      route: 'GET /api/v1/systems/{system_id}/events/stream',
+      path: sys('relay', '/events/stream'),
+      readMs: 4000,
+      during: { afterMs: 1200, run: (side) => appendFileSync(join(side.vars.home, '.local/share/nemo-relay/atof/relay-events.jsonl'), `${line}\n`) },
+    },
+  ];
 }
 
 /**
@@ -167,8 +183,13 @@ export function configRoundTrip(id, file, { tag = file, restart = false, appendT
   R(A, { id: 'apply.confirm-int', method: 'POST', path: `${base}/apply`, json: { content: `{{${v}_content}}${appendText}`, base_sha256: ZERO_SHA, confirm: 1 } });
   R(A, { id: 'apply.viewer', method: 'POST', path: `${base}/apply`, json: { content: 'x', base_sha256: ZERO_SHA, confirm: true }, auth: 'viewer' });
   if (invalid !== undefined) R(A, { id: 'apply.invalid', method: 'POST', path: `${base}/apply`, json: { content: invalid, base_sha256: `{{${v}_sha}}`, restart, confirm: true } });
-  R(A, { id: 'apply.ok', method: 'POST', path: `${base}/apply`, json: { content: `{{${v}_content}}${appendText}`, base_sha256: `{{${v}_sha}}`, restart, confirm: true },
-    capture: { [`${v}_rev`]: '/revision_id' } });
+  R(A, {
+    id: 'apply.ok',
+    method: 'POST',
+    path: `${base}/apply`,
+    json: { content: `{{${v}_content}}${appendText}`, base_sha256: `{{${v}_sha}}`, restart, confirm: true },
+    capture: { [`${v}_rev`]: '/revision_id' },
+  });
   R('GET /api/v1/systems/{system_id}/config/{file_id}', { id: 'get.after-apply', path: base, capture: { [`${v}_sha2`]: '/sha256' } });
   R('GET /api/v1/systems/{system_id}/config/{file_id}/history', { id: 'history.after-apply', path: `${base}/history` });
   R(A, { id: 'apply.stale-old-base', method: 'POST', path: `${base}/apply`, json: { content: `{{${v}_content}}`, base_sha256: `{{${v}_sha}}`, restart, confirm: true } });
@@ -184,8 +205,13 @@ export function configRoundTrip(id, file, { tag = file, restart = false, appendT
   if (unhealthyMarker) {
     // the fake restart fails while the file carries the marker: post-apply is unhealthy, the core restores the old
     // file and runs post_apply again (rolled_back: true)
-    R(A, { id: 'apply.auto-rollback', method: 'POST', path: `${base}/apply`, timeoutMs: 180_000,
-      json: { content: `{{${v}_content}}\n# ${unhealthyMarker}\n`, base_sha256: `{{${v}_sha3}}`, restart: true, confirm: true } });
+    R(A, {
+      id: 'apply.auto-rollback',
+      method: 'POST',
+      path: `${base}/apply`,
+      timeoutMs: 180_000,
+      json: { content: `{{${v}_content}}\n# ${unhealthyMarker}\n`, base_sha256: `{{${v}_sha3}}`, restart: true, confirm: true },
+    });
     R('GET /api/v1/systems/{system_id}/config/{file_id}/history', { id: 'history.after-auto-rollback', path: `${base}/history` });
     R('GET /api/v1/systems/{system_id}/config/{file_id}', { id: 'get.after-auto-rollback', path: base });
   }
@@ -201,12 +227,36 @@ export function configRefusalCases() {
   c.push({ id: 'cfgx.relay.plugins.apply-readonly', route: A, method: 'POST', path: sys('relay', '/config/plugins/apply'), json: { content: 'x = 1\n', base_sha256: ZERO_SHA, confirm: true } });
   c.push({ id: 'cfgx.relay.plugins.validate', route: V, method: 'POST', path: sys('relay', '/config/plugins/validate'), json: { content: '[policy]\nsignature = "required"\n' } });
   c.push({ id: 'cfgx.relay.config.validate-bad-toml', route: V, method: 'POST', path: sys('relay', '/config/config/validate'), json: { content: '[unclosed\n' } });
-  c.push({ id: 'cfgx.openshell.gateway.apply-readonly', route: A, method: 'POST', path: sys('openshell', '/config/gateway/apply'), json: { content: 'x = 1\n', base_sha256: ZERO_SHA, confirm: true } });
+  c.push({
+    id: 'cfgx.openshell.gateway.apply-readonly',
+    route: A,
+    method: 'POST',
+    path: sys('openshell', '/config/gateway/apply'),
+    json: { content: 'x = 1\n', base_sha256: ZERO_SHA, confirm: true },
+  });
   c.push({ id: 'cfgx.openshell.policy.validate', route: V, method: 'POST', path: sys('openshell', '/config/policy/validate'), json: { content: 'version: 1\n' } });
   c.push({ id: 'cfgx.openshell.policy.rollback-readonly', route: B, method: 'POST', path: sys('openshell', '/config/policy/rollback'), json: { revision_id: 'abcdef0123456789', confirm: true } });
-  c.push({ id: 'cfgx.guardrails.actions-py.validate', route: V, method: 'POST', path: sys('guardrails', '/config/lab-input-output--actions.py/validate'), json: { content: 'def x():\n    return 2\n' } });
-  c.push({ id: 'cfgx.guardrails.actions-py.apply', route: A, method: 'POST', path: sys('guardrails', '/config/lab-input-output--actions.py/apply'), json: { content: 'x', base_sha256: ZERO_SHA, confirm: true } });
-  c.push({ id: 'cfgx.dynamo.compose.apply-readonly', route: A, method: 'POST', path: sys('dynamo', '/config/compose/apply'), json: { content: 'services: {}\n', base_sha256: ZERO_SHA, confirm: true } });
+  c.push({
+    id: 'cfgx.guardrails.actions-py.validate',
+    route: V,
+    method: 'POST',
+    path: sys('guardrails', '/config/lab-input-output--actions.py/validate'),
+    json: { content: 'def x():\n    return 2\n' },
+  });
+  c.push({
+    id: 'cfgx.guardrails.actions-py.apply',
+    route: A,
+    method: 'POST',
+    path: sys('guardrails', '/config/lab-input-output--actions.py/apply'),
+    json: { content: 'x', base_sha256: ZERO_SHA, confirm: true },
+  });
+  c.push({
+    id: 'cfgx.dynamo.compose.apply-readonly',
+    route: A,
+    method: 'POST',
+    path: sys('dynamo', '/config/compose/apply'),
+    json: { content: 'services: {}\n', base_sha256: ZERO_SHA, confirm: true },
+  });
   c.push({ id: 'cfgx.unknown-file.validate', route: V, method: 'POST', path: sys('switchyard', '/config/nope/validate'), json: { content: 'x' } });
   c.push({ id: 'cfgx.unknown-file.apply', route: A, method: 'POST', path: sys('switchyard', '/config/nope/apply'), json: { content: 'x', base_sha256: ZERO_SHA, confirm: true } });
   c.push({ id: 'cfgx.unknown-system.apply', route: A, method: 'POST', path: sys('bogus', '/config/routes/apply'), json: { content: 'x', base_sha256: ZERO_SHA, confirm: true } });
@@ -284,8 +334,13 @@ export function actionRouteCases() {
 const ACT = 'POST /api/v1/systems/{system_id}/actions/{action}';
 /** One action call. */
 export const action = (system, actionId, params, o = {}) => ({
-  id: `act.${system}.${actionId}${o.tag ? `.${o.tag}` : ''}`, route: ACT, method: 'POST', path: sys(system, `/actions/${actionId}`),
-  json: { ...(params ? { params } : {}), ...(o.confirm ? { confirm: true } : {}) }, timeoutMs: o.timeoutMs ?? 240_000, ...(o.extra || {}),
+  id: `act.${system}.${actionId}${o.tag ? `.${o.tag}` : ''}`,
+  route: ACT,
+  method: 'POST',
+  path: sys(system, `/actions/${actionId}`),
+  json: { ...(params ? { params } : {}), ...(o.confirm ? { confirm: true } : {}) },
+  timeoutMs: o.timeoutMs ?? 240_000,
+  ...(o.extra || {}),
 });
 
 /** Wait until no run.json under <state>/<system>/runs says "running" (background runs: aiperf profile, Data Designer
@@ -298,7 +353,11 @@ export function waitRuns(system, timeoutMs = 60_000) {
       let running = false;
       if (existsSync(dir)) {
         for (const r of readdirSync(dir)) {
-          try { if (JSON.parse(readFileSync(join(dir, r, 'run.json'), 'utf8')).verdict === 'running') running = true; } catch { /* being written */ }
+          try {
+            if (JSON.parse(readFileSync(join(dir, r, 'run.json'), 'utf8')).verdict === 'running') running = true;
+          } catch {
+            /* being written */
+          }
         }
       }
       if (!running) return;
