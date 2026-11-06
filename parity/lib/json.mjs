@@ -9,9 +9,19 @@ export class JsonError extends Error {}
 export function parse(text) {
   let i = 0;
   const n = text.length;
-  const ws = () => { while (i < n && (text[i] === ' ' || text[i] === '\t' || text[i] === '\n' || text[i] === '\r')) i++; };
-  const fail = (why) => { throw new JsonError(`${why} at offset ${i}`); };
-  const lit = (word, node) => { if (text.startsWith(word, i)) { i += word.length; return node; } return fail(`bad literal`); };
+  const ws = () => {
+    while (i < n && (text[i] === ' ' || text[i] === '\t' || text[i] === '\n' || text[i] === '\r')) i++;
+  };
+  const fail = (why) => {
+    throw new JsonError(`${why} at offset ${i}`);
+  };
+  const lit = (word, node) => {
+    if (text.startsWith(word, i)) {
+      i += word.length;
+      return node;
+    }
+    return fail(`bad literal`);
+  };
 
   function str() {
     i++; // opening quote
@@ -20,8 +30,13 @@ export function parse(text) {
     while (true) {
       if (i >= n) fail('unterminated string');
       const c = text.charCodeAt(i);
-      if (c === 34) { out += text.slice(start, i); i++; return out; }          // "
-      if (c === 92) {                                                          // backslash
+      if (c === 34) {
+        out += text.slice(start, i);
+        i++;
+        return out;
+      } // "
+      if (c === 92) {
+        // backslash
         out += text.slice(start, i);
         const e = text[i + 1];
         if (e === 'u') {
@@ -46,7 +61,10 @@ export function parse(text) {
   function num() {
     const m = /^-?(?:0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?/.exec(text.slice(i, i + 400));
     if (!m) {
-      if (text.startsWith('-Infinity', i)) { i += 9; return { k: 'float', v: -Infinity, raw: '-Infinity' }; }
+      if (text.startsWith('-Infinity', i)) {
+        i += 9;
+        return { k: 'float', v: -Infinity, raw: '-Infinity' };
+      }
       fail('bad number');
     }
     i += m[0].length;
@@ -62,7 +80,10 @@ export function parse(text) {
       i++;
       const map = new Map();
       ws();
-      if (text[i] === '}') { i++; return { k: 'obj', v: map }; }
+      if (text[i] === '}') {
+        i++;
+        return { k: 'obj', v: map };
+      }
       while (true) {
         ws();
         if (text[i] !== '"') fail('expected key');
@@ -70,10 +91,16 @@ export function parse(text) {
         ws();
         if (text[i] !== ':') fail('expected :');
         i++;
-        map.set(key, value());            // a duplicate key keeps the last value (as Python's json does)
+        map.set(key, value()); // a duplicate key keeps the last value (as Python's json does)
         ws();
-        if (text[i] === ',') { i++; continue; }
-        if (text[i] === '}') { i++; return { k: 'obj', v: map }; }
+        if (text[i] === ',') {
+          i++;
+          continue;
+        }
+        if (text[i] === '}') {
+          i++;
+          return { k: 'obj', v: map };
+        }
         fail('expected , or }');
       }
     }
@@ -81,12 +108,21 @@ export function parse(text) {
       i++;
       const arr = [];
       ws();
-      if (text[i] === ']') { i++; return { k: 'arr', v: arr }; }
+      if (text[i] === ']') {
+        i++;
+        return { k: 'arr', v: arr };
+      }
       while (true) {
         arr.push(value());
         ws();
-        if (text[i] === ',') { i++; continue; }
-        if (text[i] === ']') { i++; return { k: 'arr', v: arr }; }
+        if (text[i] === ',') {
+          i++;
+          continue;
+        }
+        if (text[i] === ']') {
+          i++;
+          return { k: 'arr', v: arr };
+        }
         fail('expected , or ]');
       }
     }
@@ -130,17 +166,24 @@ export function stringify(node, indent = 0) {
   const pad = (d) => (indent ? '\n' + ' '.repeat(indent * d) : '');
   const walk = (x, d) => {
     switch (x.k) {
-      case 'null': return 'null';
-      case 'bool': return String(x.v);
-      case 'int': return x.v.toString();
-      case 'float': return fmtFloat(x.v);
-      case 'str': return JSON.stringify(x.v);
-      case 'arr': return x.v.length ? `[${x.v.map((e) => pad(d + 1) + walk(e, d + 1)).join(',')}${pad(d)}]` : '[]';
+      case 'null':
+        return 'null';
+      case 'bool':
+        return String(x.v);
+      case 'int':
+        return x.v.toString();
+      case 'float':
+        return fmtFloat(x.v);
+      case 'str':
+        return JSON.stringify(x.v);
+      case 'arr':
+        return x.v.length ? `[${x.v.map((e) => pad(d + 1) + walk(e, d + 1)).join(',')}${pad(d)}]` : '[]';
       case 'obj': {
         const keys = [...x.v.keys()].sort();
         return keys.length ? `{${keys.map((key) => `${pad(d + 1)}${JSON.stringify(key)}:${indent ? ' ' : ''}${walk(x.v.get(key), d + 1)}`).join(',')}${pad(d)}}` : '{}';
       }
-      default: return `<${x.k}>`;
+      default:
+        return `<${x.k}>`;
     }
   };
   return walk(node, 0);
@@ -149,13 +192,21 @@ export function stringify(node, indent = 0) {
 /** Tagged tree -> plain JS for reports (ints beyond 2^53 become strings; floats lose only their kind marker). */
 export function toPlain(node) {
   switch (node.k) {
-    case 'null': return null;
-    case 'bool': case 'str': return node.v;
-    case 'int': return (node.v <= BigInt(Number.MAX_SAFE_INTEGER) && node.v >= -BigInt(Number.MAX_SAFE_INTEGER)) ? Number(node.v) : node.v.toString();
-    case 'float': return Number.isFinite(node.v) ? node.v : fmtFloat(node.v);
-    case 'arr': return node.v.map(toPlain);
-    case 'obj': return Object.fromEntries([...node.v].map(([k, v]) => [k, toPlain(v)]));
-    default: return null;
+    case 'null':
+      return null;
+    case 'bool':
+    case 'str':
+      return node.v;
+    case 'int':
+      return node.v <= BigInt(Number.MAX_SAFE_INTEGER) && node.v >= -BigInt(Number.MAX_SAFE_INTEGER) ? Number(node.v) : node.v.toString();
+    case 'float':
+      return Number.isFinite(node.v) ? node.v : fmtFloat(node.v);
+    case 'arr':
+      return node.v.map(toPlain);
+    case 'obj':
+      return Object.fromEntries([...node.v].map(([k, v]) => [k, toPlain(v)]));
+    default:
+      return null;
   }
 }
 

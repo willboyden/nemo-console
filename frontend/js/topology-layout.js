@@ -11,7 +11,10 @@ export function computeRanks(nodes, edges) {
     let changed = false;
     for (const e of es) {
       const r = rank.get(e.src) + 1;
-      if (r > rank.get(e.dst) && r < nodes.length) { rank.set(e.dst, r); changed = true; }
+      if (r > rank.get(e.dst) && r < nodes.length) {
+        rank.set(e.dst, r);
+        changed = true;
+      }
     }
     if (!changed) break;
   }
@@ -21,7 +24,10 @@ export function computeRanks(nodes, edges) {
 export function layoutTopology(nodes, edges, { nodeW = 150, nodeH = 54, gapX = 60, gapY = 20, pad = 12 } = {}) {
   const rank = computeRanks(nodes, edges);
   const cols = [];
-  for (const n of nodes) { const r = rank.get(n.id); (cols[r] ||= []).push(n); }
+  for (const n of nodes) {
+    const r = rank.get(n.id);
+    (cols[r] ||= []).push(n);
+  }
   const dense = cols.filter(Boolean);
   const maxRows = Math.max(1, ...dense.map((c) => c.length));
   const height = pad * 2 + maxRows * nodeH + (maxRows - 1) * gapY;
@@ -34,15 +40,21 @@ export function layoutTopology(nodes, edges, { nodeW = 150, nodeH = 54, gapX = 6
   });
   const laid = nodes.map((n) => ({ ...n, ...pos.get(n.id) }));
   const round = (v) => Math.round(v * 10) / 10;
-  const laidEdges = edges.filter((e) => pos.has(e.src) && pos.has(e.dst)).map((e) => {
-    const a = pos.get(e.src), b = pos.get(e.dst);
-    const x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2;
-    const forward = x2 > x1;
-    const dx = forward ? (x2 - x1) / 2 : 40;
-    const path = `M${round(x1)} ${round(y1)}C${round(x1 + dx)} ${round(y1)} ${round(x2 - dx)} ${round(y2)} ${round(x2)} ${round(y2)}`;
-    // Label sits at the edge midpoint (the inter-column gap, so it never sits under a node) on a background chip.
-    return { ...e, path, lx: round(x1 + (x2 - x1) * 0.5), ly: round(y1 + (y2 - y1) * 0.5) };
-  });
+  const laidEdges = edges
+    .filter((e) => pos.has(e.src) && pos.has(e.dst))
+    .map((e) => {
+      const a = pos.get(e.src),
+        b = pos.get(e.dst);
+      const x1 = a.x + a.w,
+        y1 = a.y + a.h / 2,
+        x2 = b.x,
+        y2 = b.y + b.h / 2;
+      const forward = x2 > x1;
+      const dx = forward ? (x2 - x1) / 2 : 40;
+      const path = `M${round(x1)} ${round(y1)}C${round(x1 + dx)} ${round(y1)} ${round(x2 - dx)} ${round(y2)} ${round(x2)} ${round(y2)}`;
+      // Label sits at the edge midpoint (the inter-column gap, so it never sits under a node) on a background chip.
+      return { ...e, path, lx: round(x1 + (x2 - x1) * 0.5), ly: round(y1 + (y2 - y1) * 0.5) };
+    });
   return { nodes: laid, edges: laidEdges, width, height };
 }
 
@@ -54,13 +66,25 @@ export function describeTopology(nodes, edges, { active = 'active', inactive = '
 
 /** Wrap a node label into at most `maxLines` lines of about `width` chars; the last line is ellipsised. Full text stays available via <title>. */
 export function wrapLabel(label, width = 20, maxLines = 2) {
-  const words = String(label ?? '').split(/\s+/).filter(Boolean), lines = [];
+  const words = String(label ?? '')
+      .split(/\s+/)
+      .filter(Boolean),
+    lines = [];
   let cur = '';
   for (const w of words) {
-    if (!cur) cur = w; else if ((cur + ' ' + w).length <= width) cur += ' ' + w; else { lines.push(cur); cur = w; }
+    if (!cur) cur = w;
+    else if ((cur + ' ' + w).length <= width) cur += ' ' + w;
+    else {
+      lines.push(cur);
+      cur = w;
+    }
   }
   if (cur) lines.push(cur);
   const cut = (x) => (x.length > width ? `${x.slice(0, width - 1)}…` : x);
-  if (lines.length > maxLines) { const head = lines.slice(0, maxLines - 1), tail = lines.slice(maxLines - 1).join(' '); return [...head.map(cut), cut(tail)]; }
+  if (lines.length > maxLines) {
+    const head = lines.slice(0, maxLines - 1),
+      tail = lines.slice(maxLines - 1).join(' ');
+    return [...head.map(cut), cut(tail)];
+  }
   return lines.map(cut);
 }

@@ -24,20 +24,28 @@ export function helpTabs(scope, { path, helpKey, name, tabDefs: ownTabs, active,
     goTab: (id) => tablist.selectTab(id),
   };
   const help = { key: helpKey, name, nav };
-  const tabDefs = [...ownTabs,
-    { id: 'start', label: t('tab.start'), render: (s) => gettingStartedPanel(s, help) },
-    { id: 'faq', label: t('tab.faq'), render: (s) => faqPanel(s, help) }];
+  const tabDefs = [...ownTabs, { id: 'start', label: t('tab.start'), render: (s) => gettingStartedPanel(s, help) }, { id: 'faq', label: t('tab.faq'), render: (s) => faqPanel(s, help) }];
   const panel = h('div', { id: 'tabpanel', role: 'tabpanel', tabindex: '-1', class: 'tabpanel' });
   let panelScope = null;
   function show(id) {
-    panelScope?.dispose(); panelScope = scope.child();
+    panelScope?.dispose();
+    panelScope = scope.child();
     const def = tabDefs.find((d) => d.id === id) || tabDefs[0];
     clear(panel).append(def.render(panelScope, panelCtx(panelScope)));
-    try { history.replaceState(null, '', `#/${path}?tab=${def.id}`); } catch { /* ignore */ }
+    try {
+      history.replaceState(null, '', `#/${path}?tab=${def.id}`);
+    } catch {
+      /* ignore */
+    }
     panel.setAttribute('aria-labelledby', `tab-${def.id}`);
   }
   const startId = tabDefs.some((d) => d.id === active) ? active : tabDefs[0].id;
-  const tablist = tabs(tabDefs.map((d) => ({ id: d.id, label: d.label })), startId, show, t('sys.tabs', { name }));
+  const tablist = tabs(
+    tabDefs.map((d) => ({ id: d.id, label: d.label })),
+    startId,
+    show,
+    t('sys.tabs', { name }),
+  );
   return { tablist, panel, show, open: () => show(startId) };
 }
 
@@ -53,14 +61,34 @@ export function systemPage(view, { system, tabDefs, active }) {
       if (!scope.alive) return;
       if (last && last.health !== st.health) announce(t('sys.health_changed', { name: t(`sys.${system}`), health: t(`health.${st.health}`) }));
       last = st;
-      append(clear(head), [statusSummary(st), isLoading(st) ? h('p', { class: 'note info', role: 'status' }, h('strong', t('sys.loading')), ' ', t('sys.loading_hint')) : null, problemList(st.problems)]);
+      append(clear(head), [
+        statusSummary(st),
+        isLoading(st) ? h('p', { class: 'note info', role: 'status' }, h('strong', t('sys.loading')), ' ', t('sys.loading_hint')) : null,
+        problemList(st.problems),
+      ]);
       for (const f of cbs) f(st);
-    } catch (e) { if (scope.alive) clear(head).append(errorBox(e, refreshHead)); }
+    } catch (e) {
+      if (scope.alive) clear(head).append(errorBox(e, refreshHead));
+    }
   }
-  const area = helpTabs(scope, { path: system, helpKey: system, name: t(`sys.${system}`), tabDefs, active,
-    panelCtx: (ps) => ({ lastStatus: () => last, onStatus: (f) => { cbs.add(f); ps.own(() => cbs.delete(f)); if (last) f(last); } }) });
+  const area = helpTabs(scope, {
+    path: system,
+    helpKey: system,
+    name: t(`sys.${system}`),
+    tabDefs,
+    active,
+    panelCtx: (ps) => ({
+      lastStatus: () => last,
+      onStatus: (f) => {
+        cbs.add(f);
+        ps.own(() => cbs.delete(f));
+        if (last) f(last);
+      },
+    }),
+  });
   view.append(h('h1', t(`sys.${system}`)), head, area.tablist, area.panel);
-  refreshHead(); scope.every(5000, refreshHead);
+  refreshHead();
+  scope.every(5000, refreshHead);
   area.open();
   return { refreshHead, show: area.show };
 }

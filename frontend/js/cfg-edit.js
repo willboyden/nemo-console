@@ -18,7 +18,7 @@ const DEC_FLOAT = /^[-+]?(?:\d[\d_]*)?\.\d[\d_]*(?:[eE][-+]?\d+)?$|^[-+]?\d[\d_]
  * Unicode line/paragraph separators raw; YAML folds NEL/LS/PS into spaces and refuses DEL, so they are escaped too.
  */
 const dq = (s) => JSON.stringify(s).replace(/[\u007f\u0085\u2028\u2029]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
-const YAML_SQ_BAD = /[\n\r\t\u0000-\u001f\u007f\u0085\u2028\u2029]/;   // what a YAML single-quoted string cannot carry as typed
+const YAML_SQ_BAD = /[\n\r\t\u0000-\u001f\u007f\u0085\u2028\u2029]/; // what a YAML single-quoted string cannot carry as typed
 
 function tomlString(node, v) {
   if (/[\u0000-\u0008\u000b-\u001f\u007f]/.test(v) && !/\n/.test(v)) return dq(v);
@@ -30,8 +30,16 @@ function tomlString(node, v) {
 
 /** Can v be written as a YAML plain scalar that PyYAML reads back as exactly this string? */
 export function yamlPlainSafe(v) {
-  return v !== '' && v !== '=' && v !== '<<' && v === v.trim() && yamlPlainType(v).type === 'string' && !/^(?:[,[\]{}#&*!|>'"%@`]|[-?:](?:\s|$))/.test(v)
-    && !/:(?:\s|$)|\s#|[\t\n\r]|[\u0000-\u001f\u007f\u0085\u2028\u2029\ufeff]/.test(v) && !/^(?:---|\.\.\.)(?:\s|$)/.test(v);
+  return (
+    v !== '' &&
+    v !== '=' &&
+    v !== '<<' &&
+    v === v.trim() &&
+    yamlPlainType(v).type === 'string' &&
+    !/^(?:[,[\]{}#&*!|>'"%@`]|[-?:](?:\s|$))/.test(v) &&
+    !/:(?:\s|$)|\s#|[\t\n\r]|[\u0000-\u001f\u007f\u0085\u2028\u2029\ufeff]/.test(v) &&
+    !/^(?:---|\.\.\.)(?:\s|$)/.test(v)
+  );
 }
 function yamlString(node, v) {
   // inside [ ] or { } a plain value also ends at , [ ] { } and :, so only simple words stay unquoted there
@@ -65,7 +73,7 @@ export function encodeValue(format, node, input, spec = null) {
     return { raw: format === 'toml' ? String(input) : yamlBool(node.type === 'bool' ? node.raw : 'true', input) };
   }
   const s = String(input);
-  if (node.type === 'null' && s.trim() === '' && format === 'yaml') return { raw: node.raw };   // still empty
+  if (node.type === 'null' && s.trim() === '' && format === 'yaml') return { raw: node.raw }; // still empty
   if (type === 'string') {
     if (format === 'toml') return { raw: tomlString(node, s) };
     if (node.style === 'block') {
@@ -78,7 +86,7 @@ export function encodeValue(format, node, input, spec = null) {
     return { raw: yamlString(node, s) };
   }
   let v = s.trim();
-  if (format === 'yaml') v = v.replace(/^([-+])\.(?=\d)/, '$10.');   // PyYAML reads -.5 as text, -0.5 as a number
+  if (format === 'yaml') v = v.replace(/^([-+])\.(?=\d)/, '$10.'); // PyYAML reads -.5 as text, -0.5 as a number
   if (type === 'int' || type === 'float') {
     const intOk = format === 'toml' ? TOML_INT.test(v) : DEC_INT.test(v);
     const floatOk = format === 'toml' ? TOML_FLOAT.test(v) && /[.eEn]/.test(v) : DEC_FLOAT.test(v);
@@ -94,8 +102,10 @@ export function encodeValue(format, node, input, spec = null) {
         const n = Number(v.replace(/_/g, ''));
         if (!Number.isFinite(n)) return { error: `'${v}' is not a number` };
         let out = String(n);
-        if (out.includes('e')) { out = n.toExponential(); if (!out.split('e')[0].includes('.')) out = out.replace('e', '.0e'); }
-        else if (!out.includes('.')) out += '.0';
+        if (out.includes('e')) {
+          out = n.toExponential();
+          if (!out.split('e')[0].includes('.')) out = out.replace('e', '.0e');
+        } else if (!out.includes('.')) out += '.0';
         return { raw: out };
       }
       return { raw: v };
@@ -122,7 +132,10 @@ export function spliceValue(text, node, raw) {
 /** Replace the lines of a YAML | or > block, re-indented to the block's own indentation. */
 export function spliceBlock(text, node, value) {
   const ind = ' '.repeat(node.block.indent);
-  const lines = value.replace(/\n$/, '').split('\n').map((l) => (l ? ind + l : ''));
+  const lines = value
+    .replace(/\n$/, '')
+    .split('\n')
+    .map((l) => (l ? ind + l : ''));
   return text.slice(0, node.start) + lines.join('\n') + text.slice(node.end);
 }
 
@@ -139,7 +152,10 @@ export function displayValue(node) {
 export function flattenFields(root) {
   const out = [];
   const walk = (node, path) => {
-    if (node.kind === 'scalar') { out.push({ path, key: path.at(-1), node }); return; }
+    if (node.kind === 'scalar') {
+      out.push({ path, key: path.at(-1), node });
+      return;
+    }
     if (node.kind === 'map') for (const e of node.entries) walk(e.node, [...path, e.key]);
     else node.items.forEach((it, i) => walk(it, [...path, i]));
   };

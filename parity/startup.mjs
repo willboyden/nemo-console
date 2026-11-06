@@ -58,11 +58,19 @@ function runOnce(kind, env, args) {
   return new Promise((resolve) => {
     const [cmd, ...pre] = CLI[kind];
     const p = spawn(cmd, [...pre, ...args], { cwd: CWD[kind], env, stdio: ['ignore', 'pipe', 'pipe'] });
-    let out = ''; let err = '';
-    p.stdout.on('data', (d) => { out += d; });
-    p.stderr.on('data', (d) => { err += d; });
+    let out = '';
+    let err = '';
+    p.stdout.on('data', (d) => {
+      out += d;
+    });
+    p.stderr.on('data', (d) => {
+      err += d;
+    });
     const t = setTimeout(() => p.kill('SIGKILL'), 60_000);
-    p.on('exit', (code) => { clearTimeout(t); resolve({ code, out, err }); });
+    p.on('exit', (code) => {
+      clearTimeout(t);
+      resolve({ code, out, err });
+    });
   });
 }
 
@@ -71,8 +79,7 @@ function runOnce(kind, env, args) {
 // dropped from that one line; any other difference in it, or anywhere else, still fails the comparison.
 const D31_TAIL = ', modelopt, gym, flare) [type=value_error]';
 function d31(line) {
-  return line.startsWith('  Value error, unknown layout key ') && line.endsWith(D31_TAIL)
-    ? `${line.slice(0, -D31_TAIL.length)}) [type=value_error]` : line;
+  return line.startsWith('  Value error, unknown layout key ') && line.endsWith(D31_TAIL) ? `${line.slice(0, -D31_TAIL.length)}) [type=value_error]` : line;
 }
 
 /** Python's final exception message (or Rust's whole stderr), normalised per D-1 (and D-31 for Rust). */
@@ -81,12 +88,20 @@ function message(kind, err) {
   if (kind === 'python') {
     const lines = err.split('\n');
     let i = -1;
-    for (let k = lines.length - 1; k >= 0; k--) if (/^[A-Za-z_][\w.]*(Error|Exception): /.test(lines[k])) { i = k; break; }
+    for (let k = lines.length - 1; k >= 0; k--)
+      if (/^[A-Za-z_][\w.]*(Error|Exception): /.test(lines[k])) {
+        i = k;
+        break;
+      }
     text = i < 0 ? err : [lines[i].replace(/^[A-Za-z_][\w.]*: /, ''), ...lines.slice(i + 1)].join('\n');
   }
-  return text.split('\n').filter((l) => !/^\s+For further information visit /.test(l))
+  return text
+    .split('\n')
+    .filter((l) => !/^\s+For further information visit /.test(l))
     .map((l) => l.replace(/, input_value=.*?, input_type=\w+\]$/, ']'))
-    .map((l) => (kind === 'rust' ? d31(l) : l)).join('\n').trim();
+    .map((l) => (kind === 'rust' ? d31(l) : l))
+    .join('\n')
+    .trim();
 }
 
 function setup(name, kind, extraEnv, file) {
@@ -94,9 +109,14 @@ function setup(name, kind, extraEnv, file) {
   const home = join(dir, 'home');
   mkdirSync(home, { recursive: true });
   const env = {
-    HOME: home, PATH: '/usr/bin:/bin', LANG: 'C.UTF-8', NEMO_CONSOLE_STATE_DIR: join(dir, 'state'),
-    NEMO_CONSOLE_REPO_ROOT: join(dir, 'repo'), NEMO_CONSOLE_BACKGROUND_TASKS: 'false',
-    NEMO_CONSOLE_URLS: '{"litellm": "http://127.0.0.1:9", "switchyard": "http://127.0.0.1:9", "relay": "http://127.0.0.1:9", "dynamo": "http://127.0.0.1:9", "dcgm": "http://127.0.0.1:9", "prometheus": "http://127.0.0.1:9", "guardrails": "http://127.0.0.1:9", "dynamo_worker_metrics": "http://127.0.0.1:9"}',
+    HOME: home,
+    PATH: '/usr/bin:/bin',
+    LANG: 'C.UTF-8',
+    NEMO_CONSOLE_STATE_DIR: join(dir, 'state'),
+    NEMO_CONSOLE_REPO_ROOT: join(dir, 'repo'),
+    NEMO_CONSOLE_BACKGROUND_TASKS: 'false',
+    NEMO_CONSOLE_URLS:
+      '{"litellm": "http://127.0.0.1:9", "switchyard": "http://127.0.0.1:9", "relay": "http://127.0.0.1:9", "dynamo": "http://127.0.0.1:9", "dcgm": "http://127.0.0.1:9", "prometheus": "http://127.0.0.1:9", "guardrails": "http://127.0.0.1:9", "dynamo_worker_metrics": "http://127.0.0.1:9"}',
     ...extraEnv,
   };
   if (file !== undefined) {
@@ -133,13 +153,15 @@ try {
     const { dir, env } = setup('port-taken', kind, { NEMO_CONSOLE_PORT: String(port), NEMO_CONSOLE_NO_USER_ENV: '1' });
     const r = await runOnce(kind, env, []);
     holder.close();
-    const line = (r.err.split('\n').find((l) => l.includes('"level": "ERROR"')) || '').replace(/"ts": "[^"]*", /, '')
-      .replaceAll(String(port), '<port>');
+    const line = (r.err.split('\n').find((l) => l.includes('"level": "ERROR"')) || '').replace(/"ts": "[^"]*", /, '').replaceAll(String(port), '<port>');
     res[kind] = { code: r.code, line, bootstrapKey: existsSync(join(dir, 'state', 'bootstrap-admin.key')) };
   }
   const eq = JSON.stringify(res.python) === JSON.stringify(res.rust);
   console.log(`${eq ? 'equal' : 'DIFF '} port-taken: exit ${res.python.code}, key left: ${res.python.bootstrapKey}, ${res.python.line.slice(0, 160)}`);
-  if (!eq) { failures.push('port-taken'); console.log(`   python: ${JSON.stringify(res.python)}\n   rust:   ${JSON.stringify(res.rust)}`); }
+  if (!eq) {
+    failures.push('port-taken');
+    console.log(`   python: ${JSON.stringify(res.python)}\n   rust:   ${JSON.stringify(res.rust)}`);
+  }
 } catch (e) {
   failures.push(`harness: ${e.stack || e.message}`);
 } finally {

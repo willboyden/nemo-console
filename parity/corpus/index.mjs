@@ -19,15 +19,33 @@ import { join } from 'node:path';
 import { FIXTURES } from '../lib/seed.mjs';
 import { securityCases, roleSweepCases, staticCases, globalReadCases, auditCases, settingsCases, metricsCases, cliCases } from './core.mjs';
 import {
-  SYSTEM_IDS, systemReadCases, systemReadVariantCases, configReadCases, sseCases, sseAppendCases, configRoundTrip,
-  configRefusalCases, paramsCases, actionRouteCases, action, waitRuns, captureNewestRun, playgroundCases, ddRunCases,
+  SYSTEM_IDS,
+  systemReadCases,
+  systemReadVariantCases,
+  configReadCases,
+  sseCases,
+  sseAppendCases,
+  configRoundTrip,
+  configRefusalCases,
+  paramsCases,
+  actionRouteCases,
+  action,
+  waitRuns,
+  captureNewestRun,
+  playgroundCases,
+  ddRunCases,
   concurrencyCases,
 } from './systems.mjs';
 
 const LIFECYCLE_ENV = {
-  NEMO_CONSOLE_BACKGROUND_TASKS: 'true', NEMO_CONSOLE_POLL_INTERVAL_S: '0.5',
-  NEMO_CONSOLE_SSE_IDLE_TIMEOUT_S: '1.5', NEMO_CONSOLE_SSE_HEARTBEAT_S: '0.4', NEMO_CONSOLE_SHUTDOWN_GRACE_S: '2',
-  NEMO_CONSOLE_CAPABLE_PROBE: 'true', NEMO_CONSOLE_CAPABLE_PROBE_RETRY_S: '0', NEMO_CONSOLE_CAPABLE_PROBE_TIMEOUT_S: '2',
+  NEMO_CONSOLE_BACKGROUND_TASKS: 'true',
+  NEMO_CONSOLE_POLL_INTERVAL_S: '0.5',
+  NEMO_CONSOLE_SSE_IDLE_TIMEOUT_S: '1.5',
+  NEMO_CONSOLE_SSE_HEARTBEAT_S: '0.4',
+  NEMO_CONSOLE_SHUTDOWN_GRACE_S: '2',
+  NEMO_CONSOLE_CAPABLE_PROBE: 'true',
+  NEMO_CONSOLE_CAPABLE_PROBE_RETRY_S: '0',
+  NEMO_CONSOLE_CAPABLE_PROBE_TIMEOUT_S: '2',
 };
 
 export const SCENARIOS = {
@@ -42,22 +60,34 @@ export const SCENARIOS = {
   // whole-run distinct argv / upstream sets are compared (wholeRunCallsOnly).
   lifecycle: { name: 'lifecycle', seed: true, fakes: true, upstreams: true, wholeRunCallsOnly: true, env: LIFECYCLE_ENV },
   // the same with the router unreachable: the probe's verdict is "broken" (tried twice) and Switchyard degrades
-  'probe-broken': { name: 'probe-broken', seed: true, fakes: true, upstreams: true, wholeRunCallsOnly: true,
-    env: { ...LIFECYCLE_ENV, NEMO_CONSOLE_URLS__LITELLM: 'http://127.0.0.1:9' } },
+  'probe-broken': { name: 'probe-broken', seed: true, fakes: true, upstreams: true, wholeRunCallsOnly: true, env: { ...LIFECYCLE_ENV, NEMO_CONSOLE_URLS__LITELLM: 'http://127.0.0.1:9' } },
 };
 
 // config files of the seeded repo, per system (GET /config lists them)
 const FILES = {
-  switchyard: ['routes'], relay: ['routes', 'plugins', 'config'], dynamo: ['compose', 'override'],
-  datadesigner: ['reviews_smoke.py', 'tiny.yaml'], openshell: ['gateway', 'policy', 'provider-profile', 'compose'],
-  dcgm: ['counters'], aiperf: ['profiles'],
+  switchyard: ['routes'],
+  relay: ['routes', 'plugins', 'config'],
+  dynamo: ['compose', 'override'],
+  datadesigner: ['reviews_smoke.py', 'tiny.yaml'],
+  openshell: ['gateway', 'policy', 'provider-profile', 'compose'],
+  dcgm: ['counters'],
+  aiperf: ['profiles'],
   guardrails: ['lab-input-output--actions.py', 'lab-input-output--config.yml', 'lab-input-output--kb--faq.md', 'lab-input-output--prompts.yml'],
   evaluator: ['suites.yaml'],
 };
 
 const DYNAMO_VALID = { max_model_len: 131072, gpu_memory_utilization: 0.6, num_speculative_tokens: 3, enable_prefix_caching: false, router_mode: 'kv', reasoning_parser: 'none' };
-const DYNAMO_INVALID = [{ max_num_seqs: 0 }, { router_mode: 'direct' }, { max_model_len: true }, { gpu_memory_utilization: 1.5 },
-  { nope: 1 }, { max_num_seqs: 16.5 }, { max_num_seqs: 16.0 }, { tool_call_parser: 5 }, { enable_prefix_caching: 'false' }];
+const DYNAMO_INVALID = [
+  { max_num_seqs: 0 },
+  { router_mode: 'direct' },
+  { max_model_len: true },
+  { gpu_memory_utilization: 1.5 },
+  { nope: 1 },
+  { max_num_seqs: 16.5 },
+  { max_num_seqs: 16.0 },
+  { tool_call_parser: 5 },
+  { enable_prefix_caching: 'false' },
+];
 
 function actionsFull() {
   const A = (system, id, params, o = {}) => action(system, id, params, o);
@@ -67,8 +97,11 @@ function actionsFull() {
     A('switchyard', 'restart', {}, { confirm: true }),
     A('switchyard', 'reset_stats', {}, { confirm: true }),
     // relay
-    A('relay', 'gateway_status', {}), A('relay', 'doctor_offline', {}), A('relay', 'agents_list', {}),
-    A('relay', 'plugins_validate', {}), A('relay', 'gateway_restart', {}, { confirm: true }),
+    A('relay', 'gateway_status', {}),
+    A('relay', 'doctor_offline', {}),
+    A('relay', 'agents_list', {}),
+    A('relay', 'plugins_validate', {}),
+    A('relay', 'gateway_restart', {}, { confirm: true }),
     // dynamo: the card state machine (worker + an engine sharing its card at start)
     A('dynamo', 'preflight', {}),
     A('dynamo', 'up_mock', {}, { tag: 'worker-running' }),
@@ -102,14 +135,33 @@ function actionsFull() {
     A('datadesigner', 'report', {}, { tag: 'none-yet' }),
     A('datadesigner', 'preview', { script: 'reviews_smoke.py', num_records: 2 }, { confirm: true, extra: { after: captureNewestRun('datadesigner', 'ddPreviewRun') } }),
     A('datadesigner', 'report', {}),
-    A('datadesigner', 'create', { script: 'tiny.yaml', num_records: 2, format: 'jsonl' }, { confirm: true, extra: { after: async (side) => { await waitRuns('datadesigner')(side); await captureNewestRun('datadesigner', 'ddCreateRun')(side); } } }),
-    A('datadesigner', 'create', { script: 'reviews_smoke.py', num_records: 2, format: 'csv', dataset_name: 'parity_csv', destination_subdir: 'parity/csv' }, { confirm: true, tag: 'csv', extra: { after: waitRuns('datadesigner') } }),
+    A(
+      'datadesigner',
+      'create',
+      { script: 'tiny.yaml', num_records: 2, format: 'jsonl' },
+      {
+        confirm: true,
+        extra: {
+          after: async (side) => {
+            await waitRuns('datadesigner')(side);
+            await captureNewestRun('datadesigner', 'ddCreateRun')(side);
+          },
+        },
+      },
+    ),
+    A(
+      'datadesigner',
+      'create',
+      { script: 'reviews_smoke.py', num_records: 2, format: 'csv', dataset_name: 'parity_csv', destination_subdir: 'parity/csv' },
+      { confirm: true, tag: 'csv', extra: { after: waitRuns('datadesigner') } },
+    ),
     A('datadesigner', 'create', { script: 'reviews_smoke.py', num_records: 2, destination_subdir: '../escape' }, { confirm: true, tag: 'escape' }),
     A('datadesigner', 'create', { script: 'nope.py' }, { confirm: true, tag: 'bad-script' }),
     A('datadesigner', 'report', { run_id: '{{ddCreateRun}}' }, { tag: 'create' }),
     A('datadesigner', 'report', { run_id: 'bogus' }, { tag: 'bogus' }),
     // openshell
-    A('openshell', 'doctor', {}), A('openshell', 'list_sandboxes', {}),
+    A('openshell', 'doctor', {}),
+    A('openshell', 'list_sandboxes', {}),
     A('openshell', 'sandbox_get', { name: 'nc-adapter-probe' }),
     A('openshell', 'sandbox_get', { name: 'nope' }, { tag: 'unknown' }),
     A('openshell', 'sandbox_logs', { name: 'nc-adapter-probe', lines: 5 }),
@@ -150,16 +202,29 @@ function actionsFull() {
 function actionsEmpty() {
   const A = (system, id, params, o = {}) => action(system, id, params, o);
   return [
-    A('switchyard', 'dry_run_config', {}), A('switchyard', 'restart', {}, { confirm: true }), A('switchyard', 'reset_stats', {}, { confirm: true }),
-    A('relay', 'doctor_offline', {}), A('relay', 'plugins_validate', {}), A('relay', 'gateway_restart', {}, { confirm: true }),
-    A('dynamo', 'preflight', {}), A('dynamo', 'up', {}, { confirm: true }), A('dynamo', 'down', {}, { confirm: true }),
-    A('skillevaluator', 'doctor', {}), A('skillevaluator', 'evaluate', { tiers: 'static' }),
-    A('datadesigner', 'show_config', {}), A('datadesigner', 'report', {}),
-    A('openshell', 'doctor', {}), A('openshell', 'gateway_up', {}, { confirm: true }),
-    A('dcgm', 'discovery', {}), A('dcgm', 'restart_exporter', {}, { confirm: true }),
-    A('aiperf', 'report', {}), A('aiperf', 'profile', {}, { confirm: true }),
-    A('guardrails', 'check', {}, { confirm: true }), A('guardrails', 'up', {}, { confirm: true }),
-    A('evaluator', 'report', {}), A('evaluator', 'run', {}, { confirm: true }),
+    A('switchyard', 'dry_run_config', {}),
+    A('switchyard', 'restart', {}, { confirm: true }),
+    A('switchyard', 'reset_stats', {}, { confirm: true }),
+    A('relay', 'doctor_offline', {}),
+    A('relay', 'plugins_validate', {}),
+    A('relay', 'gateway_restart', {}, { confirm: true }),
+    A('dynamo', 'preflight', {}),
+    A('dynamo', 'up', {}, { confirm: true }),
+    A('dynamo', 'down', {}, { confirm: true }),
+    A('skillevaluator', 'doctor', {}),
+    A('skillevaluator', 'evaluate', { tiers: 'static' }),
+    A('datadesigner', 'show_config', {}),
+    A('datadesigner', 'report', {}),
+    A('openshell', 'doctor', {}),
+    A('openshell', 'gateway_up', {}, { confirm: true }),
+    A('dcgm', 'discovery', {}),
+    A('dcgm', 'restart_exporter', {}, { confirm: true }),
+    A('aiperf', 'report', {}),
+    A('aiperf', 'profile', {}, { confirm: true }),
+    A('guardrails', 'check', {}, { confirm: true }),
+    A('guardrails', 'up', {}, { confirm: true }),
+    A('evaluator', 'report', {}),
+    A('evaluator', 'run', {}, { confirm: true }),
   ];
 }
 
@@ -183,14 +248,27 @@ function fullCases() {
     ...configRoundTrip('dynamo', 'override', { appendText: readFileSync(join(FIXTURES, 'dynamo', 'golden_override.yml'), 'utf8'), invalid: 'services:\n  dynamo-worker:\n    privileged: true\n' }),
     ...configRoundTrip('datadesigner', 'reviews_smoke.py', { tag: 'script', invalid: '# parity-invalid\n' }),
     ...configRoundTrip('dcgm', 'counters', { invalid: 'DCGM_FI_DEV_GPU_TEMP, gauge\n' }),
-    { id: 'cfg.dcgm.counters.validate.unknown-field', route: 'POST /api/v1/systems/{system_id}/config/{file_id}/validate', method: 'POST', path: '/api/v1/systems/dcgm/config/counters/validate', json: { content: 'DCGM_FI_NOPE_NOT_A_FIELD, gauge, nope\nDCGM_FI_DEV_GPU_TEMP, gauge, temp\n' } },
+    {
+      id: 'cfg.dcgm.counters.validate.unknown-field',
+      route: 'POST /api/v1/systems/{system_id}/config/{file_id}/validate',
+      method: 'POST',
+      path: '/api/v1/systems/dcgm/config/counters/validate',
+      json: { content: 'DCGM_FI_NOPE_NOT_A_FIELD, gauge, nope\nDCGM_FI_DEV_GPU_TEMP, gauge, temp\n' },
+    },
     ...configRoundTrip('aiperf', 'profiles', { invalid: 'presets: [\n' }),
     ...configRoundTrip('guardrails', 'lab-input-output--prompts.yml', { tag: 'prompts', invalid: '# parity-invalid\nprompts: []\n' }),
     ...configRoundTrip('evaluator', 'suites.yaml', { tag: 'suites', invalid: 'suites: [\n' }),
     ...configRefusalCases(),
     ...actionsFull(),
     ...paramsCases(DYNAMO_VALID, DYNAMO_INVALID),
-    { id: 'params.dynamo.preview.nan', route: 'POST /api/v1/systems/{system_id}/params/preview', method: 'POST', path: '/api/v1/systems/dynamo/params/preview', body: '{"values":{"gpu_memory_utilization":NaN}}', contentType: 'application/json' },
+    {
+      id: 'params.dynamo.preview.nan',
+      route: 'POST /api/v1/systems/{system_id}/params/preview',
+      method: 'POST',
+      path: '/api/v1/systems/dynamo/params/preview',
+      body: '{"values":{"gpu_memory_utilization":NaN}}',
+      contentType: 'application/json',
+    },
     ...ddRunCases(),
     ...settingsCases(),
     ...playgroundCases('pg-after-settings').filter((c) => /\.(relay|dynamo|switchyard)\.nonstream$/.test(c.id)),
@@ -248,8 +326,12 @@ function lifecycleCases() {
   const S = 'GET /api/v1/systems/{system_id}/status';
   const H = 'GET /api/v1/systems/{system_id}/metrics/history';
   const E = 'GET /api/v1/systems/{system_id}/events/stream';
-  const hist = (sys, window, key) => ({ id: `life.poller.${window}.${sys}.${key}`, route: H, historyShape: true,
-    path: `/api/v1/systems/${sys}/metrics/history?window=${window}&key=${encodeURIComponent(key)}` });
+  const hist = (sys, window, key) => ({
+    id: `life.poller.${window}.${sys}.${key}`,
+    route: H,
+    historyShape: true,
+    path: `/api/v1/systems/${sys}/metrics/history?window=${window}&key=${encodeURIComponent(key)}`,
+  });
   return [
     // the first Switchyard status schedules the probe (one tiny completion per running capable target); the second,
     // after the probe ran, shows its verdict
@@ -258,12 +340,22 @@ function lifecycleCases() {
     // no event for 1.5 s: heartbeats every 0.4 s, then `event: idle-timeout` and the stream ends on its own
     { id: 'life.sse.idle-timeout', route: E, path: '/api/v1/systems/relay/events/stream', readMs: 6000, collapseKeepAlive: true },
     // the poller has run for a few seconds by now: the ring (15m) and the minute rollups (1h, 24h) hold the points
-    hist('switchyard', '15m', 'sy.route.calls'), hist('switchyard', '1h', 'sy.route.calls'), hist('switchyard', '24h', 'sy.route.calls'),
-    hist('dcgm', '15m', 'dcgm.gpu_temp_c'), hist('dcgm', '1h', 'dcgm.gpu_temp_c'),
+    hist('switchyard', '15m', 'sy.route.calls'),
+    hist('switchyard', '1h', 'sy.route.calls'),
+    hist('switchyard', '24h', 'sy.route.calls'),
+    hist('dcgm', '15m', 'dcgm.gpu_temp_c'),
+    hist('dcgm', '1h', 'dcgm.gpu_temp_c'),
     { id: 'life.metrics.after-poller', route: 'GET /metrics', path: '/metrics' },
     // SIGTERM while a stream is open: the stream ends with `event: shutdown`, the process exits (code compared)
-    { id: 'life.sse.shutdown', route: E, path: '/api/v1/systems/relay/events/stream', readMs: 12_000, collapseKeepAlive: true,
-      during: { afterMs: 700, run: (side) => side.b.proc.kill('SIGTERM') }, waitExit: true },
+    {
+      id: 'life.sse.shutdown',
+      route: E,
+      path: '/api/v1/systems/relay/events/stream',
+      readMs: 12_000,
+      collapseKeepAlive: true,
+      during: { afterMs: 700, run: (side) => side.b.proc.kill('SIGTERM') },
+      waitExit: true,
+    },
   ];
 }
 
@@ -289,8 +381,7 @@ export const ALL_SCENARIOS = Object.keys(SCENARIOS);
 // Python exception escaping the YAML loader (an impossible date), tomllib errors and difflib's "did you mean".
 function wsbCases() {
   const V = 'POST /api/v1/systems/{system_id}/config/{file_id}/validate';
-  const v = (id, system, file, content) => ({ id: `wsb.${system}.${id}`, route: V, method: 'POST',
-    path: `/api/v1/systems/${system}/config/${file}/validate`, json: { content } });
+  const v = (id, system, file, content) => ({ id: `wsb.${system}.${id}`, route: V, method: 'POST', path: `/api/v1/systems/${system}/config/${file}/validate`, json: { content } });
   const live = readFileSync(join(FIXTURES, 'guardrails', 'config-tree', 'lab-input-output', 'config.yml'), 'utf8');
   const noInput = live.replace('  input:\n    flows:\n      - self check input\n', '');
   const noRails = live.slice(0, live.indexOf('rails:'));

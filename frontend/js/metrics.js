@@ -19,7 +19,9 @@ export function groupBy(snapshot, key, by) {
 export function counterRate(points) {
   const out = [];
   for (let i = 1; i < (points || []).length; i++) {
-    const [t0, v0] = points[i - 1], [t1, v1] = points[i], dt = t1 - t0;
+    const [t0, v0] = points[i - 1],
+      [t1, v1] = points[i],
+      dt = t1 - t0;
     if (dt > 0 && v1 >= v0) out.push([t1, (v1 - v0) / dt]);
   }
   return out;

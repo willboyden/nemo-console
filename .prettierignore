@@ -1,0 +1,25 @@
+# Prettier checks code and JSON only (js, mjs, cjs, ts, tsx, css, html, json): `make fmt` / `make fmt-check`.
+# Markdown and YAML stay as written.
+*.md
+*.yml
+*.yaml
+
+# Build output, dependencies, lockfiles
+backend/target/
+node_modules/
+dist/
+build/
+package-lock.json
+Cargo.lock
+
+# Files whose exact bytes matter
+# - test fixtures and goldens (captured upstream answers, Python-recorded outputs, the console.db fixtures)
+backend/crates/*/tests/fixtures/
+# - the OpenAPI document generated from the Python backend (parity/gen/gen_openapi.py), embedded with include_str!
+backend/crates/*/assets/
+# - the parity harness: its extracted Python reference, its output, recorded captures and generated route tables
+parity/.ref/
+parity/out/
+parity/gen/
+parity/routes.python.json
+parity/routes.rust.json

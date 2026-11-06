@@ -10,9 +10,8 @@ import { dirname, join } from 'node:path';
 import { isatty } from 'node:tty';
 import { respond, initialWorld } from './cli-table.mjs';
 
-const ENV_SHOWN = ['PATH', 'HOME', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS', 'DOCKER_HOST', 'DOCKER_CONTEXT',
-  'DOCKER_CONFIG', 'LANG', 'LC_ALL'];
-const ENV_IGNORED = new Set(['PWD', 'OLDPWD', 'SHLVL', '_']);       // added by /bin/sh itself, not by the console
+const ENV_SHOWN = ['PATH', 'HOME', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_CONFIG', 'LANG', 'LC_ALL'];
+const ENV_IGNORED = new Set(['PWD', 'OLDPWD', 'SHLVL', '_']); // added by /bin/sh itself, not by the console
 
 async function main() {
   const [sideDir, name, ...args] = process.argv.slice(2);
@@ -25,12 +24,19 @@ async function main() {
     for await (const c of process.stdin) chunks.push(c);
     stdin = Buffer.concat(chunks).toString('utf8');
   }
-  const envKeys = Object.keys(process.env).filter((k) => !ENV_IGNORED.has(k)).sort();
+  const envKeys = Object.keys(process.env)
+    .filter((k) => !ENV_IGNORED.has(k))
+    .sort();
   const env = Object.fromEntries(ENV_SHOWN.filter((k) => k in process.env).map((k) => [k, process.env[k]]));
   // the fake machine's state (containers, sandboxes, ...): created on first use, changed by mutating commands
   const worldFile = join(sideDir, 'fake-world.json');
   let world;
-  try { world = JSON.parse(readFileSync(worldFile, 'utf8')); } catch { world = initialWorld(); writeAtomic(worldFile, JSON.stringify(world)); }
+  try {
+    world = JSON.parse(readFileSync(worldFile, 'utf8'));
+  } catch {
+    world = initialWorld();
+    writeAtomic(worldFile, JSON.stringify(world));
+  }
   const ctx = { ...conf, name, args, argv: [name, ...args], stdin, cwd: process.cwd(), world, worldChanged: false };
   let ans;
   try {

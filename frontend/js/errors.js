@@ -6,7 +6,8 @@ const STATUS_KEY = { 401: 'err.401', 403: 'err.403', 409: 'err.409', 413: 'err.4
 
 export function describeError(e) {
   if (!e) return t('common.error');
-  const status = e.status, detail = e.message;
+  const status = e.status,
+    detail = e.message;
   if (status === 0 || e.code === 'network') return t('err.network');
   const key = STATUS_KEY[status];
   if (!key) return detail || t('common.error');

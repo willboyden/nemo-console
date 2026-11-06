@@ -2,7 +2,10 @@
 const PROPS = new Set(['value', 'checked', 'selected', 'indeterminate', 'disabled', 'open']);
 export function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
-  if (attrs && (typeof attrs !== 'object' || attrs instanceof Node || Array.isArray(attrs))) { children.unshift(attrs); attrs = null; }
+  if (attrs && (typeof attrs !== 'object' || attrs instanceof Node || Array.isArray(attrs))) {
+    children.unshift(attrs);
+    attrs = null;
+  }
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v == null || v === false) continue;
     if (k === 'style') throw new Error('inline style attributes are forbidden by the CSP; use a CSS class or el.style.prop');
@@ -22,7 +25,10 @@ export function append(el, children) {
   }
   return el;
 }
-export const clear = (el) => { el.replaceChildren(); return el; };
+export const clear = (el) => {
+  el.replaceChildren();
+  return el;
+};
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
@@ -39,7 +45,8 @@ const ICONS = {
   moon: 'M20 14A8 8 0 1110 4a7 7 0 0010 10z',
   key: 'M14 10a4 4 0 11-3 4l-8 0v-3h2v-2h2l2-2M17 8h.01',
   close: 'M6 6l12 12M18 6L6 18',
-  play: 'M7 4l13 8-13 8z', stop: 'M6 6h12v12H6z',
+  play: 'M7 4l13 8-13 8z',
+  stop: 'M6 6h12v12H6z',
   restart: 'M4 12a8 8 0 108-8M4 4v6h6',
   trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
   copy: 'M9 9h11v11H9zM5 15V4h11',
@@ -63,28 +70,50 @@ const ICONS = {
 export function icon(name, size = 18) {
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('width', size); svg.setAttribute('height', size);
-  svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '1.8');
-  svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
-  svg.setAttribute('aria-hidden', 'true'); svg.classList.add('icon');
-  const p = document.createElementNS(ns, 'path'); p.setAttribute('d', ICONS[name] || ICONS.overview);
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', size);
+  svg.setAttribute('height', size);
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.8');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('icon');
+  const p = document.createElementNS(ns, 'path');
+  p.setAttribute('d', ICONS[name] || ICONS.overview);
   svg.append(p);
   return svg;
 }
 // Only for markup produced by markdown.js / charts.js (both escape all dynamic text).
-export function setTrustedHtml(el, html) { el.innerHTML = html; return el; }
+export function setTrustedHtml(el, html) {
+  el.innerHTML = html;
+  return el;
+}
 
 export function download(filename, text, type = 'text/plain') {
   const url = URL.createObjectURL(new Blob([text], { type }));
   const a = h('a', { href: url, download: filename });
-  document.body.append(a); a.click(); a.remove();
+  document.body.append(a);
+  a.click();
+  a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 export async function copyText(text) {
-  try { await navigator.clipboard.writeText(text); return true; } catch {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
     const ta = h('textarea', { value: text, class: 'sr-only' });
-    document.body.append(ta); ta.select();
-    let ok = false; try { ok = document.execCommand('copy'); } catch { /* ignore */ }
-    ta.remove(); return ok;
+    document.body.append(ta);
+    ta.select();
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch {
+      /* ignore */
+    }
+    ta.remove();
+    return ok;
   }
 }

@@ -29,7 +29,7 @@ function commentFor(lines, line, endCol, max = 2) {
   for (let i = line - 2; i >= 0; i--) {
     const s = lines[i].trim();
     if (!s.startsWith('#')) break;
-    if (i === 0) return '';   // a block that starts the file is the file's header, not about this key
+    if (i === 0) return ''; // a block that starts the file is the file's header, not about this key
     above.unshift(s.replace(/^#+\s?/, ''));
     if (above.length > max) return '';
   }
@@ -41,12 +41,14 @@ function commentFor(lines, line, endCol, max = 2) {
 function sectionsOf(root) {
   const out = [];
   const walk = (node, path, line) => {
-    const fields = [], kids = [];
+    const fields = [],
+      kids = [];
     if (node.kind === 'map') {
       for (const e of node.entries) {
-        if (entryOf(node, e.key) !== e) continue;   // a duplicate key that a later one overrides: the loader ignores it
+        if (entryOf(node, e.key) !== e) continue; // a duplicate key that a later one overrides: the loader ignores it
         if (e.node.kind === 'scalar') fields.push({ path: [...path, e.key], label: e.key, node: e.node });
-        else if (e.node.kind === 'seq' && e.node.items.every((x) => x.kind === 'scalar')) e.node.items.forEach((x, i) => fields.push({ path: [...path, e.key, i], label: `${e.key} [${i + 1}]`, node: x }));
+        else if (e.node.kind === 'seq' && e.node.items.every((x) => x.kind === 'scalar'))
+          e.node.items.forEach((x, i) => fields.push({ path: [...path, e.key, i], label: `${e.key} [${i + 1}]`, node: x }));
         else kids.push([e.node, [...path, e.key], e.line]);
       }
     } else node.items.forEach((x, i) => (x.kind === 'scalar' ? fields.push({ path: [...path, i], label: `[${i + 1}]`, node: x }) : kids.push([x, [...path, i], x.line])));
@@ -71,34 +73,74 @@ const crumb = (path) => path.map((p) => (typeof p === 'number' ? `#${p + 1}` : p
  */
 export function configForm(o) {
   const root = h('div', { class: 'cfg-form stack-v' });
-  let fields = new Map(), sections = [], filter = { q: '', only: 'all' }, diags = [], base = new Map(), doc = null;
+  let fields = new Map(),
+    sections = [],
+    filter = { q: '', only: 'all' },
+    diags = [],
+    base = new Map(),
+    doc = null;
   const lines = () => o.getText().split('\n');
 
   function build() {
     closePop(false);
     clear(root);
     const res = parseConfig(o.format, o.getText());
-    if (res.unsupported) { root.append(emptyBox(t('form.unsupported'), t('form.unsupported_hint', { what: res.unsupported }))); return false; }
+    if (res.unsupported) {
+      root.append(emptyBox(t('form.unsupported'), t('form.unsupported_hint', { what: res.unsupported })));
+      return false;
+    }
     if (!res.root) {
       const e = res.errors[0];
-      root.append(emptyBox(t('form.syntax'), t('form.syntax_hint', { line: e.line, message: e.message }), btn(t('form.go_line', { n: e.line }), { kind: 'primary', onClick: () => o.onGoToLine(e.line) })));
+      root.append(
+        emptyBox(t('form.syntax'), t('form.syntax_hint', { line: e.line, message: e.message }), btn(t('form.go_line', { n: e.line }), { kind: 'primary', onClick: () => o.onGoToLine(e.line) })),
+      );
       return false;
     }
     doc = res.root;
     const baseRes = parseConfig(o.format, o.baseText());
     base = new Map(baseRes.root ? flattenFields(baseRes.root).map((f) => [pathKey(f.path), f.node]) : []);
-    fields = new Map(); sections = sectionsOf(res.root);
-    const search = h('input', { type: 'search', class: 'form-search', placeholder: t('form.search_ph'), 'aria-label': t('form.search'), value: filter.q, autocomplete: 'off',
-      onInput: (e) => { filter.q = e.target.value; applyFilter(); } });
-    const seg = h('div', { class: 'seg-control', role: 'group', 'aria-label': t('form.show') }, ['all', 'changed', 'problems'].map((k) => h('button', { type: 'button', 'aria-pressed': String(filter.only === k), dataset: { only: k },
-      onClick: (e) => { filter.only = k; seg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b === e.currentTarget))); applyFilter(); } }, t(`form.only_${k}`))));
+    fields = new Map();
+    sections = sectionsOf(res.root);
+    const search = h('input', {
+      type: 'search',
+      class: 'form-search',
+      placeholder: t('form.search_ph'),
+      'aria-label': t('form.search'),
+      value: filter.q,
+      autocomplete: 'off',
+      onInput: (e) => {
+        filter.q = e.target.value;
+        applyFilter();
+      },
+    });
+    const seg = h(
+      'div',
+      { class: 'seg-control', role: 'group', 'aria-label': t('form.show') },
+      ['all', 'changed', 'problems'].map((k) =>
+        h(
+          'button',
+          {
+            type: 'button',
+            'aria-pressed': String(filter.only === k),
+            dataset: { only: k },
+            onClick: (e) => {
+              filter.only = k;
+              seg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b === e.currentTarget)));
+              applyFilter();
+            },
+          },
+          t(`form.only_${k}`),
+        ),
+      ),
+    );
     const count = h('span', { class: 'muted small', role: 'status', 'aria-live': 'polite' });
     const body = h('div', { class: 'form-sections' });
     const ls = lines();
     for (const s of sections) body.append(sectionEl(s, ls));
     const none = h('p', { class: 'note info form-none', hidden: true }, t('form.no_match'));
     root.append(h('div', { class: 'row gap wrap between form-bar' }, h('div', { class: 'row gap wrap' }, search, seg), count), body, none, pop);
-    root._count = count; root._none = none;
+    root._count = count;
+    root._none = none;
     refresh(diags);
     return true;
   }
@@ -109,19 +151,39 @@ export function configForm(o) {
     const msg = h('div', { class: 'ff-msg' });
     const grid = h('div', { class: 'ff-grid' });
     for (const f of s.fields) grid.append(fieldEl(f, ls));
-    const head = h('summary', { class: 'sec-head' }, h('span', { class: 'sec-title' }, title.map((c, i) => [i ? h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '›') : null, h('span', { class: i === title.length - 1 ? 'crumb last' : 'crumb' }, String(c))])),
-      h('span', { class: 'sec-meta muted small' }, s.fields.length ? t('form.n_values', { count: s.fields.length }) : ''), h('span', { class: 'sec-flag' }));
-    const about = s.path.length && lookupHelp(o.getHelp?.()?.cat, s.path)
-      ? h('button', { type: 'button', class: 'ff-info sec-info', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', onClick: (e) => togglePop(e.currentTarget, { section: s }) }, icon('info', 15), h('span', t('form.info_section')))
-      : null;
+    const head = h(
+      'summary',
+      { class: 'sec-head' },
+      h(
+        'span',
+        { class: 'sec-title' },
+        title.map((c, i) => [i ? h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '›') : null, h('span', { class: i === title.length - 1 ? 'crumb last' : 'crumb' }, String(c))]),
+      ),
+      h('span', { class: 'sec-meta muted small' }, s.fields.length ? t('form.n_values', { count: s.fields.length }) : ''),
+      h('span', { class: 'sec-flag' }),
+    );
+    const about =
+      s.path.length && lookupHelp(o.getHelp?.()?.cat, s.path)
+        ? h(
+            'button',
+            { type: 'button', class: 'ff-info sec-info', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', onClick: (e) => togglePop(e.currentTarget, { section: s }) },
+            icon('info', 15),
+            h('span', t('form.info_section')),
+          )
+        : null;
     const top = note || about ? h('div', { class: 'sec-about' }, note ? h('p', { class: 'hint sec-note' }, note) : h('span'), about) : null;
     const el = h('details', { class: 'sec', open: true, dataset: { path: pathKey(s.path) } }, head, top, msg, s.empty ? h('p', { class: 'muted small' }, t('form.empty_section')) : grid);
-    s.el = el; s.msg = msg; s.flag = head.lastChild;
+    s.el = el;
+    s.msg = msg;
+    s.flag = head.lastChild;
     return el;
   }
 
   function fieldEl(f, ls) {
-    const schema = o.getSchema?.(), id = `ff${++uid}`, k = pathKey(f.path), spec = schema ? specAt(schema, f.path) : null;
+    const schema = o.getSchema?.(),
+      id = `ff${++uid}`,
+      k = pathKey(f.path),
+      spec = schema ? specAt(schema, f.path) : null;
     const n = f.node;
     const ro = !o.editable || (n.style === 'block' && n.block.empty);
     const choices = choicesFor(spec, doc);
@@ -132,29 +194,73 @@ export function configForm(o) {
     let ctl;
     const isBool = n.type === 'bool' || (n.type === 'null' && spec?.t === 'bool');
     if (isBool) {
-      ctl = h('input', { type: 'checkbox', id, role: 'switch', checked: n.value === true, disabled: ro, 'aria-describedby': `${id}-msg ${id}-hint`, onChange: (e) => { write(k, e.target.checked); e.target.nextSibling.textContent = String(e.target.checked); } });
+      ctl = h('input', {
+        type: 'checkbox',
+        id,
+        role: 'switch',
+        checked: n.value === true,
+        disabled: ro,
+        'aria-describedby': `${id}-msg ${id}-hint`,
+        onChange: (e) => {
+          write(k, e.target.checked);
+          e.target.nextSibling.textContent = String(e.target.checked);
+        },
+      });
       ctl = h('label', { class: 'switch' }, ctl, h('span', { class: 'mono small' }, String(n.value === true)));
     } else if (choices) {
       const cur = displayValue(n);
       const opts = choices.includes(cur) ? choices : [cur, ...choices];
-      ctl = h('select', { id, disabled: ro, 'aria-describedby': `${id}-msg ${id}-hint`, onChange: (e) => write(k, e.target.value) },
-        opts.map((c) => h('option', { value: c, selected: c === cur }, c === cur && !choices.includes(c) ? t('form.not_allowed', { v: c || t('form.empty') }) : c)));
+      ctl = h(
+        'select',
+        { id, disabled: ro, 'aria-describedby': `${id}-msg ${id}-hint`, onChange: (e) => write(k, e.target.value) },
+        opts.map((c) => h('option', { value: c, selected: c === cur }, c === cur && !choices.includes(c) ? t('form.not_allowed', { v: c || t('form.empty') }) : c)),
+      );
     } else {
       const v = displayValue(n);
       const multi = n.style === 'block' || v.includes('\n') || (n.type === 'string' && v.length > 90);
-      ctl = h(multi ? 'textarea' : 'input', { id, type: multi ? null : 'text', class: multi ? 'ff-text' : null, rows: multi ? Math.min(12, Math.max(2, v.split('\n').length + 1)) : null, value: v, readonly: ro ? true : null, spellcheck: 'false',
-        inputmode: n.type === 'int' || n.type === 'float' ? 'decimal' : null, placeholder: n.type === 'null' ? t('form.empty') : null, 'aria-describedby': `${id}-msg ${id}-hint`,
-        onInput: (e) => write(k, e.target.value, e.target) });
+      ctl = h(multi ? 'textarea' : 'input', {
+        id,
+        type: multi ? null : 'text',
+        class: multi ? 'ff-text' : null,
+        rows: multi ? Math.min(12, Math.max(2, v.split('\n').length + 1)) : null,
+        value: v,
+        readonly: ro ? true : null,
+        spellcheck: 'false',
+        inputmode: n.type === 'int' || n.type === 'float' ? 'decimal' : null,
+        placeholder: n.type === 'null' ? t('form.empty') : null,
+        'aria-describedby': `${id}-msg ${id}-hint`,
+        onInput: (e) => write(k, e.target.value, e.target),
+      });
     }
     const typeTag = n.type === 'null' ? t('form.type_null') : t(`form.type_${n.type}`);
     const revert = o.editable ? btn('', { icon: 'history', size: 'sm', kind: 'ghost', title: t('form.revert'), onClick: () => revertField(k) }) : null;
-    const info = h('button', { type: 'button', class: 'ff-info', 'aria-label': t('form.info', { key: crumb(f.path).join(' › ') }), title: t('form.info', { key: String(f.label) }),
-      'aria-haspopup': 'dialog', 'aria-expanded': 'false', onClick: (e) => togglePop(e.currentTarget, { key: k }) }, icon('info', 15));
-    const row = h('div', { class: 'ff', dataset: { path: k } },
-      h('div', { class: 'ff-head' }, h('label', { class: 'ff-key', for: id }, h('code', String(f.label)), h('span', { class: 'ff-dot', title: t('form.changed') }), h('span', { class: 'ff-type' }, typeTag)), info),
+    const info = h(
+      'button',
+      {
+        type: 'button',
+        class: 'ff-info',
+        'aria-label': t('form.info', { key: crumb(f.path).join(' › ') }),
+        title: t('form.info', { key: String(f.label) }),
+        'aria-haspopup': 'dialog',
+        'aria-expanded': 'false',
+        onClick: (e) => togglePop(e.currentTarget, { key: k }),
+      },
+      icon('info', 15),
+    );
+    const row = h(
+      'div',
+      { class: 'ff', dataset: { path: k } },
+      h(
+        'div',
+        { class: 'ff-head' },
+        h('label', { class: 'ff-key', for: id }, h('code', String(f.label)), h('span', { class: 'ff-dot', title: t('form.changed') }), h('span', { class: 'ff-type' }, typeTag)),
+        info,
+      ),
       h('div', { class: 'ff-ctl' }, ctl, revert),
       hint ? h('div', { class: 'hint ff-hint', id: `${id}-hint` }, hint) : h('span', { id: `${id}-hint`, hidden: true }),
-      msg, h('div', { class: 'ff-local', role: 'alert' }));
+      msg,
+      h('div', { class: 'ff-local', role: 'alert' }),
+    );
     fields.set(k, { ...f, spec, row, ctl, msg, local: row.lastChild, revert, info, comment, label: String(f.label), hay: `${crumb(f.path).join(' ')} ${displayValue(n)}`.toLowerCase() });
     return row;
   }
@@ -166,7 +272,11 @@ export function configForm(o) {
     doc = res.root;
     const now = new Map(flattenFields(res.root).map((x) => [pathKey(x.path), x.node]));
     if (now.size !== fields.size) return false;
-    for (const [k, f] of fields) { const nn = now.get(k); if (!nn) return false; f.node = nn; }
+    for (const [k, f] of fields) {
+      const nn = now.get(k);
+      if (!nn) return false;
+      f.node = nn;
+    }
     return true;
   }
 
@@ -192,19 +302,28 @@ export function configForm(o) {
   }
 
   function revertField(k) {
-    const f = fields.get(k), b = base.get(k);
+    const f = fields.get(k),
+      b = base.get(k);
     if (!f || !b) return;
     const text = o.getText();
     const next = f.node.style === 'block' && b.style === 'block' ? spliceBlock(text, f.node, b.block.lines.join('\n')) : spliceValue(text, f.node, b.raw);
     if (next === text) return;
     o.setText(next);
-    build();     // the control must show the old value again
+    build(); // the control must show the old value again
   }
 
-  const isChanged = (k, f) => { const b = base.get(k); return !b || b.raw !== f.node.raw; };
+  const isChanged = (k, f) => {
+    const b = base.get(k);
+    return !b || b.raw !== f.node.raw;
+  };
   function markChanged() {
     let changed = 0;
-    for (const [k, f] of fields) { const c = isChanged(k, f); f.row.classList.toggle('changed', c); if (f.revert) f.revert.hidden = !c; if (c) changed++; }
+    for (const [k, f] of fields) {
+      const c = isChanged(k, f);
+      f.row.classList.toggle('changed', c);
+      if (f.revert) f.revert.hidden = !c;
+      if (c) changed++;
+    }
     root._changed = changed;
     applyFilter();
   }
@@ -213,7 +332,8 @@ export function configForm(o) {
   function refresh(ds) {
     diags = ds || [];
     if (!fields.size && !sections.length) return;
-    const byPath = new Map(), byLine = new Map();
+    const byPath = new Map(),
+      byLine = new Map();
     for (const d of diags) {
       if (d.path) (byPath.get(pathKey(d.path)) || byPath.set(pathKey(d.path), []).get(pathKey(d.path))).push(d);
       else if (d.line) (byLine.get(d.line) || byLine.set(d.line, []).get(d.line)).push(d);
@@ -236,12 +356,15 @@ export function configForm(o) {
     for (const d of diags) {
       if (used.has(d)) continue;
       const s = d.path ? secFor(d.path) : d.line ? sections.find((x) => x.line === d.line) : null;
-      if (s) { secDiags.get(s).push(d); used.add(d); }
+      if (s) {
+        secDiags.get(s).push(d);
+        used.add(d);
+      }
     }
     for (const s of sections) {
       const mine = secDiags.get(s);
       clear(s.msg);
-      for (const d of mine) s.msg.append(h('p', { class: `ff-problem ${d.severity}` }, sevBadge(d.severity), ' ', pathKey(d.path || []) === pathKey(s.path) ? d.short ?? d.message : d.message));
+      for (const d of mine) s.msg.append(h('p', { class: `ff-problem ${d.severity}` }, sevBadge(d.severity), ' ', pathKey(d.path || []) === pathKey(s.path) ? (d.short ?? d.message) : d.message));
       const inside = [...s.el.querySelectorAll('.ff.has-problem')].map((r) => r.dataset.sev);
       const all = [...mine.map((d) => d.severity), ...inside.map((x) => x)];
       clear(s.flag);
@@ -257,8 +380,12 @@ export function configForm(o) {
     let shown = 0;
     for (const [, f] of fields) {
       const okQ = q.every((w) => f.hay.includes(w));
-      const okO = filter.only === 'all' || (filter.only === 'changed' && f.row.classList.contains('changed')) || (filter.only === 'problems' && (f.row.classList.contains('has-problem') || f.row.classList.contains('bad-input')));
-      f.row.hidden = !(okQ && okO); if (!f.row.hidden) shown++;
+      const okO =
+        filter.only === 'all' ||
+        (filter.only === 'changed' && f.row.classList.contains('changed')) ||
+        (filter.only === 'problems' && (f.row.classList.contains('has-problem') || f.row.classList.contains('bad-input')));
+      f.row.hidden = !(okQ && okO);
+      if (!f.row.hidden) shown++;
     }
     for (const s of sections) {
       const anyField = [...s.el.querySelectorAll('.ff')].some((r) => !r.hidden);
@@ -273,8 +400,22 @@ export function configForm(o) {
 
   /** Scroll to and focus the control of the field at line n (a diagnostic link while the Form is shown). */
   function focusLine(line) {
-    for (const [, f] of fields) if (f.node.line === line) { f.row.hidden = false; f.row.closest('details').open = true; f.row.scrollIntoView({ block: 'center' }); (f.ctl.querySelector?.('input') || f.ctl).focus(); return true; }
-    for (const s of sections) if (s.line === line) { s.el.hidden = false; s.el.open = true; s.el.scrollIntoView({ block: 'start' }); s.el.querySelector('summary').focus(); return true; }
+    for (const [, f] of fields)
+      if (f.node.line === line) {
+        f.row.hidden = false;
+        f.row.closest('details').open = true;
+        f.row.scrollIntoView({ block: 'center' });
+        (f.ctl.querySelector?.('input') || f.ctl).focus();
+        return true;
+      }
+    for (const s of sections)
+      if (s.line === line) {
+        s.el.hidden = false;
+        s.el.open = true;
+        s.el.scrollIntoView({ block: 'start' });
+        s.el.querySelector('summary').focus();
+        return true;
+      }
     return false;
   }
 
@@ -283,31 +424,64 @@ export function configForm(o) {
   const popId = `ffpop${++uid}`;
   const pop = h('div', { class: 'ff-pop', id: popId, role: 'dialog', 'aria-labelledby': `${popId}-t`, tabindex: '-1', hidden: true });
   const hasPopover = typeof pop.showPopover === 'function';
-  if (hasPopover) { pop.setAttribute('popover', 'manual'); pop.hidden = false; }
-  let popFor = null;   // the button the pop-up belongs to
+  if (hasPopover) {
+    pop.setAttribute('popover', 'manual');
+    pop.hidden = false;
+  }
+  let popFor = null; // the button the pop-up belongs to
   const isOpen = () => (hasPopover ? pop.matches(':popover-open') : !pop.hidden);
-  const rich = (text) => richRuns(text).map((runs) => h('p', runs.map((r) => (r.code ? h('code', r.text) : r.text))));
+  const rich = (text) =>
+    richRuns(text).map((runs) =>
+      h(
+        'p',
+        runs.map((r) => (r.code ? h('code', r.text) : r.text)),
+      ),
+    );
   const block = (title, ...body) => h('section', { class: 'fh-block' }, h('h4', title), ...body);
 
   function place() {
     if (!popFor || !isOpen()) return;
-    const a = popFor.getBoundingClientRect(), vw = document.documentElement.clientWidth, vh = window.innerHeight, m = 8;
+    const a = popFor.getBoundingClientRect(),
+      vw = document.documentElement.clientWidth,
+      vh = window.innerHeight,
+      m = 8;
     const w = Math.min(420, vw - 2 * m);
     pop.style.width = `${w}px`;
     pop.style.maxHeight = `${Math.max(160, vh - 2 * m)}px`;
     const left = Math.min(Math.max(m, a.right - w), vw - w - m);
     const ph = pop.offsetHeight;
-    const below = a.bottom + 6, above = a.top - 6 - ph;
+    const below = a.bottom + 6,
+      above = a.top - 6 - ph;
     const top = below + ph <= vh - m || above < m ? Math.min(below, Math.max(m, vh - m - ph)) : above;
-    pop.style.left = `${left}px`; pop.style.top = `${top}px`;
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
   }
-  const onKey = (e) => { if (!root.isConnected) { closePop(false); return; } if (e.key === 'Escape' && isOpen()) { e.preventDefault(); e.stopPropagation(); closePop(true); } };
-  const onDown = (e) => { if (!root.isConnected) { closePop(false); return; } if (isOpen() && !pop.contains(e.target) && e.target !== popFor && !popFor?.contains(e.target)) closePop(false); };
+  const onKey = (e) => {
+    if (!root.isConnected) {
+      closePop(false);
+      return;
+    }
+    if (e.key === 'Escape' && isOpen()) {
+      e.preventDefault();
+      e.stopPropagation();
+      closePop(true);
+    }
+  };
+  const onDown = (e) => {
+    if (!root.isConnected) {
+      closePop(false);
+      return;
+    }
+    if (isOpen() && !pop.contains(e.target) && e.target !== popFor && !popFor?.contains(e.target)) closePop(false);
+  };
   function closePop(refocus) {
     if (!popFor) return;
-    const b = popFor; popFor = null;
+    const b = popFor;
+    popFor = null;
     b.setAttribute('aria-expanded', 'false');
-    if (hasPopover) { if (pop.matches(':popover-open')) pop.hidePopover(); } else pop.hidden = true;
+    if (hasPopover) {
+      if (pop.matches(':popover-open')) pop.hidePopover();
+    } else pop.hidden = true;
     document.removeEventListener('keydown', onKey, true);
     document.removeEventListener('pointerdown', onDown, true);
     window.removeEventListener('resize', place);
@@ -315,13 +489,17 @@ export function configForm(o) {
     if (refocus || pop.contains(document.activeElement) || document.activeElement === document.body) b.focus();
   }
   function togglePop(btnEl, what) {
-    if (popFor === btnEl) { closePop(true); return; }
+    if (popFor === btnEl) {
+      closePop(true);
+      return;
+    }
     closePop(false);
     fillPop(what);
     popFor = btnEl;
     btnEl.setAttribute('aria-expanded', 'true');
     btnEl.setAttribute('aria-controls', popId);
-    if (hasPopover) pop.showPopover(); else pop.hidden = false;
+    if (hasPopover) pop.showPopover();
+    else pop.hidden = false;
     place();
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onDown, true);
@@ -348,18 +526,25 @@ export function configForm(o) {
     if (f) {
       const fl = !hp.params ? null : typeof path.at(-1) === 'number' ? flagFor(hp.params, siblings(path), path.at(-1)) : path.at(-2) === 'environment' ? envFor(hp.params, path.at(-1)) : null;
       if (fl) {
-        const p = fl.param, extra = [];
+        const p = fl.param,
+          extra = [];
         if (p.min != null && p.max != null) extra.push(t('fh.flag_range', { min: p.min, max: p.max }));
         if (p.default != null && p.default !== '') extra.push(t('fh.flag_default', { v: typeof p.default === 'object' ? JSON.stringify(p.default) : p.default }));
-        bodyEl.append(block(t('fh.flag', { flag: fl.flag }), h('p', h('strong', p.label), ' — ', p.help), fl.isValue ? h('p', { class: 'muted small' }, t('fh.flag_value', { flag: fl.flag })) : null,
-          extra.length ? h('p', { class: 'muted small' }, extra.join(' ')) : null));
+        bodyEl.append(
+          block(
+            t('fh.flag', { flag: fl.flag }),
+            h('p', h('strong', p.label), ' — ', p.help),
+            fl.isValue ? h('p', { class: 'muted small' }, t('fh.flag_value', { flag: fl.flag })) : null,
+            extra.length ? h('p', { class: 'muted small' }, extra.join(' ')) : null,
+          ),
+        );
       }
       if (!entry && !fl && !hp.loading && !hp.failed) bodyEl.append(h('p', { class: 'note info' }, t('fh.missing')));
-      const accepts = describeSpec(f.spec) || (choicesFor(f.spec, doc)?.join(', ')) || (f.node.type === 'null' ? t('form.type_null') : t(`form.type_${f.node.type}`));
+      const accepts = describeSpec(f.spec) || choicesFor(f.spec, doc)?.join(', ') || (f.node.type === 'null' ? t('form.type_null') : t(`form.type_${f.node.type}`));
       const disk = base.get(what.key);
-      const now = displayValue(f.node), was = disk ? displayValue(disk) : null;
-      bodyEl.append(block(t('fh.accepts'), h('p', accepts),
-        disk && was !== now ? h('p', { class: 'muted small' }, t('fh.now', { v: short(now), disk: short(was) })) : null));
+      const now = displayValue(f.node),
+        was = disk ? displayValue(disk) : null;
+      bodyEl.append(block(t('fh.accepts'), h('p', accepts), disk && was !== now ? h('p', { class: 'muted small' }, t('fh.now', { v: short(now), disk: short(was) })) : null));
       const said = `${accepts} ${entry?.what || ''} ${entry?.change || ''}`.toLowerCase();
       if (f.comment && !said.includes(f.comment.toLowerCase())) bodyEl.append(block(t('fh.comment'), h('p', { class: 'mono small' }, f.comment)));
     }
@@ -372,14 +557,25 @@ export function configForm(o) {
       }
     }
   }
-  const short = (v) => { const s = String(v ?? '').replace(/\s+/g, ' '); return s === '' ? t('form.empty') : s.length > 60 ? `${s.slice(0, 57)}…` : s; };
+  const short = (v) => {
+    const s = String(v ?? '').replace(/\s+/g, ' ');
+    return s === '' ? t('form.empty') : s.length > 60 ? `${s.slice(0, 57)}…` : s;
+  };
   /** The scalar values of the list a field sits in (a command line), for flag lookups. */
   function siblings(path) {
     let n = doc;
-    for (const p of path.slice(0, -1)) { n = typeof p === 'number' ? n?.items?.[p] : n?.kind === 'map' ? entryOf(n, p)?.node : null; if (!n) return []; }
+    for (const p of path.slice(0, -1)) {
+      n = typeof p === 'number' ? n?.items?.[p] : n?.kind === 'map' ? entryOf(n, p)?.node : null;
+      if (!n) return [];
+    }
     return n?.kind === 'seq' ? n.items.map((x) => (x.kind === 'scalar' ? displayValue(x) : null)) : [];
   }
 
-  root.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { e.preventDefault(); o.onSave?.(); } });
+  root.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+      e.preventDefault();
+      o.onSave?.();
+    }
+  });
   return { el: root, build, refresh, focusLine, closePop: () => closePop(false) };
 }

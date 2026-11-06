@@ -1,7 +1,7 @@
 // REST client for /api/v1 (ARCHITECTURE.md section 4). Errors are {error:{code,message}}; non-GET sends X-Console: 1.
 export class ApiError extends Error {
   constructor(status, body = {}) {
-    const e = body && typeof body === 'object' ? (body.error || {}) : {};
+    const e = body && typeof body === 'object' ? body.error || {} : {};
     super(e.message || `HTTP ${status}`);
     this.name = 'ApiError';
     this.status = status;
@@ -27,7 +27,10 @@ const enc = encodeURIComponent;
 export function createClient({ base = '/api/v1', getKey = () => null, onUnauthorized = () => {}, fetchImpl } = {}) {
   const f = (...a) => (fetchImpl || globalThis.fetch)(...a);
   // A bearer is optional (loopback-admin trust needs none); it lives in sessionStorage only.
-  const authHeaders = () => { const k = getKey(); return k ? { Authorization: `Bearer ${k}` } : {}; };
+  const authHeaders = () => {
+    const k = getKey();
+    return k ? { Authorization: `Bearer ${k}` } : {};
+  };
   const url = (path, query) => `${base}${path}${buildQuery(query)}`;
   const mutHeaders = (method) => (SAFE_METHODS.has(method.toUpperCase()) ? {} : { [CSRF_HEADER]: '1' });
   // After a 401 nothing is sent with the same key (or with none) until the user signs in again: every view polls on a
@@ -35,7 +38,10 @@ export function createClient({ base = '/api/v1', getKey = () => null, onUnauthor
   // is public and tells the UI the caller's role.
   let authHeld = false;
   let heldKey = null;
-  const clearAuthHold = () => { authHeld = false; heldKey = null; };
+  const clearAuthHold = () => {
+    authHeld = false;
+    heldKey = null;
+  };
 
   async function request(method, path, { query, body, signal } = {}) {
     if (authHeld && path !== '/health' && (getKey() || null) === heldKey) {
@@ -44,13 +50,31 @@ export function createClient({ base = '/api/v1', getKey = () => null, onUnauthor
     }
     const hdr = { Accept: 'application/json', ...authHeaders(), ...mutHeaders(method) };
     let payload;
-    if (body !== undefined) { hdr['Content-Type'] = 'application/json'; payload = JSON.stringify(body); }
+    if (body !== undefined) {
+      hdr['Content-Type'] = 'application/json';
+      payload = JSON.stringify(body);
+    }
     let res;
-    try { res = await f(url(path, query), { method, headers: hdr, body: payload, signal }); }
-    catch (e) { if (e?.name === 'AbortError') throw e; throw new ApiError(0, { error: { code: 'network', message: e?.message || 'unreachable' } }); }
-    if (res.status === 401) { authHeld = true; heldKey = getKey() || null; onUnauthorized(); }
-    else if (res.ok) clearAuthHold();
-    if (!res.ok) { let b = {}; try { b = await res.json(); } catch { /* not json */ } throw new ApiError(res.status, b); }
+    try {
+      res = await f(url(path, query), { method, headers: hdr, body: payload, signal });
+    } catch (e) {
+      if (e?.name === 'AbortError') throw e;
+      throw new ApiError(0, { error: { code: 'network', message: e?.message || 'unreachable' } });
+    }
+    if (res.status === 401) {
+      authHeld = true;
+      heldKey = getKey() || null;
+      onUnauthorized();
+    } else if (res.ok) clearAuthHold();
+    if (!res.ok) {
+      let b = {};
+      try {
+        b = await res.json();
+      } catch {
+        /* not json */
+      }
+      throw new ApiError(res.status, b);
+    }
     if (res.status === 204) return null;
     return (res.headers.get?.('content-type') || '').includes('json') ? res.json() : res.text();
   }
@@ -60,7 +84,14 @@ export function createClient({ base = '/api/v1', getKey = () => null, onUnauthor
   const sys = (id) => `/systems/${enc(id)}`;
 
   return {
-    url, authHeaders, mutHeaders, request, get, post, put, clearAuthHold,
+    url,
+    authHeaders,
+    mutHeaders,
+    request,
+    get,
+    post,
+    put,
+    clearAuthHold,
     health: () => get('/health'),
     overview: () => get('/overview'),
     topology: () => get('/topology'),

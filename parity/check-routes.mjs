@@ -25,7 +25,10 @@ const unknown = new Map();
 for (const s of ALL_SCENARIOS) {
   for (const c of casesFor(s)) {
     if (c.route.startsWith('CLI ')) continue;
-    if (!pyKeys.has(c.route)) { unknown.set(c.route, [...(unknown.get(c.route) || []), `${s}:${c.id}`]); continue; }
+    if (!pyKeys.has(c.route)) {
+      unknown.set(c.route, [...(unknown.get(c.route) || []), `${s}:${c.id}`]);
+      continue;
+    }
     const e = counts.get(c.route);
     e.total++;
     e.byScenario[s] = (e.byScenario[s] || 0) + 1;
@@ -34,10 +37,19 @@ for (const s of ALL_SCENARIOS) {
 console.log('corpus cases per route (all scenarios):');
 for (const [route, e] of [...counts].sort()) {
   const flag = e.total === 0 ? '  <- MISSING' : e.total === 1 ? '  <- only one case' : '';
-  console.log(`  ${String(e.total).padStart(4)}  ${route}  (${Object.entries(e.byScenario).map(([s, n]) => `${s} ${n}`).join(', ') || '-'})${flag}`);
+  console.log(
+    `  ${String(e.total).padStart(4)}  ${route}  (${
+      Object.entries(e.byScenario)
+        .map(([s, n]) => `${s} ${n}`)
+        .join(', ') || '-'
+    })${flag}`,
+  );
 }
 const missing = [...counts].filter(([, e]) => e.total === 0).map(([r]) => r);
-if (missing.length) { failed = true; console.log(`\nFAIL: ${missing.length} Python route(s) without a corpus case:\n  ${missing.join('\n  ')}`); }
+if (missing.length) {
+  failed = true;
+  console.log(`\nFAIL: ${missing.length} Python route(s) without a corpus case:\n  ${missing.join('\n  ')}`);
+}
 if (unknown.size) {
   failed = true;
   console.log(`\nFAIL: corpus cases name routes that are not in routes.python.json:`);

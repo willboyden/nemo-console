@@ -4,133 +4,94 @@
     {
       "system": "switchyard",
       "file": "routes",
-      "catalogs": [
-        "switchyard_routes"
-      ]
+      "catalogs": ["switchyard_routes"]
     },
     {
       "system": "relay",
       "file": "routes",
-      "catalogs": [
-        "switchyard_routes"
-      ]
+      "catalogs": ["switchyard_routes"]
     },
     {
       "system": "relay",
       "file": "plugins",
-      "catalogs": [
-        "relay_plugins"
-      ]
+      "catalogs": ["relay_plugins"]
     },
     {
       "system": "relay",
       "file": "config",
-      "catalogs": [
-        "relay_config"
-      ]
+      "catalogs": ["relay_config"]
     },
     {
       "system": "dynamo",
       "file": "override",
-      "catalogs": [
-        "dynamo_override",
-        "compose"
-      ],
+      "catalogs": ["dynamo_override", "compose"],
       "flags": true
     },
     {
       "system": "dynamo",
       "file": "compose",
-      "catalogs": [
-        "compose"
-      ],
+      "catalogs": ["compose"],
       "flags": true
     },
     {
       "system": "openshell",
       "file": "gateway",
-      "catalogs": [
-        "openshell_gateway"
-      ]
+      "catalogs": ["openshell_gateway"]
     },
     {
       "system": "openshell",
       "file": "policy",
-      "catalogs": [
-        "openshell_policy"
-      ]
+      "catalogs": ["openshell_policy"]
     },
     {
       "system": "openshell",
       "file": "provider-profile",
-      "catalogs": [
-        "openshell_profile"
-      ]
+      "catalogs": ["openshell_profile"]
     },
     {
       "system": "openshell",
       "file": "compose",
-      "catalogs": [
-        "openshell_compose",
-        "compose"
-      ]
+      "catalogs": ["openshell_compose", "compose"]
     },
     {
       "system": "aiperf",
       "file": "profiles",
-      "catalogs": [
-        "aiperf_profiles"
-      ]
+      "catalogs": ["aiperf_profiles"]
     },
     {
       "system": "evaluator",
       "file": "suites.yaml",
-      "catalogs": [
-        "evaluator_suites"
-      ]
+      "catalogs": ["evaluator_suites"]
     },
     {
       "system": "modelopt",
       "file": "recipes",
-      "catalogs": [
-        "modelopt_recipes"
-      ]
+      "catalogs": ["modelopt_recipes"]
     },
     {
       "system": "guardrails",
       "file": "*--config.y*ml",
-      "catalogs": [
-        "guardrails_config"
-      ]
+      "catalogs": ["guardrails_config"]
     },
     {
       "system": "guardrails",
       "file": "*--prompts.y*ml",
-      "catalogs": [
-        "guardrails_prompts"
-      ]
+      "catalogs": ["guardrails_prompts"]
     },
     {
       "system": "flare",
       "file": "compose*",
-      "catalogs": [
-        "flare_compose",
-        "compose"
-      ]
+      "catalogs": ["flare_compose", "compose"]
     },
     {
       "system": "flare",
       "file": "ignition",
-      "catalogs": [
-        "flare_ignition"
-      ]
+      "catalogs": ["flare_ignition"]
     },
     {
       "system": "*",
       "file": "*compose*",
-      "catalogs": [
-        "compose"
-      ]
+      "catalogs": ["compose"]
     }
   ],
   "catalogs": {

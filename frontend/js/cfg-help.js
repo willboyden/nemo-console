@@ -9,10 +9,15 @@ export const FIELDS_URL = 'i18n/fields.en.json';
 let pending = null;
 /** The catalog document, fetched once per page load (a failed fetch is retried next time). */
 export function loadFieldHelp(url = FIELDS_URL) {
-  pending ||= fetch(url).then((r) => {
-    if (!r.ok) throw new Error(`field help load failed: ${r.status}`);
-    return r.json();
-  }).catch((e) => { pending = null; throw e; });
+  pending ||= fetch(url)
+    .then((r) => {
+      if (!r.ok) throw new Error(`field help load failed: ${r.status}`);
+      return r.json();
+    })
+    .catch((e) => {
+      pending = null;
+      throw e;
+    });
   return pending;
 }
 
@@ -46,9 +51,13 @@ export function matchScore(segs, path) {
     if (s === '**') return i === segs.length - 1 && path.length > i ? score + 1 : -1;
     if (i >= path.length) return -1;
     const p = path[i];
-    if (s === '#') { if (typeof p !== 'number') return -1; score += 2; }
-    else if (s === '*') { if (typeof p !== 'string') return -1; score += 2; }
-    else if (String(p) !== s || typeof p === 'number') return -1;
+    if (s === '#') {
+      if (typeof p !== 'number') return -1;
+      score += 2;
+    } else if (s === '*') {
+      if (typeof p !== 'string') return -1;
+      score += 2;
+    } else if (String(p) !== s || typeof p === 'number') return -1;
     else score += 4;
   }
   return segs.length === path.length ? score + 2 : -1;
@@ -57,10 +66,14 @@ export function matchScore(segs, path) {
 /** The best catalog entry for a path (keys are strings, list indexes numbers), or null. */
 export function lookupHelp(cat, path) {
   if (!cat) return null;
-  let best = null, bestScore = -1;
+  let best = null,
+    bestScore = -1;
   for (const e of cat.entries) {
     const sc = matchScore(e.segs, path);
-    if (sc > bestScore || (sc === bestScore && best && e.order < best.order)) { best = e; bestScore = sc; }
+    if (sc > bestScore || (sc === bestScore && best && e.order < best.order)) {
+      best = e;
+      bestScore = sc;
+    }
   }
   return bestScore >= 0 ? best.entry : null;
 }
@@ -81,7 +94,7 @@ export function flagFor(params, tokens, i) {
   const own = find(tokens[i]);
   if (own) return { ...own, isValue: String(tokens[i]).includes('=') };
   const prev = i > 0 ? find(tokens[i - 1]) : null;
-  if (prev && prev.param.type !== 'bool' && !String(tokens[i - 1]).includes('=')) return { ...prev, isValue: true };   // a switch takes no value
+  if (prev && prev.param.type !== 'bool' && !String(tokens[i - 1]).includes('=')) return { ...prev, isValue: true }; // a switch takes no value
   return null;
 }
 

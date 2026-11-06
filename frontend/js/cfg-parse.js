@@ -12,8 +12,18 @@
 // documents, multi-line flow or quoted values) set `unsupported` instead of raising an error, so a valid file is
 // never reported as broken here.
 
-class SyntaxErr extends Error { constructor(pos, message) { super(message); this.pos = pos; } }
-class Unsupported extends Error { constructor(what) { super(what); this.what = what; } }
+class SyntaxErr extends Error {
+  constructor(pos, message) {
+    super(message);
+    this.pos = pos;
+  }
+}
+class Unsupported extends Error {
+  constructor(what) {
+    super(what);
+    this.what = what;
+  }
+}
 
 export function lineStarts(text) {
   const out = [0];
@@ -22,8 +32,13 @@ export function lineStarts(text) {
 }
 /** 1-based {line, col} of a character offset. */
 export function posOf(starts, pos) {
-  let lo = 0, hi = starts.length - 1;
-  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (starts[mid] <= pos) lo = mid; else hi = mid - 1; }
+  let lo = 0,
+    hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= pos) lo = mid;
+    else hi = mid - 1;
+  }
   return { line: lo + 1, col: pos - starts[lo] + 1 };
 }
 
@@ -40,7 +55,12 @@ export function parseConfig(format, text) {
   // after it; the Form view does not model it, the Text view and the server check still work.
   const deep = { root: null, errors: [], warnings: [], unsupported: `nesting deeper than ${MAX_DEPTH} levels` };
   let r;
-  try { r = format === 'toml' ? parseToml(text) : parseYaml(text); } catch (e) { if (e instanceof RangeError) return deep; throw e; }
+  try {
+    r = format === 'toml' ? parseToml(text) : parseYaml(text);
+  } catch (e) {
+    if (e instanceof RangeError) return deep;
+    throw e;
+  }
   return r.root && depthOf(r.root) > MAX_DEPTH ? deep : r;
 }
 /** The nesting depth of a parsed tree, without recursion. */
@@ -63,18 +83,34 @@ const BARE = /[A-Za-z0-9_-]/;
 const TOML_ESC = { b: '\b', t: '\t', n: '\n', f: '\f', r: '\r', '"': '"', '\\': '\\' };
 
 export function parseToml(text) {
-  const starts = lineStarts(text), n = text.length;
+  const starts = lineStarts(text),
+    n = text.length;
   const lineAt = (p) => posOf(starts, p).line;
-  const root = mkMap(1); root.defined = true;
-  let cur = root, i = 0;
-  const fail = (p, m) => { throw new SyntaxErr(p, m); };
-  const ws = () => { while (i < n && (text[i] === ' ' || text[i] === '\t')) i++; };
-  const comment = () => { if (text[i] === '#') while (i < n && text[i] !== '\n') i++; };
+  const root = mkMap(1);
+  root.defined = true;
+  let cur = root,
+    i = 0;
+  const fail = (p, m) => {
+    throw new SyntaxErr(p, m);
+  };
+  const ws = () => {
+    while (i < n && (text[i] === ' ' || text[i] === '\t')) i++;
+  };
+  const comment = () => {
+    if (text[i] === '#') while (i < n && text[i] !== '\n') i++;
+  };
   const eol = () => {
-    ws(); comment();
+    ws();
+    comment();
     if (i >= n) return;
-    if (text[i] === '\r' && text[i + 1] === '\n') { i += 2; return; }
-    if (text[i] === '\n') { i++; return; }
+    if (text[i] === '\r' && text[i + 1] === '\n') {
+      i += 2;
+      return;
+    }
+    if (text[i] === '\n') {
+      i++;
+      return;
+    }
     fail(i, `unexpected text '${text.slice(i, i + 12).split('\n')[0]}' after the value (one key = value per line)`);
   };
 
@@ -84,28 +120,47 @@ export function parseToml(text) {
       if (i >= n) fail(i, 'this string is never closed');
       const c = text[i];
       if (multi && text.startsWith('"""', i)) {
-        let q = 3; while (text[i + q] === '"' && q < 5) q++;
-        out += '"'.repeat(q - 3); i += q; return out;
+        let q = 3;
+        while (text[i + q] === '"' && q < 5) q++;
+        out += '"'.repeat(q - 3);
+        i += q;
+        return out;
       }
-      if (!multi && c === '"') { i++; return out; }
+      if (!multi && c === '"') {
+        i++;
+        return out;
+      }
       if (!multi && c === '\n') fail(i, 'this string is never closed on its line (use """ for several lines)');
       if (c === '\\') {
         const e = text[i + 1];
         if (multi && /[ \t\r\n]/.test(e ?? '')) {
-          let j = i + 1; while (j < n && /[ \t]/.test(text[j])) j++;
-          if (text[j] === '\n' || (text[j] === '\r' && text[j + 1] === '\n')) { i = j; while (i < n && /[ \t\r\n]/.test(text[i])) i++; continue; }
+          let j = i + 1;
+          while (j < n && /[ \t]/.test(text[j])) j++;
+          if (text[j] === '\n' || (text[j] === '\r' && text[j + 1] === '\n')) {
+            i = j;
+            while (i < n && /[ \t\r\n]/.test(text[i])) i++;
+            continue;
+          }
         }
-        if (e in TOML_ESC) { out += TOML_ESC[e]; i += 2; continue; }
+        if (e in TOML_ESC) {
+          out += TOML_ESC[e];
+          i += 2;
+          continue;
+        }
         if (e === 'u' || e === 'U') {
-          const len = e === 'u' ? 4 : 8, hex = text.slice(i + 2, i + 2 + len);
+          const len = e === 'u' ? 4 : 8,
+            hex = text.slice(i + 2, i + 2 + len);
           if (!new RegExp(`^[0-9A-Fa-f]{${len}}$`).test(hex)) fail(i, `bad \\${e} escape`);
           const cp = parseInt(hex, 16);
           if (cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) fail(i, `\\${e}${hex} is not a valid character`);
-          out += String.fromCodePoint(cp); i += 2 + len; continue;
+          out += String.fromCodePoint(cp);
+          i += 2 + len;
+          continue;
         }
         fail(i, `unknown escape \\${e ?? ''} (write \\\\ for a backslash)`);
       }
-      out += c; i++;
+      out += c;
+      i++;
     }
   }
   function literalString(multi) {
@@ -115,14 +170,35 @@ export function parseToml(text) {
     if (j < 0 || (!multi && nl >= 0 && nl < j)) fail(i, multi ? 'this string is never closed' : "this string is never closed on its line (use ''' for several lines)");
     let end = j;
     if (multi) while (text[end + 3] === "'" && end - j < 2) end++;
-    const s = text.slice(i, end); i = end + close.length; return s;
+    const s = text.slice(i, end);
+    i = end + close.length;
+    return s;
   }
   function stringValue() {
-    const s = i, line = lineAt(i);
-    if (text.startsWith('"""', i)) { i += 3; if (text[i] === '\n') i++; else if (text.startsWith('\r\n', i)) i += 2; const v = basicString(true); return mkScalar('string', v, text, s, i, line, 'ml-basic'); }
-    if (text.startsWith("'''", i)) { i += 3; if (text[i] === '\n') i++; else if (text.startsWith('\r\n', i)) i += 2; const v = literalString(true); return mkScalar('string', v, text, s, i, line, 'ml-literal'); }
-    if (text[i] === '"') { i++; const v = basicString(false); return mkScalar('string', v, text, s, i, line, 'basic'); }
-    i++; const v = literalString(false); return mkScalar('string', v, text, s, i, line, 'literal');
+    const s = i,
+      line = lineAt(i);
+    if (text.startsWith('"""', i)) {
+      i += 3;
+      if (text[i] === '\n') i++;
+      else if (text.startsWith('\r\n', i)) i += 2;
+      const v = basicString(true);
+      return mkScalar('string', v, text, s, i, line, 'ml-basic');
+    }
+    if (text.startsWith("'''", i)) {
+      i += 3;
+      if (text[i] === '\n') i++;
+      else if (text.startsWith('\r\n', i)) i += 2;
+      const v = literalString(true);
+      return mkScalar('string', v, text, s, i, line, 'ml-literal');
+    }
+    if (text[i] === '"') {
+      i++;
+      const v = basicString(false);
+      return mkScalar('string', v, text, s, i, line, 'basic');
+    }
+    i++;
+    const v = literalString(false);
+    return mkScalar('string', v, text, s, i, line, 'literal');
   }
   function key() {
     const parts = [];
@@ -130,9 +206,17 @@ export function parseToml(text) {
       ws();
       const p = i;
       let name;
-      if (text[i] === '"') { i++; name = basicString(false); }
-      else if (text[i] === "'") { i++; name = literalString(false); }
-      else { while (i < n && BARE.test(text[i])) i++; name = text.slice(p, i); if (!name) fail(p, text[p] === '=' ? 'a key is missing before =' : `'${text[p] ?? ''}' cannot start a key (keys are letters, digits, _ and -, or quoted)`); }
+      if (text[i] === '"') {
+        i++;
+        name = basicString(false);
+      } else if (text[i] === "'") {
+        i++;
+        name = literalString(false);
+      } else {
+        while (i < n && BARE.test(text[i])) i++;
+        name = text.slice(p, i);
+        if (!name) fail(p, text[p] === '=' ? 'a key is missing before =' : `'${text[p] ?? ''}' cannot start a key (keys are letters, digits, _ and -, or quoted)`);
+      }
       parts.push({ name, pos: p });
       ws();
       if (text[i] !== '.') return parts;
@@ -141,7 +225,9 @@ export function parseToml(text) {
   }
   const DELIM = /[\s,\]}#]/;
   function atomValue() {
-    const s = i, line = lineAt(i), rest = text.slice(i, i + 64);
+    const s = i,
+      line = lineAt(i),
+      rest = text.slice(i, i + 64);
     const done = (type, value, len, style = 'plain') => {
       i = s + len;
       if (i < n && !DELIM.test(text[i])) fail(s, `'${text.slice(s, i + 1)}…' is not a valid value (strings need quotes)`);
@@ -170,9 +256,18 @@ export function parseToml(text) {
   function skipFlowSpace() {
     for (;;) {
       ws();
-      if (text[i] === '#') { comment(); continue; }
-      if (text[i] === '\n') { i++; continue; }
-      if (text[i] === '\r' && text[i + 1] === '\n') { i += 2; continue; }
+      if (text[i] === '#') {
+        comment();
+        continue;
+      }
+      if (text[i] === '\n') {
+        i++;
+        continue;
+      }
+      if (text[i] === '\r' && text[i + 1] === '\n') {
+        i += 2;
+        continue;
+      }
       return;
     }
   }
@@ -180,26 +275,57 @@ export function parseToml(text) {
     const c = text[i];
     if (c === '"' || c === "'") return stringValue();
     if (c === '[') {
-      const arr = mkSeq(lineAt(i), true); arr.start = i; i++;
+      const arr = mkSeq(lineAt(i), true);
+      arr.start = i;
+      i++;
       for (;;) {
         skipFlowSpace();
         if (i >= n) fail(arr.start, 'this array is never closed with ]');
-        if (text[i] === ']') { i++; arr.end = i; return arr; }
+        if (text[i] === ']') {
+          i++;
+          arr.end = i;
+          return arr;
+        }
         arr.items.push(value());
         skipFlowSpace();
-        if (text[i] === ',') { i++; continue; }
-        if (text[i] === ']') { i++; arr.end = i; return arr; }
+        if (text[i] === ',') {
+          i++;
+          continue;
+        }
+        if (text[i] === ']') {
+          i++;
+          arr.end = i;
+          return arr;
+        }
         fail(i, 'expected , or ] in the array');
       }
     }
     if (c === '{') {
-      const tbl = mkMap(lineAt(i), true); tbl.start = i; i++; ws();
-      if (text[i] === '}') { i++; tbl.end = i; tbl.closed = true; return tbl; }
+      const tbl = mkMap(lineAt(i), true);
+      tbl.start = i;
+      i++;
+      ws();
+      if (text[i] === '}') {
+        i++;
+        tbl.end = i;
+        tbl.closed = true;
+        return tbl;
+      }
       for (;;) {
         if (text[i] === '\n' || text[i] === '\r') fail(i, 'an inline table must close with } on the same line');
-        keyval(tbl, true); ws();
-        if (text[i] === ',') { i++; ws(); continue; }
-        if (text[i] === '}') { i++; tbl.end = i; tbl.closed = true; return tbl; }
+        keyval(tbl, true);
+        ws();
+        if (text[i] === ',') {
+          i++;
+          ws();
+          continue;
+        }
+        if (text[i] === '}') {
+          i++;
+          tbl.end = i;
+          tbl.closed = true;
+          return tbl;
+        }
         fail(i, text[i] === '\n' ? 'an inline table must close with } on the same line' : 'expected , or } in the inline table');
       }
     }
@@ -210,7 +336,8 @@ export function parseToml(text) {
   function keyval(table, inInline = false) {
     const parts = key();
     if (text[i] !== '=') fail(i, `expected = after the key '${parts.map((p) => p.name).join('.')}'`);
-    i++; ws();
+    i++;
+    ws();
     const v = value();
     let t = table;
     for (const [k, p] of parts.entries()) {
@@ -219,13 +346,18 @@ export function parseToml(text) {
         if (e) fail(p.pos, dupMsg(p.name, e));
         t.entries.push({ key: p.name, line: lineAt(p.pos), node: v });
       } else if (!e) {
-        const sub = mkMap(lineAt(p.pos), inInline); sub.dotted = true; t.entries.push({ key: p.name, line: lineAt(p.pos), node: sub }); t = sub;
-      } else if (e.node.kind === 'map' && !e.node.closed && !e.node.header) { t = e.node; }
-      else fail(p.pos, `'${p.name}' is already defined on line ${e.line} and cannot be extended here`);
+        const sub = mkMap(lineAt(p.pos), inInline);
+        sub.dotted = true;
+        t.entries.push({ key: p.name, line: lineAt(p.pos), node: sub });
+        t = sub;
+      } else if (e.node.kind === 'map' && !e.node.closed && !e.node.header) {
+        t = e.node;
+      } else fail(p.pos, `'${p.name}' is already defined on line ${e.line} and cannot be extended here`);
     }
   }
   function header() {
-    const s = i, aot = text.startsWith('[[', i);
+    const s = i,
+      aot = text.startsWith('[[', i);
     i += aot ? 2 : 1;
     const parts = key();
     if (!text.startsWith(aot ? ']]' : ']', i)) fail(i, aot ? 'expected ]] to close the [[array]] header' : 'expected ] to close the [table] header');
@@ -233,23 +365,42 @@ export function parseToml(text) {
     const line = lineAt(s);
     let t = root;
     for (const [k, p] of parts.entries()) {
-      const last = k === parts.length - 1, e = entryOf(t, p.name);
+      const last = k === parts.length - 1,
+        e = entryOf(t, p.name);
       if (!last) {
-        if (!e) { const sub = mkMap(line); t.entries.push({ key: p.name, line, node: sub }); t = sub; }
-        else if (e.node.kind === 'map' && !e.node.closed) t = e.node;
+        if (!e) {
+          const sub = mkMap(line);
+          t.entries.push({ key: p.name, line, node: sub });
+          t = sub;
+        } else if (e.node.kind === 'map' && !e.node.closed) t = e.node;
         else if (e.node.kind === 'seq' && e.node.aot) t = e.node.items[e.node.items.length - 1];
         else fail(p.pos, `'${p.name}' is already a value (line ${e.line}), not a table`);
         continue;
       }
       if (aot) {
-        const item = mkMap(line); item.defined = true; item.header = true;
-        if (!e) { const arr = mkSeq(line); arr.aot = true; arr.items.push(item); t.entries.push({ key: p.name, line, node: arr }); }
-        else if (e.node.kind === 'seq' && e.node.aot) e.node.items.push(item);
+        const item = mkMap(line);
+        item.defined = true;
+        item.header = true;
+        if (!e) {
+          const arr = mkSeq(line);
+          arr.aot = true;
+          arr.items.push(item);
+          t.entries.push({ key: p.name, line, node: arr });
+        } else if (e.node.kind === 'seq' && e.node.aot) e.node.items.push(item);
         else fail(p.pos, `[[${parts.map((x) => x.name).join('.')}]] clashes with '${p.name}' defined on line ${e.line}`);
         cur = item;
-      } else if (!e) { const sub = mkMap(line); sub.defined = true; sub.header = true; t.entries.push({ key: p.name, line, node: sub }); cur = sub; }
-      else if (e.node.kind === 'map' && !e.node.closed && !e.node.defined && !e.node.dotted) { e.node.defined = true; e.node.header = true; e.node.line = line; cur = e.node; }
-      else fail(s, `table [${parts.map((x) => x.name).join('.')}] is defined twice (first on line ${e.line})`);
+      } else if (!e) {
+        const sub = mkMap(line);
+        sub.defined = true;
+        sub.header = true;
+        t.entries.push({ key: p.name, line, node: sub });
+        cur = sub;
+      } else if (e.node.kind === 'map' && !e.node.closed && !e.node.defined && !e.node.dotted) {
+        e.node.defined = true;
+        e.node.header = true;
+        e.node.line = line;
+        cur = e.node;
+      } else fail(s, `table [${parts.map((x) => x.name).join('.')}] is defined twice (first on line ${e.line})`);
     }
   }
 
@@ -258,10 +409,20 @@ export function parseToml(text) {
       ws();
       if (i >= n) break;
       const c = text[i];
-      if (c === '#') { comment(); continue; }
-      if (c === '\n') { i++; continue; }
-      if (c === '\r' && text[i + 1] === '\n') { i += 2; continue; }
-      if (c === '[') header(); else keyval(cur);
+      if (c === '#') {
+        comment();
+        continue;
+      }
+      if (c === '\n') {
+        i++;
+        continue;
+      }
+      if (c === '\r' && text[i + 1] === '\n') {
+        i += 2;
+        continue;
+      }
+      if (c === '[') header();
+      else keyval(cur);
       eol();
     }
     return { root, errors: [], warnings: [], unsupported: null };
@@ -286,7 +447,9 @@ export function yamlPlainType(s) {
   if (Y_NULL.test(s)) return { type: 'null', value: null };
   if (Y_BOOL.test(s)) return { type: 'bool', value: /^(?:yes|true|on)$/i.test(s) };
   if (Y_INT.test(s)) {
-    const t = s.replace(/_/g, ''), sign = t.startsWith('-') ? -1 : 1, u = t.replace(/^[-+]/, '');
+    const t = s.replace(/_/g, ''),
+      sign = t.startsWith('-') ? -1 : 1,
+      u = t.replace(/^[-+]/, '');
     let v;
     if (u.includes(':')) v = u.split(':').reduce((a, d) => a * 60 + Number(d), 0);
     else if (u.startsWith('0x')) v = parseInt(u.slice(2), 16);
@@ -297,51 +460,120 @@ export function yamlPlainType(s) {
   }
   if (Y_FLOAT.test(s)) {
     const t = s.replace(/_/g, '').toLowerCase();
-    const v = t.includes('inf') ? (t.startsWith('-') ? -Infinity : Infinity) : t.includes('nan') ? NaN
-      : t.includes(':') ? (t.startsWith('-') ? -1 : 1) * t.replace(/^[-+]/, '').split(':').reduce((a, d) => a * 60 + Number(d), 0) : Number(t);
+    const v = t.includes('inf')
+      ? t.startsWith('-')
+        ? -Infinity
+        : Infinity
+      : t.includes('nan')
+        ? NaN
+        : t.includes(':')
+          ? (t.startsWith('-') ? -1 : 1) *
+            t
+              .replace(/^[-+]/, '')
+              .split(':')
+              .reduce((a, d) => a * 60 + Number(d), 0)
+          : Number(t);
     return { type: 'float', value: v };
   }
   if (Y_DATE.test(s)) return { type: 'date', value: s };
   return { type: 'string', value: s };
 }
 
-const Y_ESC = { 0: '\0', a: '\x07', b: '\b', t: '\t', '\t': '\t', n: '\n', v: '\v', f: '\f', r: '\r', e: '\x1b', ' ': ' ', '"': '"', '/': '/', '\\': '\\', N: '\x85', _: '\xa0', L: '\u2028', P: '\u2029' };
+const Y_ESC = {
+  0: '\0',
+  a: '\x07',
+  b: '\b',
+  t: '\t',
+  '\t': '\t',
+  n: '\n',
+  v: '\v',
+  f: '\f',
+  r: '\r',
+  e: '\x1b',
+  ' ': ' ',
+  '"': '"',
+  '/': '/',
+  '\\': '\\',
+  N: '\x85',
+  _: '\xa0',
+  L: '\u2028',
+  P: '\u2029',
+};
 const PLAIN_BAD_START = /^(?:[,[\]{}#&*!|>'"%@`]|[-?:](?:\s|$))/;
 
 export function parseYaml(text) {
-  const starts = lineStarts(text), n = text.length;
+  const starts = lineStarts(text),
+    n = text.length;
   const warnings = [];
   // One record per physical line: indent (spaces), the content start offset, the end offset (before \r?\n).
   const L = starts.map((s, k) => {
     let end = k + 1 < starts.length ? starts[k + 1] - 1 : n;
     if (text[end - 1] === '\r') end--;
-    let j = s; while (j < end && text[j] === ' ') j++;
+    let j = s;
+    while (j < end && text[j] === ' ') j++;
     return { no: k + 1, start: s, end, indent: j - s, cs: j };
   });
-  const fail = (pos, m) => { throw new SyntaxErr(pos, m); };
+  const fail = (pos, m) => {
+    throw new SyntaxErr(pos, m);
+  };
   const lineAt = (p) => posOf(starts, p).line;
-  const isBlank = (l) => { const c = text.slice(l.cs, l.end); return /^[ \t]*(?:#.*)?$/.test(c); };
+  const isBlank = (l) => {
+    const c = text.slice(l.cs, l.end);
+    return /^[ \t]*(?:#.*)?$/.test(c);
+  };
   let li = 0;
   // PyYAML refuses a tab anywhere outside a quoted string, a | or > block and a comment (even in a blank line).
   const checkTabs = (l) => {
     let q = null;
     for (let j = l.start; j < l.end; j++) {
-      const c = text[j], prev = j > l.start ? text[j - 1] : ' ';
-      if (q === '"') { if (c === '\\') j++; else if (c === '"') q = null; continue; }
-      if (q === "'") { if (c === "'") { if (text[j + 1] === "'") j++; else q = null; } continue; }
+      const c = text[j],
+        prev = j > l.start ? text[j - 1] : ' ';
+      if (q === '"') {
+        if (c === '\\') j++;
+        else if (c === '"') q = null;
+        continue;
+      }
+      if (q === "'") {
+        if (c === "'") {
+          if (text[j + 1] === "'") j++;
+          else q = null;
+        }
+        continue;
+      }
       if (c === '#' && /[ \t]/.test(prev)) return;
-      if ((c === '"' || c === "'") && /[ \t[{,:-]/.test(prev)) { q = c; continue; }
-      if (c === '\t') fail(j, j < l.cs || /^[ \t]*$/.test(text.slice(l.start, j)) ? 'a tab is used for indentation (YAML allows only spaces)' : 'a tab character here: PyYAML accepts tabs only inside quotes, | or > blocks and comments');
+      if ((c === '"' || c === "'") && /[ \t[{,:-]/.test(prev)) {
+        q = c;
+        continue;
+      }
+      if (c === '\t')
+        fail(
+          j,
+          j < l.cs || /^[ \t]*$/.test(text.slice(l.start, j))
+            ? 'a tab is used for indentation (YAML allows only spaces)'
+            : 'a tab character here: PyYAML accepts tabs only inside quotes, | or > blocks and comments',
+        );
     }
   };
-  const skipBlank = () => { while (li < L.length && isBlank(L[li])) { checkTabs(L[li]); li++; } };
+  const skipBlank = () => {
+    while (li < L.length && isBlank(L[li])) {
+      checkTabs(L[li]);
+      li++;
+    }
+  };
 
   // Document markers: one leading `---` is fine; a second document, `...` followed by content, or a %directive is not modeled.
   {
-    let k = 0; while (k < L.length && isBlank(L[k])) k++;
+    let k = 0;
+    while (k < L.length && isBlank(L[k])) k++;
     if (k < L.length && /^%/.test(text.slice(L[k].start, L[k].end))) throw new Unsupported('YAML directives (%)');
     if (k < L.length && /^---(?:\s|$)/.test(text.slice(L[k].start, L[k].end))) {
-      if (text.slice(L[k].start + 3, L[k].end).trim().replace(/^#.*/, '')) throw new Unsupported('content on the --- line');
+      if (
+        text
+          .slice(L[k].start + 3, L[k].end)
+          .trim()
+          .replace(/^#.*/, '')
+      )
+        throw new Unsupported('content on the --- line');
       li = k + 1;
     }
   }
@@ -362,8 +594,10 @@ export function parseYaml(text) {
   const restIsEmpty = (s, e) => /^[ \t]*(?:#.*)?$/.test(text.slice(s, e));
 
   function quoted(s, e) {
-    const q = text[s], line = lineAt(s);
-    let j = s + 1, out = '';
+    const q = text[s],
+      line = lineAt(s);
+    let j = s + 1,
+      out = '';
     for (;;) {
       if (j >= e) {
         // closed on a later line = a multi-line quoted scalar (valid YAML, not modeled); never closed = an error
@@ -372,21 +606,39 @@ export function parseYaml(text) {
         fail(s, 'this quoted string is never closed');
       }
       const c = text[j];
-      if (q === "'" && c === "'") { if (text[j + 1] === "'") { out += "'"; j += 2; continue; } j++; break; }
-      if (q === '"' && c === '"') { j++; break; }
+      if (q === "'" && c === "'") {
+        if (text[j + 1] === "'") {
+          out += "'";
+          j += 2;
+          continue;
+        }
+        j++;
+        break;
+      }
+      if (q === '"' && c === '"') {
+        j++;
+        break;
+      }
       if (q === '"' && c === '\\') {
         const x = text[j + 1];
-        if (x in Y_ESC) { out += Y_ESC[x]; j += 2; continue; }
+        if (x in Y_ESC) {
+          out += Y_ESC[x];
+          j += 2;
+          continue;
+        }
         const len = { x: 2, u: 4, U: 8 }[x];
         if (len) {
           const hex = text.slice(j + 2, j + 2 + len);
           if (!new RegExp(`^[0-9A-Fa-f]{${len}}$`).test(hex)) fail(j, `bad \\${x} escape`);
-          out += String.fromCodePoint(parseInt(hex, 16)); j += 2 + len; continue;
+          out += String.fromCodePoint(parseInt(hex, 16));
+          j += 2 + len;
+          continue;
         }
         if (j + 1 >= e) throw new Unsupported('a quoted value that spans several lines');
         fail(j, `unknown escape \\${x} in a double-quoted string (write \\\\ for a backslash)`);
       }
-      out += c; j++;
+      out += c;
+      j++;
     }
     return { node: mkScalar('string', out, text, s, j, line, q === '"' ? 'double' : 'single'), end: j };
   }
@@ -401,46 +653,92 @@ export function parseYaml(text) {
   function flow(s, e) {
     let j = s;
     // a [ or { that never closes anywhere below is an error; one that closes on a later line is valid but not modeled
-    const open = () => { const close = text[s] === '[' ? ']' : '}'; return text.indexOf(close, e) >= 0 ? new Unsupported('a [ ] or { } list that spans several lines') : new SyntaxErr(s, `this ${text[s]} ${close} list is never closed`); };
-    const sp = () => { while (j < e && /[ \t]/.test(text[j])) j++; };
+    const open = () => {
+      const close = text[s] === '[' ? ']' : '}';
+      return text.indexOf(close, e) >= 0 ? new Unsupported('a [ ] or { } list that spans several lines') : new SyntaxErr(s, `this ${text[s]} ${close} list is never closed`);
+    };
+    const sp = () => {
+      while (j < e && /[ \t]/.test(text[j])) j++;
+    };
     function item() {
       sp();
       const c = text[j];
       if (j >= e) throw open();
       if (c === '[') {
-        const seq = mkSeq(lineAt(j), true); seq.start = j; j++;
+        const seq = mkSeq(lineAt(j), true);
+        seq.start = j;
+        j++;
         for (;;) {
-          sp(); if (j >= e) throw open();
-          if (text[j] === ']') { j++; seq.end = j; return seq; }
-          seq.items.push(item()); sp();
-          if (text[j] === ',') { j++; continue; }
-          if (text[j] === ']') { j++; seq.end = j; return seq; }
+          sp();
+          if (j >= e) throw open();
+          if (text[j] === ']') {
+            j++;
+            seq.end = j;
+            return seq;
+          }
+          seq.items.push(item());
+          sp();
+          if (text[j] === ',') {
+            j++;
+            continue;
+          }
+          if (text[j] === ']') {
+            j++;
+            seq.end = j;
+            return seq;
+          }
           if (j >= e) throw open();
           fail(j, 'expected , or ] in the [ ] list');
         }
       }
       if (c === '{') {
-        const map = mkMap(lineAt(j), true); map.start = j; j++;
+        const map = mkMap(lineAt(j), true);
+        map.start = j;
+        j++;
         for (;;) {
-          sp(); if (j >= e) throw open();
-          if (text[j] === '}') { j++; map.end = j; return map; }
-          const kStart = j, k = item();
+          sp();
+          if (j >= e) throw open();
+          if (text[j] === '}') {
+            j++;
+            map.end = j;
+            return map;
+          }
+          const kStart = j,
+            k = item();
           if (k.kind !== 'scalar') throw new Unsupported('a list or mapping used as a key');
           sp();
           let v;
-          if (text[j] === ':') { j++; v = item(); } else v = mkScalar('null', null, text, j, j, lineAt(j), 'plain');
+          if (text[j] === ':') {
+            j++;
+            v = item();
+          } else v = mkScalar('null', null, text, j, j, lineAt(j), 'plain');
           if (entryOf(map, String(k.value))) warnings.push({ line: lineAt(kStart), col: 1, message: `duplicate key '${k.value}': the later value wins` });
           map.entries.push({ key: String(k.value), line: lineAt(kStart), node: v });
           sp();
-          if (text[j] === ',') { j++; continue; }
-          if (text[j] === '}') { j++; map.end = j; return map; }
+          if (text[j] === ',') {
+            j++;
+            continue;
+          }
+          if (text[j] === '}') {
+            j++;
+            map.end = j;
+            return map;
+          }
           if (j >= e) throw open();
           fail(j, 'expected , or } in the { } mapping');
         }
       }
-      if (c === '"' || c === "'") { const r = quoted(j, e); j = r.end; r.node.flow = true; return r.node; }
+      if (c === '"' || c === "'") {
+        const r = quoted(j, e);
+        j = r.end;
+        r.node.flow = true;
+        return r.node;
+      }
       if (c === '&' || c === '*' || c === '!') throw new Unsupported('anchors, aliases or tags (&, *, !)');
-      const r = plainScalar(j, e, true); j = r.end; r.node.flow = true; return r.node;
+      const r = plainScalar(j, e, true);
+      j = r.end;
+      r.node.flow = true;
+      return r.node;
     }
     const node = item();
     return { node, end: j };
@@ -454,8 +752,15 @@ export function parseYaml(text) {
       if (/^[&!*][^\s]*(?:\s|$)/.test(text.slice(s, e)) && /:(?:\s|$)/.test(text.slice(s, e))) throw new Unsupported('anchors, aliases or tags (&, *, !)');
     }
     if (c === '"' || c === "'") {
-      let r; try { r = quoted(s, e); } catch (err) { if (err instanceof Unsupported) return null; throw err; }
-      let j = r.end; while (j < e && /[ \t]/.test(text[j])) j++;
+      let r;
+      try {
+        r = quoted(s, e);
+      } catch (err) {
+        if (err instanceof Unsupported) return null;
+        throw err;
+      }
+      let j = r.end;
+      while (j < e && /[ \t]/.test(text[j])) j++;
       if (text[j] === ':' && (j + 1 >= e || /[ \t]/.test(text[j + 1]))) return { key: r.node.value, valueStart: j + 1 };
       return null;
     }
@@ -463,13 +768,19 @@ export function parseYaml(text) {
     for (let j = s; j < e; j++) {
       if (text[j] === '#' && j > s && /[ \t]/.test(text[j - 1])) return null;
       if (text[j] === ':' && (j + 1 >= e || /[ \t]/.test(text[j + 1]))) {
-        let k = j; while (k > s && /[ \t]/.test(text[k - 1])) k--;
+        let k = j;
+        while (k > s && /[ \t]/.test(text[k - 1])) k--;
         const key = text.slice(s, k);
         if (key === '<<') throw new Unsupported('merge keys (<<)');
         if (!key) fail(s, "a key is missing before ':'");
         if (PLAIN_BAD_START.test(key)) fail(s, `a key cannot start with '${key[0]}' unless it is quoted`);
         const kt = yamlPlainType(key).type;
-        if (kt === 'bool' || kt === 'null') warnings.push({ line: lineAt(s), col: s - starts[lineAt(s) - 1] + 1, message: `the key '${key}' is read as ${kt === 'bool' ? `the boolean ${yamlPlainType(key).value ? 'True' : 'False'}` : 'null'} by PyYAML, not as text (quote it: "${key}")` });
+        if (kt === 'bool' || kt === 'null')
+          warnings.push({
+            line: lineAt(s),
+            col: s - starts[lineAt(s) - 1] + 1,
+            message: `the key '${key}' is read as ${kt === 'bool' ? `the boolean ${yamlPlainType(key).value ? 'True' : 'False'}` : 'null'} by PyYAML, not as text (quote it: "${key}")`,
+          });
         return { key, valueStart: j + 1 };
       }
     }
@@ -478,13 +789,17 @@ export function parseYaml(text) {
 
   /** The value that follows `key:` or `- ` on line l from offset s; `indent` is the owning node's indent. */
   function inlineValue(l, s, indent) {
-    let j = s; while (j < l.end && /[ \t]/.test(text[j])) j++;
+    let j = s;
+    while (j < l.end && /[ \t]/.test(text[j])) j++;
     if (restIsEmpty(j, l.end)) {
       li++;
       skipBlank();
       const nx = L[li];
-      if (nx && nx.indent > indent) { checkTabs(nx); return block(nx.indent); }
-      if (nx && nx.indent === indent && /^-(?:\s|$)/.test(text.slice(nx.cs, nx.end))) return seq(indent);   // `key:` then `- item` at the key's column
+      if (nx && nx.indent > indent) {
+        checkTabs(nx);
+        return block(nx.indent);
+      }
+      if (nx && nx.indent === indent && /^-(?:\s|$)/.test(text.slice(nx.cs, nx.end))) return seq(indent); // `key:` then `- item` at the key's column
       return mkScalar('null', null, text, s, s, l.no, 'empty');
     }
     const c = text[j];
@@ -493,37 +808,59 @@ export function parseYaml(text) {
     if (c === '[' || c === '{') {
       const r = flow(j, l.end);
       if (!restIsEmpty(r.end, l.end)) fail(r.end, 'unexpected text after the closing bracket');
-      li++; return r.node;
+      li++;
+      return r.node;
     }
     if (c === '"' || c === "'") {
       const r = quoted(j, l.end);
       if (!restIsEmpty(r.end, l.end)) fail(r.end, 'unexpected text after the quoted string');
-      li++; return r.node;
+      li++;
+      return r.node;
     }
     const r = plainScalar(j, l.end, false);
     li++;
     // A more-indented line after a plain value continues it (a folded multi-line plain scalar): valid, not modeled.
-    let k = li; while (k < L.length && isBlank(L[k])) k++;
+    let k = li;
+    while (k < L.length && isBlank(L[k])) k++;
     if (k < L.length && L[k].indent > indent && !mapKeySafe(L[k])) throw new Unsupported('a plain value that continues on the next line');
     if (k < L.length && L[k].indent > indent) fail(L[k].cs, 'this line is indented more than the key above it, whose value is already given');
     return r.node;
   }
-  const mapKeySafe = (l) => { try { return !!mapKey(l.cs, l.end); } catch { return false; } };
+  const mapKeySafe = (l) => {
+    try {
+      return !!mapKey(l.cs, l.end);
+    } catch {
+      return false;
+    }
+  };
 
   function blockScalar(l, j, indent) {
     const head = /^([|>])([+-]?)([1-9]?)([+-]?)[ \t]*(?:#.*)?$/.exec(text.slice(j, l.end));
     if (!head) fail(j, `bad block scalar header '${text.slice(j, l.end).trim()}' (use | or > with an optional + or - and a digit)`);
-    const style = head[1], chomp = head[2] || head[4], explicit = head[3] ? indent + Number(head[3]) : 0;
+    const style = head[1],
+      chomp = head[2] || head[4],
+      explicit = head[3] ? indent + Number(head[3]) : 0;
     li++;
-    let k = li, blockIndent = explicit;
-    if (!blockIndent) { while (k < L.length && L[k].cs === L[k].end) k++; blockIndent = k < L.length && L[k].indent > indent ? L[k].indent : indent + 1; }
-    const lines = []; let lastContent = li - 1;
+    let k = li,
+      blockIndent = explicit;
+    if (!blockIndent) {
+      while (k < L.length && L[k].cs === L[k].end) k++;
+      blockIndent = k < L.length && L[k].indent > indent ? L[k].indent : indent + 1;
+    }
+    const lines = [];
+    let lastContent = li - 1;
     k = li;
     while (k < L.length) {
       const x = L[k];
-      if (x.cs === x.end) { lines.push(''); k++; continue; }   // a blank (or spaces-only) line belongs to the block
+      if (x.cs === x.end) {
+        lines.push('');
+        k++;
+        continue;
+      } // a blank (or spaces-only) line belongs to the block
       if (x.indent < blockIndent) break;
-      lines.push(text.slice(x.start + blockIndent, x.end)); lastContent = k; k++;
+      lines.push(text.slice(x.start + blockIndent, x.end));
+      lastContent = k;
+      k++;
     }
     const used = lastContent - li + 1;
     const content = lines.slice(0, Math.max(used, 0));
@@ -543,7 +880,8 @@ export function parseYaml(text) {
       });
     }
     if (content.length) value += chomp === '-' ? '' : chomp === '+' ? '\n'.repeat(1 + trailing) : '\n';
-    const cStart = used > 0 ? L[li].start : L[li - 1].end, cEnd = used > 0 ? L[lastContent].end : L[li - 1].end;
+    const cStart = used > 0 ? L[li].start : L[li - 1].end,
+      cEnd = used > 0 ? L[lastContent].end : L[li - 1].end;
     const node = mkScalar('string', value, text, cStart, cEnd, l.no, 'block');
     node.block = { header: text.slice(j, l.end).trim(), indent: blockIndent, lines: content, empty: used <= 0 };
     li = lastContent + 1;
@@ -561,19 +899,25 @@ export function parseYaml(text) {
       if (l.indent > indent) fail(l.cs, 'this line is indented more than the list item above it');
       const c = text.slice(l.cs, l.end);
       if (!/^-(?:\s|$)/.test(c)) return node;
-      let j = l.cs + 1; while (j < l.end && text[j] === ' ') j++;
+      let j = l.cs + 1;
+      while (j < l.end && text[j] === ' ') j++;
       if (text[j] === '\t') fail(j, 'a tab is used for indentation (YAML allows only spaces)');
       if (restIsEmpty(j, l.end)) {
-        li++; skipBlank();
+        li++;
+        skipBlank();
         const nx = L[li];
-        if (nx && nx.indent > indent) { checkTabs(nx); node.items.push(block(nx.indent)); }
-        else node.items.push(mkScalar('null', null, text, l.cs + 1, l.cs + 1, l.no, 'empty'));
+        if (nx && nx.indent > indent) {
+          checkTabs(nx);
+          node.items.push(block(nx.indent));
+        } else node.items.push(mkScalar('null', null, text, l.cs + 1, l.cs + 1, l.no, 'empty'));
         continue;
       }
       if (/^-(?:\s|$)/.test(text.slice(j, l.end))) throw new Unsupported('a list item that starts another list on the same line');
       if (mapKey(j, l.end)) {
         // `- key: v` opens a mapping whose keys sit at the column after the dash: parse it from a virtual line.
-        const col = j - l.start, at = li, saved = L[at];
+        const col = j - l.start,
+          at = li,
+          saved = L[at];
         L[at] = { ...saved, indent: col, cs: j };
         node.items.push(map(col));
         L[at] = saved;
@@ -626,9 +970,11 @@ export function parseYaml(text) {
     const root = block(L[li].indent);
     skipBlank();
     if (li < L.length) {
-      const l = L[li], c = text.slice(l.cs, l.end);
+      const l = L[li],
+        c = text.slice(l.cs, l.end);
       if (/^(?:---|\.\.\.)(?:\s|$)/.test(c) && l.indent === 0) {
-        let k = li + 1; while (k < L.length && isBlank(L[k])) k++;
+        let k = li + 1;
+        while (k < L.length && isBlank(L[k])) k++;
         if (k < L.length || c.startsWith('---')) throw new Unsupported('several YAML documents in one file');
       } else fail(l.cs, l.indent > 0 ? 'this line is indented less than the block it belongs to, but more than the one above it' : 'unexpected content after the end of the document');
     }

@@ -36,11 +36,11 @@ const FRONTEND = dirname(dirname(fileURLToPath(import.meta.url)));
 const BACKEND = join(FRONTEND, '..', 'backend');
 const BIN = process.env.E2E_BIN || join(BACKEND, 'target', 'debug', 'nemo-console');
 const LIVE = process.env.E2E_LIVE === '1';
-const CLOSED_URL = 'http://127.0.0.1:9';   // discard port: nothing listens, a connection is refused at once
+const CLOSED_URL = 'http://127.0.0.1:9'; // discard port: nothing listens, a connection is refused at once
 // Every key of the backend's DEFAULT_URLS (backend/crates/nemo-console/src/config.rs). A key missing here keeps its live
 // default; the effective-URL check in startBackend catches that.
 const URL_KEYS = ['switchyard', 'relay', 'dynamo', 'dynamo_worker_metrics', 'litellm', 'dcgm', 'prometheus', 'guardrails'];
-const SETTLE_MS = 400;          // the page must stay free of skeletons for this long to count as rendered
+const SETTLE_MS = 400; // the page must stay free of skeletons for this long to count as rendered
 const PAGE_TIMEOUT_MS = 20000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -54,25 +54,40 @@ function findChrome() {
   throw new Error('no Chrome found: set CHROME_BIN, or `git config nemo-console.chrome <path>`, or put google-chrome / chromium / chrome-headless-shell on PATH');
 }
 
-const freePort = () => new Promise((resolve, reject) => {
-  const s = createServer();
-  s.once('error', reject);
-  s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); });
-});
+const freePort = () =>
+  new Promise((resolve, reject) => {
+    const s = createServer();
+    s.once('error', reject);
+    s.listen(0, '127.0.0.1', () => {
+      const { port } = s.address();
+      s.close(() => resolve(port));
+    });
+  });
 
 /** Minimal DevTools client: one browser WebSocket, flat sessions. */
 export class Cdp {
-  constructor(ws) { this.ws = ws; this.id = 0; this.waiting = new Map(); this.handlers = []; }
+  constructor(ws) {
+    this.ws = ws;
+    this.id = 0;
+    this.waiting = new Map();
+    this.handlers = [];
+  }
   static async connect(url) {
     const ws = new WebSocket(url);
-    await new Promise((res, rej) => { ws.onopen = res; ws.onerror = () => rej(new Error(`cannot connect to ${url}`)); });
+    await new Promise((res, rej) => {
+      ws.onopen = res;
+      ws.onerror = () => rej(new Error(`cannot connect to ${url}`));
+    });
     const c = new Cdp(ws);
     ws.onmessage = (m) => {
       const msg = JSON.parse(m.data);
       if (msg.id && c.waiting.has(msg.id)) {
-        const { resolve, reject } = c.waiting.get(msg.id); c.waiting.delete(msg.id);
+        const { resolve, reject } = c.waiting.get(msg.id);
+        c.waiting.delete(msg.id);
         msg.error ? reject(new Error(`${msg.error.message} (${msg.error.code})`)) : resolve(msg.result);
-      } else if (msg.method) { for (const h of c.handlers) h(msg); }
+      } else if (msg.method) {
+        for (const h of c.handlers) h(msg);
+      }
     };
     return c;
   }
@@ -81,30 +96,55 @@ export class Cdp {
     this.ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
     return new Promise((resolve, reject) => this.waiting.set(id, { resolve, reject }));
   }
-  on(h) { this.handlers.push(h); }
-  close() { try { this.ws.close(); } catch { /* ignore */ } }
+  on(h) {
+    this.handlers.push(h);
+  }
+  close() {
+    try {
+      this.ws.close();
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 export async function startBackend(tmp, { port, frontendDir } = {}) {
   if (!existsSync(BIN)) throw new Error(`${BIN} missing: build it (make setup, or cd backend && cargo build --locked)`);
   port ||= await freePort();
-  const home = join(tmp, 'home'); const state = join(tmp, 'state'); const repo = join(tmp, 'repo');
-  const bin = join(tmp, 'bin');      // the hermetic PATH: empty, so every allowlisted CLI is "not found"
+  const home = join(tmp, 'home');
+  const state = join(tmp, 'state');
+  const repo = join(tmp, 'repo');
+  const bin = join(tmp, 'bin'); // the hermetic PATH: empty, so every allowlisted CLI is "not found"
   for (const d of [home, state, repo, bin]) mkdirSync(d, { recursive: true });
   chmodSync(state, 0o700);
   const env = {
-    PATH: LIVE ? (process.env.PATH || '/usr/bin:/bin') : bin, HOME: home, LANG: 'C.UTF-8',
-    NEMO_CONSOLE_PORT: String(port), NEMO_CONSOLE_STATE_DIR: state, NEMO_CONSOLE_NO_USER_ENV: '1',
-    NEMO_CONSOLE_TRUST_LOOPBACK: 'false', NEMO_CONSOLE_REPO_ROOT: repo,
+    PATH: LIVE ? process.env.PATH || '/usr/bin:/bin' : bin,
+    HOME: home,
+    LANG: 'C.UTF-8',
+    NEMO_CONSOLE_PORT: String(port),
+    NEMO_CONSOLE_STATE_DIR: state,
+    NEMO_CONSOLE_NO_USER_ENV: '1',
+    NEMO_CONSOLE_TRUST_LOOPBACK: 'false',
+    NEMO_CONSOLE_REPO_ROOT: repo,
     ...(LIVE ? {} : { NEMO_CONSOLE_URLS: JSON.stringify(Object.fromEntries(URL_KEYS.map((k) => [k, CLOSED_URL]))) }),
     ...(frontendDir ? { NEMO_CONSOLE_FRONTEND_DIR: frontendDir } : {}),
   };
   const proc = spawn(BIN, [], { cwd: BACKEND, env, stdio: ['ignore', 'pipe', 'pipe'] });
-  let log = ''; proc.stdout.on('data', (d) => { log += d; }); proc.stderr.on('data', (d) => { log += d; });
+  let log = '';
+  proc.stdout.on('data', (d) => {
+    log += d;
+  });
+  proc.stderr.on('data', (d) => {
+    log += d;
+  });
   const base = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 150; i++) {
     if (proc.exitCode !== null) throw new Error(`backend exited early (${proc.exitCode}):\n${log.slice(-2000)}`);
-    try { if ((await fetch(`${base}/api/v1/health`)).ok) break; } catch { /* not up yet */ }
+    try {
+      if ((await fetch(`${base}/api/v1/health`)).ok) break;
+    } catch {
+      /* not up yet */
+    }
     await sleep(200);
   }
   const keyFile = join(state, 'bootstrap-admin.key');
@@ -116,12 +156,15 @@ export async function startBackend(tmp, { port, frontendDir } = {}) {
     try {
       const r = await fetch(`${base}/api/v1/settings`, { headers: { Authorization: `Bearer ${key}` } });
       urls = r.ok ? (await r.json()).urls : null;
-    } catch { /* reported below */ }
+    } catch {
+      /* reported below */
+    }
     const live = urls && typeof urls === 'object' ? Object.entries(urls).filter(([, u]) => u !== CLOSED_URL) : null;
     if (!live || live.length) {
       proc.kill('SIGKILL');
-      throw new Error(`not hermetic: ${live ? live.map(([k, u]) => `${k}=${u}`).join(', ') : 'GET /api/v1/settings failed'}`
-        + ' (add the key to URL_KEYS, or set E2E_LIVE=1 for a deliberate live run)');
+      throw new Error(
+        `not hermetic: ${live ? live.map(([k, u]) => `${k}=${u}`).join(', ') : 'GET /api/v1/settings failed'}` + ' (add the key to URL_KEYS, or set E2E_LIVE=1 for a deliberate live run)',
+      );
     }
   }
   return { proc, base, key, log: () => log };
@@ -129,16 +172,35 @@ export async function startBackend(tmp, { port, frontendDir } = {}) {
 
 export async function startChrome(profile) {
   const port = await freePort();
-  const proc = spawn(findChrome(), [
-    '--headless', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-sandbox', '--disable-gpu',
-    '--disable-dev-shm-usage', '--disable-background-networking', '--disable-sync', '--no-first-run',
-    '--no-default-browser-check', '--window-size=1440,1000', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
-  let err = ''; proc.stderr.on('data', (d) => { err += d; });
+  const proc = spawn(
+    findChrome(),
+    [
+      '--headless',
+      `--remote-debugging-port=${port}`,
+      `--user-data-dir=${profile}`,
+      '--no-sandbox',
+      '--disable-gpu',
+      '--disable-dev-shm-usage',
+      '--disable-background-networking',
+      '--disable-sync',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--window-size=1440,1000',
+      'about:blank',
+    ],
+    { stdio: ['ignore', 'ignore', 'pipe'] },
+  );
+  let err = '';
+  proc.stderr.on('data', (d) => {
+    err += d;
+  });
   for (let i = 0; i < 100; i++) {
     try {
       const v = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
       if (v.webSocketDebuggerUrl) return { proc, wsUrl: v.webSocketDebuggerUrl, version: v.Browser };
-    } catch { /* not listening yet */ }
+    } catch {
+      /* not listening yet */
+    }
     await sleep(150);
   }
   proc.kill('SIGKILL');
@@ -149,7 +211,9 @@ export async function main(argv = process.argv.slice(2)) {
   const keepProfile = argv.includes('--keep-profile');
   const tmp = mkdtempSync(join(tmpdir(), 'nc-e2e-'));
   const failures = [];
-  let backend; let chrome; let cdp;
+  let backend;
+  let chrome;
+  let cdp;
   try {
     backend = await startBackend(tmp);
     chrome = await startChrome(join(tmp, 'profile'));
@@ -161,20 +225,32 @@ export async function main(argv = process.argv.slice(2)) {
 
     let route = '(sign-in)';
     // Before the key is in sessionStorage the app's first calls answer 401 by design: not a failure.
-    const problems = (msg) => { if (route !== '(sign-in)') failures.push(`${route}: ${msg}`); };
+    const problems = (msg) => {
+      if (route !== '(sign-in)') failures.push(`${route}: ${msg}`);
+    };
     const seenHeaders = new Map();
     cdp.on((m) => {
       if (m.sessionId !== sessionId) return;
       if (m.method === 'Runtime.exceptionThrown') {
-        const d = m.params.exceptionDetails; problems(`uncaught exception: ${d.exception?.description || d.text}`);
+        const d = m.params.exceptionDetails;
+        problems(`uncaught exception: ${d.exception?.description || d.text}`);
       } else if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') {
-        problems(`console.error: ${m.params.args.map((a) => a.value ?? a.description ?? '').join(' ').slice(0, 300)}`);
+        problems(
+          `console.error: ${m.params.args
+            .map((a) => a.value ?? a.description ?? '')
+            .join(' ')
+            .slice(0, 300)}`,
+        );
       } else if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error' && m.params.entry.source !== 'network') {
-        problems(`browser error: ${m.params.entry.text.slice(0, 300)} ${m.params.entry.url || ''}`);    // network: below
+        problems(`browser error: ${m.params.entry.text.slice(0, 300)} ${m.params.entry.url || ''}`); // network: below
       } else if (m.method === 'Network.responseReceived') {
-        const r = m.params.response; const u = new URL(r.url);
+        const r = m.params.response;
+        const u = new URL(r.url);
         if (u.origin !== backend.base) return;
-        if (u.pathname.startsWith('/api/')) { if (r.status >= 500) problems(`HTTP ${r.status} from ${u.pathname}`); return; }
+        if (u.pathname.startsWith('/api/')) {
+          if (r.status >= 500) problems(`HTTP ${r.status} from ${u.pathname}`);
+          return;
+        }
         if (r.status >= 400) problems(`frontend file ${u.pathname} answered ${r.status}`);
         seenHeaders.set(u.pathname, Object.entries(r.headers).find(([k]) => k.toLowerCase() === 'cache-control')?.[1] || '');
       }
@@ -190,7 +266,8 @@ export async function main(argv = process.argv.slice(2)) {
 
     /** Wait until the page has rendered (no skeleton for SETTLE_MS) and report the visible error states. */
     const settle = async () => {
-      const t0 = Date.now(); let quietSince = 0;
+      const t0 = Date.now();
+      let quietSince = 0;
       while (Date.now() - t0 < PAGE_TIMEOUT_MS) {
         const st = await evaluate(`(() => {
           const main = document.querySelector('#main');
@@ -201,8 +278,10 @@ export async function main(argv = process.argv.slice(2)) {
           return { busy, errs, notFound, hasContent: !!main && main.children.length > 0 };
         })()`);
         if (st.errs.length || st.notFound) return st;
-        if (!st.busy && st.hasContent) { quietSince ||= Date.now(); if (Date.now() - quietSince >= SETTLE_MS) return st; }
-        else quietSince = 0;
+        if (!st.busy && st.hasContent) {
+          quietSince ||= Date.now();
+          if (Date.now() - quietSince >= SETTLE_MS) return st;
+        } else quietSince = 0;
         await sleep(100);
       }
       return { timeout: true, errs: [], notFound: false };
@@ -215,7 +294,8 @@ export async function main(argv = process.argv.slice(2)) {
       route = path;
       await evaluate(`location.hash = '#${path}'; true`);
       await sleep(150);
-      let st = await settle(); pages++;
+      let st = await settle();
+      pages++;
       if (st.timeout) problems('did not finish rendering');
       if (st.notFound) problems('shows the not-found state');
       for (const e of st.errs) problems(`error state: ${e}`);
@@ -224,7 +304,8 @@ export async function main(argv = process.argv.slice(2)) {
         route = `${path} › ${id}`;
         await evaluate(`document.getElementById(${JSON.stringify(id)})?.click(); true`);
         await sleep(150);
-        st = await settle(); pages++;
+        st = await settle();
+        pages++;
         if (st.timeout) problems('did not finish rendering');
         for (const e of st.errs) problems(`error state: ${e}`);
       }
@@ -233,7 +314,9 @@ export async function main(argv = process.argv.slice(2)) {
     for (const [p, cc] of seenHeaders) if (!/\bno-cache\b/.test(cc)) problems(`${p} served without Cache-Control: no-cache (got '${cc}')`);
     if (!seenHeaders.size) problems('no frontend file was observed (the page never loaded?)');
 
-    console.log(`e2e: backend ${BIN.replace(/^.*\/backend\//, 'backend/')} (${LIVE ? 'LIVE upstreams and PATH' : 'hermetic'}); ${chrome.version}; ${paths.length} routes, ${pages} pages/tabs rendered, ${seenHeaders.size} static files checked`);
+    console.log(
+      `e2e: backend ${BIN.replace(/^.*\/backend\//, 'backend/')} (${LIVE ? 'LIVE upstreams and PATH' : 'hermetic'}); ${chrome.version}; ${paths.length} routes, ${pages} pages/tabs rendered, ${seenHeaders.size} static files checked`,
+    );
   } catch (e) {
     failures.push(`harness: ${e.message}`);
   } finally {

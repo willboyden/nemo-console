@@ -41,24 +41,57 @@ test('the tab table matches the tab ids the views define', () => {
 });
 
 test('help.en.json has a valid guide and FAQ for every system, Overview, Audit, Settings and the console questions', () => {
-  assert.deepEqual(helpProblems(doc, tabsBySystem, ROUTES.map((r) => r.path)), []);
+  assert.deepEqual(
+    helpProblems(
+      doc,
+      tabsBySystem,
+      ROUTES.map((r) => r.path),
+    ),
+    [],
+  );
 });
 
 test('helpProblems catches the mistakes it is meant to catch', () => {
   const bad = {
     [CONSOLE_KEY]: { faq: [{ q: 'Q', a: 'A', tab: 'status' }] },
-    switchyard: { lead: 'x', steps: [{ title: 't', body: 'b', tab: 'nope' }], faq: [{ q: 'q', a: 'see https://example.org, not http://127.0.0.1:8793/' }, { q: 'q', a: 'odd `tick' }, { q: 'r', a: 'a', route: '/nowhere' }, { q: 's', a: 'a', extra: 1 }] },
+    switchyard: {
+      lead: 'x',
+      steps: [{ title: 't', body: 'b', tab: 'nope' }],
+      faq: [
+        { q: 'q', a: 'see https://example.org, not http://127.0.0.1:8793/' },
+        { q: 'q', a: 'odd `tick' },
+        { q: 'r', a: 'a', route: '/nowhere' },
+        { q: 's', a: 'a', extra: 1 },
+      ],
+    },
     nosuch: {},
   };
   const out = helpProblems(bad, { switchyard: ['routing', 'start', 'faq'], relay: ['status'] }, ['/settings']);
-  for (const want of ['nosuch: not a page', 'only for a page', 'fewer than 3 steps', 'external URL', 'unbalanced backtick', 'unknown route /nowhere', 'unknown key extra', 'duplicate question', 'relay: no entry']) {
-    assert.ok(out.some((p) => p.includes(want)), `${want} in ${JSON.stringify(out)}`);
+  for (const want of [
+    'nosuch: not a page',
+    'only for a page',
+    'fewer than 3 steps',
+    'external URL',
+    'unbalanced backtick',
+    'unknown route /nowhere',
+    'unknown key extra',
+    'duplicate question',
+    'relay: no entry',
+  ]) {
+    assert.ok(
+      out.some((p) => p.includes(want)),
+      `${want} in ${JSON.stringify(out)}`,
+    );
   }
 });
 
 test('richRuns splits paragraphs and inline code, and never yields markup', () => {
   assert.deepEqual(richRuns('Run `make all` now.\n\nThen <b>stop</b>.'), [
-    [{ code: false, text: 'Run ' }, { code: true, text: 'make all' }, { code: false, text: ' now.' }],
+    [
+      { code: false, text: 'Run ' },
+      { code: true, text: 'make all' },
+      { code: false, text: ' now.' },
+    ],
     [{ code: false, text: 'Then <b>stop</b>.' }],
   ]);
   assert.deepEqual(richRuns(''), []);
@@ -66,14 +99,30 @@ test('richRuns splits paragraphs and inline code, and never yields markup', () =
 });
 
 test('filterFaq matches every word in question, answer or command, case-insensitively', () => {
-  const items = [{ q: 'Up timed out', a: 'Raise the timeout.' }, { q: 'Why 409?', a: 'stale base', cmd: 'docker ps' }];
+  const items = [
+    { q: 'Up timed out', a: 'Raise the timeout.' },
+    { q: 'Why 409?', a: 'stale base', cmd: 'docker ps' },
+  ];
   assert.equal(filterFaq(items, '').length, 2);
-  assert.deepEqual(filterFaq(items, 'TIMEOUT').map((i) => i.q), ['Up timed out']);
-  assert.deepEqual(filterFaq(items, '409 stale').map((i) => i.q), ['Why 409?']);
-  assert.deepEqual(filterFaq(items, 'docker').map((i) => i.q), ['Why 409?']);
+  assert.deepEqual(
+    filterFaq(items, 'TIMEOUT').map((i) => i.q),
+    ['Up timed out'],
+  );
+  assert.deepEqual(
+    filterFaq(items, '409 stale').map((i) => i.q),
+    ['Why 409?'],
+  );
+  assert.deepEqual(
+    filterFaq(items, 'docker').map((i) => i.q),
+    ['Why 409?'],
+  );
   assert.deepEqual(filterFaq(items, 'timeout 409'), []);
 });
 
 test('the console pages are nav routes and every console-page help key has a route', () => {
-  for (const id of Object.keys(CONSOLE_PAGES)) assert.ok(ROUTES.some((r) => r.path === `/${id}`), id);
+  for (const id of Object.keys(CONSOLE_PAGES))
+    assert.ok(
+      ROUTES.some((r) => r.path === `/${id}`),
+      id,
+    );
 });

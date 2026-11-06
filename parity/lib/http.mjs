@@ -19,9 +19,17 @@ export function send(port, req) {
       headers['Content-Length'] = String(body.length);
     }
     let settled = false;
-    const done = (r) => { if (!settled) { settled = true; clearTimeout(timer); resolve(r); } };
+    const done = (r) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        resolve(r);
+      }
+    };
     const r = http.request({ host: '127.0.0.1', port, method: req.method, path: req.path, headers, agent: false, setHost: false });
-    const timer = setTimeout(() => { r.destroy(new Error(`timeout after ${timeoutMs} ms`)); }, timeoutMs);
+    const timer = setTimeout(() => {
+      r.destroy(new Error(`timeout after ${timeoutMs} ms`));
+    }, timeoutMs);
     r.on('response', (res) => {
       const chunks = [];
       let truncated = false;
@@ -31,9 +39,17 @@ export function send(port, req) {
         hdrs[k] = k in hdrs ? `${hdrs[k]}, ${res.rawHeaders[i + 1]}` : res.rawHeaders[i + 1];
       }
       let readTimer = null;
-      const finish = () => { if (readTimer) clearTimeout(readTimer); done({ status: res.statusCode, headers: hdrs, body: Buffer.concat(chunks), truncated }); };
+      const finish = () => {
+        if (readTimer) clearTimeout(readTimer);
+        done({ status: res.statusCode, headers: hdrs, body: Buffer.concat(chunks), truncated });
+      };
       if (req.readMs) {
-        readTimer = setTimeout(() => { truncated = true; finish(); res.destroy(); r.destroy(); }, req.readMs);
+        readTimer = setTimeout(() => {
+          truncated = true;
+          finish();
+          res.destroy();
+          r.destroy();
+        }, req.readMs);
       }
       res.on('data', (c) => chunks.push(c));
       res.on('end', finish);
@@ -64,7 +80,10 @@ export function parseSse(text) {
     let ev = null;
     for (const line of block.split('\n')) {
       if (line === '') continue;
-      if (line.startsWith(':')) { events.push({ comment: line.slice(1).trimStart(), ...(partial ? { partial } : {}) }); continue; }
+      if (line.startsWith(':')) {
+        events.push({ comment: line.slice(1).trimStart(), ...(partial ? { partial } : {}) });
+        continue;
+      }
       const idx = line.indexOf(':');
       const field = idx === -1 ? line : line.slice(0, idx);
       let value = idx === -1 ? '' : line.slice(idx + 1);

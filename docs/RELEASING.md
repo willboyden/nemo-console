@@ -20,16 +20,17 @@ Run every gate from a fresh clone of the commit you will tag, outside the workin
 
 ```bash
 git clone --no-local <checkout> /tmp/nc-release && cd /tmp/nc-release
-make setup                 # cargo build --locked, enables .githooks
-make all                   # rustfmt, clippy -D warnings, cargo test, cargo-deny, cargo-audit, crate-age, frontend tests, e2e
+make setup                 # cargo build --locked, npm ci (the pinned Prettier), enables .githooks
+make all                   # rustfmt, Prettier check, clippy -D warnings, cargo test, cargo-deny, cargo-audit, crate-age, frontend tests, e2e
 make parity                # the differential harness against the last Python backend (see section 4)
 node parity/check-test-map.mjs --no-pending && node parity/check-routes.mjs
 node parity/xstate.mjs && node parity/startup.mjs && node parity/launcher.mjs
 ```
 
-`cargo deny`, `cargo audit` and `crate-age.py` read crates.io and the RustSec advisory database; nothing else uses the
-network. CI (`.github/workflows/ci.yml`) runs the same gates on every push and pull request: the `backend`, `frontend`,
-`e2e` and `parity` jobs. The pre-push hook (`.githooks/pre-push`) refuses a push whose tree has no recorded e2e pass
+`cargo deny`, `cargo audit` and `crate-age.py` read crates.io and the RustSec advisory database, and `make setup`
+installs the pinned Prettier from the npm registry (`npm ci`); nothing else uses the network. CI
+(`.github/workflows/ci.yml`) runs the same gates on every push and pull request: the `backend`, `frontend`, `e2e` and
+`parity` jobs. The pre-push hook (`.githooks/pre-push`) refuses a push whose tree has no recorded e2e pass
 (`scripts/e2e-gate.sh`).
 
 ## 3. Tag and publish

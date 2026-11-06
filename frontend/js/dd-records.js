@@ -1,8 +1,8 @@
 // Pure logic behind the Data Designer runs list and records table (views/datadesigner.js). No DOM, no imports:
 // node --test covers it directly (tests/dd-records.test.mjs). Shapes follow the contract addendum:
 // records endpoint -> {run_id, total, columns, rows, truncated}; run events -> kind "dd.run" with metadata only.
-export const RECORDS_LIMIT = 50;   // server-driven page size (contract: limit=50, offset pages)
-export const CELL_MAX = 120;       // visible characters per cell; the full text goes into the title attribute
+export const RECORDS_LIMIT = 50; // server-driven page size (contract: limit=50, offset pages)
+export const CELL_MAX = 120; // visible characters per cell; the full text goes into the title attribute
 
 const VERDICT_KINDS = { succeeded: 'ok', passed: 'ok', failed: 'bad', error: 'bad', incomplete: 'warn', interrupted: 'warn', running: 'info' };
 export const verdictKind = (v) => VERDICT_KINDS[v] || 'muted';
@@ -21,7 +21,9 @@ export function runsFromEvents(events, { kind = 'dd.run', cap = 200 } = {}) {
     // Input order is not guaranteed (the UI's list is newest-first): only a newer event may overwrite.
     if (prev && e.ts < prev.ts) continue;
     byId.set(id, {
-      id, ts: e.ts, summary: e.summary || '',
+      id,
+      ts: e.ts,
+      summary: e.summary || '',
       verdict: d.verdict || prev?.verdict || 'running',
       mode: d.mode ?? prev?.mode,
       script: d.script ?? prev?.script,
@@ -33,7 +35,7 @@ export function runsFromEvents(events, { kind = 'dd.run', cap = 200 } = {}) {
       error: d.error ?? prev?.error,
     });
   }
-  return [...byId.values()].sort((a, b) => (b.ts - a.ts) || (a.id < b.id ? -1 : 1)).slice(0, cap);
+  return [...byId.values()].sort((a, b) => b.ts - a.ts || (a.id < b.id ? -1 : 1)).slice(0, cap);
 }
 
 /** The subset of runs whose latest verdict is still "running" (the live create banner / progress line). */
@@ -60,7 +62,8 @@ export function pageMeta(total, limit, offset) {
 export const visibleColumns = (columns, hidden) => (columns || []).filter((c) => !hidden.has(c));
 export const toggleHidden = (hidden, col) => {
   const next = new Set(hidden);
-  if (next.has(col)) next.delete(col); else next.add(col);
+  if (next.has(col)) next.delete(col);
+  else next.add(col);
   return next;
 };
 
@@ -68,7 +71,13 @@ export const toggleHidden = (hidden, col) => {
 export function cellText(v) {
   if (v === null) return 'null';
   if (v === undefined) return '';
-  if (typeof v === 'object') { try { return JSON.stringify(v); } catch { return String(v); } }
+  if (typeof v === 'object') {
+    try {
+      return JSON.stringify(v);
+    } catch {
+      return String(v);
+    }
+  }
   return String(v);
 }
 
@@ -81,5 +90,9 @@ export function truncateCell(text, max = CELL_MAX) {
 
 /** Pretty JSON for the per-row raw toggle. */
 export const rowJson = (row) => {
-  try { return JSON.stringify(row, null, 2); } catch { return String(row); }
+  try {
+    return JSON.stringify(row, null, 2);
+  } catch {
+    return String(row);
+  }
 };

@@ -54,4 +54,4 @@ Everything else is TOML or YAML whose meaning only the real tool knows.
 - **A schema endpoint served by the backend.** Better long term (one source of truth), but it changes the API
   contract the parity harness checks against the Python reference. Possible later; the drift tests make the mirror
   safe enough until then.
-- **A third-party editor or YAML library (CodeMirror, js-yaml).** Rejected by ADR-0013 (zero npm, strict CSP).
+- **A third-party editor or YAML library (CodeMirror, js-yaml).** Rejected by ADR-0013 (zero runtime npm dependencies, strict CSP).

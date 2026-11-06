@@ -61,7 +61,12 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-      - name: Tests (no dependencies to install)
+      - name: Install Prettier (the only devDependency, exact version from package-lock.json)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Format (Prettier check on the code and JSON; .prettierignore lists what is left as written)
+        working-directory: .
+        run: make fmt-check
+      - name: Tests (node --test; they need no dependencies)
         run: npm test
 
   e2e:

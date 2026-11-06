@@ -80,8 +80,10 @@ test('check-test-map: a row naming a helper fn (no #[test]) is not mapped', asyn
   const real = readFileSync(join(here, '..', '..', 'backend', 'TEST-MAP.md'), 'utf8');
   const id = 'tests/core/test_roles.py::test_every_route_carries_exactly_one_role_dependency';
   // point that one id at `concrete`, a helper of tests/core_route_guard.rs (a fn, but not a test)
-  const swapped = real.split('\n').map((l) => (l.startsWith(`| \`${id}\``)
-    ? `| \`${id}\` | core | \`tests/core_route_guard.rs::concrete\` | mapped |` : l)).join('\n');
+  const swapped = real
+    .split('\n')
+    .map((l) => (l.startsWith(`| \`${id}\``) ? `| \`${id}\` | core | \`tests/core_route_guard.rs::concrete\` | mapped |` : l))
+    .join('\n');
   const dir = mkdtempSync(join(tmpdir(), 'nc-testmap-'));
   writeFileSync(join(dir, 'TEST-MAP.md'), swapped);
   const r = spawnSync(process.execPath, [join(here, '..', 'check-test-map.mjs'), '--map', join(dir, 'TEST-MAP.md')], { encoding: 'utf8' });
@@ -94,7 +96,7 @@ test('reference: python = python-final = the pinned last Python commit; other re
   assert.equal(DEFAULT_REF, 'python-final');
   assert.equal(refTag('python'), 'python-final');
   assert.equal(refTag('python@python-final'), 'python-final');
-  assert.equal(resolveRef('python-final'), PYTHON_FINAL_COMMIT);   // the tag, when present, must name this commit
+  assert.equal(resolveRef('python-final'), PYTHON_FINAL_COMMIT); // the tag, when present, must name this commit
   assert.equal(resolveRef('v0.3.1'), 'v0.3.1');
   assert.throws(() => refTag('python@main'), /python-final, a tag vX.Y.Z or a commit id/);
 });
@@ -107,7 +109,7 @@ test("normalise: the console's own version is replaced only on the routes that r
   const other = (doc) => stringify(n.json(parse(doc)));
   assert.equal(own('{"status":"ok","version":"0.5.0"}'), '{"status":"ok","version":"<version>"}');
   assert.equal(own('{"info":{"title":"Nemo Console","version":"0.5.0"}}'), '{"info":{"title":"Nemo Console","version":"<version>"}}');
-  assert.equal(own('{"version":"0.4.9"}'), '{"version":"0.4.9"}');               // another version is left alone
+  assert.equal(own('{"version":"0.4.9"}'), '{"version":"0.4.9"}'); // another version is left alone
   assert.equal(other('{"id":"skillevaluator","version":"0.5.0"}'), '{"id":"skillevaluator","version":"0.5.0"}');
   assert.equal(n.str('0.5.0'), '0.5.0');
   for (const r of ['GET /api/v1/health', 'GET /api/v1/settings', 'PUT /api/v1/settings', 'GET /api/v1/openapi.json']) {

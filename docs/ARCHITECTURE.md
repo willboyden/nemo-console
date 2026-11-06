@@ -28,7 +28,7 @@ additive only, appended to §9 and relayed to affected agents immediately.
 | 10 | Events carry **metadata only** (route, tier, tokens, latency, event type) — never prompt/completion text | ATOF/ATIF and routing logs can contain conversation content |
 | 11 | Playground chat is proxied, streamed, **never persisted**; credential resolved server-side by env NAME | Secrets never touch disk or the browser |
 | 12 | SQLite (WAL) for metrics rollups, config revisions, audit, settings; SSE for live streams | Single node, zero ops |
-| 13 | Zero-build, zero-npm frontend (ES modules + web components, SVG charts), strict CSP | No supply-chain surface (same as Engine Console) |
+| 13 | Zero-build frontend with zero runtime npm dependencies (ES modules + web components, SVG charts), strict CSP | No supply-chain surface (same as Engine Console) |
 | 14 | Security baseline = a localhost-service hardening checklist (ADR-0014), applied in full | Loopback is not a trust boundary for a browser |
 | 15 | NeMo Guardrails rails configs are editable, but a candidate that shrinks the rails is refused unless it carries `# nemo-console: allow-weaken-rails` (ADR-0015, exception to 0007) | Rails tuning is routine; silent weakening is not |
 

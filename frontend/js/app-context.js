@@ -5,10 +5,10 @@ import { openStream } from './sse.js';
 import { toastError } from './components/toast.js';
 
 export const store = createStore({
-  apiKey: session.get('nc.bearer', ''),   // sessionStorage only, never localStorage
+  apiKey: session.get('nc.bearer', ''), // sessionStorage only, never localStorage
   authRequired: false,
   theme: local.get('nc.theme', 'dark'),
-  role: 'admin',      // enforced server-side; this only decides whether admin controls are shown enabled
+  role: 'admin', // enforced server-side; this only decides whether admin controls are shown enabled
   trust: null,
   version: null,
 });
@@ -22,8 +22,9 @@ export const api = createClient({
 export const isAdmin = () => store.get().role === 'admin';
 
 export function setApiKey(key) {
-  if (key) session.set('nc.bearer', key); else session.remove('nc.bearer');
-  api.clearAuthHold();   // a new sign-in, even with the same key, lets requests through again
+  if (key) session.set('nc.bearer', key);
+  else session.remove('nc.bearer');
+  api.clearAuthHold(); // a new sign-in, even with the same key, lets requests through again
   store.set({ apiKey: key || '', authRequired: false });
 }
 

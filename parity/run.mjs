@@ -29,17 +29,36 @@ import { PARITY } from './lib/seed.mjs';
 import { makeNormaliser, isCachedArgv, isCachedHttp, OWN_VERSION_ROUTES } from './corpus/normalise.mjs';
 import { SCENARIOS, casesFor } from './corpus/index.mjs';
 
-const CHOSEN_HEADERS = ['content-type', 'cache-control', 'etag', 'last-modified', 'content-security-policy',
-  'x-content-type-options', 'referrer-policy', 'x-frame-options', 'permissions-policy', 'cross-origin-opener-policy',
-  'cross-origin-resource-policy', 'x-served-by-route', 'x-served-by-tier', 'x-accel-buffering', 'allow',
-  'content-disposition', 'location', 'www-authenticate'];
+const CHOSEN_HEADERS = [
+  'content-type',
+  'cache-control',
+  'etag',
+  'last-modified',
+  'content-security-policy',
+  'x-content-type-options',
+  'referrer-policy',
+  'x-frame-options',
+  'permissions-policy',
+  'cross-origin-opener-policy',
+  'cross-origin-resource-policy',
+  'x-served-by-route',
+  'x-served-by-tier',
+  'x-accel-buffering',
+  'allow',
+  'content-disposition',
+  'location',
+  'www-authenticate',
+];
 const BAD_KEY = 'nck_parityNotAKey0000000000000000000000000000';
 
 function parseArgs(argv) {
   const o = { a: 'python', b: 'rust', rustBin: undefined, scenarios: [], filter: [], only: [], allowFile: undefined, keep: false, tmp: tmpdir(), list: false };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
-    const v = () => { if (i + 1 >= argv.length) throw new Error(`${k} needs a value`); return argv[++i]; };
+    const v = () => {
+      if (i + 1 >= argv.length) throw new Error(`${k} needs a value`);
+      return argv[++i];
+    };
     if (k === '--a') o.a = v();
     else if (k === '--b') o.b = v();
     else if (k === '--rust-bin') o.rustBin = v();
@@ -51,8 +70,15 @@ function parseArgs(argv) {
     else if (k === '--tmp') o.tmp = v();
     else if (k === '--list') o.list = true;
     else if (k === '--dump') o.dump = true;
-    else if (k === '-h' || k === '--help') { console.log(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 20).join('\n')); process.exit(0); }
-    else throw new Error(`unknown option ${k}`);
+    else if (k === '-h' || k === '--help') {
+      console.log(
+        readFileSync(new URL(import.meta.url), 'utf8')
+          .split('\n')
+          .slice(1, 20)
+          .join('\n'),
+      );
+      process.exit(0);
+    } else throw new Error(`unknown option ${k}`);
   }
   for (const s of o.scenarios) if (!SCENARIOS[s]) throw new Error(`unknown scenario ${s} (${Object.keys(SCENARIOS).join(', ')})`);
   if (!o.scenarios.length) o.scenarios = Object.keys(SCENARIOS);
@@ -60,8 +86,15 @@ function parseArgs(argv) {
 }
 
 function readAllowList(file) {
-  const lines = new Set(file ? readFileSync(file, 'utf8').split('\n').map((l) => l.replace(/#.*/, '').trim()).filter(Boolean)
-    .map((l) => l.replace(/\s+/g, ' ')) : []);
+  const lines = new Set(
+    file
+      ? readFileSync(file, 'utf8')
+          .split('\n')
+          .map((l) => l.replace(/#.*/, '').trim())
+          .filter(Boolean)
+          .map((l) => l.replace(/\s+/g, ' '))
+      : [],
+  );
   const stubs = new Set([...lines].filter((l) => l.startsWith('stub:')).map((l) => l.slice(5)));
   return {
     has: (x) => lines.has(x),
@@ -72,7 +105,11 @@ function readAllowList(file) {
       const ids = paths.map((p) => {
         const m = typeof p === 'string' ? /^\/api\/v1\/systems\/([^/?#]+)/.exec(p) : null;
         if (!m) return null;
-        try { return decodeURIComponent(m[1]); } catch { return null; }
+        try {
+          return decodeURIComponent(m[1]);
+        } catch {
+          return null;
+        }
       });
       return ids.length > 0 && ids.every((id) => id !== null && stubs.has(id));
     },
@@ -88,7 +125,10 @@ function substitute(value, side) {
   if (typeof value === 'string') {
     return value.replace(/\{\{(\w+)\}\}/g, (m, k) => {
       if (k in side.vars) return String(side.vars[k]);
-      if (side.other && k in side.other.vars) { side.fallbacks.add(k); return String(side.other.vars[k]); }
+      if (side.other && k in side.other.vars) {
+        side.fallbacks.add(k);
+        return String(side.other.vars[k]);
+      }
       throw new MissingVar(k);
     });
   }
@@ -142,33 +182,51 @@ function shape(c, view) {
     const seen = new Map();
     for (const p of pts) if (p.k === 'arr' && p.v[1]) seen.set(stringify(p.v[1]), p.v[1]);
     const values = [...seen.entries()].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)).map(([, n]) => n);
-    b.tree.v.set('points', { k: 'obj', v: new Map([['nonEmpty', { k: 'bool', v: pts.length > 0 }], ['values', { k: 'arr', v: values }]]) });
+    b.tree.v.set('points', {
+      k: 'obj',
+      v: new Map([
+        ['nonEmpty', { k: 'bool', v: pts.length > 0 }],
+        ['values', { k: 'arr', v: values }],
+      ]),
+    });
   }
   return view;
 }
 
 /** Normalised view of one response: {status, headers, body:{kind, ...}} */
 function analyse(res, norm, route) {
-  const own = OWN_VERSION_ROUTES.has(route);         // the own-release rule applies only to these documents
+  const own = OWN_VERSION_ROUTES.has(route); // the own-release rule applies only to these documents
   const out = { status: res.status, error: res.error ? res.error.replace(/\d{2,5}/g, '<n>') : undefined, headers: {} };
   for (const h of CHOSEN_HEADERS) if (res.headers[h] !== undefined) out.headers[h] = h === 'etag' || h === 'last-modified' ? res.headers[h] : norm.str(res.headers[h]);
   const ct = (res.headers['content-type'] || '').toLowerCase();
   const text = res.body.toString('utf8');
   if (!res.body.length) out.body = { kind: 'empty' };
   else if (ct.startsWith('text/event-stream')) {
-    out.body = { kind: 'sse', events: parseSse(text).map((ev) => {
-      const e = { ...ev };
-      if (e.data !== undefined) {
-        try { e.data = norm.json(parse(e.data), own); e.json = true; } catch { e.data = norm.str(e.data, own); }
-      }
-      return e;
-    }) };
+    out.body = {
+      kind: 'sse',
+      events: parseSse(text).map((ev) => {
+        const e = { ...ev };
+        if (e.data !== undefined) {
+          try {
+            e.data = norm.json(parse(e.data), own);
+            e.json = true;
+          } catch {
+            e.data = norm.str(e.data, own);
+          }
+        }
+        return e;
+      }),
+    };
   } else if (ct.includes('json')) {
-    try { out.body = { kind: 'json', tree: norm.json(parse(text), own) }; } catch (e) { out.body = { kind: 'text', text: norm.str(text, own), note: `invalid JSON: ${e.message}` }; }
+    try {
+      out.body = { kind: 'json', tree: norm.json(parse(text), own) };
+    } catch (e) {
+      out.body = { kind: 'text', text: norm.str(text, own), note: `invalid JSON: ${e.message}` };
+    }
   } else if (ct.startsWith('text/plain') && /version=0\.0\.4|^# (HELP|TYPE) /m.test(ct + '\n' + text)) {
     out.body = { kind: 'prometheus', lines: norm.prometheus(text) };
   } else if (/^(text\/html|text\/css|text\/javascript|application\/javascript|image\/)/.test(ct)) {
-    out.body = { kind: 'bytes', length: res.body.length, text };                 // static files: byte-exact
+    out.body = { kind: 'bytes', length: res.body.length, text }; // static files: byte-exact
   } else {
     out.body = { kind: 'text', text: norm.str(text) };
   }
@@ -180,15 +238,23 @@ function compareResponses(ra, rb) {
   comparePlain(ra.status, rb.status, 'status', diffs);
   if (ra.error || rb.error) comparePlain(ra.error, rb.error, 'transport-error', diffs);
   for (const h of CHOSEN_HEADERS) comparePlain(ra.headers[h], rb.headers[h], `header:${h}`, diffs);
-  const ba = ra.body; const bb = rb.body;
-  if (ba.kind !== bb.kind) { diffs.push({ path: 'body-kind', a: ba.kind, b: bb.kind }); return diffs; }
+  const ba = ra.body;
+  const bb = rb.body;
+  if (ba.kind !== bb.kind) {
+    diffs.push({ path: 'body-kind', a: ba.kind, b: bb.kind });
+    return diffs;
+  }
   if (ba.kind === 'json') {
     for (const d of compareTrees(ba.tree, bb.tree)) diffs.push({ ...d, path: `body${d.path}` });
   } else if (ba.kind === 'sse') {
     const n = Math.max(ba.events.length, bb.events.length);
     for (let i = 0; i < n; i++) {
-      const ea = ba.events[i]; const eb = bb.events[i];
-      if (!ea || !eb) { diffs.push({ path: `sse/${i}`, a: ea ? JSON.stringify(ea) : '(absent)', b: eb ? JSON.stringify(eb) : '(absent)' }); continue; }
+      const ea = ba.events[i];
+      const eb = bb.events[i];
+      if (!ea || !eb) {
+        diffs.push({ path: `sse/${i}`, a: ea ? JSON.stringify(ea) : '(absent)', b: eb ? JSON.stringify(eb) : '(absent)' });
+        continue;
+      }
       for (const f of new Set([...Object.keys(ea), ...Object.keys(eb)])) {
         if (f === 'data' && ea.json && eb.json) for (const d of compareTrees(ea.data, eb.data)) diffs.push({ ...d, path: `sse/${i}/data${d.path}` });
         else comparePlain(ea[f], eb[f], `sse/${i}/${f}`, diffs);
@@ -198,7 +264,8 @@ function compareResponses(ra, rb) {
     compareSets(ba.lines, bb.lines, 'body:prometheus-lines', diffs);
   } else if (ba.kind === 'bytes') {
     if (ba.text !== bb.text) {
-      const la = ba.text.split('\n'); const lb = bb.text.split('\n');
+      const la = ba.text.split('\n');
+      const lb = bb.text.split('\n');
       const i = la.findIndex((l, k) => l !== lb[k]);
       diffs.push({ path: `body:bytes (length ${ba.length} vs ${bb.length}), first differing line ${i + 1}`, a: (la[i] ?? '(eof)').slice(0, 200), b: (lb[i] ?? '(eof)').slice(0, 200) });
     }
@@ -229,7 +296,9 @@ function plainCapture(res, spec) {
     if (node === undefined) return undefined;
     const v = toPlain(node);
     return typeof v === 'object' ? JSON.stringify(v) : v;
-  } catch { return undefined; }
+  } catch {
+    return undefined;
+  }
 }
 
 /** Build the request (or CLI args) for one side first: a missing {{var}} throws MissingVar before anything is sent. */
@@ -249,12 +318,25 @@ async function runCase(c, side, req) {
     cliOut = await runCli(side.b, req.args);
   } else if (req.subs) {
     // several requests in flight at once (lock / connection-cap behaviour); sub i starts after its delayMs
-    res = await Promise.all(req.subs.map(async (r, i) => {
-      await new Promise((ok) => setTimeout(ok, c.concurrent[i].delayMs || 0));
-      return send(side.port, r);
-    }));
+    res = await Promise.all(
+      req.subs.map(async (r, i) => {
+        await new Promise((ok) => setTimeout(ok, c.concurrent[i].delayMs || 0));
+        return send(side.port, r);
+      }),
+    );
   } else {
-    const during = c.during ? new Promise((r) => setTimeout(() => { try { c.during.run(side); } catch (e) { side.notes.push(`${c.id}: during hook failed: ${e.message}`); } r(); }, c.during.afterMs || 0)) : null;
+    const during = c.during
+      ? new Promise((r) =>
+          setTimeout(() => {
+            try {
+              c.during.run(side);
+            } catch (e) {
+              side.notes.push(`${c.id}: during hook failed: ${e.message}`);
+            }
+            r();
+          }, c.during.afterMs || 0),
+        )
+      : null;
     res = await send(side.port, req);
     if (during) await during;
   }
@@ -274,30 +356,49 @@ async function runCase(c, side, req) {
 
 function sideCtx(b, root) {
   let realRoot;
-  try { realRoot = realpathSync(root); } catch { realRoot = root; }
+  try {
+    realRoot = realpathSync(root);
+  } catch {
+    realRoot = root;
+  }
   const upstreamPorts = b.upstreams ? b.upstreams.ports : Object.fromEntries(Object.entries(b.urls).map(([n, u]) => [n, Number(new URL(u).port)]));
   const norm = makeNormaliser({ root, realRoot, port: b.port, upstreamPorts, version: b.version });
-  return { b, port: b.port, adminKey: b.adminKey, viewerKey: b.viewerKey, norm, notes: [], root,
+  return {
+    b,
+    port: b.port,
+    adminKey: b.adminKey,
+    viewerKey: b.viewerKey,
+    norm,
+    notes: [],
+    root,
     vars: { port: b.port, origin: `http://127.0.0.1:${b.port}`, home: b.paths.home, repo: b.paths.repo, state: b.paths.state, adminKeyRaw: b.adminKey },
-    allCli: new Set(), allHttp: new Set(), unknownCli: [], unknownHttp: [], fallbacks: new Set() };
+    allCli: new Set(),
+    allHttp: new Set(),
+    unknownCli: [],
+    unknownHttp: [],
+    fallbacks: new Set(),
+  };
 }
 
 async function runScenario(name, opts, allow, report) {
   const scenario = SCENARIOS[name];
-  const cases = casesFor(name).filter((c) => !opts.filter.length || opts.filter.some((f) => c.id.includes(f) || c.route.includes(f)))
+  const cases = casesFor(name)
+    .filter((c) => !opts.filter.length || opts.filter.some((f) => c.id.includes(f) || c.route.includes(f)))
     .filter((c) => !opts.only.length || opts.only.some((re) => re.test(c.id) || re.test(c.route)));
   mkdirSync(opts.tmp, { recursive: true });
   const tmp = mkdtempSync(join(opts.tmp, `nc-parity-${name}-`));
   const out = { scenario: name, a: opts.a, b: opts.b, cases: 0, equal: 0, skipped: [], diffs: [], timings: {} };
   const dump = [];
-  let A; let B;
+  let A;
+  let B;
   try {
     // one after the other: a fake upstream of one side binding port 0 must not grab the other side's console port
     A = await startBackend({ kind: opts.a, rustBin: opts.rustBin, sideDir: join(tmp, 'a'), scenario, label: `A(${opts.a})` });
     B = await startBackend({ kind: opts.b, rustBin: opts.rustBin, sideDir: join(tmp, 'b'), scenario, label: `B(${opts.b})` });
     const sa = sideCtx(A, join(tmp, 'a'));
     const sb = sideCtx(B, join(tmp, 'b'));
-    sa.other = sb; sb.other = sa;
+    sa.other = sb;
+    sb.other = sa;
     // the mint-key run of the setup is itself a CLI parity check
     const mintDiffs = [];
     comparePlain(A.mintOutput.code, B.mintOutput.code, 'mint-key viewer: exit code', mintDiffs);
@@ -306,8 +407,10 @@ async function runScenario(name, opts, allow, report) {
     const t0 = Date.now();
     for (const c of cases) {
       out.cases++;
-      let qa; let qb;
-      sa.fallbacks.clear(); sb.fallbacks.clear();
+      let qa;
+      let qb;
+      sa.fallbacks.clear();
+      sb.fallbacks.clear();
       try {
         qa = prepare(c, sa);
         qb = prepare(c, sb);
@@ -317,7 +420,7 @@ async function runScenario(name, opts, allow, report) {
         continue;
       }
       const fallbackNote = [...[...sa.fallbacks].map((k) => `A used B's {{${k}}}`), ...[...sb.fallbacks].map((k) => `B used A's {{${k}}}`)];
-      if (c.pauseMs) await new Promise((r) => setTimeout(r, c.pauseMs));      // let wall-clock TTL caches expire on both
+      if (c.pauseMs) await new Promise((r) => setTimeout(r, c.pauseMs)); // let wall-clock TTL caches expire on both
       // An action may stamp a run id. Python's stamp reads the clock twice (seconds, then milliseconds), so near a second
       // boundary its id can fall up to a second behind and sort out of order; Rust reads it once (PORTING D-30). Send
       // actions only well inside a second, so both stamps land in the same second as the request.
@@ -342,32 +445,54 @@ async function runScenario(name, opts, allow, report) {
         if (c.waitExit) comparePlain(pa.exit, pb.exit, 'process exit after the case', diffs);
         if (c.capture) {
           for (const [v, spec] of Object.entries(c.capture)) {
-            const va = plainCapture(pa.res, spec); const vb = plainCapture(pb.res, spec);
+            const va = plainCapture(pa.res, spec);
+            const vb = plainCapture(pb.res, spec);
             if (va !== undefined) sa.vars[v] = va;
             if (vb !== undefined) sb.vars[v] = vb;
           }
         }
       }
       // fake CLI argv and upstream requests made during the case
-      const cliA = pa.cli.map((r) => sa.norm.cliRecord(r)); const cliB = pb.cli.map((r) => sb.norm.cliRecord(r));
+      const cliA = pa.cli.map((r) => sa.norm.cliRecord(r));
+      const cliB = pb.cli.map((r) => sb.norm.cliRecord(r));
       for (const x of cliA) sa.allCli.add(x);
       for (const x of cliB) sb.allCli.add(x);
       for (const r of pa.cli) if (r.unknown) sa.unknownCli.push({ case: c.id, argv: sa.norm.str(r.argv.join(' ')) });
       for (const r of pb.cli) if (r.unknown) sb.unknownCli.push({ case: c.id, argv: sb.norm.str(r.argv.join(' ')) });
       const argvKey = (s) => JSON.parse(s).argv.join(' ');
       // a scenario with background tasks (poller, probe) makes calls between cases: only the whole-run sets compare
-      if (!scenario.wholeRunCallsOnly) compareSets([...new Set(cliA.filter((x) => !isCachedArgv(argvKey(x))))], [...new Set(cliB.filter((x) => !isCachedArgv(argvKey(x))))], 'cli-argv (set, cached probes excluded)', diffs);
-      const httpA = pa.http.map((r) => sa.norm.httpRecord(r)); const httpB = pb.http.map((r) => sb.norm.httpRecord(r));
+      if (!scenario.wholeRunCallsOnly)
+        compareSets([...new Set(cliA.filter((x) => !isCachedArgv(argvKey(x))))], [...new Set(cliB.filter((x) => !isCachedArgv(argvKey(x))))], 'cli-argv (set, cached probes excluded)', diffs);
+      const httpA = pa.http.map((r) => sa.norm.httpRecord(r));
+      const httpB = pb.http.map((r) => sb.norm.httpRecord(r));
       for (const x of httpA) sa.allHttp.add(x);
       for (const x of httpB) sb.allHttp.add(x);
       for (const r of pa.http) if (r.unknown) sa.unknownHttp.push({ case: c.id, req: `${r.server} ${r.method} ${r.path}` });
       for (const r of pb.http) if (r.unknown) sb.unknownHttp.push({ case: c.id, req: `${r.server} ${r.method} ${r.path}` });
-      const httpKey = (s) => { const o = JSON.parse(s); return `${o.server} ${o.method} ${o.path}`; };
-      if (!scenario.wholeRunCallsOnly) compareSets([...new Set(httpA.filter((x) => !isCachedHttp(httpKey(x))))], [...new Set(httpB.filter((x) => !isCachedHttp(httpKey(x))))], 'upstream-requests (set, cached excluded)', diffs);
+      const httpKey = (s) => {
+        const o = JSON.parse(s);
+        return `${o.server} ${o.method} ${o.path}`;
+      };
+      if (!scenario.wholeRunCallsOnly)
+        compareSets([...new Set(httpA.filter((x) => !isCachedHttp(httpKey(x))))], [...new Set(httpB.filter((x) => !isCachedHttp(httpKey(x))))], 'upstream-requests (set, cached excluded)', diffs);
       if (opts.dump) {
-        const view = c.kind === 'cli' ? { code: pa.cliOut.code, stdout: sa.norm.str(pa.cliOut.stdout), stderr: sa.norm.str(pa.cliOut.stderr) }
-          : c.concurrent ? { status: pa.res.map((r) => r.status), body: pa.res.map((r) => dumpView(analyse(r, sa.norm, c.route)).body) } : dumpView(analyse(pa.res, sa.norm, c.route));
-        dump.push({ id: c.id, route: c.route, ...view, ...(c.waitExit ? { exit: pa.exit } : {}), argv: cliA.map((x) => JSON.parse(x).argv.join(' ')), upstream: httpA.map((x) => { const o = JSON.parse(x); return `${o.server} ${o.method} ${o.path}`; }) });
+        const view =
+          c.kind === 'cli'
+            ? { code: pa.cliOut.code, stdout: sa.norm.str(pa.cliOut.stdout), stderr: sa.norm.str(pa.cliOut.stderr) }
+            : c.concurrent
+              ? { status: pa.res.map((r) => r.status), body: pa.res.map((r) => dumpView(analyse(r, sa.norm, c.route)).body) }
+              : dumpView(analyse(pa.res, sa.norm, c.route));
+        dump.push({
+          id: c.id,
+          route: c.route,
+          ...view,
+          ...(c.waitExit ? { exit: pa.exit } : {}),
+          argv: cliA.map((x) => JSON.parse(x).argv.join(' ')),
+          upstream: httpA.map((x) => {
+            const o = JSON.parse(x);
+            return `${o.server} ${o.method} ${o.path}`;
+          }),
+        });
       }
       if (fallbackNote.length) diffs.push({ path: 'captured variable (an earlier answer differed)', a: fallbackNote.join('; '), b: '' });
       if (diffs.length) out.diffs.push({ id: c.id, route: c.route, allowed: allow.has(c.route) || allow.has(c.id) || allow.stubCase(c), diffs });
@@ -376,7 +501,10 @@ async function runScenario(name, opts, allow, report) {
     }
     // over the whole run: the distinct argv / upstream requests (cached probes included) must be the same. Built from
     // the COMPLETE logs, so calls made between cases (background tasks: poller, capable probe) are counted too.
-    for (const [side, b] of [[sa, A], [sb, B]]) {
+    for (const [side, b] of [
+      [sa, A],
+      [sb, B],
+    ]) {
       for (const r of readCliLog(b)) side.allCli.add(side.norm.cliRecord(r));
       if (b.upstreams) for (const r of b.upstreams.log) side.allHttp.add(side.norm.httpRecord(r));
     }
@@ -419,15 +547,20 @@ async function main() {
   for (const s of opts.scenarios) {
     const r = await runScenario(s, opts, allow, report);
     const hard = r.diffs.filter((d) => !d.allowed);
-    console.log(`\nscenario ${s}: ${r.cases} cases, ${r.equal} equal, ${r.diffs.length} with diffs` +
-      `${r.diffs.length - hard.length ? ` (${r.diffs.length - hard.length} on allowed routes)` : ''}, ${r.skipped.length} skipped, ${r.seconds}s`);
+    console.log(
+      `\nscenario ${s}: ${r.cases} cases, ${r.equal} equal, ${r.diffs.length} with diffs` +
+        `${r.diffs.length - hard.length ? ` (${r.diffs.length - hard.length} on allowed routes)` : ''}, ${r.skipped.length} skipped, ${r.seconds}s`,
+    );
     const byRoute = new Map();
     for (const d of r.diffs) byRoute.set(d.route, [...(byRoute.get(d.route) || []), d]);
     for (const [route, ds] of [...byRoute].sort()) {
       console.log(`  ${ds[0].allowed ? '[allowed] ' : ''}${route}: ${ds.length} case(s)`);
       for (const d of ds.slice(0, 4)) {
         console.log(`    - ${d.id}`);
-        for (const x of d.diffs.slice(0, 3)) console.log(`        ${x.path}: A=${String(typeof x.a === 'string' ? x.a : JSON.stringify(x.a)).slice(0, 160)} | B=${String(typeof x.b === 'string' ? x.b : JSON.stringify(x.b)).slice(0, 160)}`);
+        for (const x of d.diffs.slice(0, 3))
+          console.log(
+            `        ${x.path}: A=${String(typeof x.a === 'string' ? x.a : JSON.stringify(x.a)).slice(0, 160)} | B=${String(typeof x.b === 'string' ? x.b : JSON.stringify(x.b)).slice(0, 160)}`,
+          );
       }
     }
     for (const sk of r.skipped) console.log(`  skipped ${sk.id}: ${sk.why}`);
@@ -437,8 +570,10 @@ async function main() {
     if (unkH.length) console.log(`  note: ${unkH.length} upstream request(s) hit no fake route (see report.json unknownHttp)`);
     if (hard.length) failed = true;
   }
-  const tot = report.scenarios.reduce((acc, r) => ({ cases: acc.cases + r.cases, equal: acc.equal + r.equal, diffs: acc.diffs + r.diffs.length,
-    hard: acc.hard + r.diffs.filter((d) => !d.allowed).length }), { cases: 0, equal: 0, diffs: 0, hard: 0 });
+  const tot = report.scenarios.reduce(
+    (acc, r) => ({ cases: acc.cases + r.cases, equal: acc.equal + r.equal, diffs: acc.diffs + r.diffs.length, hard: acc.hard + r.diffs.filter((d) => !d.allowed).length }),
+    { cases: 0, equal: 0, diffs: 0, hard: 0 },
+  );
   report.summary = tot;
   writeFileSync(join(PARITY, 'out', 'report.json'), JSON.stringify(report, null, 1));
   console.log(`\nTOTAL ${opts.a} vs ${opts.b}: ${tot.cases} cases, ${tot.equal} equal, ${tot.diffs} with diffs (${tot.diffs - tot.hard} allowed) -> ${failed ? 'FAIL' : 'PASS'}`);
@@ -446,4 +581,12 @@ async function main() {
   return failed ? 1 : 0;
 }
 
-main().then((code) => { process.exitCode = code; }, (e) => { console.error(`parity harness error: ${e.stack || e.message}`); process.exitCode = 2; });
+main().then(
+  (code) => {
+    process.exitCode = code;
+  },
+  (e) => {
+    console.error(`parity harness error: ${e.stack || e.message}`);
+    process.exitCode = 2;
+  },
+);
