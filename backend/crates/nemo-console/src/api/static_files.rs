@@ -55,6 +55,8 @@ pub fn content_type(path: &Path) -> &'static str {
         Some("ttf") => "font/ttf",
         Some("txt") => "text/plain; charset=utf-8",
         Some("md") => "text/markdown; charset=utf-8",
+        // the config validators (`make wasm`, ADR-0022): streaming compilation needs exactly this type
+        Some("wasm") => "application/wasm",
         _ => "application/octet-stream",
     }
 }
@@ -261,4 +263,24 @@ fn parse_range(header: &str, size: usize) -> Result<Vec<(usize, usize)>, RangeEr
         ));
     }
     Ok(ranges)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `WebAssembly.instantiateStreaming` refuses any other type, so the module must not fall back to octet-stream.
+    #[test]
+    fn wasm_is_served_as_application_wasm() {
+        assert_eq!(
+            content_type(Path::new("js/wasm/nemo_console_wasm_bg.wasm")),
+            "application/wasm"
+        );
+        assert_eq!(content_type(Path::new("x.WASM")), "application/wasm");
+        assert_eq!(
+            content_type(Path::new("js/wasm/nemo_console_wasm.js")),
+            "text/javascript; charset=utf-8"
+        );
+        assert_eq!(content_type(Path::new("x.bin")), "application/octet-stream");
+    }
 }

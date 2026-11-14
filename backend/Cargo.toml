@@ -1,7 +1,7 @@
 # Nemo Console, Rust backend (port of backend/src/nemo_console). Contract: backend/PORTING.md.
 [workspace]
 resolver = "3"
-members = ["crates/nemo-console", "crates/nemo-console-core"]
+members = ["crates/nemo-console", "crates/nemo-console-core", "crates/nemo-console-wasm"]
 
 [workspace.package]
 version = "0.10.0"
@@ -56,6 +56,9 @@ tower = { version = "0.5.3", features = ["util"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["json", "fmt"] }
 url = "2.5.8"
+# exactly the version harness2-workbench vetted (and past the 14-day cooldown); the wasm-bindgen CLI must match it
+# (`make wasm` checks). Only crates/nemo-console-wasm uses it (ADR-0022).
+wasm-bindgen = "=0.2.129"
 uuid = { version = "1.27.0", features = ["v4"] }
 wiremock = "0.6.5"
 
@@ -92,3 +95,11 @@ uninlined_format_args = "warn"
 lto = "thin"
 codegen-units = 1
 strip = "symbols"
+
+# The browser build of the validators (crates/nemo-console-wasm, `make wasm`): small, and a panic aborts (a trap the
+# page catches and reports as "live checks unavailable"), never unwinds into JavaScript.
+[profile.release-wasm]
+inherits = "release"
+opt-level = "z"
+lto = true
+panic = "abort"

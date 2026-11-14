@@ -1153,6 +1153,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "nemo-console-wasm"
+version = "0.10.0"
+dependencies = [
+ "nemo-console-core",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "nix"
 version = "0.31.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

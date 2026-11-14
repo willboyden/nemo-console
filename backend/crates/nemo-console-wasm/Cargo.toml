@@ -1,0 +1,22 @@
+[package]
+name = "nemo-console-wasm"
+description = "Nemo Console's config validators for the browser: nemo-console-core compiled to WebAssembly (ADR-0022)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# Built by `make wasm` (cargo build --target wasm32-unknown-unknown --profile release-wasm, then wasm-bindgen
+# --target web) into frontend/js/wasm/, which is generated and never committed. Only wasm-bindgen: no web-sys,
+# js-sys, gloo or framework; the module takes strings and returns JSON strings, makes no network call and holds no key.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+nemo-console-core.workspace = true
+wasm-bindgen.workspace = true
+
+[lints]
+workspace = true

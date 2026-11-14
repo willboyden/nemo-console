@@ -11,6 +11,7 @@
 //! (`tests/vectors/`) run in both.
 
 pub mod adapter_error;
+pub mod check;
 pub mod diagnostics;
 pub mod schemas;
 

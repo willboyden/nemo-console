@@ -439,3 +439,42 @@ async fn test_static_files_are_revalidated_on_every_load() {
         "no-store"
     );
 }
+
+/// ADR-0022: the config validators are served from the static `js` dir as `application/wasm`, under the same headers
+/// as every other response; the CSP allows WebAssembly compilation and nothing else beyond the page's own scripts.
+#[tokio::test]
+async fn the_wasm_module_is_served_as_application_wasm_under_the_strict_csp() {
+    let env = Env::new(Some("http://127.0.0.1:9"));
+    let front = env.settings.frontend_dir.clone();
+    std::fs::create_dir_all(front.join("js/wasm")).unwrap();
+    std::fs::write(front.join("index.html"), "<html>ok</html>").unwrap();
+    std::fs::write(
+        front.join("js/wasm/nemo_console_wasm_bg.wasm"),
+        b"\0asm\x01\0\0\0",
+    )
+    .unwrap();
+    let r = env.get("/js/wasm/nemo_console_wasm_bg.wasm").send().await;
+    assert_eq!(r.status, 200);
+    assert_eq!(r.header("content-type").unwrap(), "application/wasm");
+    assert_secure(&r);
+    for path in ["/", "/api/v1/health", "/js/wasm/nemo_console_wasm_bg.wasm"] {
+        let csp = env
+            .get(path)
+            .send()
+            .await
+            .header("content-security-policy")
+            .unwrap();
+        assert_eq!(
+            csp,
+            "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self'; \
+             img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+            "{path}"
+        );
+        // the one 'unsafe' source is WebAssembly compilation: never unsafe-inline or unsafe-eval
+        let unsafe_tokens: Vec<&str> = csp
+            .split([' ', ';'])
+            .filter(|t| t.contains("unsafe"))
+            .collect();
+        assert_eq!(unsafe_tokens, ["'wasm-unsafe-eval'"], "{path}");
+    }
+}

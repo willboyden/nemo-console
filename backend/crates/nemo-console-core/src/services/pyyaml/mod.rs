@@ -25,7 +25,7 @@ pub mod load;
 mod pyobj;
 /// Nemo: crate-visible so `services::pyfmt::str_repr` uses the exact `str.isprintable()` table.
 pub(crate) mod pyunicode;
-mod resolver;
+pub(crate) mod resolver;
 
 /// Python helpers the dumper uses (copied with it).
 pub mod py;

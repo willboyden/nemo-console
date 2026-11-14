@@ -26,7 +26,7 @@ import { send, parseSse } from './lib/http.mjs';
 import { parse, pointer, toPlain, stringify } from './lib/json.mjs';
 import { compareTrees, comparePlain, compareSets } from './lib/compare.mjs';
 import { PARITY } from './lib/seed.mjs';
-import { makeNormaliser, isCachedArgv, isCachedHttp, OWN_VERSION_ROUTES } from './corpus/normalise.mjs';
+import { makeNormaliser, isCachedArgv, isCachedHttp, OWN_VERSION_ROUTES, cspForCompare } from './corpus/normalise.mjs';
 import { SCENARIOS, casesFor } from './corpus/index.mjs';
 
 const CHOSEN_HEADERS = [
@@ -197,7 +197,11 @@ function shape(c, view) {
 function analyse(res, norm, route) {
   const own = OWN_VERSION_ROUTES.has(route); // the own-release rule applies only to these documents
   const out = { status: res.status, error: res.error ? res.error.replace(/\d{2,5}/g, '<n>') : undefined, headers: {} };
-  for (const h of CHOSEN_HEADERS) if (res.headers[h] !== undefined) out.headers[h] = h === 'etag' || h === 'last-modified' ? res.headers[h] : norm.str(res.headers[h]);
+  for (const h of CHOSEN_HEADERS) {
+    if (res.headers[h] === undefined) continue;
+    const v = h === 'content-security-policy' ? cspForCompare(norm.kind, res.headers[h]) : res.headers[h]; // csp-wasm (D-34)
+    out.headers[h] = h === 'etag' || h === 'last-modified' ? v : norm.str(v);
+  }
   const ct = (res.headers['content-type'] || '').toLowerCase();
   const text = res.body.toString('utf8');
   if (!res.body.length) out.body = { kind: 'empty' };
@@ -362,7 +366,7 @@ function sideCtx(b, root) {
     realRoot = root;
   }
   const upstreamPorts = b.upstreams ? b.upstreams.ports : Object.fromEntries(Object.entries(b.urls).map(([n, u]) => [n, Number(new URL(u).port)]));
-  const norm = makeNormaliser({ root, realRoot, port: b.port, upstreamPorts, version: b.version });
+  const norm = { ...makeNormaliser({ root, realRoot, port: b.port, upstreamPorts, version: b.version }), kind: b.kind };
   return {
     b,
     port: b.port,

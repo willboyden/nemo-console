@@ -28,5 +28,8 @@ screenshots/
 .DS_Store
 # rust build output
 /backend/target/
+# the config validators compiled to WebAssembly (`make wasm`, ADR-0022): generated, never committed
+/frontend/js/wasm/
+/frontend/js/wasm.staging/
 # the parity harness's extracted Python reference (parity/ref.mjs) and its output
 /parity/.ref/
