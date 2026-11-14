@@ -2,6 +2,7 @@
 // MOCK-ONLY: every number, version, path, container name and score below is invented so the UI can be built and
 // screenshotted against contract-shaped data (domain/models.py). None of it is a fact about the real systems, and
 // the real adapters are being written separately (metric keys beyond the documented ap.* / ev.score are guesses).
+import { wasmCheck } from '../js/cfg-wasm.js';
 export const SEVEN = ['openshell', 'dcgm', 'aiperf', 'guardrails', 'evaluator', 'modelopt', 'gym', 'flare'];
 // skillevaluator is not new in 9.8; it is mocked here only so the twelve-system overview is complete in dev.
 export const MOCKED = [...SEVEN, 'skillevaluator'];
@@ -781,10 +782,20 @@ export const SEVEN_FILES = {
 /** Which of the five restart something on apply (the rest only write a file). */
 export const SEVEN_RESTARTS = new Set(['dcgm', 'guardrails']);
 
+// The files whose schema the console checks itself: the mock runs the backend's own validators on them (the
+// WebAssembly build of nemo-console-core, loaded by mock-server.mjs; ADR-0022), never a copy of the rules.
+const REAL_SCHEMA = new Set(['aiperf/profiles', 'modelopt/recipes', 'evaluator/suites.yaml']);
+
 /** Mock validator for the five systems' editable files. Returns the ValidationResult shape. */
 export function sevenValidate(system, file, content) {
   const spec = SEVEN_SPECS[system].find((s) => s.id === file);
   const diags = [];
+  if (REAL_SCHEMA.has(`${system}/${file}`)) {
+    const real = wasmCheck(system, file, 'yaml', content);
+    if (!real) diags.push({ severity: 'error', message: 'the mock validates this file with the real validators: run `make wasm` first', line: null });
+    else for (const d of real.diagnostics) if (d.source === 'schema' || d.source === 'syntax') diags.push({ severity: d.severity, message: d.message, line: d.line });
+    return { ok: !diags.some((d) => d.severity === 'error'), validator: spec.validators[0], authoritative: spec.authoritative, diagnostics: diags, note: null };
+  }
   const tab = content.split('\n').findIndex((l) => /^\t/.test(l));
   if (system === 'dcgm') {
     const known = /^DCGM_FI_[A-Z0-9_]+$/;
@@ -796,10 +807,6 @@ export function sevenValidate(system, file, content) {
       else if (!['gauge', 'counter', 'label'].includes(f[1])) diags.push({ severity: 'error', message: `type must be gauge, counter or label, got ${f[1]}`, line: i + 1 });
     });
   } else if (tab >= 0) diags.push({ severity: 'error', message: 'YAML does not allow tab indentation', line: tab + 1 });
-  if (system === 'aiperf' && !/^profiles:/m.test(content)) diags.push({ severity: 'error', message: 'top-level "profiles:" is required', line: 1 });
-  if (system === 'evaluator' && !/^suites:/m.test(content)) diags.push({ severity: 'error', message: 'top-level "suites:" is required', line: 1 });
-  if (system === 'modelopt' && !/^recipes:/m.test(content)) diags.push({ severity: 'error', message: 'top-level "recipes:" is required', line: 1 });
-  if (system === 'modelopt' && !/^version: 1$/m.test(content)) diags.push({ severity: 'error', message: "'version' must be 1", line: 1 });
   if (system === 'guardrails' && file === 'lab-input-output--config.yml' && !/^models:/m.test(content)) diags.push({ severity: 'error', message: 'a rails config needs a "models:" section', line: 1 });
   return {
     ok: !diags.some((d) => d.severity === 'error'),
