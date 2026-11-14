@@ -16,7 +16,7 @@ pub mod admin;
 pub mod bodies;
 pub mod configure;
 pub mod observe;
-pub mod pyjson;
+pub use nemo_console_core::api::pyjson; // in nemo-console-core since ADR-0022
 pub mod static_files;
 
 use std::collections::HashMap;

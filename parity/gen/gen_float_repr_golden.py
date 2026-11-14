@@ -2,7 +2,7 @@
 values with binary fractions that are exact decimal ties, and known edge cases such as -1133092563735992.25, whose
 shortest repr needs round-half-to-even). One line per value: `<16 hex digits of the IEEE bits> <repr>`.
 
-    REF=$(node parity/ref.mjs) && "$REF/.venv/bin/python" -I parity/gen/gen_float_repr_golden.py > backend/crates/nemo-console/tests/fixtures/pyfmt/float_repr.txt
+    REF=$(node parity/ref.mjs) && "$REF/.venv/bin/python" -I parity/gen/gen_float_repr_golden.py > backend/crates/nemo-console-core/tests/fixtures/pyfmt/float_repr.txt
 """
 import math
 import random

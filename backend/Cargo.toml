@@ -1,7 +1,7 @@
 # Nemo Console, Rust backend (port of backend/src/nemo_console). Contract: backend/PORTING.md.
 [workspace]
 resolver = "3"
-members = ["crates/nemo-console"]
+members = ["crates/nemo-console", "crates/nemo-console-core"]
 
 [workspace.package]
 version = "0.10.0"
@@ -15,6 +15,7 @@ publish = false
 # been public for at least 14 days on 2026-10-27, preferring the versions already in harness2-workbench's Cargo.lock.
 # Every crate a workstream needs is listed here NOW (PORTING.md section 2), so no workstream edits this file.
 [workspace.dependencies]
+nemo-console-core = { path = "crates/nemo-console-core" }
 anyhow = "1.0.104"
 async-stream = "0.3.6"
 async-trait = "0.1.92"

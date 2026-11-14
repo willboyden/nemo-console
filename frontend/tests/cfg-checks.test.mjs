@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { checkConfig, contentChecks, schemaFor, specAt, describeSpec, choicesFor, baseUrlProblem, countBy, AIPERF, MODELOPT, EVALUATOR } from '../js/cfg-checks.js';
 import { parseYaml } from '../js/cfg-parse.js';
 
-const ADAPTERS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../backend/crates/nemo-console/src/adapters');
+const ADAPTERS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../backend/crates/nemo-console-core/src/schemas');
 const rust = (f) => fs.readFileSync(path.join(ADAPTERS, f), 'utf8');
 const strings = (src, name) => {
   const m = new RegExp(`${name}: \\[&str; \\d+\\] =\\s*\\[([^\\]]*)\\]`).exec(src);

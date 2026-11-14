@@ -54,7 +54,7 @@ fn mantissa(digits: &str) -> String {
 /// `repr(x)` for a Python float (`inf`, `-inf`, `nan` for the non-finite values).
 ///
 /// Nemo copy: delegates to `services::pyfmt::float_repr` (CPython's digits incl. round-half-to-even on decimal ties,
-/// pinned by tests/fixtures/pyfmt/float_repr.txt). The hub's original rounded such ties upwards.
+/// pinned by crates/nemo-console-core/tests/fixtures/pyfmt/float_repr.txt). The hub's original rounded such ties upwards.
 pub fn repr(x: f64) -> String {
     crate::services::pyfmt::float_repr(x)
 }
