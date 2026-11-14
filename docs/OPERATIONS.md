@@ -217,7 +217,8 @@ curl -s -X POST -H "Authorization: Bearer $KEY" -H 'X-Console: 1' -H 'Content-Ty
   browser admin. `GET /api/v1/health` returns `role` (`admin`, `viewer`, `public`) and a `trust_notice` that is `null` unless you
   opted in to loopback trust and it was forced off (then it says why).
 - **Roles:** `viewer` may `GET`. Everything else, including "safe" actions such as `preflight` (they are POSTs) and
-  the playground, needs `admin`. `GET /api/v1/audit` is admin-only.
+  the playground, needs `admin`. A few `GET`s are admin-only too: `/api/v1/audit`, Relay span and step content, and
+  Data Designer run records (the generated rows).
 - **Revoking a key:** there is no command in v0.1.0. Stop the console and delete the row from the `keys` table in
   `<STATE_DIR>/console.db` with `sqlite3`.
 - **Audit and denials:** the audit table (`GET /api/v1/audit`, admin) records authenticated, authorised mutating calls
@@ -291,7 +292,7 @@ shows is prefixed with the code words for security rejections.
 | 403 `cross origin: cross-origin requests are not allowed` | An unsafe request carried an `Origin` (or `Origin: null`) that is not the console's own host. | Use the console UI from its own origin; strip `Origin` in scripts. |
 | 403 `csrf header required: send the header 'X-Console: 1' on non-GET requests` | Missing `X-Console: 1`. Required even with a bearer. | `curl -H 'X-Console: 1' ...` |
 | 401 `unauthorized: a valid bearer API key is required` | No or wrong key. Unless you opted in with `TRUST_LOOPBACK=true` every caller needs one, and loopback trust is refused when `X-Forwarded-For`/`Forwarded` is present, the host is non-loopback or `ALLOWED_HOSTS` is set. A wrong key never falls back to loopback trust. Only `/health` is open. | Send `Authorization: Bearer <key>`; mint one (section 4). |
-| 403 `forbidden` "this key has the viewer role (read-only)" / "this action needs the admin role" | A viewer key on a POST/PUT, on the playground, or on the audit list. | Use an admin key. |
+| 403 `forbidden` "this key has the viewer role (read-only)" / "this action needs the admin role" | A viewer key on a POST/PUT, on the playground, on the audit list, on Relay span/step content or on Data Designer run records. | Use an admin key. |
 | 413 `payload_too_large` | Body over 1 MiB (also detected while streaming a chunked body). | Send less. |
 | 404 `not_found` "no such file" | Path outside the static allowlist (including `/docs`; Swagger is disabled). | Use the UI at `/`. |
 | Browser shows a blank page, console errors mention CSP | A local edit added an inline script/style or external origin. | The `static-guards` frontend test finds these: `make frontend-test`. |

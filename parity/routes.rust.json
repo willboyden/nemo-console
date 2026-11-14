@@ -143,6 +143,13 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/systems/{system_id}/metrics/series",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-36"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/systems/{system_id}/params",
       "auth": "viewer",
       "body": false
@@ -180,8 +187,12 @@
     {
       "method": "GET",
       "path": "/api/v1/systems/{system_id}/runs/{run_id}/records",
-      "auth": "viewer",
-      "body": false
+      "auth": "admin",
+      "body": false,
+      "auth_deviation": {
+        "python": "viewer",
+        "deviation": "D-37"
+      }
     },
     {
       "method": "GET",

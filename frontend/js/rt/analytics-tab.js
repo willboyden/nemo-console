@@ -15,29 +15,14 @@ import { rangeControls, facetSelect, resetButton } from './controls.js';
 import { legendList, dataTable, chartEmpty, inlineBar, swap, dash, kindChip } from './ui.js';
 import { navLink } from './nav.js';
 import { fitted } from './fit.js';
+import { chartCard as sharedChartCard } from '../charts/card.js';
 import { stackedChart, lineChart, histogramChart, activityHeatmap, latencyHeatmap, scatterChart, flowChart } from './charts.js';
 
 const FILTERS = ['client', 'model', 'kind'];
 const pms = (v) => (v == null ? '–' : fmtDur(v));
 
 let fitScope = null; // a scope per render, so charts redrawn on resize are released with the data they showed
-function chartCard({ title, hint, build, legend, table, empty, wide = false, id, extra }) {
-  const chart = fitted(fitScope, build, null);
-  return h(
-    'section',
-    { class: `card chart-card rt-chart${wide ? ' wide' : ''}`, id, 'aria-label': title },
-    h('header', { class: 'card-head' }, h('h3', title)),
-    h(
-      'div',
-      { class: 'card-body' },
-      hint ? h('p', { class: 'hint' }, hint) : null,
-      chart ?? chartEmpty(empty),
-      chart && legend ? legendList(legend) : null,
-      chart ? extra : null,
-      chart && table ? table : null,
-    ),
-  );
-}
+const chartCard = (o) => sharedChartCard(fitScope, o);
 const panel = (title, ...body) => h('section', { class: 'card', 'aria-label': title }, h('header', { class: 'card-head' }, h('h3', title)), h('div', { class: 'card-body' }, ...body));
 const table = (cols, rows, { cls = '', label } = {}) =>
   h(

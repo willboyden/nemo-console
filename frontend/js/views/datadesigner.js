@@ -2,12 +2,15 @@
 // actions (preview / create / report / check models / show config), and runs with a server-paginated
 // records table. Follows the SkillEvaluator page structure; every string goes through i18n (dd.*).
 import { NcView } from '../components/base.js';
+import { isAdmin } from '../app-context.js';
 import { h, clear } from '../dom.js';
 import { t } from '../i18n.js';
 import { fmtInt, fmtMs, fmtBytes, fmtDate } from '../format.js';
 import { valueOf } from '../metrics.js';
 import { badge, btn, card, kv, stat, errorBox, emptyBox, skeleton } from '../components/ui.js';
 import { systemPage } from '../components/system-page.js';
+import { runHistoryPanel } from '../components/run-history.js';
+import { DATADESIGNER } from '../run-descriptors.js';
 import { componentsTable, endpointsList } from '../components/status-panel.js';
 import { eventsPanel, pushEvent } from '../components/events-panel.js';
 import { actionsPanel } from '../components/actions-panel.js';
@@ -110,6 +113,11 @@ function recordsCard(scope, runId) {
   const body = h('div', { class: 'stack-v' }, controls, tableHost);
 
   async function load() {
+    // The rows are model-written content: admin-only (addendum 9.13). A viewer gets a note, not a 403 box.
+    if (!isAdmin()) {
+      clear(tableHost).append(h('p', { class: 'note info', role: 'note' }, t('dd.records_admin_only')));
+      return;
+    }
     clear(tableHost).append(skeleton(2));
     try {
       const r = await scope.api.get(`/systems/${SYS}/runs/${encodeURIComponent(runId)}/records`, { limit: RECORDS_LIMIT, offset: st.offset });
@@ -387,6 +395,7 @@ class NcDataDesigner extends NcView {
         { id: 'scripts', label: t('tab.scripts'), render: (scope) => scriptsTab(scope) },
         { id: 'actions', label: t('tab.actions'), render: (scope) => actionsPanel(scope, SYS) },
         { id: 'runs', label: t('tab.runs'), render: (scope) => runsTab(scope) },
+        { id: 'history', label: t('tab.history'), render: (scope, ctx) => runHistoryPanel(scope, ctx, DATADESIGNER) },
       ],
     });
   }

@@ -511,6 +511,11 @@
       {
         "q": "How many reports are kept?",
         "a": "The newest 200 runs. Each `run.json` holds metadata and redacted error text only; the reports sit next to it in the console state directory."
+      },
+      {
+        "q": "How do I compare two runs?",
+        "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
+        "tab": "history"
       }
     ]
   },
@@ -569,6 +574,11 @@
       {
         "q": "How many runs are kept?",
         "a": "The newest 100, in the console state directory."
+      },
+      {
+        "q": "How do I compare two runs?",
+        "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
+        "tab": "history"
       }
     ]
   },
@@ -675,6 +685,26 @@
       {
         "q": "Why is there no version for the other hosts' exporters?",
         "a": "Prometheus does not expose it, and the console does not guess. Only this host's exporter version is checked."
+      },
+      {
+        "q": "How do I compare two runs?",
+        "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
+        "tab": "history"
+      },
+      {
+        "q": "A chart shows only four GPUs. Where are the others?",
+        "a": "A chart with more than four lines starts with the four busiest. Under the chart, toggle the others on or off, or press Busiest 4 to go back. Your choice is kept in the page address.",
+        "tab": "status"
+      },
+      {
+        "q": "Why does a chart show a rate instead of a total?",
+        "a": "A counter only ever goes up, so its chart shows how fast it grows: per second, or per minute when that is under 0.1 a second. When a counter restarts from zero the chart starts a new line there instead of drawing a spike or a negative rate.",
+        "tab": "status"
+      },
+      {
+        "q": "What does Show max do on the charts?",
+        "a": "It draws the highest value in each time bucket as a thin line and a band above the average, so a short spike the average hides stays visible. It needs a window of an hour or longer; the 15-minute view already shows every sample. Counters drawn as rates have no max.",
+        "tab": "status"
       }
     ]
   },
@@ -723,6 +753,16 @@
       {
         "q": "The numbers look far worse than usual.",
         "a": "The engine may be busy with other traffic, or the run hit the AIPerf key's own rate limits on the router. Compare with a quiet moment and a smaller preset before drawing conclusions."
+      },
+      {
+        "q": "How do I compare two runs?",
+        "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
+        "tab": "history"
+      },
+      {
+        "q": "What does Show max do on the charts?",
+        "a": "It draws the highest value in each time bucket as a thin line and a band above the average, so a short spike the average hides stays visible. It needs a window of an hour or longer; the 15-minute view already shows every sample. Counters drawn as rates have no max.",
+        "tab": "status"
       }
     ]
   },
@@ -776,6 +816,11 @@
       {
         "q": "Are probe prompts stored?",
         "a": "No. Events carry names and verdicts only, never prompt text."
+      },
+      {
+        "q": "How do I compare two runs?",
+        "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
+        "tab": "history"
       }
     ]
   },
@@ -828,6 +873,11 @@
       {
         "q": "My run is `interrupted`.",
         "a": "The console stopped while it ran. Start it again."
+      },
+      {
+        "q": "How do I compare two runs?",
+        "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
+        "tab": "history"
       }
     ]
   },
@@ -879,6 +929,16 @@
       {
         "q": "Why are there no numbers?",
         "a": "Every number comes from a finished job's `run.json`; nothing is estimated. With no job yet only the job count (0) is shown."
+      },
+      {
+        "q": "How do I compare two runs?",
+        "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
+        "tab": "history"
+      },
+      {
+        "q": "What does Show max do on the charts?",
+        "a": "It draws the highest value in each time bucket as a thin line and a band above the average, so a short spike the average hides stays visible. It needs a window of an hour or longer; the 15-minute view already shows every sample. Counters drawn as rates have no max.",
+        "tab": "status"
       }
     ]
   },
@@ -930,6 +990,16 @@
       {
         "q": "Where do the reward numbers come from?",
         "a": "From the console's own `run.json` of a finished smoke run, parsed from the wrapper's printed result. Nothing is estimated."
+      },
+      {
+        "q": "How do I compare two runs?",
+        "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
+        "tab": "history"
+      },
+      {
+        "q": "What does Show max do on the charts?",
+        "a": "It draws the highest value in each time bucket as a thin line and a band above the average, so a short spike the average hides stays visible. It needs a window of an hour or longer; the 15-minute view already shows every sample. Counters drawn as rates have no max.",
+        "tab": "status"
       }
     ]
   },
@@ -998,6 +1068,16 @@
       {
         "q": "A target says it could not be checked.",
         "a": "Its host did not answer ssh within a few seconds. The page keeps showing the last report and checks again about once a minute; the launcher never waits long on a dead host."
+      },
+      {
+        "q": "Why does a chart show a rate instead of a total?",
+        "a": "A counter only ever goes up, so its chart shows how fast it grows: per second, or per minute when that is under 0.1 a second. When a counter restarts from zero the chart starts a new line there instead of drawing a spike or a negative rate.",
+        "tab": "status"
+      },
+      {
+        "q": "What does Show max do on the charts?",
+        "a": "It draws the highest value in each time bucket as a thin line and a band above the average, so a short spike the average hides stays visible. It needs a window of an hour or longer; the 15-minute view already shows every sample. Counters drawn as rates have no max.",
+        "tab": "status"
       }
     ]
   }

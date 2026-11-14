@@ -1,0 +1,299 @@
+{
+  "_comment": "Cases that differ from the Python reference by a documented deviation (backend/PORTING.md section 13) and pass ONLY when they differ exactly as pinned here (parity/run.mjs, lib/compare.mjs pinMismatch). A pin entry without `a` or `b` matches any value there. Regenerate an entry from parity/out/report.json when a deviation changes on purpose.",
+  "pins": [
+    {
+      "case": "ddrun.preview.records.viewer",
+      "deviation": "D-37",
+      "why": "Data Designer run records are admin-only: a viewer gets 403 forbidden (the Python reference answers 200 with the rows)",
+      "diffs": [
+        {
+          "path": "status",
+          "a": "200",
+          "b": "403"
+        },
+        {
+          "path": "body/columns",
+          "a": "[\"product_category\",\"review\"]",
+          "b": "(absent)"
+        },
+        {
+          "path": "body/error",
+          "a": "(absent)",
+          "b": "{\"code\":\"forbidden\",\"message\":\"this key has the viewer role (read-only)\"}"
+        },
+        {
+          "path": "body/rows",
+          "a": "[{\"product_category\":\"Books\",\"review\":\"I couldn't put this book down—the characters felt like old friends by the second chapter, and the twist at the end completely caught me off guard. Highly recommend to anyone who enjoys a story that lingers with you long after the last page.\"},{\"product_category\":\"Electronics\",\"review\":\"**Noise-Cancelling Headphones Review**\\n\\n★★★★★\\nThese headphones complete...[715 chars]",
+          "b": "(absent)"
+        },
+        {
+          "path": "body/run_id",
+          "a": "\"<run:7>-reviews_smoke.py\"",
+          "b": "(absent)"
+        },
+        {
+          "path": "body/total",
+          "a": "2",
+          "b": "(absent)"
+        },
+        {
+          "path": "body/truncated",
+          "a": "false",
+          "b": "(absent)"
+        }
+      ]
+    },
+    {
+      "case": "metrics.viewer",
+      "deviation": "D-37",
+      "why": "Data Designer run records are admin-only: the viewer gets 403 (Python 200), and the console's request counters read afterwards count that request as a 403",
+      "diffs": [
+        {
+          "path": "body:prometheus-lines",
+          "a": ["nemo_console_http_requests_total{method=\"GET\",route=\"/systems/{system_id}/runs/{run_id}/records\",status=\"200\"} 5.0"],
+          "b": [
+            "nemo_console_http_requests_created{method=\"GET\",route=\"/systems/{system_id}/runs/{run_id}/records\",status=\"403\"} <created>",
+            "nemo_console_http_requests_total{method=\"GET\",route=\"/systems/{system_id}/runs/{run_id}/records\",status=\"200\"} 4.0",
+            "nemo_console_http_requests_total{method=\"GET\",route=\"/systems/{system_id}/runs/{run_id}/records\",status=\"403\"} 1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "case": "metrics.admin",
+      "deviation": "D-37",
+      "why": "Data Designer run records are admin-only: the viewer gets 403 (Python 200), and the console's request counters read afterwards count that request as a 403",
+      "diffs": [
+        {
+          "path": "body:prometheus-lines",
+          "a": ["nemo_console_http_requests_total{method=\"GET\",route=\"/systems/{system_id}/runs/{run_id}/records\",status=\"200\"} 5.0"],
+          "b": [
+            "nemo_console_http_requests_created{method=\"GET\",route=\"/systems/{system_id}/runs/{run_id}/records\",status=\"403\"} <created>",
+            "nemo_console_http_requests_total{method=\"GET\",route=\"/systems/{system_id}/runs/{run_id}/records\",status=\"200\"} 4.0",
+            "nemo_console_http_requests_total{method=\"GET\",route=\"/systems/{system_id}/runs/{run_id}/records\",status=\"403\"} 1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "case": "global.openapi.admin",
+      "deviation": "D-34, D-36",
+      "why": "D-34 and D-36: the document lists the eleven Relay trace explorer routes and the series route, which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned)",
+      "diffs": [
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1analytics",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1capture",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1metrics~1series",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1sessions",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1sessions~1{session_key}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1index",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1{trace_id}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1{trace_id}~1spans~1{span_id}~1content",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories~1{trajectory_id}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories~1{trajectory_id}~1steps~1{step_id}~1content",
+          "a": "(absent)"
+        }
+      ]
+    },
+    {
+      "case": "global.openapi.viewer",
+      "deviation": "D-34, D-36",
+      "why": "D-34 and D-36: the document lists the eleven Relay trace explorer routes and the series route, which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned)",
+      "diffs": [
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1analytics",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1capture",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1metrics~1series",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1sessions",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1sessions~1{session_key}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1index",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1{trace_id}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1{trace_id}~1spans~1{span_id}~1content",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories~1{trajectory_id}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories~1{trajectory_id}~1steps~1{step_id}~1content",
+          "a": "(absent)"
+        }
+      ]
+    },
+    {
+      "case": "global.openapi.admin.after",
+      "deviation": "D-34, D-36",
+      "why": "D-34 and D-36: the document lists the eleven Relay trace explorer routes and the series route, which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned)",
+      "diffs": [
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1analytics",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1capture",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1metrics~1series",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1sessions",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1sessions~1{session_key}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1index",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1{trace_id}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1{trace_id}~1spans~1{span_id}~1content",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories~1{trajectory_id}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories~1{trajectory_id}~1steps~1{step_id}~1content",
+          "a": "(absent)"
+        }
+      ]
+    },
+    {
+      "case": "global.openapi.viewer.after",
+      "deviation": "D-34, D-36",
+      "why": "D-34 and D-36: the document lists the eleven Relay trace explorer routes and the series route, which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned)",
+      "diffs": [
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1analytics",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1capture",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1metrics~1series",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1sessions",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1sessions~1{session_key}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1index",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1{trace_id}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1{trace_id}~1spans~1{span_id}~1content",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories~1{trajectory_id}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories~1{trajectory_id}~1steps~1{step_id}~1content",
+          "a": "(absent)"
+        }
+      ]
+    }
+  ]
+}

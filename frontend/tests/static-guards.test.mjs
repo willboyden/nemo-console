@@ -39,7 +39,7 @@ test('dynamic key families are complete', () => {
     'sev.': ['info', 'warn', 'error'],
     'danger.': ['safe', 'disruptive', 'destructive'],
     'postcheck.': ['healthy', 'unhealthy', 'skipped'],
-    'window.': ['15m', '1h', '24h'],
+    'window.': ['15m', '1h', '24h', '7d'],
     'tokens.': ['prompt', 'completion', 'reasoning', 'cached', 'total'],
     'act.danger_': ['disruptive', 'destructive'],
     'dyn.effect_': ['up', 'down', 'restart'],

@@ -95,6 +95,7 @@ pub enum H {
     Status,
     Metrics,
     History,
+    Series,
     Events,
     EventsStream,
     RunRecords,
@@ -185,6 +186,14 @@ pub static ROUTES: &[RouteDef] = &[
         false,
         History
     ),
+    // the series route (addendum 9.13; added after the port, PORTING.md D-36)
+    r!(
+        GET,
+        "/systems/{system_id}/metrics/series",
+        Viewer,
+        false,
+        Series
+    ),
     r!(GET, "/systems/{system_id}/events", Viewer, false, Events),
     r!(
         GET,
@@ -193,10 +202,11 @@ pub static ROUTES: &[RouteDef] = &[
         false,
         EventsStream
     ),
+    // admin since addendum 9.13 (PORTING.md D-37; the Python reference has viewer)
     r!(
         GET,
         "/systems/{system_id}/runs/{run_id}/records",
-        Viewer,
+        Admin,
         false,
         RunRecords
     ),
@@ -1080,6 +1090,7 @@ async fn run_handler(h: H, req: Req) -> Result<Response<Body>, ApiError> {
         H::Status => observe::system_status(req).await,
         H::Metrics => observe::system_metrics(req).await,
         H::History => observe::metrics_history(req).await,
+        H::Series => observe::metrics_series(req).await,
         H::Events => observe::events(req).await,
         H::EventsStream => observe::events_stream(req).await,
         H::RunRecords => observe::run_records(req).await,

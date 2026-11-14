@@ -97,6 +97,8 @@ pub struct Knobs {
     pub lf_on_read: bool,
     /// The next N `read_config()` calls rewrite the file (another writer racing the read).
     pub mutate_reads: u32,
+    /// `records_page()` answers this page (a Data Designer run's records); `None`: 404 like other systems.
+    pub records: Option<Value>,
 }
 
 pub struct FakeAdapter {
@@ -362,6 +364,18 @@ impl SystemAdapter for FakeAdapter {
             .clone()
             .unwrap_or_else(|| "done".to_owned());
         Ok(ActionResult::new(true, out))
+    }
+
+    async fn records_page(
+        &self,
+        _run_id: &str,
+        _limit: i64,
+        _offset: i64,
+    ) -> Result<Value, AdapterError> {
+        self.knobs()
+            .records
+            .clone()
+            .ok_or(AdapterError::NoSuchEndpoint)
     }
 
     fn playground(&self) -> Result<Option<PlaygroundSpec>, AdapterError> {

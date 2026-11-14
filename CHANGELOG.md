@@ -7,6 +7,15 @@ implemented / verified-live / unverified defined in the README.
 
 ### Added
 
+- **Charts for every system, wave 1** (addendum 9.13): a Rust-only route `/systems/{id}/metrics/series` returns up to
+  12 metric keys in one call (each split into at most 32 series by label on request), for 15 minutes, 1 hour, 24 hours or 7 days, with each bucket's maximum next to its average
+  and, on request, one series per label (per GPU, per model). Generic system pages use it: counters are drawn as
+  rates, a 7-day window and a "show max" toggle are offered, and a chart with more than four lines gets a picker.
+- **Run history** on the eight run-based pages (AIPerf, NeMo Evaluator, NeMo Gym, Model Optimizer, SkillEvaluator,
+  Data Designer, DCGM diagnostics, NeMo Guardrails checks): a verdict timeline, a trend of any recorded number across
+  runs grouped by model, preset or script, an A/B compare of two runs with the difference and a better/worse mark
+  (judged only between successful runs, except where the verdict is the measured outcome), and filters; the
+  selection is kept in the URL.
 - **Relay trace explorer** (addendum 9.12, ADR-0021): five new tabs on the Relay page, read from the files NeMo Relay
   writes on this machine. **Traces**: a filterable list (client, model, kind, status, duration) and a trace view with a
   waterfall, an icicle and a span table sharing one selection, the routing decision, tokens, first chunk and chunk
@@ -19,6 +28,8 @@ implemented / verified-live / unverified defined in the README.
 
 ### Security
 
+- Data Designer run records (the generated rows) are admin-only; viewers keep the run list, run details and the
+  artifact list. Parity deviation D-37.
 - **rusqlite 0.41.0** (was 0.40.2) brings the bundled SQLite of `libsqlite3-sys` 0.39.1, which fixes CVE-2026-119375
   (RUSTSEC-2026-0459). Both versions pass the 14-day crate-age cooldown on their own; no code change was needed.
 - The index and every viewer route carry metadata only; a test plants a marker in every payload field of the

@@ -312,7 +312,7 @@ nothing above changes. Contract: feature "datadesigner" (2026-10-23).
   `confirm:true`; admin; `data-designer-local check-models <script>` — the CLI's own --help requires a config
   source argument, so the action takes the script enum), `show_config` (safe; read-only provider/alias dump).
 * API (additive, viewer GET, headers/auth identical to the other observe endpoints):
-  `GET /api/v1/systems/datadesigner/runs/{run_id}/records?limit=50&offset=0` → `{run_id, total, columns, rows,
+  `GET /api/v1/systems/datadesigner/runs/{run_id}/records?limit=50&offset=0` (admin-only since 9.13) → `{run_id, total, columns, rows,
   truncated}` — reads records.jsonl ONLY (never parquet); values pass through as-is, no string over 2 KiB
   (truncated, no marker fields); total from run.json's records when present, else the counted lines. A live create
   run answers an empty records page (not 404). `GET /api/v1/systems/datadesigner/runs/{run_id}/files` →
@@ -651,3 +651,61 @@ machine. Decision record: ADR 0021.
   script (the CSP is unchanged). Deep links: `#/relay?tab=traces&trace=<id>&span=<id>`,
   `#/relay?tab=sessions&session=<key>`, `#/relay?tab=trajectories&id=<id>`. The mock server serves every route above
   with deterministic data, and the browser suite visits every new tab and one detail view of each.
+
+**9.13 (2026-11-14): visualizations for every system, wave 1 — series history, run history, shared charts.**
+Additive except one role change (Data Designer records become admin-only). Later waves (per-system views) build on it
+and get their own addenda.
+
+* **Route `GET /api/v1/systems/{id}/metrics/series`** (viewer; every system; Rust-only, parity deviation D-36). The
+  existing `/metrics/history` route is unchanged. Query: `keys` = a comma-separated list of 1..12 canonical metric keys
+  (each matching the existing `KEY_RE`; a bare key also matches its label variants), `window` = `15m|1h|24h|7d`
+  (default `1h`), `split` = `0|1` (default `0`). Answer:
+  `{window, step_s, from, to, series: [{key, label: {..} | null, points: [[ts, avg, max], ..]}], truncated}`.
+  * `split=0`: one series per requested key, label variants summed per bucket (as `/metrics/history` does), `label`
+    null. `split=1`: one series per stored series name (label variant), `label` = its labels parsed into an object
+    (`sy.model.calls{model="x"}` -> `{"model": "x"}`), at most 32 series per key (the rest dropped, `truncated: true`),
+    ordered by key then label.
+  * Buckets: `15m` = the in-memory ring, raw points (`step_s` = the poll interval, `max` = the value itself); `1h` and
+    `24h` = the 1-minute rollups (`step_s` 60); `7d` = the rollups regrouped into 10-minute buckets (`step_s` 600; avg
+    weighted by each minute's sample count `n`, max = max of maxes). Timestamps are bucket starts, epoch seconds.
+    Points are in time order; a key with no data is a series with `points: []` (never an error). Values are numbers;
+    no gap filling (the client draws gaps).
+  * 422 `invalid_request` for an unknown window, more than 12 keys, an empty or malformed key, `split` not 0/1.
+  * Rollups are kept 8 days (`ROLLUP_KEEP_S`), so `7d` is always covered once the console has run that long.
+  * Pinned details (2026-11-14, from the build): `keys` is split on commas outside braces (a labelled key keeps its
+    commas); with `split=1` an unlabelled stored name gets `label: {}`, and the 32 kept are the first by name (not the
+    busiest; the client picks what to draw); with `split=0` the bucket `max` is the sum of the variants' maxes (an upper
+    bound of the true max of the sum); a key with no data is one series with `label: null` and `points: []`; series of a
+    key that have no point in the window are left out; `to` is now, `from` the first bucket's start (a 10-minute
+    boundary for `7d`); `step_s` is a number; non-finite values are dropped; a duplicated key is answered twice.
+* **Role change: `GET /systems/{id}/runs/{run_id}/records` is admin** (was viewer). Data Designer rows are model-written
+  content, like Relay span content (ADR-0021); viewers keep the run list, run detail and artifact list (paths and
+  sizes). The role test lists it among the admin GETs. A viewer gets 403 `forbidden` (the role check). Parity:
+  deviation D-37 (the Python reference served it to viewers). Threat model: E-7 says the records are admin-only.
+  A later wave adds an aggregates-only column profile for viewers.
+* **Frontend (no new dependency, CSP unchanged):**
+  * `frontend/js/viz/*` and the reusable chart cards in `frontend/js/rt/charts.js` become a shared toolkit any view may
+    import (move shared helpers out of `rt/` into `frontend/js/viz/` or a new `frontend/js/charts/` folder if they are
+    Relay-specific in name only; keep Relay working unchanged).
+  * Generic system pages (`components/generic-system.js`): (1) a counter series is drawn as a per-second (or
+    per-minute, label says which) rate, never as a rising total: a descriptor entry may say `rate: true`, and keys
+    ending in `_total` are rates by default; resets (a negative delta) start a new segment; (2) the window picker gains
+    `7d`; (3) a "show max" toggle draws the bucket max as a thin line or band above the average where `step_s` > the
+    poll interval; (4) charts fetch through the new series route (one request per chart, `split=1` where the
+    descriptor asks for one line per label, e.g. per GPU), with a series picker when there are more than 4 lines
+    (default: the 4 busiest, the rest toggled on by the user; the choice is kept in the URL hash).
+  * **Run history component** (`frontend/js/components/run-history.js` or similar), configured by a descriptor per
+    system, built only from `GET /systems/{id}/events?limit=500` (event `data`), so no backend change: `{kind,
+    id, label, verdict, numbers: [{field, label, unit, better: "lower"|"higher"}], groupBy: [field..], filters:
+    [field..]}`. It shows: (a) a verdict timeline (one mark per run, coloured by verdict, hover = summary, click =
+    select); (b) a trend chart of one chosen number across runs (points coloured by a chosen group field, e.g. model or
+    preset; line per group); (c) A/B compare: pick two runs, a table of every configured number with the difference and
+    a better/worse mark; (d) filters by the descriptor's fields (enum dropdowns built from the values seen). Run ids
+    and field values are rendered with textContent; the URL hash keeps the selection (`run=`, `vs=`, `metric=`,
+    `group=`, filters).
+  * Wired into the eight run-based pages with descriptors read from their adapters' event data: aiperf (`aiperf.run`),
+    evaluator (`evaluator.run`, per-benchmark scores flattened as `bench:<name>` numbers), gym (`gym.smoke`),
+    modelopt (`modelopt.job`), skillevaluator (`skilleval.run`), datadesigner (`dd.run`), dcgm (`dcgm.diag`), guardrails
+    (`guardrails.check`, per-probe pass as numbers). A page whose events lack a field shows `—`, never 0.
+  * The mock server serves `/metrics/series` and realistic run events for all eight systems; the browser suite visits
+    every page that gains a chart, the run history with one A/B compare, and the 7d window.

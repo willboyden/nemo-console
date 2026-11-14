@@ -5,6 +5,7 @@
 // secret redaction ("[set, N chars]"), strict CSP + security headers on every response, optional bearer (MOCK_KEY).
 // All data is canned or simulated. Nothing here is a verified fact about the real systems.
 // Usage: node dev/mock-server.mjs [--port 18796] [--host 127.0.0.1]     env: MOCK_KEY=secret  MOCK_ROLE=viewer  MOCK_DYNAMO=up|loading|down
+//   Series + run history (9.13): GET /systems/{id}/metrics/series and 10-30 run events per run-based system are always on; /__dev/seven?dcgm_gpus=6 gives the DCGM page six GPUs (the series picker needs more than four lines)
 //   Relay trace explorer (9.12): MOCK_TRACES=ready|building|empty|disabled  MOCK_CAPTURE=full|gen_ai  MOCK_TRACES_STALE=1  (or /__dev/traces?index=&content=admin|off&capture=&truncated=1&stale=1)
 // Dev helpers (not part of the contract): /__dev/scenario /__dev/touch /__dev/role /__dev/fail /__dev/vllm /__shot
 import http from 'node:http';
@@ -33,6 +34,8 @@ import {
   GR_REFUSAL,
 } from './mock-seven.mjs';
 import { createTracesMock } from './mock-traces.mjs';
+import { parseSeriesQuery, buildSeries } from './mock-series.mjs';
+import { runSeeds, extraDdRuns } from './mock-runs.mjs';
 import { SWITCHYARD_ROUTES, RELAY_ROUTES, RELAY_PLUGINS, RELAY_CONFIG, DYNAMO_CATALOG, DD_SCRIPTS, DD_SCRIPT, DD_COLS, ddRows, DD_RUNS, DD_PREVIEW_FILES, DD_CREATE_FILES } from './mock-data.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -68,7 +71,7 @@ const state = {
   vllmRunning: false, // the container that shares the Workstation card
   dynamoSince: now() - 5400,
   failNext: null,
-  seven: { dcgmFixed: false, guardPlayground: true }, // dev toggles for the 9.8 systems (/__dev/seven)                                 // {status, n}
+  seven: { dcgmFixed: false, guardPlayground: true, dcgmGpus: 2 }, // dev toggles for the 9.8 systems (/__dev/seven)
   settings: {
     version: '0.1.0-mock',
     urls: { switchyard: 'http://127.0.0.1:4010', relay: 'http://127.0.0.1:4040', dynamo: 'http://127.0.0.1:8020', dynamo_worker_metrics: 'http://127.0.0.1:8081', litellm: 'http://127.0.0.1:4000' },
@@ -441,7 +444,7 @@ function metrics(id) {
   const ts = now(),
     P = (key, value, unit = '', labels = {}) => ({ key, value, unit, labels });
   const wob = (b, a) => b + Math.sin(ts / 7) * a + rnd() * a * 0.4;
-  if (MOCKED.includes(id)) return { system: id, ts, available: true, points: sevenMetrics(id, ts, wob) };
+  if (MOCKED.includes(id)) return { system: id, ts, available: true, points: sevenMetrics(id, ts, wob, state.seven) };
   if (id === 'switchyard')
     return {
       system: id,
@@ -536,6 +539,9 @@ function routingSummary(window) {
 // ---------------------------------------------------------------- events + SSE
 const ring = { switchyard: [], relay: [], dynamo: [], datadesigner: [], skillevaluator: [] };
 for (const [id, evs] of Object.entries(sevenSeedEvents(now()))) ring[id] = evs;
+// Run history (addendum 9.13): 10-30 runs per system in the adapters' event shapes (dev/mock-runs.mjs). The few hand-written seeds
+// above stay only where nothing replaces them (openshell, and dcgm's XID event next to its diagnostic runs).
+for (const [id, evs] of Object.entries(runSeeds(now()))) ring[id] = id === 'dcgm' ? [...evs, ...ring[id].filter((e) => e.kind !== 'dcgm.diag')].sort((a, b) => b.ts - a.ts) : evs;
 const streams = new Set();
 function makeEvent(system) {
   const ts = now();
@@ -573,7 +579,9 @@ for (const s of EVENTED)
     e.ts -= i * 7;
     ring[s].unshift(e);
   }
-// Data Designer has no periodic feed: one dd.run event per stored run (metadata only).
+// Data Designer has no periodic feed: one dd.run event per stored run (metadata only). The runs behind the three hand-written ones
+// are generated, so the Runs tab (records, files) and the Run history agree.
+DD_RUNS.push(...extraDdRuns(now(), { cols: DD_COLS, rows: ddRows, previewFiles: DD_PREVIEW_FILES, createFiles: DD_CREATE_FILES }));
 for (const r of DD_RUNS) ring.datadesigner.unshift(ddEvent(r));
 setInterval(() => {
   if (rnd() < 0.3) {
@@ -612,6 +620,8 @@ function ddEvent(run) {
       destination: run.destination,
       format: run.format,
       duration_ms: run.duration_ms,
+      num_records_requested: run.num_records_requested ?? null,
+      batches: run.batches ?? null,
     },
   };
 }
@@ -1167,8 +1177,14 @@ async function api(req, res, url) {
     if (!SYSTEMS.includes(id)) return err(res, 404, 'not_found', `unknown system ${id}`);
     if (sub === '/status') return json(res, 200, status(id));
     if (sub === '/metrics') return json(res, 200, metrics(id));
+    if (sub === '/metrics/series') {
+      const q = parseSeriesQuery(url.searchParams);
+      if (q.error) return err(res, 422, 'invalid_request', q.error);
+      const m = metrics(id);
+      return json(res, 200, buildSeries({ ...q, points: m.available ? m.points : [], now: Math.floor(now()), pollS: state.settings.poll_interval_s }));
+    }
     if (sub === '/metrics/history') return json(res, 200, history(id, url.searchParams.get('key') || '', url.searchParams.get('window') || '15m'));
-    if (sub === '/events') return json(res, 200, ring[id].slice(0, Number(url.searchParams.get('limit') || 50)));
+    if (sub === '/events') return json(res, 200, (ring[id] || []).slice(0, Number(url.searchParams.get('limit') || 50))); // flare has no seeded events: an empty list, not a 500
     if (sub === '/events/stream') {
       if (streams.size >= 8) return err(res, 429, 'too_many_streams', 'at most 8 concurrent event streams');
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', ...SEC });
@@ -1327,6 +1343,7 @@ function dev(req, res, url) {
   if (p === '/__dev/seven') {
     if (q.has('dcgm_fixed')) state.seven.dcgmFixed = q.get('dcgm_fixed') === '1';
     if (q.has('playground')) state.seven.guardPlayground = q.get('playground') === '1';
+    if (q.has('dcgm_gpus')) state.seven.dcgmGpus = Math.min(8, Math.max(2, Number(q.get('dcgm_gpus')) || 2));
     return json(res, 200, state.seven);
   }
   if (p === '/__dev/dd') {

@@ -275,6 +275,15 @@ spare port against the real captures of one workstation (Relay 0.9.2: 7 ATOF fil
 | Content from gzip rotations | Implemented | see the CHANGELOG entry for the measured read times | Seek points recorded during the index scan bound how much of a rotation one content read decompresses. |
 | Index off / content off switches | Implemented | fakes only | See OPERATIONS. |
 
+## Charts for every system, wave 1 (addendum 9.13)
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| `/metrics/series` (many keys, 15m/1h/24h/7d, avg + max, split per label) | Implemented | verified live (2026-11-14, a debug build on a copy of the live state: two GPUs' 1h and 7d series); fakes `tests/core_metrics_series.rs` | Rust-only (D-36). `/metrics/history` unchanged. |
+| Counters as rates, 7d window, show max, series picker on generic pages | Implemented | verified live (DCGM page on real data, 24h with max); mock + unit tests | Rate charts draw no max (a counter's bucket max is its last value). |
+| Run history (timeline, trend, A/B compare, filters) on 8 pages | Implemented | verified live on the systems that had runs that day (Data Designer: 8 runs incl. a failed one; SkillEvaluator: 1); the other six only against the mock | Built from `/events` data only. |
+| Data Designer records admin-only | Implemented | fakes (`tests/core_roles.rs`, records cases in `core_metrics_series.rs`) | D-37. |
+
 ## Not planned for v1
 
 Editing Relay `plugins.toml` / `config.toml`; multi-user or per-user audit identity beyond the key
