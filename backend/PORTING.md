@@ -140,7 +140,7 @@ because the GET catch-all matches every path, every non-GET to an unknown path i
 | GET | .../metrics/history `?window=15m&key=` | viewer | | observe.metrics_history | |
 | GET | .../events `?limit=1..500 (100)` | viewer | | observe.events | |
 | GET | .../events/stream (SSE) | viewer | | observe.events_stream | |
-| GET | .../runs/{run_id}/records `?limit=1..200 (50)&offset>=0` | viewer | | observe.dd_run_records | |
+| GET | .../runs/{run_id}/records `?limit=1..200 (50)&offset>=0` | viewer (admin in Rust since D-37) | | observe.dd_run_records | |
 | GET | .../runs/{run_id}/files | viewer | | observe.dd_run_files | |
 | GET | .../config | viewer | | configure.config_list | |
 | GET | .../config/{file_id} | viewer (viewers get `redact(keep_env_names)` content) | | configure.config_get | |
@@ -555,6 +555,39 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
   the two now agree on the pathological inputs too. No fail-closed backstop remains in `scrub()` (nothing in it can give
   up). The trace explorer's content goes through the same `scrub_count()` and then its own credential-pair pass
   (`adapters/relay_traces/secrets.rs`).
+- **D-36 The series route (addendum 9.13), one route added after the port.** `GET
+  /api/v1/systems/{system_id}/metrics/series` (viewer, every system): `keys` = 1..12 canonical keys separated by the
+  commas outside braces (so a labelled key such as `sy.tokens{kind=prompt,model=x}` keeps its own commas), `window` =
+  `15m|1h|24h|7d` (default `1h`), `split` = `0|1` (default `0`); answer `{window, step_s, from, to, series: [{key,
+  label, points: [[ts, avg, max]]}], truncated}`. `15m` reads the in-memory ring (raw points, `max` = the value,
+  `step_s` = the poll interval, `from` = now - 900); `1h` and `24h` the `rollup` table at 60 s after the same flush
+  of pending minutes the history route does (`from` = the first minute's start); `7d` regroups the rollups into
+  600 s buckets in SQL (`bucket / 10`; avg = `SUM(avg * n) / SUM(n)`, max = `MAX(max)`; `from` aligned down to a
+  10-minute boundary so the first bucket is never partial). A bare key matches its label variants with a range scan of
+  the `(system, series, bucket)` primary key (`key{` <= series < `key|`). `split=0` sums the variants per bucket (avg
+  and max each summed, `label` null); `split=1` gives one series per stored name, ordered by name, `label` = the
+  name's labels parsed into an object (`services::metrics::series_labels`, the inverse of `series_name`: `k=v` pairs,
+  a part without `=` continues the previous value, a value in double quotes is unwrapped; a name without labels gives
+  `{}`), at most 32 per key (`truncated: true` when any key lost some). A key without data is one series with
+  `label` null and `points: []`; non-finite values are left out. 422 `invalid_request` for an unknown window, more than
+  12 keys, an empty or malformed key, `split` other than `0`/`1`. The history route and `WINDOWS` (no `7d`) are
+  untouched. Parity: like D-34, `tests/core_routes_table.rs` lists it in `RUST_ONLY` (row `"rust_only": "D-36"` in
+  `parity/routes.rust.json`), the corpus has no case for it, and `assets/openapi.json` gains its entry by hand in
+  the generated style, so the `global.openapi.*` cases differ by one more path (their `parity/allow-diffs.txt` lines
+  name D-34 and D-36). Tests: `tests/core_metrics_series.rs`.
+- **D-37 Data Designer run records are admin-only (addendum 9.13).** `GET
+  /api/v1/systems/{system_id}/runs/{run_id}/records` returns model-written rows, like Relay span content (ADR-0021),
+  so its role dependency is `admin` (the handler's `dep_admin`, the route table's role, the role test's admin-GET
+  list); viewers keep the run list, run detail and the artifact list (`/files`: paths and sizes). The Python reference
+  declares `viewer`, so: `tests/core_routes_table.rs` lists the row in `ROLE_CHANGED` and writes it to
+  `parity/routes.rust.json` with `"auth_deviation": {"python": "viewer", "deviation": "D-37"}`;
+  `parity/check-routes.mjs` checks that Python still has exactly that old role, that the Rust role differs, and
+  compares the row with the Python role. Of the corpus, only `ddrun.preview.records.viewer` differs (Python 200 with
+  the rows, Rust 403 `forbidden`), and with it the console's own request counters read afterwards by `metrics.viewer`
+  and `metrics.admin` (the records route's `status="200"` total is one lower and a `status="403"` series appears; no
+  other line differs); the three case ids are allowed in `parity/allow-diffs.txt`. The role sweep (`roleSweepCases`) builds its
+  viewer cases from the Python table, where the route is a viewer route, so it adds none; its no-key case is 401 on
+  both. The OpenAPI document carries no roles, so it is unchanged for this route.
 - **Test-only (workstream B):** in the DCGM `post_apply` restart test the fake upstream answers 503 instead of refusing the
   connection.
 - **Moot since A-7 (the private copies are deleted):** workstream B's "alias expansion over 1,000,000 nodes raises

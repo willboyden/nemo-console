@@ -10,13 +10,16 @@ use serde_json::{Map, Value, json};
 use crate::adapters::base::AdapterError;
 use crate::api::bodies::{V, query_int, query_str};
 use crate::api::{
-    Req, adapter_failure, dep_adapter, dep_viewer, json_response, ok_json, validation_error,
+    Req, adapter_failure, dep_adapter, dep_admin, dep_viewer, json_response, ok_json,
+    validation_error,
 };
 use crate::config::VERSION;
 use crate::domain::models::{Health, now_ts};
 use crate::services::errors::ApiError;
 use crate::services::events::event_stream;
-use crate::services::metrics::{WINDOWS, window_span};
+use crate::services::metrics::{
+    SERIES_MAX_KEYS, SERIES_WINDOWS, WINDOWS, series_window, window_span,
+};
 use crate::services::pyfmt::list_repr;
 use crate::services::status::clean_event;
 
@@ -119,6 +122,78 @@ pub async fn metrics_history(req: Req) -> Result<Response<Body>, ApiError> {
     Ok(json_response(200, &json!({"key": key, "points": points})))
 }
 
+/// Split the `keys` parameter of the series route on the commas outside braces (a labelled key such as
+/// `sy.tokens{kind=prompt,model=x}` keeps its own commas).
+fn split_keys(raw: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut depth = 0usize;
+    for c in raw.chars() {
+        match c {
+            '{' => depth += 1,
+            '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                out.push(std::mem::take(&mut cur));
+                continue;
+            }
+            _ => {}
+        }
+        cur.push(c);
+    }
+    out.push(cur);
+    out
+}
+
+/// `GET /systems/{id}/metrics/series` (addendum 9.13, Rust-only, PORTING.md D-36): several keys over 15m (the
+/// ring) / 1h / 24h (1-minute rollups) / 7d (10-minute buckets), `[ts, avg, max]` points, optionally one line per
+/// label variant.
+pub async fn metrics_series(req: Req) -> Result<Response<Body>, ApiError> {
+    let a = dep_adapter(&req)?;
+    dep_viewer(&req)?;
+    let window = query_str(&req.query, "window").unwrap_or_else(|| "1h".to_owned());
+    if series_window(&window).is_none() {
+        let mut names: Vec<&str> = SERIES_WINDOWS.iter().map(|(k, _, _)| *k).collect();
+        names.sort_unstable();
+        return Err(ApiError::new(
+            422,
+            "invalid_request",
+            format!("window must be one of {}", list_repr(&names)),
+        ));
+    }
+    let raw = query_str(&req.query, "keys").unwrap_or_default();
+    let keys = split_keys(&raw);
+    if keys.len() > SERIES_MAX_KEYS {
+        return Err(ApiError::new(
+            422,
+            "invalid_request",
+            format!("at most {SERIES_MAX_KEYS} keys"),
+        ));
+    }
+    if !keys.iter().all(|k| KEY_RE.is_match(k)) {
+        return Err(ApiError::new(
+            422,
+            "invalid_request",
+            "keys must be a comma-separated list of canonical metric keys, e.g. sy.requests_total",
+        ));
+    }
+    let split = match query_str(&req.query, "split").as_deref() {
+        None | Some("0") => false,
+        Some("1") => true,
+        Some(_) => {
+            return Err(ApiError::new(
+                422,
+                "invalid_request",
+                "split must be 0 or 1",
+            ));
+        }
+    };
+    let answer = req
+        .state
+        .metrics
+        .series(a.id(), &window, &keys, split, None);
+    ok_json(&answer)
+}
+
 pub async fn events(req: Req) -> Result<Response<Body>, ApiError> {
     let a = dep_adapter(&req)?;
     dep_viewer(&req)?;
@@ -201,10 +276,12 @@ fn run_error(e: &AdapterError) -> ApiError {
     }
 }
 
-/// Data Designer run records (addendum 9.7): records.jsonl only, values capped by the adapter.
+/// Data Designer run records (addendum 9.7): records.jsonl only, values capped by the adapter. Admin-only since
+/// addendum 9.13 (model-written content, like Relay span content; PORTING.md D-37: the Python reference served it
+/// to viewers).
 pub async fn run_records(req: Req) -> Result<Response<Body>, ApiError> {
     let a = dep_adapter(&req)?;
-    dep_viewer(&req)?;
+    dep_admin(&req)?;
     let (limit, offset) = run_query(&req, 50)?;
     match a.records_page(req.param("run_id"), limit, offset).await {
         Ok(v) => Ok(json_response(200, &v)),

@@ -7,7 +7,9 @@
 //   3. When parity/routes.rust.json exists (written by the Rust test suite, same row shape: at least method, path,
 //      auth), the Rust route set must equal Python's on (method, path, auth). Rows marked `rust_only: "D-<n>"` are
 //      routes added after the port (a deviation recorded in backend/PORTING.md): they are listed, must NOT exist in
-//      the Python table, and are left out of the comparison.
+//      the Python table, and are left out of the comparison. Rows carrying `auth_deviation: {python, deviation:
+//      "D-<n>"}` are routes whose role changed after the port: Python must have the row with exactly that old role,
+//      the Rust role must differ from it, and the row is compared with the Python role.
 // Exit 0 when all pass, 1 otherwise.   node parity/check-routes.mjs [--verbose]
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -87,8 +89,30 @@ if (existsSync(rustFile)) {
       console.log(`\nRust-only routes (added after the port, not compared): ${extra.length}`);
       for (const r of extra) console.log(`  ${r.rust_only}  ${sig(r)}`);
     }
+    const changed = rust.filter((r) => !r.rust_only && r.auth_deviation);
+    for (const r of changed) {
+      const d = r.auth_deviation;
+      if (!d || typeof d !== 'object' || !/^D-\d+$/.test(String(d.deviation)) || typeof d.python !== 'string') {
+        failed = true;
+        console.log(`\nFAIL: ${key(r)}: auth_deviation must be {python: <role>, deviation: "D-<n>"}, not ${JSON.stringify(d)}`);
+        continue;
+      }
+      if (d.python === r.auth) {
+        failed = true;
+        console.log(`\nFAIL: ${key(r)}: auth_deviation ${d.deviation} names the same role as the Rust row (${r.auth})`);
+      }
+      if (!py.some((x) => key(x) === key(r) && x.auth === d.python)) {
+        failed = true;
+        console.log(`\nFAIL: ${key(r)}: auth_deviation ${d.deviation} says Python has auth=${d.python}, the Python table does not`);
+      }
+    }
+    if (changed.length) {
+      console.log(`\nRoutes whose role changed after the port (compared with the Python role): ${changed.length}`);
+      for (const r of changed) console.log(`  ${r.auth_deviation?.deviation}  ${key(r)} auth=${r.auth_deviation?.python} -> ${r.auth}`);
+    }
+    const asPython = (r) => (r.auth_deviation?.python ? { ...r, auth: r.auth_deviation.python } : r);
     const ps = new Set(py.map(sig));
-    const rs = new Set(rust.filter((r) => !r.rust_only).map(sig));
+    const rs = new Set(rust.filter((r) => !r.rust_only).map((r) => sig(asPython(r))));
     const onlyPy = [...ps].filter((x) => !rs.has(x)).sort();
     const onlyRust = [...rs].filter((x) => !ps.has(x)).sort();
     if (onlyPy.length || onlyRust.length) {
