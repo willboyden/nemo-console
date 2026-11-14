@@ -6,12 +6,12 @@
 //
 //   checkConfig({ system, file, format, text }) -> { parse, diagnostics, schema, live, syntax, serverAdds }
 //   diagnostic: { severity: 'error' | 'warn' | 'info', line, col?, message, source }
-//   live: 'ok' | 'unavailable'   syntax: 'ok' | 'error' | 'n/a' | null (null: unknown, the checks did not run)
+//   live: 'ok' | 'loading' | 'unavailable'   syntax: 'ok' | 'error' | 'n/a' | null (null: unknown, the checks did not run)
 //
 // While the WebAssembly module is not available there is no verdict and no silent pass: `live` is 'unavailable', a
 // warning says so, and the server's Check (and every Apply) still validates. The backend stays the authority.
 import { parseConfig, entryOf } from './cfg-parse.js';
-import { wasmCheck, wasmConstants } from './cfg-wasm.js';
+import { wasmCheck, wasmConstants, wasmRetry, wasmState } from './cfg-wasm.js';
 /** A schema table's OWN entry for a file-controlled key: `constructor`, `__proto__` or `toString` never hit Object.prototype. */
 const own = (obj, k) => (obj && Object.hasOwn(obj, k) ? obj[k] : undefined);
 
@@ -180,6 +180,7 @@ export const LIVE_UNAVAILABLE = 'live checks unavailable: the browser could not 
 
 /** Every live check for one draft. */
 export function checkConfig({ system, file, format, text }) {
+  wasmRetry(); // once per draft change: a module that failed to start again gets one more try
   const parse = parseConfig(format, text);
   const diagnostics = lintChecks(text);
   // the layout parser's own hints (duplicate keys, keys PyYAML reads as booleans); its syntax errors are not shown:
@@ -187,8 +188,11 @@ export function checkConfig({ system, file, format, text }) {
   for (const w of parse.warnings) diagnostics.push({ severity: 'warn', line: w.line, col: w.col, source: 'lint', message: w.message });
   const w = wasmCheck(system, file, format, text);
   if (!w) {
-    diagnostics.push({ severity: 'warn', line: null, source: 'live', message: LIVE_UNAVAILABLE });
-    return { parse, diagnostics: sortDiagnostics(diagnostics), schema: schemaFor(system, file), live: 'unavailable', syntax: null, serverAdds: [] };
+    // the first load (the module is being fetched and compiled): not a failure yet, and no verdict either
+    const s = wasmState();
+    const live = !s.readyOnce && (s.state === 'idle' || s.state === 'loading') ? 'loading' : 'unavailable';
+    if (live === 'unavailable') diagnostics.push({ severity: 'warn', line: null, source: 'live', message: LIVE_UNAVAILABLE });
+    return { parse, diagnostics: sortDiagnostics(diagnostics), schema: schemaFor(system, file), live, syntax: null, serverAdds: [] };
   }
   for (const d of w.diagnostics) diagnostics.push({ severity: d.severity, line: d.line ?? null, source: d.source, message: d.message });
   const known = schemaFor(system, file);

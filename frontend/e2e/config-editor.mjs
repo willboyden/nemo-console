@@ -23,18 +23,21 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { startBackend, startChrome, Cdp } from './run.mjs';
 import { SEVEN_FILES } from '../dev/mock-seven.mjs';
-import { SWITCHYARD_ROUTES } from '../dev/mock-data.mjs';
+import { SWITCHYARD_ROUTES, RELAY_ROUTES } from '../dev/mock-data.mjs';
 import { parseConfig } from '../js/cfg-parse.js';
 import { spliceValue, flattenFields } from '../js/cfg-edit.js';
 import { loadWasm, wasmCheck } from '../js/cfg-wasm.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const MUTATIONS = Number(process.env.E2E_MIRROR_N || 30);
+const MUTATIONS = Number(process.env.E2E_MIRROR_N || 150);
 const FILES = [
   { system: 'aiperf', file: 'profiles', format: 'yaml', rel: 'clients/aiperf/profiles.yaml', text: SEVEN_FILES['aiperf/profiles'] },
   { system: 'modelopt', file: 'recipes', format: 'yaml', rel: 'clients/modelopt/recipes.yaml', text: SEVEN_FILES['modelopt/recipes'] },
   { system: 'evaluator', file: 'suites.yaml', format: 'yaml', rel: 'clients/nemo-evaluator/suites.yaml', text: SEVEN_FILES['evaluator/suites.yaml'] },
   { system: 'switchyard', file: 'routes', format: 'toml', rel: 'inference/switchyard/routes.toml', text: SWITCHYARD_ROUTES },
+  { system: 'relay', file: 'routes', format: 'toml', rel: 'clients/nemo-relay/routes.toml', text: RELAY_ROUTES },
+  // a file with no schema: only the loader decides (Flare's validator is PyYAML safe_load, constructors included)
+  { system: 'flare', file: 'compose', format: 'yaml', rel: 'inference/flare/docker-compose.yml', text: SEVEN_FILES['flare/compose'] },
 ];
 const YAML_VALUES = [
   '0',
@@ -83,6 +86,9 @@ const YAML_VALUES = [
   '"quoted"',
   'Bad-Name',
   'yes',
+  '2026-02-30', // the resolver says date, the constructor refuses it: the server answers 500
+  '!!int x',
+  '!!python/object:os.system x',
 ];
 const TOML_VALUES = [
   '"lightning"',
@@ -147,6 +153,7 @@ async function mirror(backend) {
       return seed / 2147483648;
     };
     let agree = 0;
+    const seen = { 422: 0, 500: 0, syntax: 0 }; // what the corpus exercised, printed with the count
     for (let m = 0; m < MUTATIONS; m++) {
       const text = m === 0 ? f.text : mutate(f, rnd);
       // every third mutation also carries a secret the save path refuses (the server answers 422 before validating)
@@ -159,6 +166,8 @@ async function mirror(backend) {
       }
       const mine = (src) => w.diagnostics.filter((d) => src.includes(d.source));
       let server, browser;
+      if (w.syntax === 'error') seen.syntax++;
+      if (r.status === 422 || r.status === 500) seen[r.status]++;
       if (r.status === 422) {
         const e = (await r.json()).error;
         server = [`${e.code}: ${e.message}`];
@@ -167,6 +176,11 @@ async function mirror(backend) {
         const v = await r.json();
         server = v.diagnostics.filter((d) => !NOT_THE_FILE.test(d.message)).map((d) => `${d.severity}:${d.line ?? '-'}:${d.message}`);
         browser = [...mine(['secret', 'content']).map(() => 'refused'), ...mine(['schema', 'syntax']).map((d) => `${d.severity}:${d.line ?? '-'}:${d.message}`)];
+      } else if (r.status === 500) {
+        // an exception the server's validator does not catch (a ValueError for 2026-02-30): the browser names it
+        await r.text();
+        server = ['500 internal_error'];
+        browser = mine(['schema', 'syntax']).map((d) => (/^the backend's validator stops with /.test(d.message) ? '500 internal_error' : `${d.severity}:${d.line ?? '-'}:${d.message}`));
       } else {
         failures.push(`${f.system}: validate answered ${r.status}`);
         break;
@@ -174,7 +188,7 @@ async function mirror(backend) {
       if (JSON.stringify(server) === JSON.stringify(browser)) agree++;
       else if (failures.length < 12) failures.push(`${f.system} mutation ${m}: server ${JSON.stringify(server).slice(0, 300)} browser ${JSON.stringify(browser).slice(0, 300)}`);
     }
-    counts.push(`${f.system} ${agree}/${MUTATIONS}`);
+    counts.push(`${f.system} ${agree}/${MUTATIONS} (${seen.syntax} not loading, ${seen[500]} answered 500, ${seen[422]} refused 422)`);
   }
   return { failures, summary: counts.join(', ') };
 }

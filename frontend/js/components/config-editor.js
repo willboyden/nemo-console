@@ -545,13 +545,16 @@ export function configEditor(scope, systemId) {
       c = st.checks,
       n = countBy(all);
     const live = c.live === 'ok';
-    const syntax = !live
-      ? badge(t('chk.live_unavailable'), 'warn', t('chk.live_unavailable_hint'))
-      : !structured()
-        ? badge(t('chk.plain_text'), 'muted')
-        : c.syntax === 'ok'
-          ? badge(t('chk.syntax_ok'), 'ok')
-          : badge(t('chk.syntax_bad'), 'bad');
+    const loading = c.live === 'loading';
+    const syntax = loading
+      ? badge(t('chk.live_loading'), 'muted', t('chk.live_loading_hint'))
+      : !live
+        ? badge(t('chk.live_unavailable'), 'warn', t('chk.live_unavailable_hint'))
+        : !structured()
+          ? badge(t('chk.plain_text'), 'muted')
+          : c.syntax === 'ok'
+            ? badge(t('chk.syntax_ok'), 'ok')
+            : badge(t('chk.syntax_bad'), 'bad');
     const summary = h(
       'div',
       { class: 'row gap wrap chk-summary', dataset: { live: c.live } },
@@ -563,13 +566,15 @@ export function configEditor(scope, systemId) {
     const about = h(
       'p',
       { class: 'hint' },
-      !live
-        ? t('chk.live_unavailable_hint')
-        : c.schema
-          ? t(c.syntax !== 'error' ? 'chk.schema_known' : 'chk.schema_paused', { name: t(`chk.schema_${c.schema.id}`) })
-          : structured()
-            ? t('chk.schema_none')
-            : t('chk.text_only'),
+      loading
+        ? t('chk.live_loading_hint')
+        : !live
+          ? t('chk.live_unavailable_hint')
+          : c.schema
+            ? t(c.syntax !== 'error' ? 'chk.schema_known' : 'chk.schema_paused', { name: t(`chk.schema_${c.schema.id}`) })
+            : structured()
+              ? t('chk.schema_none')
+              : t('chk.text_only'),
       live && c.serverAdds.length ? ` ${t('chk.server_adds', { what: c.serverAdds.join(', ') })}` : '',
     );
     const items = all.slice(0, 60);

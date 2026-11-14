@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { wasmReady } from './wasm-ready.mjs';
-import { wasmCheck, wasmPlainType, wasmRoundtrip, wasmConstants, wasmState, onWasmState, API, _test } from '../js/cfg-wasm.js';
+import { wasmCheck, wasmPlainType, wasmRoundtrip, wasmConstants, wasmState, onWasmState, wasmRetry, API, _test } from '../js/cfg-wasm.js';
 
 await wasmReady();
 const VECTORS = JSON.parse(readFileSync(new URL('../../backend/crates/nemo-console-core/tests/vectors/check.json', import.meta.url), 'utf8'));
@@ -55,4 +55,22 @@ test('a trap is reported as unavailable (no silent pass) and a fresh instance ta
   off();
   assert.equal(wasmState().state, 'ready');
   assert.equal(wasmCheck('aiperf', 'profiles', 'yaml', 'version: 1\n').api, API);
+});
+
+test('a second trap while the fresh instance starts is retried on the next draft, not left off for good', async () => {
+  const settle = async () => {
+    for (let i = 0; i < 50 && wasmState().state === 'loading'; i++) await new Promise((r) => setTimeout(r, 20));
+  };
+  _test.breakInstance();
+  _test.failNextInstantiate(); // the re-instantiation after this trap traps too
+  assert.equal(wasmCheck('aiperf', 'profiles', 'yaml', 'version: 1\n'), null);
+  await settle();
+  assert.equal(wasmState().state, 'failed');
+  assert.equal(wasmCheck('aiperf', 'profiles', 'yaml', 'version: 1\n'), null); // no instance, nothing pending
+  wasmRetry(); // what the editor does once per draft change
+  await settle();
+  assert.equal(wasmState().state, 'ready');
+  assert.equal(wasmCheck('aiperf', 'profiles', 'yaml', 'version: 1\n').api, API);
+  wasmRetry(); // a no-op while an instance is live
+  assert.equal(wasmState().state, 'ready');
 });
