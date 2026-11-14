@@ -579,19 +579,40 @@ pub fn bucket_quantile(mut cum: Vec<(f64, f64)>, q: f64) -> Option<f64> {
 
 // ── addendum 9.14: windowed quantiles (requests that finished since the previous poll) ─────────────────
 
-/// Cumulative bucket counts of one histogram family: label set (every label but `le`, as text) -> `[(le, count)]`.
+/// Per scrape and family: at most this many label sets ...
+pub const HIST_MAX_SETS: usize = 64;
+/// ... and at most this many distinct `le` bounds per label set; the rest is ignored (an upstream cannot make a
+/// poll quadratic or unbounded).
+pub const HIST_MAX_BUCKETS: usize = 256;
+/// A label set's text is cut to this many bytes (two sets that only differ beyond it are summed together).
+const HIST_SET_TEXT_MAX: usize = 512;
+/// `dyn.spec_accept_pos`: at most this many draft positions, each a decimal of at most two digits.
+pub const SPEC_MAX_POSITIONS: usize = 32;
+
+/// Cumulative bucket counts of one histogram family: label set (every label but `le`, as text) -> `[(le, count)]`
+/// ordered by `le`.
 pub type HistCounts = std::collections::BTreeMap<String, Vec<(f64, f64)>>;
 
-/// The `<base>_bucket` samples of one scrape as [`HistCounts`]; empty when the family is absent.
+/// A histogram bound: `+Inf` or a finite number (`NaN`, `-Inf` and junk are not bounds; -0 is 0).
+fn hist_bound(le: &str) -> Option<f64> {
+    if le == "+Inf" || le == "Inf" {
+        return Some(f64::INFINITY);
+    }
+    py_float(le).filter(|x| x.is_finite()).map(|x| x + 0.0)
+}
+
+/// The `<base>_bucket` samples of one scrape as [`HistCounts`]; empty when the family is absent. Linear in the
+/// samples; at most [`HIST_MAX_SETS`] label sets of [`HIST_MAX_BUCKETS`] bounds; non-finite counts and bounds are
+/// ignored.
 #[must_use]
 pub fn hist_counts(samples: &[Sample], base: &str) -> HistCounts {
     let bucket = format!("{base}_bucket");
-    let mut out = HistCounts::new();
+    let mut sets: HashMap<String, HashMap<u64, f64>> = HashMap::new();
     for (n, lb, v) in samples {
         if *n != bucket || !v.is_finite() {
             continue;
         }
-        let Some(le) = lb.get("le").and_then(|x| py_float(x)) else {
+        let Some(le) = lb.get("le").and_then(|x| hist_bound(x)) else {
             continue;
         };
         let mut rest: Vec<String> = lb
@@ -600,95 +621,98 @@ pub fn hist_counts(samples: &[Sample], base: &str) -> HistCounts {
             .map(|(k, v)| format!("{k}={v}"))
             .collect();
         rest.sort();
-        let slot = out.entry(rest.join(",")).or_default();
-        #[allow(clippy::float_cmp)]
-        match slot.iter_mut().find(|(b, _)| *b == le) {
-            Some(x) => x.1 += v,
-            None => slot.push((le, *v)),
+        let mut set = rest.join(",");
+        if set.len() > HIST_SET_TEXT_MAX {
+            let mut cut = HIST_SET_TEXT_MAX;
+            while !set.is_char_boundary(cut) {
+                cut -= 1;
+            }
+            set.truncate(cut);
         }
+        if !sets.contains_key(&set) && sets.len() >= HIST_MAX_SETS {
+            continue;
+        }
+        let slot = sets.entry(set).or_default();
+        let key = le.to_bits();
+        if !slot.contains_key(&key) && slot.len() >= HIST_MAX_BUCKETS {
+            continue;
+        }
+        *slot.entry(key).or_insert(0.0) += v;
     }
-    out
+    sets.into_iter()
+        .map(|(set, b)| {
+            let mut v: Vec<(f64, f64)> =
+                b.into_iter().map(|(k, c)| (f64::from_bits(k), c)).collect();
+            v.sort_by(|x, y| x.0.total_cmp(&y.0));
+            (set, v)
+        })
+        .collect()
 }
 
 /// What `cur` added over `prev`, summed over the label sets both have, as cumulative buckets. `None` is a counter
 /// reset: a bucket of a label set went down or disappeared. A label set only one of them has adds nothing (a worker
-/// that restarted under a new id starts its own baseline).
+/// that restarted under a new id starts its own baseline). Linear (maps, not searches).
 #[must_use]
 pub fn hist_delta(prev: &HistCounts, cur: &HistCounts) -> Option<Vec<(f64, f64)>> {
-    let mut out: Vec<(f64, f64)> = Vec::new();
+    let mut out: HashMap<u64, f64> = HashMap::new();
     for (set, now) in cur {
         let Some(before) = prev.get(set) else {
             continue;
         };
+        let now: HashMap<u64, f64> = now.iter().map(|(b, c)| (b.to_bits(), *c)).collect();
         for (le, c0) in before {
-            #[allow(clippy::float_cmp)]
-            let c1 = now.iter().find(|(b, _)| b == le).map(|x| x.1)?;
+            let c1 = *now.get(&le.to_bits())?;
             if c1 < *c0 {
                 return None;
             }
-            #[allow(clippy::float_cmp)]
-            match out.iter_mut().find(|(b, _)| b == le) {
-                Some(x) => x.1 += c1 - c0,
-                None => out.push((*le, c1 - c0)),
-            }
+            *out.entry(le.to_bits()).or_insert(0.0) += c1 - c0;
         }
     }
-    Some(out)
+    Some(
+        out.into_iter()
+            .map(|(k, c)| (f64::from_bits(k), c))
+            .collect(),
+    )
 }
 
-/// At most this many earlier reads are kept per family.
-const WINDOW_KEEP: usize = 16;
-
-/// The earlier reads of every windowed histogram family, oldest first, each with its time.
+/// The windowed histogram families' baselines: per family the read of the previous POLL. Only the poller's read
+/// (`poll_metrics`) moves a baseline; any other `/metrics` read is compared with it and changes nothing, so the
+/// window is exactly "since the previous poll" whatever the poll interval and however often the UI reads.
 #[derive(Default)]
 pub struct HistWindows {
-    reads: HashMap<String, std::collections::VecDeque<(f64, HistCounts)>>,
+    base: HashMap<String, HistCounts>,
 }
 
 impl HistWindows {
-    /// Record the read `cur` of family `base` at `now` and return the buckets of the observations since the previous
-    /// poll: the newest earlier read at least `min_age` seconds old (else the oldest one kept), so an extra metrics
-    /// read between two poller ticks does not take the poller's window. `None` (no point) when there is no earlier
-    /// read, when the family is absent now (its history is dropped: after a gap the window starts afresh) and on a
-    /// counter reset (the history restarts from `cur`).
+    /// The buckets of the observations in `cur` since the previous poll of family `family`. With `advance` (the
+    /// poller) `cur` becomes the new baseline. `None` (no point) when there is no baseline yet, when the family is
+    /// absent now (on a poll its baseline is dropped: after a gap the window starts afresh) and on a counter reset
+    /// (on a poll the reset read becomes the baseline).
     pub fn observe(
         &mut self,
-        base: &str,
-        now: f64,
-        min_age: f64,
+        family: &str,
         cur: Option<HistCounts>,
+        advance: bool,
     ) -> Option<Vec<(f64, f64)>> {
         let Some(cur) = cur.filter(|c| !c.is_empty()) else {
-            self.reads.remove(base);
+            if advance {
+                self.base.remove(family);
+            }
             return None;
         };
-        let reads = self.reads.entry(base.to_owned()).or_default();
-        let base_at = reads
-            .iter()
-            .rposition(|(t, _)| now - t >= min_age)
-            .or(if reads.is_empty() { None } else { Some(0) });
-        let delta = match base_at {
-            None => None,
-            Some(i) => {
-                let d = hist_delta(&reads[i].1, &cur);
-                if d.is_none() {
-                    reads.clear();
-                } else {
-                    reads.drain(..i);
-                }
-                d
-            }
-        };
-        reads.push_back((now, cur));
-        while reads.len() > WINDOW_KEEP {
-            reads.pop_front();
+        let delta = self
+            .base
+            .get(family)
+            .and_then(|prev| hist_delta(prev, &cur));
+        if advance {
+            self.base.insert(family.to_owned(), cur);
         }
         delta
     }
 
-    /// Forget every family (the frontend could not be read: the next window starts afresh).
+    /// Forget every baseline (the poller could not read the frontend: the next window starts afresh).
     pub fn clear(&mut self) {
-        self.reads.clear();
+        self.base.clear();
     }
 }
 
@@ -796,36 +820,41 @@ pub fn plain_points_9_14(fe: &[Sample], wm: Option<&[Sample]>) -> Vec<MetricPoin
     let Some(wm) = wm else {
         return pts;
     };
-    if let Some(v) = sum(wm, "vllm:num_preemptions_total") {
+    if let Some(v) = sum(wm, "vllm:num_preemptions_total").filter(|v| v.is_finite()) {
         pts.push(one("dyn.preemptions_total", v, "1", &[]));
     }
     if let Some(drafts) = sum(wm, "vllm:spec_decode_num_drafts_total")
+        && drafts.is_finite()
         && drafts > 0.0
     {
-        let mut by_pos: Vec<(u32, String, f64)> = Vec::new();
+        let mut by_pos: std::collections::BTreeMap<u32, f64> = std::collections::BTreeMap::new();
         for (n, lb, v) in wm {
-            if n != "vllm:spec_decode_num_accepted_tokens_per_pos_total" {
+            if n != "vllm:spec_decode_num_accepted_tokens_per_pos_total" || !v.is_finite() {
                 continue;
             }
-            let Some(pos) = lb.get("position") else {
+            // a position is a decimal of one or two digits, nothing else
+            let Some(pos) = lb
+                .get("position")
+                .filter(|p| (1..=2).contains(&p.len()) && p.bytes().all(|b| b.is_ascii_digit()))
+                .and_then(|p| p.parse::<u32>().ok())
+            else {
                 continue;
             };
-            let Ok(order) = pos.parse::<u32>() else {
+            if !by_pos.contains_key(&pos) && by_pos.len() >= SPEC_MAX_POSITIONS {
                 continue;
-            };
-            match by_pos.iter_mut().find(|x| x.0 == order) {
-                Some(x) => x.2 += v,
-                None => by_pos.push((order, pos.clone(), *v)),
             }
+            *by_pos.entry(pos).or_insert(0.0) += v;
         }
-        by_pos.sort_by_key(|x| x.0);
-        for (_, pos, accepted) in by_pos {
-            pts.push(one(
-                "dyn.spec_accept_pos",
-                accepted / drafts,
-                "ratio",
-                &[("pos", &pos)],
-            ));
+        for (pos, accepted) in by_pos {
+            let ratio = accepted / drafts;
+            if ratio.is_finite() {
+                pts.push(one(
+                    "dyn.spec_accept_pos",
+                    ratio,
+                    "ratio",
+                    &[("pos", &pos.to_string())],
+                ));
+            }
         }
     }
     pts
@@ -1820,10 +1849,6 @@ pub struct DynamoAdapter {
     pub policy: CardPolicy,
     /// The container replaces it (addendum 9.11).
     pub names: DynamoNames,
-    /// The windowed keys (addendum 9.14) compare with the newest earlier read at least this old (seconds), so an
-    /// extra `/metrics` read between two poller ticks does not take the poller's window. The container sets 90% of
-    /// the poll interval.
-    pub window_min_s: f64,
     st: Mutex<DynState>,
 }
 
@@ -1914,7 +1939,6 @@ impl DynamoAdapter {
             follow_interval: 2.0,
             policy: CardPolicy::default(),
             names: DynamoNames::default(),
-            window_min_s: 1.0,
             st: Mutex::new(DynState::default()),
         }
     }
@@ -1924,14 +1948,18 @@ impl DynamoAdapter {
     pub fn from_settings(ctx: &AdapterContext, cfg: &Settings) -> Self {
         let mut a = DynamoAdapter::new(ctx.clone());
         a.names = DynamoNames::from_settings(cfg);
-        a.window_min_s = (cfg.poll_interval_s * 0.9).max(0.0);
         a.policy = CardPolicy::from_settings(cfg, &a.names);
         a
     }
 
-    /// The windowed keys of addendum 9.14 for this read (`wm` `None`: the worker was not read, so its windows start
-    /// afresh next time).
-    fn windowed_points(&self, now: f64, fe: &[Sample], wm: Option<&[Sample]>) -> Vec<MetricPoint> {
+    /// The windowed keys of addendum 9.14 for this read, against the previous poll; `advance` (the poller's read)
+    /// makes this read the next baseline. `wm` `None`: the worker was not read (on a poll its windows start afresh).
+    fn windowed_points(
+        &self,
+        advance: bool,
+        fe: &[Sample],
+        wm: Option<&[Sample]>,
+    ) -> Vec<MetricPoint> {
         let mut pts: Vec<MetricPoint> = Vec::new();
         let mut st = self.state();
         for w in &WINDOWED {
@@ -1940,7 +1968,7 @@ impl DynamoAdapter {
             } else {
                 Some(hist_counts(fe, w.family))
             };
-            let Some(window) = st.windows.observe(w.family, now, self.window_min_s, cur) else {
+            let Some(window) = st.windows.observe(w.family, cur, advance) else {
                 continue;
             };
             for (qname, q) in w.quantiles {
@@ -1956,6 +1984,220 @@ impl DynamoAdapter {
             }
         }
         pts
+    }
+
+    /// `metrics()` (`advance` false: a UI or API read) and `poll_metrics()` (`advance` true: the poller's tick, the
+    /// only read that moves the windowed keys' baselines, addendum 9.14).
+    async fn read_metrics(&self, advance: bool) -> Result<MetricsSnapshot, AdapterError> {
+        let ts = now_ts();
+        let fe = match self
+            .ctx
+            .http
+            .get(&format!("{}/metrics", self.base_url()), 5.0)
+            .await
+        {
+            Ok(r) if (200..300).contains(&r.status) => parse_prom(&r.text()),
+            Ok(_) => {
+                if advance {
+                    self.state().windows.clear();
+                }
+                return Ok(MetricsSnapshot {
+                    system: SystemId::Dynamo,
+                    ts,
+                    available: false,
+                    points: Vec::new(),
+                    error: Some("frontend /metrics unreachable: HTTPStatusError".into()),
+                });
+            }
+            Err(e) => {
+                if advance {
+                    self.state().windows.clear();
+                }
+                return Ok(MetricsSnapshot {
+                    system: SystemId::Dynamo,
+                    ts,
+                    available: false,
+                    points: Vec::new(),
+                    error: Some(format!("frontend /metrics unreachable: {}", e.class)),
+                });
+            }
+        };
+        let mut pts = vec![{
+            let mut p = MetricPoint::new("dyn.up", 1.0);
+            p.unit = "1".into();
+            p
+        }];
+        let add = |pts: &mut Vec<MetricPoint>,
+                   key: &str,
+                   val: Option<f64>,
+                   unit: &str,
+                   labels: &[(&str, &str)]| {
+            if let Some(v) = val {
+                pts.push(MetricPoint {
+                    key: key.into(),
+                    value: v,
+                    unit: unit.into(),
+                    labels: labels
+                        .iter()
+                        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+                        .collect(),
+                });
+            }
+        };
+        let ready: Vec<f64> = fe
+            .iter()
+            .filter(|(n, _, _)| n == "dynamo_frontend_model_ready")
+            .map(|s| s.2)
+            .collect();
+        #[allow(clippy::cast_precision_loss)]
+        let models = if ready.is_empty() {
+            None
+        } else {
+            Some(ready.iter().filter(|v| **v >= 1.0).count() as f64)
+        };
+        add(&mut pts, "dyn.models", models, "1", &[]);
+        let mut by_status: IndexMap<String, f64> = IndexMap::new();
+        for (n, lb, v) in &fe {
+            if n == "dynamo_frontend_requests_total" {
+                let st = lb
+                    .get("status")
+                    .cloned()
+                    .unwrap_or_else(|| "unknown".into());
+                *by_status.entry(st).or_insert(0.0) += v;
+            }
+        }
+        let mut statuses: Vec<(String, f64)> = by_status.into_iter().collect();
+        statuses.sort_by(|a, b| a.0.cmp(&b.0));
+        for (st, v) in statuses {
+            add(
+                &mut pts,
+                "dyn.requests_total",
+                Some(v),
+                "1",
+                &[("status", &st)],
+            );
+        }
+        add(
+            &mut pts,
+            "dyn.in_flight",
+            sum(&fe, "dynamo_frontend_inflight_requests"),
+            "1",
+            &[],
+        );
+        for (qn, q) in [("p50", 0.5), ("p95", 0.95)] {
+            add(
+                &mut pts,
+                "dyn.ttft_ms",
+                time_ms(histogram_quantile(
+                    &fe,
+                    "dynamo_frontend_time_to_first_token_seconds",
+                    q,
+                )),
+                "ms",
+                &[("q", qn)],
+            );
+            add(
+                &mut pts,
+                "dyn.itl_ms",
+                time_ms(histogram_quantile(
+                    &fe,
+                    "dynamo_frontend_inter_token_latency_seconds",
+                    q,
+                )),
+                "ms",
+                &[("q", qn)],
+            );
+        }
+        add(
+            &mut pts,
+            "dyn.tokens",
+            sum(&fe, "dynamo_frontend_input_sequence_tokens_sum"),
+            "tok",
+            &[("kind", "prompt")],
+        );
+        add(
+            &mut pts,
+            "dyn.tokens",
+            sum(&fe, "dynamo_frontend_output_tokens_total"),
+            "tok",
+            &[("kind", "completion")],
+        );
+        add(
+            &mut pts,
+            "dyn.tokens",
+            sum(&fe, "dynamo_frontend_cached_tokens_sum"),
+            "tok",
+            &[("kind", "cached")],
+        );
+        let insp = self
+            .inspect(std::slice::from_ref(&self.names.worker))
+            .await?;
+        let mut worker_up = 0.0;
+        let mut worker_samples: Option<Vec<Sample>> = None;
+        if let Some(wk) = insp.get(&self.names.worker)
+            && container_state(Some(wk)) == "running"
+            && self.project_ok(wk, &self.names.svc_worker)
+        {
+            let (health, wm) = self.worker_scrape().await?;
+            if let Some(h) = &health
+                && pj_str(h.get("status")) == "ready"
+            {
+                worker_up = 1.0;
+            }
+            add(
+                &mut pts,
+                "dyn.kv_cache_usage",
+                sum(&wm, "vllm:kv_cache_usage_perc"),
+                "ratio",
+                &[],
+            );
+            add(
+                &mut pts,
+                "dyn.requests_running",
+                sum(&wm, "vllm:num_requests_running"),
+                "1",
+                &[],
+            );
+            add(
+                &mut pts,
+                "dyn.requests_waiting",
+                sum(&wm, "vllm:num_requests_waiting"),
+                "1",
+                &[],
+            );
+            let drafted = sum(&wm, "vllm:spec_decode_num_draft_tokens_total");
+            let accepted = sum(&wm, "vllm:spec_decode_num_accepted_tokens_total");
+            if let (Some(d), Some(a)) = (drafted, accepted)
+                && d != 0.0
+            {
+                add(&mut pts, "dyn.spec_accept_ratio", Some(a / d), "ratio", &[]);
+            }
+            let pq = sum(&wm, "vllm:prefix_cache_queries_total");
+            let ph = sum(&wm, "vllm:prefix_cache_hits_total");
+            if let (Some(q), Some(h)) = (pq, ph)
+                && q != 0.0
+            {
+                add(
+                    &mut pts,
+                    "dyn.prefix_cache_hit_ratio",
+                    Some(h / q),
+                    "ratio",
+                    &[],
+                );
+            }
+            worker_samples = Some(wm);
+        }
+        add(&mut pts, "dyn.worker_up", Some(worker_up), "1", &[]);
+        // addendum 9.14: appended last, so under the per-system series cap the older keys keep their places
+        pts.extend(self.windowed_points(advance, &fe, worker_samples.as_deref()));
+        pts.extend(plain_points_9_14(&fe, worker_samples.as_deref()));
+        Ok(MetricsSnapshot {
+            system: SystemId::Dynamo,
+            ts,
+            available: true,
+            points: pts,
+            error: None,
+        })
     }
 
     fn state(&self) -> std::sync::MutexGuard<'_, DynState> {
@@ -4072,211 +4314,11 @@ impl SystemAdapter for DynamoAdapter {
     }
 
     async fn metrics(&self) -> Result<MetricsSnapshot, AdapterError> {
-        let ts = now_ts();
-        let fe = match self
-            .ctx
-            .http
-            .get(&format!("{}/metrics", self.base_url()), 5.0)
-            .await
-        {
-            Ok(r) if (200..300).contains(&r.status) => parse_prom(&r.text()),
-            Ok(_) => {
-                self.state().windows.clear();
-                return Ok(MetricsSnapshot {
-                    system: SystemId::Dynamo,
-                    ts,
-                    available: false,
-                    points: Vec::new(),
-                    error: Some("frontend /metrics unreachable: HTTPStatusError".into()),
-                });
-            }
-            Err(e) => {
-                self.state().windows.clear();
-                return Ok(MetricsSnapshot {
-                    system: SystemId::Dynamo,
-                    ts,
-                    available: false,
-                    points: Vec::new(),
-                    error: Some(format!("frontend /metrics unreachable: {}", e.class)),
-                });
-            }
-        };
-        let mut pts = vec![{
-            let mut p = MetricPoint::new("dyn.up", 1.0);
-            p.unit = "1".into();
-            p
-        }];
-        let add = |pts: &mut Vec<MetricPoint>,
-                   key: &str,
-                   val: Option<f64>,
-                   unit: &str,
-                   labels: &[(&str, &str)]| {
-            if let Some(v) = val {
-                pts.push(MetricPoint {
-                    key: key.into(),
-                    value: v,
-                    unit: unit.into(),
-                    labels: labels
-                        .iter()
-                        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
-                        .collect(),
-                });
-            }
-        };
-        let ready: Vec<f64> = fe
-            .iter()
-            .filter(|(n, _, _)| n == "dynamo_frontend_model_ready")
-            .map(|s| s.2)
-            .collect();
-        #[allow(clippy::cast_precision_loss)]
-        let models = if ready.is_empty() {
-            None
-        } else {
-            Some(ready.iter().filter(|v| **v >= 1.0).count() as f64)
-        };
-        add(&mut pts, "dyn.models", models, "1", &[]);
-        let mut by_status: IndexMap<String, f64> = IndexMap::new();
-        for (n, lb, v) in &fe {
-            if n == "dynamo_frontend_requests_total" {
-                let st = lb
-                    .get("status")
-                    .cloned()
-                    .unwrap_or_else(|| "unknown".into());
-                *by_status.entry(st).or_insert(0.0) += v;
-            }
-        }
-        let mut statuses: Vec<(String, f64)> = by_status.into_iter().collect();
-        statuses.sort_by(|a, b| a.0.cmp(&b.0));
-        for (st, v) in statuses {
-            add(
-                &mut pts,
-                "dyn.requests_total",
-                Some(v),
-                "1",
-                &[("status", &st)],
-            );
-        }
-        add(
-            &mut pts,
-            "dyn.in_flight",
-            sum(&fe, "dynamo_frontend_inflight_requests"),
-            "1",
-            &[],
-        );
-        for (qn, q) in [("p50", 0.5), ("p95", 0.95)] {
-            add(
-                &mut pts,
-                "dyn.ttft_ms",
-                time_ms(histogram_quantile(
-                    &fe,
-                    "dynamo_frontend_time_to_first_token_seconds",
-                    q,
-                )),
-                "ms",
-                &[("q", qn)],
-            );
-            add(
-                &mut pts,
-                "dyn.itl_ms",
-                time_ms(histogram_quantile(
-                    &fe,
-                    "dynamo_frontend_inter_token_latency_seconds",
-                    q,
-                )),
-                "ms",
-                &[("q", qn)],
-            );
-        }
-        add(
-            &mut pts,
-            "dyn.tokens",
-            sum(&fe, "dynamo_frontend_input_sequence_tokens_sum"),
-            "tok",
-            &[("kind", "prompt")],
-        );
-        add(
-            &mut pts,
-            "dyn.tokens",
-            sum(&fe, "dynamo_frontend_output_tokens_total"),
-            "tok",
-            &[("kind", "completion")],
-        );
-        add(
-            &mut pts,
-            "dyn.tokens",
-            sum(&fe, "dynamo_frontend_cached_tokens_sum"),
-            "tok",
-            &[("kind", "cached")],
-        );
-        let insp = self
-            .inspect(std::slice::from_ref(&self.names.worker))
-            .await?;
-        let mut worker_up = 0.0;
-        let mut worker_samples: Option<Vec<Sample>> = None;
-        if let Some(wk) = insp.get(&self.names.worker)
-            && container_state(Some(wk)) == "running"
-            && self.project_ok(wk, &self.names.svc_worker)
-        {
-            let (health, wm) = self.worker_scrape().await?;
-            if let Some(h) = &health
-                && pj_str(h.get("status")) == "ready"
-            {
-                worker_up = 1.0;
-            }
-            add(
-                &mut pts,
-                "dyn.kv_cache_usage",
-                sum(&wm, "vllm:kv_cache_usage_perc"),
-                "ratio",
-                &[],
-            );
-            add(
-                &mut pts,
-                "dyn.requests_running",
-                sum(&wm, "vllm:num_requests_running"),
-                "1",
-                &[],
-            );
-            add(
-                &mut pts,
-                "dyn.requests_waiting",
-                sum(&wm, "vllm:num_requests_waiting"),
-                "1",
-                &[],
-            );
-            let drafted = sum(&wm, "vllm:spec_decode_num_draft_tokens_total");
-            let accepted = sum(&wm, "vllm:spec_decode_num_accepted_tokens_total");
-            if let (Some(d), Some(a)) = (drafted, accepted)
-                && d != 0.0
-            {
-                add(&mut pts, "dyn.spec_accept_ratio", Some(a / d), "ratio", &[]);
-            }
-            let pq = sum(&wm, "vllm:prefix_cache_queries_total");
-            let ph = sum(&wm, "vllm:prefix_cache_hits_total");
-            if let (Some(q), Some(h)) = (pq, ph)
-                && q != 0.0
-            {
-                add(
-                    &mut pts,
-                    "dyn.prefix_cache_hit_ratio",
-                    Some(h / q),
-                    "ratio",
-                    &[],
-                );
-            }
-            worker_samples = Some(wm);
-        }
-        add(&mut pts, "dyn.worker_up", Some(worker_up), "1", &[]);
-        // addendum 9.14: appended last, so under the per-system series cap the older keys keep their places
-        pts.extend(self.windowed_points(ts, &fe, worker_samples.as_deref()));
-        pts.extend(plain_points_9_14(&fe, worker_samples.as_deref()));
-        Ok(MetricsSnapshot {
-            system: SystemId::Dynamo,
-            ts,
-            available: true,
-            points: pts,
-            error: None,
-        })
+        self.read_metrics(false).await
+    }
+
+    async fn poll_metrics(&self) -> Result<MetricsSnapshot, AdapterError> {
+        self.read_metrics(true).await
     }
 
     async fn recent_events(&self, limit: usize) -> Result<Vec<SystemEvent>, AdapterError> {

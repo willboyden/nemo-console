@@ -18,7 +18,8 @@ use std::sync::{Arc, Mutex};
 use dynamo_support::{Fix, fx, is_docker, worker_doc};
 use nemo_console::adapters::base::SystemAdapter;
 use nemo_console::adapters::dynamo::{
-    DynamoAdapter, HistCounts, HistWindows, bucket_quantile, hist_counts, hist_delta, parse_prom,
+    DynamoAdapter, HIST_MAX_BUCKETS, HIST_MAX_SETS, HistCounts, HistWindows, SPEC_MAX_POSITIONS,
+    bucket_quantile, hist_counts, hist_delta, parse_prom, plain_points_9_14,
 };
 use nemo_console::domain::models::MetricPoint;
 use nemo_console::services::metrics::{MAX_SERIES_PER_SYSTEM, series_name};
@@ -121,8 +122,7 @@ impl Live {
             ))
         });
         dynamo_support::http_live(&f.mock, true);
-        // every read is a poll here (the container sets 90% of the poll interval)
-        let a = f.make_with(|a| a.window_min_s = 0.0);
+        let a = f.make();
         Live { f, a, worker }
     }
 
@@ -134,7 +134,15 @@ impl Live {
         *self.worker.lock().unwrap() = text.to_owned();
     }
 
+    /// The poller's read (moves the windows).
     async fn poll(&self) -> Vec<MetricPoint> {
+        let snap = self.a.poll_metrics().await.unwrap();
+        assert!(snap.available, "{:?}", snap.error);
+        snap.points
+    }
+
+    /// A UI / API read (`metrics()`): compares with the previous poll, changes nothing.
+    async fn peek(&self) -> Vec<MetricPoint> {
         let snap = self.a.metrics().await.unwrap();
         assert!(snap.available, "{:?}", snap.error);
         snap.points
@@ -176,28 +184,73 @@ fn test_windows_track_the_previous_poll() {
     let c0 = counts(&fe, TTFT);
     let c1 = counts(&bump(&fe, TTFT, 0.1, 2.0), TTFT);
     let c2 = counts(&bump(&bump(&fe, TTFT, 0.1, 2.0), TTFT, 1.0, 4.0), TTFT);
-    // first read: no window yet
-    assert_eq!(w.observe(TTFT, 0.0, 1.8, Some(c0.clone())), None);
-    // the poller 2 s later: two observations
-    let d = w.observe(TTFT, 2.0, 1.8, Some(c1.clone())).unwrap();
+    // a read before any poll has nothing to compare with
+    assert_eq!(w.observe(TTFT, Some(c0.clone()), false), None);
+    // first poll: no window yet
+    assert_eq!(w.observe(TTFT, Some(c0.clone()), true), None);
+    // any number of other reads compare with that poll and move nothing
+    for _ in 0..40 {
+        let peek = w.observe(TTFT, Some(c2.clone()), false).unwrap();
+        assert_eq!(peek.iter().map(|x| x.1).fold(0.0, f64::max), 6.0);
+    }
+    assert_eq!(w.observe(TTFT, None, false), None); // an absent family on a read keeps the baseline
+    // the next poll: still everything since the previous poll
+    let d = w.observe(TTFT, Some(c1.clone()), true).unwrap();
     assert_eq!(bucket_quantile(d, 1.0).unwrap(), 0.22);
-    // an extra read 0.5 s later compares with the newest read at least 1.8 s old (the first: 2 + 4 new) ...
-    let extra = w.observe(TTFT, 2.5, 1.8, Some(c2.clone())).unwrap();
-    assert_eq!(extra.iter().map(|x| x.1).fold(0.0, f64::max), 6.0);
-    // ... and the next poll still compares with the previous poll (2 s back), not with the extra read
-    let d = w.observe(TTFT, 4.0, 1.8, Some(c2.clone())).unwrap();
+    let d = w.observe(TTFT, Some(c2.clone()), true).unwrap();
     assert_eq!(d.iter().map(|x| x.1).fold(0.0, f64::max), 4.0);
     // nothing new since then: no quantile
-    let d = w.observe(TTFT, 6.0, 1.8, Some(c2.clone())).unwrap();
+    let d = w.observe(TTFT, Some(c2.clone()), true).unwrap();
     assert_eq!(bucket_quantile(d, 0.5), None);
-    // a counter reset: no window this poll, the reset read is the new baseline
-    assert_eq!(w.observe(TTFT, 8.0, 1.8, Some(c0)), None);
-    let d = w.observe(TTFT, 10.0, 1.8, Some(c1)).unwrap();
+    // a counter reset: no window this poll, the reset read is the new baseline (a read alone does not adopt it)
+    assert_eq!(w.observe(TTFT, Some(c0.clone()), false), None);
+    assert_eq!(w.observe(TTFT, Some(c0), true), None);
+    let d = w.observe(TTFT, Some(c1), true).unwrap();
     assert_eq!(d.iter().map(|x| x.1).fold(0.0, f64::max), 2.0);
-    // the family disappears: its history is dropped, so the next read starts afresh
-    assert_eq!(w.observe(TTFT, 12.0, 1.8, None), None);
-    assert_eq!(w.observe(TTFT, 14.0, 1.8, Some(c2)), None);
-    assert_eq!(w.observe(TTFT, 16.0, 1.8, Some(HistCounts::new())), None);
+    // the family disappears on a poll: its baseline is dropped, so the next poll starts afresh
+    assert_eq!(w.observe(TTFT, None, true), None);
+    assert_eq!(w.observe(TTFT, Some(c2), true), None);
+    assert_eq!(w.observe(TTFT, Some(HistCounts::new()), true), None);
+}
+
+#[test]
+fn test_hostile_histograms_are_bounded_fast_and_nan_bounds_ignored() {
+    // 20,000 distinct bounds in one label set: linear, and only HIST_MAX_BUCKETS kept
+    let mut text = String::new();
+    for i in 0..20_000 {
+        text.push_str(&format!("{TTFT}_bucket{{model=\"m\",le=\"{i}.5\"}} {i}\n"));
+    }
+    let samples = parse_prom(&text);
+    let t = std::time::Instant::now();
+    let c = hist_counts(&samples, TTFT);
+    let d = hist_delta(&c, &c).unwrap();
+    // linear: a few ms even in a debug build (the quadratic search took about 1.4 s)
+    assert!(t.elapsed().as_secs_f64() < 0.5, "{:?}", t.elapsed());
+    assert_eq!(c["model=m"].len(), HIST_MAX_BUCKETS);
+    assert_eq!(d.len(), HIST_MAX_BUCKETS);
+    // 1,000 label sets: only HIST_MAX_SETS kept
+    let mut text = String::new();
+    for i in 0..1000 {
+        text.push_str(&format!("{TTFT}_bucket{{model=\"m{i}\",le=\"1\"}} 1\n"));
+    }
+    assert_eq!(counts(&text, TTFT).len(), HIST_MAX_SETS);
+    // a NaN / -Inf bound or a NaN count is not a bucket, so it can never look like a reset
+    let base = format!(
+        "{TTFT}_bucket{{model=\"m\",le=\"0.5\"}} 1\n{TTFT}_bucket{{model=\"m\",le=\"+Inf\"}} 1\n"
+    );
+    let junk = |n: u32| {
+        format!(
+            "{TTFT}_bucket{{model=\"m\",le=\"0.5\"}} {n}\n{TTFT}_bucket{{model=\"m\",le=\"+Inf\"}} {n}\n\
+             {TTFT}_bucket{{model=\"m\",le=\"NaN\"}} {}\n{TTFT}_bucket{{model=\"m\",le=\"-Inf\"}} 0\n\
+             {TTFT}_bucket{{model=\"m\",le=\"1\"}} NaN\n",
+            100 - n
+        )
+    };
+    assert_eq!(counts(&junk(1), TTFT)["model=m"].len(), 2);
+    let mut w = HistWindows::default();
+    assert_eq!(w.observe(TTFT, Some(counts(&base, TTFT)), true), None);
+    let d = w.observe(TTFT, Some(counts(&junk(3), TTFT)), true).unwrap();
+    assert_eq!(bucket_quantile(d, 0.5).unwrap(), 0.25);
 }
 
 // ── the adapter ─────────────────────────────────────────────────────────────────────────────────────
@@ -274,7 +327,7 @@ async fn test_a_frontend_outage_restarts_the_windows() {
     let fe0 = fx("frontend_metrics.prom");
     live.poll().await;
     live.f.mock.get("/metrics", Reply::Close);
-    assert!(!live.a.metrics().await.unwrap().available);
+    assert!(!live.a.poll_metrics().await.unwrap().available);
     // back with more requests: the first read after the gap is a new baseline, not a window over the outage
     live.frontend(&bump(&fe0, TTFT, 0.1, 5.0));
     assert!(by(&live.poll().await, "dyn.ttft_window_ms").is_empty());
@@ -327,7 +380,7 @@ async fn test_without_a_worker_or_families_the_new_keys_are_absent() {
     let f = Fix::new().await;
     dynamo_support::wire(&f.runner, vec![], "");
     f.mock.get("/metrics", Reply::text(200, "# nothing\n"));
-    let a = f.make_with(|a| a.window_min_s = 0.0);
+    let a = f.make();
     for _ in 0..2 {
         let snap = a.metrics().await.unwrap();
         let keys: HashSet<&str> = snap.points.iter().map(|p| p.key.as_str()).collect();
@@ -347,21 +400,63 @@ async fn test_without_a_worker_or_families_the_new_keys_are_absent() {
     }
 }
 
+#[tokio::test]
+async fn test_ui_reads_do_not_move_the_pollers_window() {
+    let live = Live::new().await;
+    let fe0 = fx("frontend_metrics.prom");
+    live.poll().await;
+    live.frontend(&bump(&fe0, TTFT, 0.1, 3.0));
+    // the UI reads many times between two polls: each sees the 3 new requests ...
+    for _ in 0..20 {
+        let t = by(&live.peek().await, "dyn.ttft_window_ms");
+        assert!((t[&lab(&[("q", "p50")])] - 160.0).abs() < 1e-9);
+    }
+    // ... and the poller still gets them all
+    let t = by(&live.poll().await, "dyn.ttft_window_ms");
+    assert!((t[&lab(&[("q", "p50")])] - 160.0).abs() < 1e-9);
+    // a failed UI read does not reset the poller's windows either
+    live.f.mock.get("/metrics", Reply::Close);
+    assert!(!live.a.metrics().await.unwrap().available);
+    live.frontend(&bump(&bump(&fe0, TTFT, 0.1, 3.0), TTFT, 1.0, 2.0));
+    let t = by(&live.poll().await, "dyn.ttft_window_ms");
+    assert!(t[&lab(&[("q", "p50")])] > 1000.0);
+}
+
 #[test]
-fn test_the_container_sets_the_window_from_the_poll_interval() {
-    let tmp = tempfile::tempdir().unwrap();
-    let cfg = nemo_console::config::settings_for_test(serde_json::json!({
-        "state_dir": tmp.path().join("s").to_string_lossy(),
-        "frontend_dir": tmp.path().join("f").to_string_lossy(),
-        "repo_root": tmp.path().join("r").to_string_lossy(),
-        "poll_interval_s": 5.0,
-    }));
-    let ctx = switchyard_support::ctx(
-        switchyard_support::FakeRunner::new(),
-        &[("dynamo", "http://127.0.0.1:9")],
-        &[],
-        tmp.path(),
+fn test_spec_positions_are_strict_and_capped() {
+    let drafts = "vllm:spec_decode_num_drafts_total{engine=\"0\"} 10\n";
+    let mut text = drafts.to_owned();
+    for pos in ["0", "1", "07", "x", "-1", "1e1", "100", "", " 2", "NaN"] {
+        text.push_str(&format!(
+            "vllm:spec_decode_num_accepted_tokens_per_pos_total{{position=\"{pos}\"}} 5\n"
+        ));
+    }
+    text.push_str("vllm:spec_decode_num_accepted_tokens_per_pos_total{position=\"3\"} NaN\n");
+    text.push_str(&format!(
+        "vllm:spec_decode_num_accepted_tokens_per_pos_total{{position=\"{}\"}} 5\n",
+        "9".repeat(100_000)
+    ));
+    let wm = parse_prom(&text);
+    let pts = plain_points_9_14(&[], Some(&wm));
+    assert_eq!(
+        by(&pts, "dyn.spec_accept_pos"),
+        BTreeMap::from([
+            (lab(&[("pos", "0")]), 0.5),
+            (lab(&[("pos", "1")]), 0.5),
+            (lab(&[("pos", "7")]), 0.5),
+        ])
     );
-    let a = DynamoAdapter::from_settings(&ctx, &cfg);
-    assert!((a.window_min_s - 4.5).abs() < 1e-12);
+    let mut text = drafts.to_owned();
+    for pos in 0..99 {
+        text.push_str(&format!(
+            "vllm:spec_decode_num_accepted_tokens_per_pos_total{{position=\"{pos}\"}} 1\n"
+        ));
+    }
+    let pts = plain_points_9_14(&[], Some(&parse_prom(&text)));
+    assert_eq!(by(&pts, "dyn.spec_accept_pos").len(), SPEC_MAX_POSITIONS);
+    // NaN / Inf gauges and counters give no point
+    let text = "vllm:num_preemptions_total{a=\"1\"} NaN\ndynamo_frontend_model_context_length{model=\"m\"} +Inf\n";
+    let fe = parse_prom(text);
+    let pts = plain_points_9_14(&fe, Some(&fe));
+    assert!(pts.is_empty(), "{pts:?}");
 }

@@ -334,3 +334,113 @@ async fn test_every_new_point_is_a_valid_series_and_the_system_fits_the_cap() {
     // the captured stack (3 models, 5 decision paths): far below the cap; each extra model adds 6 series
     assert!(names.len() < MAX_SERIES_PER_SYSTEM / 4, "{}", names.len());
 }
+
+// ── hostile upstream (audit of wave 2) ──────────────────────────────────────────────────────────────
+
+#[test]
+fn test_label_values_are_cleaned_and_bounded() {
+    use nemo_console::adapters::switchyard::{LABEL_VALUE_MAX, label_value};
+    assert_eq!(
+        label_value("qwen3.8-27b-1m").as_deref(),
+        Some("qwen3.8-27b-1m")
+    );
+    assert_eq!(
+        label_value("nvidia/Qwen3.8-Flash-Next-FP4-Local").as_deref(),
+        Some("nvidia/Qwen3.8-Flash-Next-FP4-Local")
+    );
+    assert_eq!(
+        label_value(" bad model\n{x=1,y}\"").as_deref(),
+        Some("bad-model-x-1-y")
+    );
+    assert_eq!(label_value("--").as_deref(), None);
+    assert_eq!(label_value("").as_deref(), None);
+    assert_eq!(label_value("ünïcode").as_deref(), Some("n-code"));
+    let long = label_value(&"a".repeat(100_000)).unwrap();
+    assert_eq!(long.len(), LABEL_VALUE_MAX);
+}
+
+#[tokio::test]
+async fn test_hostile_stats_labels_are_cleaned_capped_and_non_numbers_dropped() {
+    use nemo_console::adapters::switchyard::MAX_GROUPS;
+    let f = Fix::new().await;
+    let mut models = serde_json::Map::new();
+    models.insert(
+        "x".repeat(100_000),
+        serde_json::json!({"errors": 1, "max_observed_context_tokens": 5}),
+    );
+    models.insert("bad model}{".into(), serde_json::json!({"errors": 2}));
+    for i in 0..200 {
+        models.insert(format!("m{i:03}"), serde_json::json!({"errors": i}));
+    }
+    let stats = serde_json::json!({
+        "models": models,
+        "routing_fallbacks": {"weird reason": 3, "=": 4},
+        "algorithm_stats": {"stage_router": {"routing_decisions": {
+            "src {x}": {"targets": {"t,1": 1}}
+        }}}
+    });
+    f.http
+        .get("/v1/stats", Reply::text(200, &stats.to_string()));
+    let pts = f.points().await;
+    let errors = by(&pts, "sy.model.errors_total");
+    assert_eq!(errors.len(), MAX_GROUPS);
+    assert!(errors.contains_key(&lab(&[("model", "bad-model")])));
+    for p in &pts {
+        assert!(p.value.is_finite());
+        for v in p.labels.values() {
+            assert!(v.len() <= 64, "{}: {} chars", p.key, v.len());
+        }
+        assert!(
+            nemo_console::api::observe::KEY_RE.is_match(&series_name(p)),
+            "{}",
+            series_name(p)
+        );
+    }
+    assert_eq!(
+        by(&pts, "sy.fallbacks_total"),
+        BTreeMap::from([(lab(&[("reason", "weird-reason")]), 3.0)])
+    );
+    assert_eq!(
+        by(&pts, "sy.decisions_total"),
+        BTreeMap::from([(lab(&[("source", "src-x"), ("target", "t-1")]), 1.0)])
+    );
+}
+
+#[tokio::test]
+async fn test_hostile_metrics_scrape_non_finite_and_bucket_floods_are_bounded() {
+    let f = Fix::new().await;
+    f.http.get("/v1/stats", Reply::status(500));
+    let mut text = String::from(
+        "switchyard_total_requests 1\n\
+         switchyard_errors_total{model=\"m\"} NaN\n\
+         switchyard_errors_total{model=\"n\"} 2\n\
+         switchyard_client_responses_total{outcome=\"ok\"} +Inf\n\
+         switchyard_client_responses_total{outcome=\"other_error\"} 1\n\
+         switchyard_routing_overhead_ms_bucket{le=\"NaN\"} 99\n\
+         switchyard_routing_overhead_ms_bucket{le=\"5\"} 1\n\
+         switchyard_routing_overhead_ms_bucket{le=\"+Inf\"} 1\n",
+    );
+    for i in 0..20_000 {
+        text.push_str(&format!(
+            "switchyard_model_call_latency_ms_bucket{{model=\"m\",le=\"{i}.5\"}} {i}\n"
+        ));
+    }
+    f.http.get("/metrics", Reply::text(200, &text));
+    let t = std::time::Instant::now();
+    let pts = f.points().await;
+    assert!(t.elapsed().as_secs_f64() < 5.0, "{:?}", t.elapsed());
+    assert!(pts.iter().all(|p| p.value.is_finite()));
+    assert_eq!(
+        by(&pts, "sy.model.errors_total"),
+        BTreeMap::from([(lab(&[("model", "n")]), 2.0)])
+    );
+    assert_eq!(
+        by(&pts, "sy.client_responses_total"),
+        BTreeMap::from([(lab(&[("outcome", "other_error")]), 1.0)])
+    );
+    // the NaN bound is not a bucket: the overhead quantiles come from the two real ones
+    let ro = by(&pts, "sy.routing_overhead_ms");
+    assert_eq!(ro[&lab(&[("q", "p50")])], 2.5);
+    // only MAX_BUCKETS of the 20,000 bounds are kept, so the quantile is from a bounded histogram
+    assert_eq!(by(&pts, "sy.model.latency_ms").len(), 2);
+}

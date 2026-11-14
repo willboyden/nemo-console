@@ -137,6 +137,38 @@ pub fn histogram_quantile(q: f64, buckets: &[(f64, f64)]) -> Option<f64> {
 
 // ── addendum 9.14: per-model latency, errors, cache, context; routing overhead, fallbacks, decisions, outcomes ──
 
+/// The longest label value the 9.14 keys carry (model names, decision sources and targets, reasons, outcomes).
+pub const LABEL_VALUE_MAX: usize = 64;
+/// Per scrape and key: at most this many label values (models, decision paths, reasons, outcomes) ...
+pub const MAX_GROUPS: usize = 64;
+/// ... and at most this many distinct `le` bounds per histogram group. The rest is ignored.
+pub const MAX_BUCKETS: usize = 256;
+
+/// A label value from an upstream, made safe for a series name: characters outside the metric-key label alphabet
+/// (`A-Z a-z 0-9 _ . : / -`) become `-`, runs of `-` collapse, `-` is trimmed at both ends, at most
+/// [`LABEL_VALUE_MAX`] characters. `None` when nothing is left. A name that already fits is returned unchanged,
+/// so the new keys join the older ones (`sy.model.calls{model}`) on the same model names.
+#[must_use]
+pub fn label_value(v: &str) -> Option<String> {
+    let mut out = String::new();
+    for c in v.trim().chars() {
+        let c = if c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | ':' | '/' | '-') {
+            c
+        } else {
+            '-'
+        };
+        if c == '-' && (out.is_empty() || out.ends_with('-')) {
+            continue;
+        }
+        out.push(c);
+        if out.len() >= LABEL_VALUE_MAX {
+            break;
+        }
+    }
+    let out = out.trim_end_matches('-');
+    (!out.is_empty()).then(|| out.to_owned())
+}
+
 /// A JSON number (never a bool), finite.
 fn num(v: Option<&PyJson>) -> Option<f64> {
     match v {
@@ -170,70 +202,102 @@ fn stats_quantiles(block: &IndexMap<String, PyJson>) -> Vec<(&'static str, f64)>
         .collect()
 }
 
-/// Cumulative `le` buckets of `<name>_bucket` grouped by one label (`None`: all summed under ""), unparseable
-/// bounds skipped.
+/// A histogram bound: `+Inf`/`Inf` or a finite number (`NaN`, `-Inf` and junk are not bounds).
+fn bound(le: &str) -> Option<f64> {
+    if le == "+Inf" || le == "Inf" {
+        return Some(f64::INFINITY);
+    }
+    // -0.0 and 0.0 are one bound
+    py_float(le).filter(|x| x.is_finite()).map(|x| x + 0.0)
+}
+
+/// Cumulative `le` buckets of `<name>_bucket` grouped by one label value (cleaned; `None`: all summed under ""),
+/// at most [`MAX_GROUPS`] groups of at most [`MAX_BUCKETS`] bounds; non-finite counts and bounds are ignored.
+/// Linear in the samples (a map per group, not a search per bucket).
 fn buckets_by(
     samples: &[Sample],
     name: &str,
     by: Option<&str>,
 ) -> IndexMap<String, Vec<(f64, f64)>> {
     let bucket = format!("{name}_bucket");
-    let mut out: IndexMap<String, Vec<(f64, f64)>> = IndexMap::new();
+    let mut groups: IndexMap<String, HashMap<u64, f64>> = IndexMap::new();
     for (n, labels, v) in samples {
-        if *n != bucket {
+        if *n != bucket || !v.is_finite() {
             continue;
         }
-        let Some(le) = labels.get("le") else {
+        let Some(le) = labels.get("le").and_then(|x| bound(x)) else {
             continue;
         };
-        let le = if le == "+Inf" || le == "Inf" {
-            f64::INFINITY
-        } else {
-            match py_float(le) {
-                Some(x) => x,
-                None => continue,
-            }
-        };
         let group = match by {
-            Some(l) => match labels.get(l) {
-                Some(g) => g.clone(),
+            Some(l) => match labels.get(l).and_then(|g| label_value(g)) {
+                Some(g) => g,
                 None => continue,
             },
             None => String::new(),
         };
-        let slot = out.entry(group).or_default();
-        #[allow(clippy::float_cmp)]
-        match slot.iter_mut().find(|(b, _)| *b == le) {
-            Some(s) => s.1 += v,
-            None => slot.push((le, 0.0 + v)),
+        if !groups.contains_key(&group) && groups.len() >= MAX_GROUPS {
+            continue;
         }
+        let slot = groups.entry(group).or_default();
+        let key = le.to_bits();
+        if !slot.contains_key(&key) && slot.len() >= MAX_BUCKETS {
+            continue;
+        }
+        *slot.entry(key).or_insert(0.0) += v;
     }
-    out
+    groups
+        .into_iter()
+        .map(|(g, b)| {
+            (
+                g,
+                b.into_iter().map(|(k, c)| (f64::from_bits(k), c)).collect(),
+            )
+        })
+        .collect()
 }
 
-/// `name{labels}` summed per value of the given labels, ordered by those values.
+/// `name{labels}` summed per (cleaned) value of the given labels, ordered by those values; at most [`MAX_GROUPS`]
+/// groups, non-finite samples ignored.
 fn sum_by(samples: &[Sample], name: &str, by: &[&str]) -> Vec<(Vec<String>, f64)> {
-    let mut out: IndexMap<Vec<String>, f64> = IndexMap::new();
+    let mut out: HashMap<Vec<String>, f64> = HashMap::new();
     for (n, labels, v) in samples {
-        if n != name {
+        if n != name || !v.is_finite() {
             continue;
         }
         let Some(vals) = by
             .iter()
-            .map(|l| labels.get(*l).cloned())
+            .map(|l| labels.get(*l).and_then(|x| label_value(x)))
             .collect::<Option<Vec<String>>>()
         else {
             continue;
         };
+        if !out.contains_key(&vals) && out.len() >= MAX_GROUPS {
+            continue;
+        }
         *out.entry(vals).or_insert(0.0) += v;
     }
-    let mut v: Vec<(Vec<String>, f64)> = out.into_iter().collect();
+    let mut v: Vec<(Vec<String>, f64)> = out.into_iter().filter(|x| x.1.is_finite()).collect();
     v.sort_by(|a, b| a.0.cmp(&b.0));
+    v
+}
+
+/// The entries of a `/v1/stats` object whose names clean to a label value, ordered by that value, at most
+/// [`MAX_GROUPS`].
+fn named(d: &IndexMap<String, PyJson>) -> Vec<(String, &PyJson)> {
+    let mut v: Vec<(String, &PyJson)> = d
+        .iter()
+        .filter_map(|(k, x)| label_value(k).map(|k| (k, x)))
+        .collect();
+    v.sort_by(|a, b| a.0.cmp(&b.0));
+    v.dedup_by(|a, b| a.0 == b.0);
+    v.truncate(MAX_GROUPS);
     v
 }
 
 /// The keys of addendum 9.14 from one `/v1/stats` document and one `/metrics` scrape (pure). Per key the stats are
 /// read first and `/metrics` stands in when the stats lack that block; a value neither reports gives no point.
+/// Upstream text is untrusted: label values go through [`label_value`], groups and buckets are capped, and only
+/// finite values become points.
 #[must_use]
 pub fn points_9_14(
     stats: Option<&IndexMap<String, PyJson>>,
@@ -242,9 +306,7 @@ pub fn points_9_14(
     let mut pts: Vec<MetricPoint> = Vec::new();
     // per model: latency p50/p99, errors, cache-hit ratio, largest observed context
     if let Some(models) = dict(stats.and_then(|s| s.get("models"))) {
-        let mut sorted: Vec<(&String, &PyJson)> = models.iter().collect();
-        sorted.sort_by(|a, b| a.0.cmp(b.0));
-        for (mid, m) in sorted {
+        for (mid, m) in named(models) {
             let PyJson::Dict(m) = m else {
                 continue;
             };
@@ -254,7 +316,7 @@ pub fn points_9_14(
                         "sy.model.latency_ms",
                         v,
                         "ms",
-                        &[("model", mid), ("q", q)],
+                        &[("model", &mid), ("q", q)],
                     ));
                 }
             }
@@ -268,7 +330,7 @@ pub fn points_9_14(
                 ),
             ] {
                 if let Some(v) = num(m.get(field)) {
-                    pts.push(point_with(key, v, unit, &[("model", mid)]));
+                    pts.push(point_with(key, v, unit, &[("model", &mid)]));
                 }
             }
         }
@@ -280,7 +342,7 @@ pub fn points_9_14(
         by_model.sort_by(|a, b| a.0.cmp(&b.0));
         for (mid, buckets) in by_model {
             for (q, p) in [("p50", 0.5), ("p99", 0.99)] {
-                if let Some(v) = histogram_quantile(p, &buckets) {
+                if let Some(v) = histogram_quantile(p, &buckets).filter(|v| v.is_finite()) {
                     pts.push(point_with(
                         "sy.model.latency_ms",
                         v,
@@ -308,22 +370,20 @@ pub fn points_9_14(
         buckets_by(samples, "switchyard_routing_overhead_ms", None).get("")
     {
         for (q, p) in [("p50", 0.5), ("p99", 0.99)] {
-            if let Some(v) = histogram_quantile(p, buckets) {
+            if let Some(v) = histogram_quantile(p, buckets).filter(|v| v.is_finite()) {
                 pts.push(point_with("sy.routing_overhead_ms", v, "ms", &[("q", q)]));
             }
         }
     }
     // fallbacks by reason (only /v1/stats reports them)
     if let Some(fb) = dict(stats.and_then(|s| s.get("routing_fallbacks"))) {
-        let mut reasons: Vec<(&String, &PyJson)> = fb.iter().collect();
-        reasons.sort_by(|a, b| a.0.cmp(b.0));
-        for (reason, v) in reasons {
+        for (reason, v) in named(fb) {
             if let Some(v) = num(Some(v)) {
                 pts.push(point_with(
                     "sy.fallbacks_total",
                     v,
                     "1",
-                    &[("reason", reason)],
+                    &[("reason", &reason)],
                 ));
             }
         }
@@ -334,13 +394,16 @@ pub fn points_9_14(
         .and_then(|r| dict(r.get("routing_decisions")));
     if let Some(dec) = decisions {
         let mut rows: Vec<(String, String, f64)> = Vec::new();
-        for (source, d) in dec {
+        'sources: for (source, d) in named(dec) {
             let Some(targets) = dict(Some(d)).and_then(|d| dict(d.get("targets"))) else {
                 continue;
             };
-            for (target, v) in targets {
+            for (target, v) in named(targets) {
+                if rows.len() >= MAX_GROUPS {
+                    break 'sources;
+                }
                 if let Some(v) = num(Some(v)) {
-                    rows.push((source.clone(), target.clone(), v));
+                    rows.push((source.clone(), target, v));
                 }
             }
         }

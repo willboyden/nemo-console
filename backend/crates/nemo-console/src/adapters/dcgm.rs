@@ -429,14 +429,93 @@ pub const FLEET_MAX_ROWS: usize = 64;
 pub const FLEET_CACHE_S: f64 = 30.0;
 /// At most this many Prometheus series are read before sorting (a bound on a misbehaving Prometheus).
 const FLEET_MAX_SERIES: usize = 1024;
-/// A `query_range` answer larger than this is refused.
-const FLEET_MAX_BYTES: usize = 32 * 1024 * 1024;
+/// A `query_range` answer larger than this is refused (checked on `Content-Length` and while reading).
+pub const FLEET_MAX_BYTES: usize = 16 * 1024 * 1024;
+/// A Prometheus failure is answered from memory this long, for every (metric, window).
+pub const FLEET_FAIL_CACHE_S: f64 = 5.0;
 
 /// The PromQL of a fleet metric over the given jobs regex: the table's family, grouped to the four labels the
 /// answer keeps (so no UUID or serial ever comes back).
 #[must_use]
 pub fn fleet_query(family: &str, jobs: &str) -> String {
     format!("max by (job, host, gpu, modelName) ({family}{{job=~\"{jobs}\"}})")
+}
+
+/// How fleet rows are ordered: (host, GPU index, job).
+type FleetOrder = (String, u32, String);
+
+/// The rows of a `query_range` answer (pure, blocking): at most `FLEET_MAX_SERIES` series are looked at, the ones
+/// with a short numeric `gpu` label are ordered by (host, GPU, job), and only the first `FLEET_MAX_ROWS` get their
+/// points built (values scaled, NaN/Inf left out). `Err((code, message))` for a document that is not a successful
+/// Prometheus answer. Returns the rows and whether some were cut.
+pub fn fleet_rows(body: &[u8], scale: f64) -> Result<(Vec<Value>, bool), (String, String)> {
+    let unexpected = || {
+        (
+            "dcgm.prometheus.bad_answer".to_owned(),
+            "Prometheus answered an unexpected document; no fleet history".to_owned(),
+        )
+    };
+    let d: Value = serde_json::from_slice(body).map_err(|_| unexpected())?;
+    let d = d.as_object().ok_or_else(unexpected)?;
+    if d.get("status").and_then(Value::as_str) != Some("success") {
+        return Err(unexpected());
+    }
+    let res = as_obj(d.get("data")).and_then(|x| x.get("result"));
+    let mut keyed: Vec<(FleetOrder, &Map<String, Value>)> = Vec::new();
+    for series in as_list(res).iter().take(FLEET_MAX_SERIES) {
+        let Some(series) = series.as_object() else {
+            continue;
+        };
+        let labels = series.get("metric").and_then(Value::as_object);
+        let gpu = labels
+            .and_then(|m| m.get("gpu"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        if !pystr::is_ascii_digits(gpu) || gpu.chars().count() > 3 {
+            continue;
+        }
+        let (job, host) = DcgmAdapter::host_of(labels);
+        keyed.push(((host, gpu.parse::<u32>().unwrap_or(u32::MAX), job), series));
+    }
+    keyed.sort_by(|a, b| a.0.cmp(&b.0));
+    let truncated = keyed.len() > FLEET_MAX_ROWS;
+    keyed.truncate(FLEET_MAX_ROWS);
+    let rows = keyed
+        .into_iter()
+        .map(|((host, gpu, job), series)| {
+            let model = clean_label(&short_model(
+                series
+                    .get("metric")
+                    .and_then(|m| m.get("modelName"))
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
+            ));
+            let mut points: Vec<Value> = Vec::new();
+            for pair in as_list(series.get("values")) {
+                let Some(pair) = pair.as_array() else {
+                    continue;
+                };
+                let (Some(ts), Some(v)) = (
+                    pair.first().and_then(Value::as_f64),
+                    pair.get(1).and_then(wsb::json_float),
+                ) else {
+                    continue;
+                };
+                if !ts.is_finite() || !(v * scale).is_finite() {
+                    continue;
+                }
+                #[allow(clippy::cast_possible_truncation, clippy::float_cmp)]
+                let ts = if ts.fract() == 0.0 {
+                    json!(ts as i64)
+                } else {
+                    json!(ts)
+                };
+                points.push(json!([ts, v * scale]));
+            }
+            json!({"host": host, "job": job, "gpu": gpu.to_string(), "model": model, "points": points})
+        })
+        .collect();
+    Ok((rows, truncated))
 }
 
 /// `{family: [(labels, value)]}` in first-appearance order (a Python dict).
@@ -807,6 +886,8 @@ struct St {
     image_cache: Option<(Instant, bool)>,
     /// The fleet route's answers per (metric, window), with when they were fetched (addendum 9.14).
     fleet_cache: IndexMap<(String, String), (Instant, Value)>,
+    /// The last Prometheus failure of the fleet route (`problem`), with when it happened.
+    fleet_down: Option<(Instant, Value)>,
 }
 
 pub struct DcgmAdapter {
@@ -817,6 +898,9 @@ pub struct DcgmAdapter {
     diag_lock: tokio::sync::Mutex<()>,
     /// How long a fleet answer is reused (`FLEET_CACHE_S`; tests shorten it).
     fleet_ttl: Mutex<f64>,
+    fleet_fail_ttl: Mutex<f64>,
+    /// One fleet request to Prometheus at a time.
+    fleet_flight: tokio::sync::Mutex<()>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -835,6 +919,8 @@ impl DcgmAdapter {
             st: Mutex::new(St::default()),
             diag_lock: tokio::sync::Mutex::new(()),
             fleet_ttl: Mutex::new(FLEET_CACHE_S),
+            fleet_fail_ttl: Mutex::new(FLEET_FAIL_CACHE_S),
+            fleet_flight: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -1130,15 +1216,21 @@ impl DcgmAdapter {
         *lock(&self.fleet_ttl) = seconds;
     }
 
-    /// `query_range` against the configured Prometheus (the client, timeout and URL of the instant queries): the
-    /// result series, or `(code, message)` when Prometheus is down or answered something unusable.
+    /// How long a Prometheus failure is answered from memory, in seconds (`FLEET_FAIL_CACHE_S`; tests shorten it).
+    pub fn set_fleet_fail_ttl(&self, seconds: f64) {
+        *lock(&self.fleet_fail_ttl) = seconds;
+    }
+
+    /// `query_range` against the configured Prometheus (the client, timeout and URL of the instant queries), the
+    /// body read with a cap of `FLEET_MAX_BYTES`: the raw answer, or `(code, message)` when Prometheus is down or
+    /// answered something unusable.
     async fn prom_range(
         &self,
         expr: &str,
         start: i64,
         end: i64,
         step: i64,
-    ) -> Result<Vec<Map<String, Value>>, (String, String)> {
+    ) -> Result<bytes::Bytes, (String, String)> {
         let url = format!("{}/api/v1/query_range", self.prom_url());
         let (start, end, step) = (start.to_string(), end.to_string(), step.to_string());
         let query = [
@@ -1147,8 +1239,19 @@ impl DcgmAdapter {
             ("end", end.as_str()),
             ("step", step.as_str()),
         ];
-        let resp = match self.ctx.http.get_query(&url, &query, 5.0).await {
-            Ok(r) => r,
+        let bad = |why: String| ("dcgm.prometheus.bad_answer".to_owned(), why);
+        let resp = match self
+            .ctx
+            .http
+            .get_query_capped(&url, &query, 5.0, FLEET_MAX_BYTES)
+            .await
+        {
+            Ok(Some(r)) => r,
+            Ok(None) => {
+                return Err(bad(
+                    "Prometheus answer too large; no fleet history".to_owned()
+                ));
+            }
             Err(e) => {
                 return Err((
                     "dcgm.prometheus.unreachable".to_owned(),
@@ -1156,90 +1259,21 @@ impl DcgmAdapter {
                 ));
             }
         };
-        let bad = |why: String| ("dcgm.prometheus.bad_answer".to_owned(), why);
         if resp.status != 200 {
             return Err(bad(format!(
                 "Prometheus answered HTTP {}; no fleet history",
                 resp.status
             )));
         }
-        if resp.body.len() > FLEET_MAX_BYTES {
-            return Err(bad(
-                "Prometheus answer too large; no fleet history".to_owned()
-            ));
-        }
-        let unexpected =
-            || bad("Prometheus answered an unexpected document; no fleet history".to_owned());
-        let d = resp.json().map_err(|_| unexpected())?;
-        let d = d.as_object().ok_or_else(unexpected)?;
-        if d.get("status").and_then(Value::as_str) != Some("success") {
-            return Err(unexpected());
-        }
-        let res = as_obj(d.get("data")).and_then(|x| x.get("result"));
-        Ok(as_list(res)
-            .iter()
-            .filter_map(|r| r.as_object().cloned())
-            .take(FLEET_MAX_SERIES)
-            .collect())
-    }
-
-    /// One fleet row: `{host, job, gpu, model, points}` with `(host, gpu, job)` to sort by; `None` for a series
-    /// without a GPU index.
-    fn fleet_row(
-        series: &Map<String, Value>,
-        scale: f64,
-    ) -> Option<((String, u32, String), Value)> {
-        let labels = series.get("metric").and_then(Value::as_object);
-        let gpu = labels
-            .and_then(|m| m.get("gpu"))
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        if !pystr::is_ascii_digits(gpu) || gpu.chars().count() > 3 {
-            return None;
-        }
-        let (job, host) = Self::host_of(labels);
-        let model = clean_label(&short_model(
-            labels
-                .and_then(|m| m.get("modelName"))
-                .and_then(Value::as_str)
-                .unwrap_or(""),
-        ));
-        let mut points: Vec<Value> = Vec::new();
-        for pair in as_list(series.get("values")) {
-            let Some(pair) = pair.as_array() else {
-                continue;
-            };
-            let (Some(ts), Some(v)) = (
-                pair.first().and_then(Value::as_f64),
-                pair.get(1).and_then(wsb::json_float),
-            ) else {
-                continue;
-            };
-            if !ts.is_finite() || !v.is_finite() {
-                continue;
-            }
-            #[allow(clippy::cast_possible_truncation, clippy::float_cmp)]
-            let ts = if ts.fract() == 0.0 {
-                json!(ts as i64)
-            } else {
-                json!(ts)
-            };
-            points.push(json!([ts, v * scale]));
-        }
-        let order = (
-            host.clone(),
-            gpu.parse::<u32>().unwrap_or(u32::MAX),
-            job.clone(),
-        );
-        Some((
-            order,
-            json!({"host": host, "job": job, "gpu": gpu, "model": model, "points": points}),
-        ))
+        Ok(resp.body)
     }
 
     /// `GET /systems/dcgm/fleet?metric=&window=` (addendum 9.14): per-GPU history of every host Prometheus scrapes
     /// for the configured `dcgm_prometheus_jobs`. The expression comes from `FLEET_METRICS` and the configured job
-    /// names only. Prometheus down -> the answer with `rows: []` and `problem: {code, message}` (not cached).
+    /// names only. Prometheus down -> the answer with `rows: []` and `problem: {code, message}`. One request at a
+    /// time (single flight): a request waits for the one in progress and then answers from the cache it filled;
+    /// answers are cached `FLEET_CACHE_S` per (metric, window), a Prometheus failure `FLEET_FAIL_CACHE_S` for every
+    /// key, so concurrent requests during an outage do not each wait for the timeout.
     pub async fn fleet(&self, metric: &str, window: &str) -> Result<Value, AdapterError> {
         let Some((_, family, unit, scale)) = FLEET_METRICS.iter().find(|m| m.0 == metric).copied()
         else {
@@ -1254,13 +1288,6 @@ impl DcgmAdapter {
                 str_repr(window)
             )));
         };
-        let key = (metric.to_owned(), window.to_owned());
-        let ttl = *lock(&self.fleet_ttl);
-        if let Some((at, doc)) = lock(&self.st).fleet_cache.get(&key)
-            && at.elapsed().as_secs_f64() < ttl
-        {
-            return Ok(doc.clone());
-        }
         #[allow(clippy::cast_possible_truncation)]
         let now = now_ts().floor() as i64;
         let end = now - now.rem_euclid(step);
@@ -1277,28 +1304,65 @@ impl DcgmAdapter {
             });
             return Ok(doc);
         }
-        let series = match self
+        let key = (metric.to_owned(), window.to_owned());
+        let cached = |doc: &mut Value| -> Option<Value> {
+            let (ttl, fail_ttl) = (*lock(&self.fleet_ttl), *lock(&self.fleet_fail_ttl));
+            let st = lock(&self.st);
+            if let Some((at, answer)) = st.fleet_cache.get(&key)
+                && at.elapsed().as_secs_f64() < ttl
+            {
+                return Some(answer.clone());
+            }
+            if let Some((at, problem)) = &st.fleet_down
+                && at.elapsed().as_secs_f64() < fail_ttl
+            {
+                doc["problem"] = problem.clone();
+                return Some(doc.clone());
+            }
+            None
+        };
+        if let Some(answer) = cached(&mut doc) {
+            return Ok(answer);
+        }
+        let _flight = self.fleet_flight.lock().await;
+        if let Some(answer) = cached(&mut doc) {
+            return Ok(answer);
+        }
+        let body = match self
             .prom_range(&fleet_query(family, &jobs), start, end, step)
             .await
         {
-            Ok(s) => s,
+            Ok(b) => b,
             Err((code, message)) => {
-                doc["problem"] = json!({"code": code, "message": message});
+                let problem = json!({"code": code, "message": message});
+                lock(&self.st).fleet_down = Some((Instant::now(), problem.clone()));
+                doc["problem"] = problem;
                 return Ok(doc);
             }
         };
-        let mut rows: Vec<((String, u32, String), Value)> = series
-            .iter()
-            .filter_map(|s| Self::fleet_row(s, scale))
-            .collect();
-        rows.sort_by(|a, b| a.0.cmp(&b.0));
-        let truncated = rows.len() > FLEET_MAX_ROWS;
-        rows.truncate(FLEET_MAX_ROWS);
-        doc["rows"] = Value::Array(rows.into_iter().map(|(_, r)| r).collect());
-        doc["truncated"] = Value::Bool(truncated);
-        lock(&self.st)
-            .fleet_cache
-            .insert(key, (Instant::now(), doc.clone()));
+        // parsing and row building off the async workers (the body may be megabytes)
+        let built = tokio::task::spawn_blocking(move || fleet_rows(&body, scale))
+            .await
+            .unwrap_or_else(|_| {
+                Err((
+                    "dcgm.prometheus.bad_answer".to_owned(),
+                    "Prometheus answer could not be read; no fleet history".to_owned(),
+                ))
+            });
+        match built {
+            Ok((rows, truncated)) => {
+                doc["rows"] = Value::Array(rows);
+                doc["truncated"] = Value::Bool(truncated);
+                let mut st = lock(&self.st);
+                st.fleet_down = None;
+                st.fleet_cache.insert(key, (Instant::now(), doc.clone()));
+            }
+            Err((code, message)) => {
+                let problem = json!({"code": code, "message": message});
+                lock(&self.st).fleet_down = Some((Instant::now(), problem.clone()));
+                doc["problem"] = problem;
+            }
+        }
         Ok(doc)
     }
 

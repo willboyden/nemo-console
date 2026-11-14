@@ -207,6 +207,7 @@ async fn test_new_keys_come_after_the_old_ones_and_fit_the_series_cap() {
 struct Range {
     seen: Arc<Mutex<Vec<HashMap<String, String>>>>,
     answer: Arc<Mutex<(u16, String)>>,
+    delay_ms: Arc<Mutex<u64>>,
 }
 
 impl Range {
@@ -214,6 +215,7 @@ impl Range {
         Range {
             seen: Arc::new(Mutex::new(Vec::new())),
             answer: Arc::new(Mutex::new((200, body.to_string()))),
+            delay_ms: Arc::new(Mutex::new(0)),
         }
     }
     fn set(&self, status: u16, body: &str) {
@@ -233,7 +235,10 @@ impl Respond for Range {
             .collect();
         self.seen.lock().unwrap().push(q);
         let (s, b) = self.answer.lock().unwrap().clone();
-        ResponseTemplate::new(s).set_body_string(b)
+        let delay = *self.delay_ms.lock().unwrap();
+        ResponseTemplate::new(s)
+            .set_body_string(b)
+            .set_delay(std::time::Duration::from_millis(delay))
     }
 }
 
@@ -413,7 +418,7 @@ async fn test_fleet_promql_is_table_text_and_configured_job_names_only() {
 }
 
 #[tokio::test]
-async fn test_fleet_prometheus_down_or_wrong_is_200_with_a_problem_and_not_cached() {
+async fn test_fleet_prometheus_down_or_wrong_is_200_with_a_problem() {
     let (env, prom) = fleet_env(&two_hosts()).await;
     // nothing listens
     let a = env.adapter_with(Arc::clone(&env.runner), &env.url(), CLOSED);
@@ -428,8 +433,9 @@ async fn test_fleet_prometheus_down_or_wrong_is_200_with_a_problem_and_not_cache
     );
     assert_eq!(doc["step_s"], 60);
     assert_eq!(doc["unit"], "C");
-    // an error status, then a document that is not a success
+    // an error status, then a document that is not a success (the failure cache off, so each is asked)
     let a = env.adapter();
+    a.set_fleet_fail_ttl(0.0);
     prom.set(500, "boom");
     let doc = a.fleet("temp", "1h").await.unwrap();
     assert_eq!(doc["problem"]["code"], "dcgm.prometheus.bad_answer");
@@ -449,7 +455,7 @@ async fn test_fleet_prometheus_down_or_wrong_is_200_with_a_problem_and_not_cache
         a.fleet("temp", "1h").await.unwrap()["problem"]["code"],
         "dcgm.prometheus.bad_answer"
     );
-    // a failure is not cached: Prometheus is back on the next call
+    // Prometheus is back on the next call
     prom.set(200, &two_hosts().to_string());
     let doc = a.fleet("temp", "1h").await.unwrap();
     assert!(doc.get("problem").is_none());
@@ -530,6 +536,106 @@ async fn test_fleet_answers_are_cached_per_metric_and_window() {
     a.set_fleet_cache_ttl(0.0);
     assert_eq!(a.fleet("util", "24h").await.unwrap()["rows"], json!([]));
     assert_eq!(prom.seen().len(), 4);
+}
+
+#[tokio::test]
+async fn test_fleet_failures_are_single_flight_and_briefly_cached() {
+    let (env, prom) = fleet_env(&two_hosts()).await;
+    let a = env.adapter();
+    prom.set(500, "down");
+    *prom.delay_ms.lock().unwrap() = 400;
+    // five concurrent requests while Prometheus is slow and failing: one request reaches it
+    let t = std::time::Instant::now();
+    let (r1, r2, r3, r4, r5) = tokio::join!(
+        a.fleet("util", "24h"),
+        a.fleet("temp", "24h"),
+        a.fleet("power", "1h"),
+        a.fleet("fb_used", "7d"),
+        a.fleet("util", "24h"),
+    );
+    let elapsed = t.elapsed().as_secs_f64();
+    for r in [r1, r2, r3, r4, r5] {
+        assert_eq!(r.unwrap()["problem"]["code"], "dcgm.prometheus.bad_answer");
+    }
+    assert_eq!(prom.seen().len(), 1);
+    assert!(elapsed < 1.5, "{elapsed}");
+    // within the failure cache, nothing is asked
+    assert_eq!(
+        a.fleet("temp", "1h").await.unwrap()["problem"]["code"],
+        "dcgm.prometheus.bad_answer"
+    );
+    assert_eq!(prom.seen().len(), 1);
+    // once it expires Prometheus is asked again, and a success clears the failure for every key
+    *prom.delay_ms.lock().unwrap() = 0;
+    prom.set(200, &two_hosts().to_string());
+    a.set_fleet_fail_ttl(0.0);
+    assert!(
+        a.fleet("temp", "1h")
+            .await
+            .unwrap()
+            .get("problem")
+            .is_none()
+    );
+    a.set_fleet_fail_ttl(60.0);
+    assert!(
+        a.fleet("power", "1h")
+            .await
+            .unwrap()
+            .get("problem")
+            .is_none()
+    );
+    assert_eq!(prom.seen().len(), 3);
+}
+
+#[tokio::test]
+async fn test_fleet_oversized_answer_is_refused() {
+    let (env, prom) = fleet_env(&two_hosts()).await;
+    let a = env.adapter();
+    prom.set(
+        200,
+        &"x".repeat(nemo_console::adapters::dcgm::FLEET_MAX_BYTES + 1),
+    );
+    let doc = a.fleet("util", "1h").await.unwrap();
+    assert_eq!(doc["problem"]["code"], "dcgm.prometheus.bad_answer");
+    assert!(
+        doc["problem"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("too large")
+    );
+    assert_eq!(doc["rows"], json!([]));
+}
+
+#[tokio::test]
+async fn test_fleet_many_series_give_64_rows_quickly() {
+    // 1,500 series of a week at 30-minute steps (337 points each): only the first 1,024 are looked at and only the
+    // 64 kept rows get points built
+    let values: Vec<(i64, String)> = (0..337)
+        .map(|i| (1_800_000_000 + i * 1800, format!("{i}")))
+        .collect();
+    let pairs: Vec<(i64, &str)> = values.iter().map(|(t, v)| (*t, v.as_str())).collect();
+    let mut result = Vec::new();
+    for h in 0..750 {
+        for g in ["0", "1"] {
+            result.push(series(
+                "dcgm-sparks",
+                Some(&format!("node{h:04}")),
+                g,
+                "NVIDIA GB10",
+                &pairs,
+            ));
+        }
+    }
+    let (env, _prom) = fleet_env(&matrix(result)).await;
+    let t = std::time::Instant::now();
+    let doc = env.adapter().fleet("power", "7d").await.unwrap();
+    assert!(t.elapsed().as_secs_f64() < 5.0, "{:?}", t.elapsed());
+    let rows = doc["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), FLEET_MAX_ROWS);
+    assert_eq!(doc["truncated"], true);
+    assert_eq!(rows[0]["host"], "node0000");
+    assert_eq!(rows[63]["host"], "node0031");
+    assert_eq!(rows[0]["points"].as_array().unwrap().len(), 337);
 }
 
 // ── the fleet route: HTTP ───────────────────────────────────────────────────────────────────────────

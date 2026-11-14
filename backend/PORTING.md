@@ -618,15 +618,21 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
   `dcgm_prometheus_jobs` that pass the adapter's job-name check (`[A-Za-z0-9_-]{1,64}`, the same `jobs_regex()` the
   instant queries use), so no request text reaches the expression (ADR-0014); grouping by those four labels means no
   UUID, serial or address ever comes back (E-8). `query_range` on the configured Prometheus URL with the instant
-  queries' client and 5 s timeout (async, so no runtime worker blocks), step 60 / 300 / 1800 s, `to` = now aligned
+  queries' client and 5 s timeout (async), the body read with a cap of 16 MiB (`FLEET_MAX_BYTES`: a `Content-Length`
+  over it is refused before reading, otherwise reading stops at the first chunk past it; `Http::get_query_capped`),
+  parsed and turned into rows on the blocking pool (`fleet_rows`: at most 1,024 series looked at, ordered and cut to
+  64 BEFORE any points are built), step 60 / 300 / 1800 s, `to` = now aligned
   down to the step, `from` = `to` - the window. Values are scaled to the per-GPU keys' units (util ratio, temp C,
   power W, fb_used B); NaN/Inf samples are left out; `host` is named as for `dcgm.host_up` (`host` label, else `local`
   for job `dcgm`, else the job); rows without a short numeric `gpu` label are dropped; at most 64 rows (`FLEET_MAX_ROWS`)
   ordered by host, then GPU numerically, then job (`truncated: true` when more). Prometheus refused / timed out ->
   200 with `rows: []` and `problem: {code: "dcgm.prometheus.unreachable", message}`; an error status, a non-success
-  document or a body over 32 MiB -> `dcgm.prometheus.bad_answer`; no configured job -> `dcgm.fleet.no_jobs` without a
-  request; `problem` is absent on success. Successful answers are cached 30 s per (metric, window) in the adapter
-  (at most 12 entries); failures are not cached. Parity: like D-36, `tests/core_routes_table.rs` lists it in
+  document or a body over the cap -> `dcgm.prometheus.bad_answer`; no configured job -> `dcgm.fleet.no_jobs` without a
+  request; `problem` is absent on success. One request reaches Prometheus at a time (single flight: a waiting request
+  answers from the cache the first one filled). Successful answers are cached 30 s per (metric, window) in the adapter
+  (at most 12 entries); a Prometheus failure is answered from memory for 5 s for EVERY (metric, window)
+  (`FLEET_FAIL_CACHE_S`), so concurrent requests during an outage do not each wait for the timeout; a success clears
+  it. Parity: like D-36, `tests/core_routes_table.rs` lists it in
   `RUST_ONLY` (row `"rust_only": "D-38"`), the corpus has no case for it, and `assets/openapi.json` gains its entry by
   hand in the generated style (its `metric` and `window` enums are checked against `FLEET_METRICS` / `FLEET_WINDOWS`
   by `tests/dcgm_viz_wave2.rs::test_the_openapi_entry_of_the_fleet_route_matches_the_code`); the four
@@ -649,20 +655,35 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
   (`routing_fallbacks.*`), `sy.decisions_total{source, target}`
   (`algorithm_stats.stage_router.routing_decisions.<source>.targets.<target>`, else
   `switchyard_stage_router_routing_decisions_total{decision_source, target_name}`), `sy.client_responses_total{outcome}`
-  (`switchyard_client_responses_total`). Dynamo: `dyn.ttft_window_ms{q=p50|p95|p99}` /
+  (`switchyard_client_responses_total`). Upstream text is untrusted (wave-2 audit): every Switchyard label value goes
+  through `switchyard::label_value` (characters outside `A-Z a-z 0-9 _ . : / -` become `-`, runs collapse, `-` trimmed,
+  at most 64 characters, empty -> no point; a name that already fits is unchanged, so the new keys join
+  `sy.model.calls{model}`), at most 64 values per key and scrape (`MAX_GROUPS`), at most 256 distinct `le` bounds per
+  histogram group (`MAX_BUCKETS`), bounds that are not `+Inf` or finite and non-finite samples are ignored, bucket
+  sums use maps (linear in the scrape). Dynamo: `dyn.ttft_window_ms{q=p50|p95|p99}` /
   `dyn.itl_window_ms{q}` (frontend `dynamo_frontend_time_to_first_token_seconds` /
   `_inter_token_latency_seconds`), `dyn.phase_ms{phase=queue|prefill|decode|inference, q=p50|p95}` (worker
   `vllm:request_queue_time_seconds` / `_prefill_time_` / `_decode_time_` / `_inference_time_seconds`): quantiles of
-  the bucket DELTAS since the previous poll (`HistWindows`: per family the earlier reads, per label set; the baseline
-  is the newest earlier read at least `window_min_s` old, 90% of the poll interval, so an extra `/metrics` read between
-  two ticks does not take the poller's window; no point on the first read, when nothing finished, on a counter reset
-  (a bucket of a label set went down: the reset read becomes the baseline) or after the family was absent or the
-  frontend unreadable (the window starts afresh); a label set only one read has adds nothing),
+  the bucket DELTAS since the previous POLL (`HistWindows`: per family the read of the previous poll, per label set).
+  Only the poller moves a baseline: the adapter port gains `poll_metrics()` (default: `metrics()`), which
+  `MetricsPoller::tick` calls through `StatusService::poll_metrics`; Dynamo's `poll_metrics` reads and then makes this
+  read the next baseline, its `metrics()` (the `/systems/dynamo/metrics` route, the UI) compares with the previous
+  poll and changes nothing, so the window is exactly one poll interval whatever the interval is (a `PUT /settings`
+  change included) and however often the UI reads. No point before the first poll, when nothing finished, on a
+  counter reset (a bucket of a label set went down: on a poll the reset read becomes the baseline) or, on a poll, after
+  the family was absent or the frontend unreadable (the window starts afresh); a label set only one read has adds
+  nothing; at most 64 label sets of 256 bounds per family and scrape (`HIST_MAX_SETS`, `HIST_MAX_BUCKETS`),
+  non-finite bounds and counts ignored, maps not searches (linear),
   `dyn.preemptions_total` (`vllm:num_preemptions_total`), `dyn.capacity{kind=context_length|kv_blocks|max_num_seqs|
   max_batched_tokens}` (the frontend's `dynamo_frontend_model_*` gauges, the largest across models),
   `dyn.spec_accept_pos{pos}` (`vllm:spec_decode_num_accepted_tokens_per_pos_total{position}` /
-  `vllm:spec_decode_num_drafts_total`, since the worker started). A value the source does not report is absent, never
-  0. Series budget: DCGM 31 per local GPU + 4 per Prometheus host (this lab: 2 GPUs + 6 hosts = 86 of 256; 7 GPUs
+  `vllm:spec_decode_num_drafts_total`, since the worker started; `position` must be one or two digits, at most 32
+  positions). A value the source does not report, or a non-finite one, is absent, never 0. One guard for every adapter
+  in `MetricsPoller::record`: a point with a NaN/Inf value or a series name longer than `MAX_SERIES_NAME` (266, the
+  longest key `KEY_RE` accepts) is dropped before the ring and the rollups (`record_stats()` counts them). And a series
+  without a point for `SERIES_IDLE_EVICT_S` (30 min) leaves the ring and gives its slot of the 256 back (its pending
+  minute is written first; its rollups stay), so label churn cannot fill the cap for good; the cap itself still
+  admits series first come, first served. Series budget: DCGM 31 per local GPU + 4 per Prometheus host (this lab: 2 GPUs + 6 hosts = 86 of 256; 7 GPUs
   still fit, with 8 the last of the NEW per-GPU keys are the ones the cap drops); Switchyard about 6 per model plus
   decision paths; Dynamo about 27 more. Parity: of the corpus only the seven `/systems/{id}/metrics` cases of these
   systems differ (`read.*.metrics`, `reread.*.metrics`, `sysv.metrics.viewer`), every difference an appended point
