@@ -569,23 +569,39 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
   name's labels parsed into an object (`services::metrics::series_labels`, the inverse of `series_name`: `k=v` pairs,
   a part without `=` continues the previous value, a value in double quotes is unwrapped; a name without labels gives
   `{}`), at most 32 per key (`truncated: true` when any key lost some). A key without data is one series with
-  `label` null and `points: []`; non-finite values are left out. 422 `invalid_request` for an unknown window, more than
-  12 keys, an empty or malformed key, `split` other than `0`/`1`. The history route and `WINDOWS` (no `7d`) are
-  untouched. Parity: like D-34, `tests/core_routes_table.rs` lists it in `RUST_ONLY` (row `"rust_only": "D-36"` in
-  `parity/routes.rust.json`), the corpus has no case for it, and `assets/openapi.json` gains its entry by hand in
-  the generated style, so the `global.openapi.*` cases differ by one more path (their `parity/allow-diffs.txt` lines
-  name D-34 and D-36). Tests: `tests/core_metrics_series.rs`.
+  `label` null and `points: []`; non-finite values are left out. 422 `invalid_request` for a `keys` parameter longer
+  than 12 x 266 + 11 = 3203 characters (`SERIES_KEYS_MAX_LEN`: 12 keys of the longest form `KEY_RE` accepts and their
+  commas; checked before splitting), an unknown window, more than 12 keys, an empty or malformed key, `split` other
+  than `0`/`1`. Cost bounds (wave-1 audit): the work runs on the blocking pool (`spawn_blocking`); each distinct key
+  is read once and a repeated key gets a copy of its answer (the contract answers every requested key); the rollups
+  are read on a read-only SQLite connection of the request's own (WAL readers do not wait for the writer), so a long
+  read never holds the store lock the poller's flush and the audit log write through (it falls back to the store's
+  connection only when that cannot be opened; `series_stats().fallbacks` counts it); `split=0` sums the variants in
+  SQL (one row per bucket leaves the database); `split=1` first reads the first 33 distinct names (`LIMIT`; the 33rd
+  only sets `truncated`) and then the points of the first 32 only, bounded by the 32nd name, so a key with hundreds
+  of variants never reads the rest. Measured (release profile, 256 variants x 8 days = 2.95 M rollup rows, 12 copies
+  of the key): `7d` split=0 0.91 s, split=1 0.32 s; `24h` 0.17 s / 0.27 s; `1h` 0.10 s / 0.03 s (the audit measured
+  13.5-18.4 s for `7d` before; `tests/core_metrics_series.rs::measure_worst_case_series`, ignored, run by hand). The
+  history route and `WINDOWS` (no `7d`) are untouched. Parity: like D-34, `tests/core_routes_table.rs` lists it in
+  `RUST_ONLY` (row `"rust_only": "D-36"` in `parity/routes.rust.json`), the corpus has no case for it, and
+  `assets/openapi.json` gains its entry by hand in the generated style (its `window` and `split` enums are checked
+  against `SERIES_WINDOWS` by a test), so the `global.openapi.*` cases differ by one more path; those four cases are
+  pinned in `parity/pinned-diffs.json` to exactly the twelve added paths (D-34 and D-36), so any other difference in
+  the document fails the run. Tests: `tests/core_metrics_series.rs`.
 - **D-37 Data Designer run records are admin-only (addendum 9.13).** `GET
   /api/v1/systems/{system_id}/runs/{run_id}/records` returns model-written rows, like Relay span content (ADR-0021),
   so its role dependency is `admin` (the handler's `dep_admin`, the route table's role, the role test's admin-GET
   list); viewers keep the run list, run detail and the artifact list (`/files`: paths and sizes). The Python reference
   declares `viewer`, so: `tests/core_routes_table.rs` lists the row in `ROLE_CHANGED` and writes it to
   `parity/routes.rust.json` with `"auth_deviation": {"python": "viewer", "deviation": "D-37"}`;
-  `parity/check-routes.mjs` checks that Python still has exactly that old role, that the Rust role differs, and
+  `parity/check-routes.mjs` checks that Python still has exactly that old role, that the Rust role is stricter (admin >
+  viewer > public; a loosening is never accepted as a deviation) and that the deviation has its bullet here, and
   compares the row with the Python role. Of the corpus, only `ddrun.preview.records.viewer` differs (Python 200 with
   the rows, Rust 403 `forbidden`), and with it the console's own request counters read afterwards by `metrics.viewer`
   and `metrics.admin` (the records route's `status="200"` total is one lower and a `status="403"` series appears; no
-  other line differs); the three case ids are allowed in `parity/allow-diffs.txt`. The role sweep (`roleSweepCases`) builds its
+  other line differs). The three cases are pinned in `parity/pinned-diffs.json` to exactly those differences
+  (`parity/run.mjs` reads the file next to the allow list; `lib/compare.mjs` `pinMismatch`: every diff must match a
+  pinned path and value, and every pinned one must be seen), so any other difference in them fails the run. The role sweep (`roleSweepCases`) builds its
   viewer cases from the Python table, where the route is a viewer route, so it adds none; its no-key case is 401 on
   both. The OpenAPI document carries no roles, so it is unchanged for this route.
 - **Test-only (workstream B):** in the DCGM `post_apply` restart test the fake upstream answers 503 instead of refusing the

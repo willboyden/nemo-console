@@ -151,8 +151,14 @@ fn test_route_table_matches_python() {
             "{m} {p} is in the Python table: not Rust-only"
         );
     }
-    // a changed role is compared as the Python role it replaced, and Python must still have exactly that role
-    for (m, p, py_auth, _, d) in ROLE_CHANGED {
+    // a changed role is compared as the Python role it replaced, and Python must still have exactly that role; a role
+    // may only get stricter (admin > viewer > public)
+    let rank = |a: &str| ["public", "viewer", "admin"].iter().position(|x| *x == a);
+    for (m, p, py_auth, rust_auth, d) in ROLE_CHANGED {
+        assert!(
+            rank(rust_auth) > rank(py_auth) && rank(py_auth).is_some(),
+            "{d}: {m} {p}: {rust_auth} is not stricter than {py_auth}"
+        );
         assert!(
             py["routes"]
                 .as_array()

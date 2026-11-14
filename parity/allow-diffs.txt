@@ -38,11 +38,5 @@ sec.origin.cross-on-get  # D-7: the extra modelopt entry (the Python reference h
 cfgread.openshell.provider-profile  # D-32: masks stop at the end of a line (the Python reference swallows the next line)
 cfgread.openshell.provider-profile.viewer  # D-32: masks stop at the end of a line (the Python reference swallows the next line)
 
-global.openapi.admin  # D-34, D-36: the OpenAPI document lists the eleven Relay trace explorer routes and the series route (the Python reference has none)
-global.openapi.viewer  # D-34, D-36: the OpenAPI document lists the eleven Relay trace explorer routes and the series route (the Python reference has none)
-global.openapi.admin.after  # D-34, D-36: the OpenAPI document lists the eleven Relay trace explorer routes and the series route (the Python reference has none)
-global.openapi.viewer.after  # D-34, D-36: the OpenAPI document lists the eleven Relay trace explorer routes and the series route (the Python reference has none)
-
-ddrun.preview.records.viewer  # D-37: Data Designer run records are admin-only (a viewer gets 403; the Python reference answers 200)
-metrics.viewer  # D-37: the console's request counters count that one records request as a 403 instead of a 200 (only those lines differ)
-metrics.admin  # D-37: the console's request counters count that one records request as a 403 instead of a 200 (only those lines differ)
+# D-34, D-36, D-37: the OpenAPI document cases and the records role change are PINNED to their exact diffs in
+# parity/pinned-diffs.json (not allowed whole here): any other difference in those cases fails the run.

@@ -99,3 +99,27 @@ export function compareSets(a, b, path, out) {
   }
   return out;
 }
+
+/**
+ * Pinned diffs: a case whose difference is a documented deviation passes only when it differs EXACTLY as pinned.
+ * `pin.diffs` is a list of `{path, a?, b?}`; a field left out matches anything (used where the value is checked
+ * elsewhere, e.g. the body of an OpenAPI entry Python does not have). Every actual diff must match one pin entry by
+ * path (and a/b when given, compared as JSON) and every pin entry must be matched: one more, one fewer or a
+ * different value fails. Returns null when they match, else a reason.
+ */
+export function pinMismatch(diffs, pin) {
+  const want = new Map(pin.diffs.map((d) => [d.path, d]));
+  if (want.size !== pin.diffs.length) return 'the pin lists a path twice';
+  const seen = new Set();
+  for (const d of diffs) {
+    const p = want.get(d.path);
+    if (!p) return `unpinned difference at ${d.path}`;
+    if (seen.has(d.path)) return `two differences at ${d.path}`;
+    seen.add(d.path);
+    for (const side of ['a', 'b']) {
+      if (side in p && JSON.stringify(p[side]) !== JSON.stringify(d[side])) return `${d.path}: ${side.toUpperCase()} differs from the pin`;
+    }
+  }
+  const missing = pin.diffs.filter((p) => !seen.has(p.path)).map((p) => p.path);
+  return missing.length ? `pinned difference(s) no longer seen: ${missing.join(', ')}` : null;
+}

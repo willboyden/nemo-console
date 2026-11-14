@@ -2,10 +2,12 @@
 //! Port of `services/metrics.py`. Storage contract: table `rollup(system, series, bucket, avg, max, n)`.
 
 use std::collections::{HashMap, VecDeque};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use indexmap::IndexMap;
+use rusqlite::{Connection, OpenFlags};
 use serde::Serialize;
 use serde_json::{Map, Value};
 
@@ -101,6 +103,70 @@ pub struct SeriesAnswer {
     pub truncated: bool,
 }
 
+/// The rollup reads below bind `?1` system, `?2` first minute, `?3` the key itself, `?4`..`?5` the range of its label
+/// variants (`variant_range`), `?6` the last series name to read (or the LIMIT of `NAMES`); finite values only.
+/// `?6` when every variant is read: above any stored name (the key alphabet is ASCII).
+const MAX_NAME: &str = "\u{7f}";
+/// One row per series and minute: `series, ts, a (avg), m (max)`.
+const PER_SERIES_1M: &str = concat!(
+    "SELECT series, bucket * 60 AS ts, avg AS a, max AS m FROM rollup WHERE ",
+    "system=?1 AND bucket>=?2 AND (series=?3 OR (series>=?4 AND series<?5)) AND series<=?6 ",
+    "AND abs(avg)<=1.7976931348623157e308 AND abs(max)<=1.7976931348623157e308"
+);
+/// One row per series and 10-minute bucket: avg weighted by each minute's sample count `n`, max of maxes.
+const PER_SERIES_10M: &str = concat!(
+    "SELECT series, (bucket / 10) * 600 AS ts, ",
+    "CASE WHEN SUM(n) > 0 THEN SUM(avg * n) / SUM(n) ELSE AVG(avg) END AS a, MAX(max) AS m FROM rollup WHERE ",
+    "system=?1 AND bucket>=?2 AND (series=?3 OR (series>=?4 AND series<?5)) AND series<=?6 ",
+    "AND abs(avg)<=1.7976931348623157e308 AND abs(max)<=1.7976931348623157e308 ",
+    "GROUP BY series, bucket / 10"
+);
+/// `SERIES_PER_KEY` + 1: the extra name only tells that some were dropped.
+#[allow(clippy::cast_possible_wrap)]
+const NAMES_LIMIT: i64 = SERIES_PER_KEY as i64 + 1;
+/// The first `?6` distinct series names of a key in the window, in byte order.
+const NAMES: &str = concat!(
+    "SELECT DISTINCT series FROM rollup WHERE ",
+    "system=?1 AND bucket>=?2 AND (series=?3 OR (series>=?4 AND series<?5)) ",
+    "AND abs(avg)<=1.7976931348623157e308 AND abs(max)<=1.7976931348623157e308 ",
+    "ORDER BY series LIMIT ?6"
+);
+
+/// Counters of the series route (`MetricsPoller::series_stats`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SeriesStats {
+    /// SQL statements run.
+    pub queries: usize,
+    /// Rollup point rows read (after the SQL grouping).
+    pub rows: usize,
+    /// Reads that went through the store's own connection (the read-only one could not be opened or failed).
+    pub fallbacks: usize,
+}
+
+/// What one series request reads, shared by its keys.
+struct KeyQuery<'a> {
+    system: SystemId,
+    /// 0: the ring; 60 or 600: the rollups.
+    bucket: i64,
+    /// First rollup minute.
+    since: i64,
+    /// First ring timestamp.
+    cutoff: f64,
+    split: bool,
+    reader: Option<&'a Connection>,
+}
+
+/// `split=1` lines of one key from its raw rows (already capped), labels parsed from the stored names.
+fn labelled(key: &str, raw: RawSeries) -> Vec<Series> {
+    raw.into_iter()
+        .map(|(name, points)| Series {
+            key: key.to_owned(),
+            label: Some(series_labels(&name)),
+            points,
+        })
+        .collect()
+}
+
 /// Raw rows of one requested key: (stored series name, points), names in byte order.
 type RawSeries = Vec<(String, Vec<[f64; 3]>)>;
 
@@ -164,6 +230,9 @@ pub struct MetricsPoller {
     interval: Mutex<f64>,
     pub ring_seconds: i64,
     inner: Mutex<Inner>,
+    series_queries: AtomicUsize,
+    series_rows: AtomicUsize,
+    series_fallbacks: AtomicUsize,
 }
 
 impl MetricsPoller {
@@ -180,6 +249,9 @@ impl MetricsPoller {
             interval: Mutex::new(interval),
             ring_seconds,
             inner: Mutex::new(Inner::default()),
+            series_queries: AtomicUsize::new(0),
+            series_rows: AtomicUsize::new(0),
+            series_fallbacks: AtomicUsize::new(0),
         }
     }
 
@@ -364,7 +436,10 @@ impl MetricsPoller {
     }
 
     /// `GET /systems/{id}/metrics/series` (addendum 9.13). `window` must be one of [`SERIES_WINDOWS`] (the route
-    /// validates it; an unknown one reads as `1h`), every key is a validated canonical key.
+    /// validates it; an unknown one reads as `1h`), every key is a validated canonical key. Blocking (SQLite): the
+    /// route runs it on the blocking pool. Each distinct key is read once; a repeated key gets a copy of the answer.
+    /// The rollups are read on a read-only connection of their own (WAL readers do not wait for the writer), so a
+    /// long read never holds the store lock the poller's flush and the audit log write through.
     #[must_use]
     pub fn series(
         &self,
@@ -392,43 +467,29 @@ impl MetricsPoller {
                 (600.0, (since * 60) as f64, since)
             }
         };
-        if bucket > 0 {
+        let reader = if bucket > 0 {
             self.flush();
-        }
+            self.reader()
+        } else {
+            None
+        };
+        let q = KeyQuery {
+            system,
+            bucket,
+            since,
+            cutoff: now - span,
+            split,
+            reader: reader.as_ref(),
+        };
+        let mut done: HashMap<&str, (Vec<Series>, bool)> = HashMap::new();
         let mut series = Vec::new();
         let mut truncated = false;
         for key in keys {
-            let mut raw = match bucket {
-                0 => self.ring_series(system, key, now - span),
-                60 => self.rollup_series(system, key, since),
-                _ => self.rollup_series_10m(system, key, since),
-            };
-            raw.sort_by(|a, b| a.0.cmp(&b.0));
-            if !split {
-                series.push(Series {
-                    key: key.clone(),
-                    label: None,
-                    points: sum_variants(raw),
-                });
-            } else if raw.is_empty() {
-                series.push(Series {
-                    key: key.clone(),
-                    label: None,
-                    points: Vec::new(),
-                });
-            } else {
-                if raw.len() > SERIES_PER_KEY {
-                    truncated = true;
-                    raw.truncate(SERIES_PER_KEY);
-                }
-                for (name, points) in raw {
-                    series.push(Series {
-                        key: key.clone(),
-                        label: Some(series_labels(&name)),
-                        points,
-                    });
-                }
-            }
+            let (lines, cut) = done
+                .entry(key.as_str())
+                .or_insert_with(|| self.one_key(&q, key));
+            truncated |= *cut;
+            series.extend(lines.iter().cloned());
         }
         SeriesAnswer {
             window: window.to_owned(),
@@ -438,6 +499,153 @@ impl MetricsPoller {
             series,
             truncated,
         }
+    }
+
+    /// Counters of the series route since start (tests and measurements).
+    #[must_use]
+    pub fn series_stats(&self) -> SeriesStats {
+        SeriesStats {
+            queries: self.series_queries.load(Ordering::Relaxed),
+            rows: self.series_rows.load(Ordering::Relaxed),
+            fallbacks: self.series_fallbacks.load(Ordering::Relaxed),
+        }
+    }
+
+    /// A read-only connection to the console database; `None` when it cannot be opened (the reads then go through
+    /// the store's own connection).
+    fn reader(&self) -> Option<Connection> {
+        let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
+        let c = Connection::open_with_flags(&self.store.path, flags).ok()?;
+        c.busy_timeout(Duration::from_secs(5)).ok()?;
+        Some(c)
+    }
+
+    /// Run one read on the read-only connection, falling back to the store's connection when there is none or the
+    /// read fails on it.
+    fn read<T>(
+        &self,
+        reader: Option<&Connection>,
+        f: impl Fn(&Connection) -> rusqlite::Result<T>,
+    ) -> Option<T> {
+        self.series_queries.fetch_add(1, Ordering::Relaxed);
+        if let Some(c) = reader
+            && let Ok(v) = f(c)
+        {
+            return Some(v);
+        }
+        self.series_fallbacks.fetch_add(1, Ordering::Relaxed);
+        self.store.with(f).ok()
+    }
+
+    /// The series lines of one key and whether some were dropped (`split=1`, more than [`SERIES_PER_KEY`]).
+    fn one_key(&self, q: &KeyQuery<'_>, key: &str) -> (Vec<Series>, bool) {
+        let empty = || {
+            vec![Series {
+                key: key.to_owned(),
+                label: None,
+                points: Vec::new(),
+            }]
+        };
+        if q.bucket == 0 {
+            let mut raw = self.ring_series(q.system, key, q.cutoff);
+            raw.sort_by(|a, b| a.0.cmp(&b.0));
+            if !q.split {
+                return (
+                    vec![Series {
+                        key: key.to_owned(),
+                        label: None,
+                        points: sum_variants(raw),
+                    }],
+                    false,
+                );
+            }
+            if raw.is_empty() {
+                return (empty(), false);
+            }
+            let cut = raw.len() > SERIES_PER_KEY;
+            raw.truncate(SERIES_PER_KEY);
+            return (labelled(key, raw), cut);
+        }
+        let (lo, hi) = variant_range(key);
+        let per_series = if q.bucket == 60 {
+            PER_SERIES_1M
+        } else {
+            PER_SERIES_10M
+        };
+        if !q.split {
+            // the variants summed per bucket in SQL: one row per bucket leaves the database
+            let sql =
+                format!("SELECT ts, SUM(a), SUM(m) FROM ({per_series}) GROUP BY ts ORDER BY ts");
+            let rows: Vec<(i64, f64, f64)> = self
+                .read(q.reader, |db| {
+                    let mut st = db.prepare_cached(&sql)?;
+                    st.query_map(
+                        rusqlite::params![q.system.as_str(), q.since, key, lo, hi, MAX_NAME],
+                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                    )?
+                    .collect()
+                })
+                .unwrap_or_default();
+            self.series_rows.fetch_add(rows.len(), Ordering::Relaxed);
+            #[allow(clippy::cast_precision_loss)]
+            let points = rows
+                .into_iter()
+                .filter(|(_, a, m)| a.is_finite() && m.is_finite())
+                .map(|(ts, a, m)| [ts as f64, a, m])
+                .collect();
+            return (
+                vec![Series {
+                    key: key.to_owned(),
+                    label: None,
+                    points,
+                }],
+                false,
+            );
+        }
+        // split=1: the first SERIES_PER_KEY + 1 names (the extra one only says "truncated"), then the points of the
+        // first SERIES_PER_KEY only, bounded by the last kept name, so a key with many variants never reads the rest
+        let names: Vec<String> = self
+            .read(q.reader, |db| {
+                let mut st = db.prepare_cached(NAMES)?;
+                st.query_map(
+                    rusqlite::params![q.system.as_str(), q.since, key, lo, hi, NAMES_LIMIT],
+                    |r| r.get(0),
+                )?
+                .collect()
+            })
+            .unwrap_or_default();
+        let cut = names.len() > SERIES_PER_KEY;
+        let Some(last) = names.iter().take(SERIES_PER_KEY).next_back() else {
+            return (empty(), false);
+        };
+        let sql = format!("SELECT series, ts, a, m FROM ({per_series}) ORDER BY series, ts");
+        let rows: Vec<(String, i64, f64, f64)> = self
+            .read(q.reader, |db| {
+                let mut st = db.prepare_cached(&sql)?;
+                st.query_map(
+                    rusqlite::params![q.system.as_str(), q.since, key, lo, hi, last],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                )?
+                .collect()
+            })
+            .unwrap_or_default();
+        self.series_rows.fetch_add(rows.len(), Ordering::Relaxed);
+        let mut raw: RawSeries = Vec::new();
+        for (name, ts, avg, max) in rows {
+            if !avg.is_finite() || !max.is_finite() {
+                continue;
+            }
+            #[allow(clippy::cast_precision_loss)]
+            let p = [ts as f64, avg, max];
+            match raw.last_mut() {
+                Some((n, pts)) if *n == name => pts.push(p),
+                _ => raw.push((name, vec![p])),
+            }
+        }
+        if raw.is_empty() {
+            return (empty(), false);
+        }
+        (labelled(key, raw), cut)
     }
 
     /// The ring's raw points at or after `cutoff` (`max` = the value itself); series without one are left out.
@@ -459,60 +667,6 @@ impl MetricsPoller {
             points.sort_by(|a, b| a[0].total_cmp(&b[0]));
             if !points.is_empty() {
                 out.push((name.clone(), points));
-            }
-        }
-        out
-    }
-
-    /// The 1-minute rollups from bucket `since` on.
-    fn rollup_series(&self, system: SystemId, key: &str, since: i64) -> RawSeries {
-        self.rollup_query(
-            "SELECT series, bucket * 60, avg, max FROM rollup WHERE system=?1 AND bucket>=?2 \
-             AND (series=?3 OR (series>=?4 AND series<?5)) ORDER BY series, bucket",
-            system,
-            key,
-            since,
-        )
-    }
-
-    /// The 1-minute rollups regrouped into 10-minute buckets in SQL: avg weighted by each minute's sample count
-    /// `n`, max = max of maxes.
-    fn rollup_series_10m(&self, system: SystemId, key: &str, since: i64) -> RawSeries {
-        self.rollup_query(
-            "SELECT series, (bucket / 10) * 600 AS b, \
-             CASE WHEN SUM(n) > 0 THEN SUM(avg * n) / SUM(n) ELSE AVG(avg) END, MAX(max) \
-             FROM rollup WHERE system=?1 AND bucket>=?2 AND (series=?3 OR (series>=?4 AND series<?5)) \
-             GROUP BY series, bucket / 10 ORDER BY series, b",
-            system,
-            key,
-            since,
-        )
-    }
-
-    /// Run one rollup query (`series, ts, avg, max` rows ordered by series then time) and group it by series.
-    fn rollup_query(&self, sql: &str, system: SystemId, key: &str, since: i64) -> RawSeries {
-        let (lo, hi) = variant_range(key);
-        let rows: Vec<(String, i64, f64, f64)> = self
-            .store
-            .with(|db| {
-                let mut s = db.prepare(sql)?;
-                s.query_map(
-                    rusqlite::params![system.as_str(), since, key, lo, hi],
-                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
-                )?
-                .collect()
-            })
-            .unwrap_or_default();
-        let mut out: RawSeries = Vec::new();
-        for (name, ts, avg, max) in rows {
-            if !avg.is_finite() || !max.is_finite() {
-                continue;
-            }
-            #[allow(clippy::cast_precision_loss)]
-            let p = [ts as f64, avg, max];
-            match out.last_mut() {
-                Some((last, pts)) if *last == name => pts.push(p),
-                _ => out.push((name, vec![p])),
             }
         }
         out

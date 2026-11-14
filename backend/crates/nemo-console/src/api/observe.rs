@@ -122,6 +122,10 @@ pub async fn metrics_history(req: Req) -> Result<Response<Body>, ApiError> {
     Ok(json_response(200, &json!({"key": key, "points": points})))
 }
 
+/// The longest `keys` parameter of the series route: 12 keys of the longest form `KEY_RE` accepts (64 characters of
+/// name, 200 of labels and the two braces) and the 11 commas between them. Longer is refused before it is split.
+pub const SERIES_KEYS_MAX_LEN: usize = SERIES_MAX_KEYS * (64 + 2 + 200) + (SERIES_MAX_KEYS - 1);
+
 /// Split the `keys` parameter of the series route on the commas outside braces (a labelled key such as
 /// `sy.tokens{kind=prompt,model=x}` keeps its own commas).
 fn split_keys(raw: &str) -> Vec<String> {
@@ -161,6 +165,13 @@ pub async fn metrics_series(req: Req) -> Result<Response<Body>, ApiError> {
         ));
     }
     let raw = query_str(&req.query, "keys").unwrap_or_default();
+    if raw.len() > SERIES_KEYS_MAX_LEN {
+        return Err(ApiError::new(
+            422,
+            "invalid_request",
+            format!("keys is longer than {SERIES_KEYS_MAX_LEN} characters"),
+        ));
+    }
     let keys = split_keys(&raw);
     if keys.len() > SERIES_MAX_KEYS {
         return Err(ApiError::new(
@@ -187,10 +198,13 @@ pub async fn metrics_series(req: Req) -> Result<Response<Body>, ApiError> {
             ));
         }
     };
-    let answer = req
-        .state
-        .metrics
-        .series(a.id(), &window, &keys, split, None);
+    // SQLite reads: on the blocking pool, never on a runtime worker
+    let metrics = Arc::clone(&req.state.metrics);
+    let system = a.id();
+    let answer =
+        tokio::task::spawn_blocking(move || metrics.series(system, &window, &keys, split, None))
+            .await
+            .map_err(|_| ApiError::internal())?;
     ok_json(&answer)
 }
 

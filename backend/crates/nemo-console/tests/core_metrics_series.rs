@@ -5,8 +5,9 @@
 mod common;
 
 use common::Env;
+use nemo_console::api::observe::SERIES_KEYS_MAX_LEN;
 use nemo_console::domain::models::{MetricPoint, Role, SystemId, now_ts};
-use nemo_console::services::metrics::series_labels;
+use nemo_console::services::metrics::{SERIES_WINDOWS, series_labels};
 use serde_json::{Value, json};
 
 const URL: &str = "/api/v1/systems/switchyard/metrics/series";
@@ -422,4 +423,195 @@ async fn test_run_records_are_admin_only() {
         .send()
         .await;
     assert_ne!(files.status, 403);
+}
+
+#[tokio::test]
+async fn test_a_repeated_key_is_read_once_and_answered_each_time() {
+    let env = Env::new(Some("http://127.0.0.1:9"));
+    for v in 0..3 {
+        rollup(
+            &env,
+            "switchyard",
+            &format!("sy.d{{v={v}}}"),
+            minute(5),
+            1.0,
+            2.0,
+            1,
+        );
+    }
+    let m = &env.state.metrics;
+    for split in ["0", "1"] {
+        for w in ["1h", "7d"] {
+            let s0 = m.series_stats();
+            let one = series(&env, &format!("window={w}&split={split}&keys=sy.d")).await;
+            let s1 = m.series_stats();
+            let keys = ["sy.d"; 12].join(",");
+            let twelve = series(&env, &format!("window={w}&split={split}&keys={keys}")).await;
+            let s2 = m.series_stats();
+            assert!(s1.queries > s0.queries);
+            // the same SQL work for twelve copies of the key as for one
+            assert_eq!(
+                s2.queries - s1.queries,
+                s1.queries - s0.queries,
+                "{w} split={split}"
+            );
+            assert_eq!(s2.rows - s1.rows, s1.rows - s0.rows, "{w} split={split}");
+            // ... and every copy answered, in order
+            let a = one["series"].as_array().unwrap();
+            let b = twelve["series"].as_array().unwrap();
+            assert_eq!(b.len(), a.len() * 12, "{w} split={split}");
+            for chunk in b.chunks(a.len()) {
+                assert_eq!(chunk, a.as_slice());
+            }
+        }
+    }
+    // the reads ran on the read-only connection, not through the store's lock
+    assert_eq!(m.series_stats().fallbacks, 0);
+}
+
+#[tokio::test]
+async fn test_split_1_never_reads_past_the_32nd_variant() {
+    let env = Env::new(Some("http://127.0.0.1:9"));
+    for v in 0..40 {
+        for back in 1..=3 {
+            rollup(
+                &env,
+                "switchyard",
+                &format!("sy.v{{id={v:02}}}"),
+                minute(back),
+                1.0,
+                1.0,
+                1,
+            );
+        }
+    }
+    for v in 0..32 {
+        rollup(
+            &env,
+            "switchyard",
+            &format!("sy.e{{id={v:02}}}"),
+            minute(1),
+            1.0,
+            1.0,
+            1,
+        );
+    }
+    let m = &env.state.metrics;
+    for w in ["1h", "24h", "7d"] {
+        let before = m.series_stats();
+        let r = series(&env, &format!("window={w}&split=1&keys=sy.v")).await;
+        let read = m.series_stats().rows - before.rows;
+        assert_eq!(r["truncated"], true, "{w}");
+        let s = r["series"].as_array().unwrap();
+        assert_eq!(s.len(), 32, "{w}");
+        assert_eq!(s[31]["label"], json!({"id": "31"}), "{w}");
+        // 32 variants x their points (3 minutes, or one 10-minute bucket at 7d, or two when the 3 minutes straddle
+        // a 10-minute boundary): never a row of variants 32..39
+        let pts: usize = s
+            .iter()
+            .map(|x| x["points"].as_array().unwrap().len())
+            .sum();
+        assert_eq!(read, pts, "{w}");
+        assert!(s.iter().all(|x| x["label"]["id"].as_str().unwrap() < "32"));
+        // exactly 32 variants: nothing dropped
+        let r = series(&env, &format!("window={w}&split=1&keys=sy.e")).await;
+        assert_eq!(r["truncated"], false, "{w}");
+        assert_eq!(r["series"].as_array().unwrap().len(), 32, "{w}");
+    }
+    assert_eq!(m.series_stats().fallbacks, 0);
+}
+
+#[tokio::test]
+async fn test_an_oversized_keys_parameter_is_422_before_it_is_split() {
+    let env = Env::new(Some("http://127.0.0.1:9"));
+    // the longest valid parameter: 12 keys of the longest form KEY_RE accepts
+    let key = format!("a{}{{{}}}", "b".repeat(63), "c".repeat(200));
+    assert_eq!(key.len(), 266);
+    let max = [key.as_str(); 12].join(",");
+    assert_eq!(max.len(), SERIES_KEYS_MAX_LEN);
+    let r = series(&env, &format!("keys={max}")).await;
+    assert_eq!(r["series"].as_array().unwrap().len(), 12);
+    for raw in [
+        format!("{max},"),
+        "a".repeat(SERIES_KEYS_MAX_LEN + 1),
+        ",".repeat(10_000),
+    ] {
+        let r = env.get(&format!("{URL}?keys={raw}")).send().await;
+        assert_eq!(r.status, 422);
+        assert_eq!(r.code(), "invalid_request");
+        assert!(r.text().contains("longer than"), "{}", r.text());
+    }
+}
+
+#[test]
+fn test_the_openapi_entry_of_the_series_route_matches_the_code() {
+    let doc: Value = serde_json::from_str(nemo_console::api::admin::OPENAPI_JSON).unwrap();
+    let params = doc["paths"]["/api/v1/systems/{system_id}/metrics/series"]["get"]["parameters"]
+        .as_array()
+        .unwrap()
+        .clone();
+    let param = |name: &str| {
+        params
+            .iter()
+            .find(|p| p["name"] == name)
+            .unwrap_or_else(|| panic!("no {name} parameter"))
+            .clone()
+    };
+    let windows: Vec<&str> = SERIES_WINDOWS.iter().map(|(w, _, _)| *w).collect();
+    assert_eq!(param("window")["schema"]["enum"], json!(windows));
+    assert_eq!(param("window")["schema"]["default"], "1h");
+    assert_eq!(param("split")["schema"]["enum"], json!([0, 1]));
+    assert_eq!(param("split")["schema"]["default"], 0);
+    assert_eq!(param("keys")["in"], "query");
+}
+
+/// Worst case of the series route, for the record (not a gate): 256 label variants x 8 days of minute rollups, 12
+/// copies of the key at 7d. `cargo test --release --locked --test core_metrics_series -- --ignored --nocapture`.
+#[tokio::test]
+#[ignore = "a measurement (about 3 M rows), run by hand in the release profile"]
+async fn measure_worst_case_series() {
+    let env = Env::new(Some("http://127.0.0.1:9"));
+    let end = minute(0);
+    let start = end - 8 * 1440;
+    let t = std::time::Instant::now();
+    env.state
+        .store
+        .with(|db| {
+            db.execute_batch("BEGIN")?;
+            {
+                let mut st = db.prepare(
+                    "INSERT INTO rollup(system, series, bucket, avg, max, n) VALUES ('switchyard',?,?,?,?,30)",
+                )?;
+                for v in 0..256 {
+                    let name = format!("sy.w{{gpu={v:03}}}");
+                    for b in start..end {
+                        #[allow(clippy::cast_precision_loss)]
+                        let x = (b % 97) as f64;
+                        st.execute(rusqlite::params![name, b, x, x + 1.0])?;
+                    }
+                }
+            }
+            db.execute_batch("COMMIT")
+        })
+        .unwrap();
+    eprintln!("insert {} rows: {:?}", 256 * 8 * 1440, t.elapsed());
+    let keys = ["sy.w"; 12].join(",");
+    for split in ["0", "1"] {
+        for w in ["7d", "24h", "1h"] {
+            let t = std::time::Instant::now();
+            let r = series(&env, &format!("window={w}&split={split}&keys={keys}")).await;
+            let n: usize = r["series"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|x| x["points"].as_array().unwrap().len())
+                .sum();
+            let bytes = r.to_string().len();
+            eprintln!(
+                "window={w} split={split} 12 x sy.w: {:?}, {n} points, {bytes} bytes",
+                t.elapsed()
+            );
+        }
+    }
+    assert_eq!(env.state.metrics.series_stats().fallbacks, 0);
 }

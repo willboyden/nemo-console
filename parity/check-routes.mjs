@@ -9,7 +9,8 @@
 //      routes added after the port (a deviation recorded in backend/PORTING.md): they are listed, must NOT exist in
 //      the Python table, and are left out of the comparison. Rows carrying `auth_deviation: {python, deviation:
 //      "D-<n>"}` are routes whose role changed after the port: Python must have the row with exactly that old role,
-//      the Rust role must differ from it, and the row is compared with the Python role.
+//      the Rust role must be stricter (admin > viewer > public), and the row is compared with the Python role. Every
+//      deviation named (rust_only or auth_deviation) must have its bullet in backend/PORTING.md ("- **D-<n> ...").
 // Exit 0 when all pass, 1 otherwise.   node parity/check-routes.mjs [--verbose]
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -74,8 +75,16 @@ if (existsSync(rustFile)) {
   }
   if (rust) {
     const sig = (r) => `${r.method} ${r.path} auth=${r.auth ?? 'null'}`;
+    const RANK = { public: 0, viewer: 1, admin: 2 };
+    const porting = readFileSync(join(HERE, '..', 'backend', 'PORTING.md'), 'utf8');
+    // a deviation is documented when PORTING.md has its bullet: "- **D-<n> ..."
+    const deviationDocumented = (id) => new RegExp(`^- \\*\\*${id} `, 'm').test(porting);
     const extra = rust.filter((r) => r.rust_only);
     for (const r of extra) {
+      if (/^D-\d+$/.test(String(r.rust_only)) && !deviationDocumented(r.rust_only)) {
+        failed = true;
+        console.log(`\nFAIL: ${key(r)}: rust_only ${r.rust_only} is not a deviation in backend/PORTING.md`);
+      }
       if (!/^D-\d+$/.test(String(r.rust_only))) {
         failed = true;
         console.log(`\nFAIL: ${key(r)}: rust_only must name a PORTING.md deviation (D-<n>), not ${JSON.stringify(r.rust_only)}`);
@@ -97,9 +106,14 @@ if (existsSync(rustFile)) {
         console.log(`\nFAIL: ${key(r)}: auth_deviation must be {python: <role>, deviation: "D-<n>"}, not ${JSON.stringify(d)}`);
         continue;
       }
-      if (d.python === r.auth) {
+      // a role may only get stricter after the port (admin > viewer > public): a loosening is never a parity deviation
+      if (!(RANK[r.auth] > RANK[d.python])) {
         failed = true;
-        console.log(`\nFAIL: ${key(r)}: auth_deviation ${d.deviation} names the same role as the Rust row (${r.auth})`);
+        console.log(`\nFAIL: ${key(r)}: auth_deviation ${d.deviation}: the Rust role (${r.auth}) must be stricter than Python's (${d.python})`);
+      }
+      if (!deviationDocumented(d.deviation)) {
+        failed = true;
+        console.log(`\nFAIL: ${key(r)}: auth_deviation ${d.deviation} is not a deviation in backend/PORTING.md`);
       }
       if (!py.some((x) => key(x) === key(r) && x.auth === d.python)) {
         failed = true;
