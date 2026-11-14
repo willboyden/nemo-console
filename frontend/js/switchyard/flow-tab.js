@@ -1,4 +1,4 @@
-// The "Decisions and models" tab of the Switchyard page (addendum 9.14): the decision flow (route -> decision source -> target, widths =
+// The "Decisions and models" tab of the Switchyard page (addendum 9.14): the decision flow (decision source -> target, routes listed beside it; route -> source -> target only if the counters ever carry a route label; widths =
 // the share of decisions over the window), a row per model (p50 / p99 latency, error rate, cache hit, largest context), a heatmap of the
 // call rate per model over time, fallbacks and routing overhead, and what clients got. One series request (split=1) feeds every card; the
 // window, a route filter and a model filter live in the URL hash. A figure the counters cannot give is an en dash, never 0. The charts and

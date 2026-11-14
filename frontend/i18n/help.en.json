@@ -402,7 +402,7 @@
       },
       {
         "title": "Read the log",
-        "body": "The Events tab lists the frontend and worker log lines with filters for level, component and text. The console redacts secrets in each line before it leaves the server.",
+        "body": "The Events tab lists the frontend and worker log lines with filters for level, component and text. Before a line leaves the server the console replaces secret-looking patterns in it; the redaction is pattern-based, so treat the lines as sensitive.",
         "tab": "events"
       },
       {

@@ -715,7 +715,9 @@ one new route, new tabs/cards); no existing key, route or shape changes. Builds 
 
 * **New metric keys** (all go through the existing poller, ring and rollups, so the series route serves them; label
   sets as listed; counters end in `_total` so the frontend draws them as rates; a value the source does not report is
-  simply absent, never 0):
+  simply absent, never 0; label values from upstreams are cleaned to `[A-Za-z0-9_.:/-]`, at most 64 characters;
+  non-finite values and series names longer than the key bound give no point; a series idle for 30 minutes leaves the
+  ring and frees its slot under the 256-series cap, its rollups stay):
   * DCGM, labels `{gpu, model}` like the existing per-GPU keys, from families the exporter already serves
     (`observability/dcgm/counters.csv`): `dcgm.fb_reserved_b`, `dcgm.mem_temp_c`, `dcgm.mem_clock_mhz`,
     `dcgm.enc_util`, `dcgm.dec_util`, `dcgm.power_limit_w` (`DCGM_FI_DEV_POWER_MGMT_LIMIT`, else
@@ -730,7 +732,7 @@ one new route, new tabs/cards); no existing key, route or shape changes. Builds 
     `reset_stats`) is a counter reset; the frontend already starts a new segment.
   * Dynamo, from the frontend and worker `/metrics` the adapter already scrapes:
     `dyn.ttft_window_ms{q=p50|p95|p99}` and `dyn.itl_window_ms{q}` (quantiles of the requests that finished SINCE THE
-    PREVIOUS POLL, from histogram bucket deltas; absent when no request finished; the existing since-start
+    PREVIOUS POLL — only the background poller's read moves the window; API/UI reads compare with the previous poll — from histogram bucket deltas; absent when no request finished; the existing since-start
     `dyn.ttft_ms` / `dyn.itl_ms` stay), `dyn.phase_ms{phase=queue|prefill|decode|inference, q=p50|p95}` (worker
     histograms, windowed the same way), `dyn.preemptions_total`, `dyn.capacity{kind=context_length|kv_blocks|
     max_num_seqs|max_batched_tokens}` (gauges, as reported), `dyn.spec_accept_pos{pos}` (acceptance rate per draft
@@ -743,7 +745,8 @@ one new route, new tabs/cards); no existing key, route or shape changes. Builds 
   rows: [{host, job, gpu, model, points: [[ts, value], ..]}], truncated}`: at most 64 rows (ordered host, gpu),
   `host` as the adapter already names hosts for `dcgm.host_up`, no GPU UUID or serial (E-8). Prometheus down -> 200 with
   `rows: []` and a `problem: {code, message}` field; 422 for an unknown metric or window. Cached for 30 s per
-  (metric, window). One call per heatmap.
+  (metric, window); a Prometheus failure is answered from memory for 5 s for every (metric, window); one Prometheus
+  request at a time; answers over 16 MiB are refused. One call per heatmap.
 * **Frontend** (shared toolkit of 9.13; textContent only; CSP unchanged):
   * **GPU telemetry page:** a Fleet tab with a heatmap (rows = host / GPU, columns = time, colour = the chosen metric,
     a legend with the scale, hover = value and time, a metric and window picker, URL state) from `/dcgm/fleet`; on
@@ -751,14 +754,15 @@ one new route, new tabs/cards); no existing key, route or shape changes. Builds 
     memory card (used / reserved / free stacked per GPU), power against its limit, energy over the window (from the
     counter), throttle-violation rates by reason, PCIe tx/rx and replay rate, remapped rows; an XID and diagnostics
     timeline (swim lane per GPU from `dcgm.xid` / `dcgm.diag` events, click = details).
-  * **Switchyard page:** a decision-flow card (route -> decision source -> target model, widths = request share over
+  * **Switchyard page:** a decision-flow card (decision source -> target model, with the routes listed beside it: the decision counters
+    carry no route label, so route -> source cannot be joined; widths = request share over
     the window, from `sy.route.calls` and `sy.decisions_total` rates; a flows chart exists in the toolkit), per-model
     latency (p50 / p99 bars, error rate, cache-hit ratio, largest context), a heatmap of call rate per model over time
     (series route, `split=1`), fallbacks and routing overhead (tiles + lines), client outcomes; filters by route /
     model on the share cards (frontend filtering of what is served).
   * **Dynamo page:** latency for the chosen window from the windowed keys (labelled as such; the since-start ones
     labelled "since start"), a latency breakdown (stacked queue -> prefill -> decode, p50 and p95), a load chart
-    (running, waiting, preemption rate, KV usage), output tokens per second (rate of `dyn.tokens{kind=output}`),
+    (running, waiting, preemption rate, KV usage), output tokens per second (rate of `dyn.tokens{kind=completion}`),
     prefix-cache hit ratio, a capacity panel, spec-decode acceptance by position when present, and an Events tab
     (the existing `dynamo.log` events with level and component filters; the log lines are redacted text, R-5).
   * Mock server: the new keys with plausible values for all three systems, the fleet route (several hosts incl. a down
@@ -766,11 +770,12 @@ one new route, new tabs/cards); no existing key, route or shape changes. Builds 
 * Pinned details (2026-11-14, from the build): Dynamo output tokens are the existing `dyn.tokens{kind=completion}`;
   the fleet route's path is `/systems/{system_id}/fleet` (404 for every system but dcgm), its values use the per-GPU key
   units (util as a 0..1 ratio, bytes, °C, W), `metric` is required, `problem` is absent on success (codes
-  `dcgm.prometheus.unreachable`, `dcgm.prometheus.bad_answer`, `dcgm.fleet.no_jobs`), failures are not cached, and the
+  `dcgm.prometheus.unreachable`, `dcgm.prometheus.bad_answer`, `dcgm.fleet.no_jobs`), failures are cached 5 s, and the
   PromQL groups by `job, host, gpu, modelName` only (no UUID or serial can come back); `dcgm.mem_temp_c` is absent on
   boards that report 0 (no sensor); `*_VIOLATION` counters are nanoseconds in the exporter, scaled to microseconds;
-  windowed Dynamo quantiles use as baseline the newest earlier read at least 90% of the poll interval old (so a UI read
-  cannot empty the poller's window), are absent on the first read, after a reset or when nothing finished;
+  windowed Dynamo quantiles use the previous POLL as baseline (adapters gain an optional `poll_metrics()`, default
+  `metrics()`, which the poller calls; only it moves a baseline), and are absent on the first poll, after a reset or
+  when nothing finished;
   `dyn.capacity` is the largest across models; `dyn.spec_accept_pos` is since the worker started; Switchyard picks
-  `/v1/stats` first and `/metrics` per key. New keys are appended after the existing ones, so the per-system 256-series
-  cap would drop new keys before old ones.
+  `/v1/stats` first and `/metrics` per key. New keys are appended after the existing ones, and idle series are evicted after 30 minutes, so churn cannot fill
+  the per-system 256-series cap for good.

@@ -1634,7 +1634,7 @@
   "dynv.ev_try": "Read the logs anyway",
   "dynv.ev_empty": "No log lines yet",
   "dynv.ev_empty_hint": "New lines from the Dynamo containers appear here live. They are log text with secrets redacted on the server, shown as plain text.",
-  "dynv.ev_lead": "The recent log lines of the Dynamo containers, newest first, live while this tab is open. The console redacts secrets in each line before it leaves the server.",
+  "dynv.ev_lead": "The recent log lines of the Dynamo containers, newest first, live while this tab is open. Before a line leaves the server the console replaces secret-looking patterns in it; the redaction is pattern-based, so treat the lines as sensitive.",
   "dynv.ev_levels": "Log levels",
   "dynv.ev_toggle": "Show or hide {level} lines",
   "dynv.ev_component": "Component",
