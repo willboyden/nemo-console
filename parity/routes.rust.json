@@ -69,6 +69,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/systems/{system_id}/analytics",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/capture",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/systems/{system_id}/config",
       "auth": "viewer",
       "body": false
@@ -171,9 +185,72 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/systems/{system_id}/sessions",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/sessions/{session_key}",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/systems/{system_id}/status",
       "auth": "viewer",
       "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/traces",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/traces/index",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/traces/{trace_id}",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/traces/{trace_id}/spans/{span_id}/content",
+      "auth": "admin",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/trajectories",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/trajectories/{trajectory_id}",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/trajectories/{trajectory_id}/steps/{step_id}/content",
+      "auth": "admin",
+      "body": false,
+      "rust_only": "D-34"
     },
     {
       "method": "GET",

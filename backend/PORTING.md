@@ -516,6 +516,33 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
   profile read back as `auth_style: bearer [redacted]: authorization`). The Rust masks match within one line, so
   config reads of such files differ (case ids `cfgread.openshell.provider-profile` and `.viewer` in
   `parity/allow-diffs.txt`). Every other difference on that route still fails the gate.
+- **D-34 The Relay trace explorer (addendum 9.12, ADR-0021), eleven routes added after the port.** Eleven read-only GETs
+  under `/api/v1/systems/{system_id}/` (`traces/index`, `traces`, `traces/{trace_id}`, the admin-only
+  `traces/{trace_id}/spans/{span_id}/content`, `sessions`, `sessions/{session_key}`, `analytics`, `trajectories`,
+  `trajectories/{trajectory_id}`, the admin-only `trajectories/{trajectory_id}/steps/{step_id}/content`, `capture`) read
+  NeMo Relay's capture files into an in-memory index (`adapters/relay_traces`, one standing background task, started and
+  stopped with the server). The Python reference has none of them: `tests/core_routes_table.rs` lists them as
+  `RUST_ONLY` and marks their rows `"rust_only": "D-34"` in `parity/routes.rust.json`, so `parity/check-routes.mjs`
+  lists them, checks that Python has none of them and leaves them out of the route-set comparison; the corpus has no
+  cases for them (Python would answer 404). `assets/openapi.json` lists them (entries added by hand in the generated
+  style; `parity/gen/gen_openapi.py` would drop them again, which
+  `core_roles::test_openapi_and_app_routes_are_exactly_the_enumerated_ones` catches), so the document differs from the
+  reference's by exactly those eleven paths (case ids `global.openapi.admin`, `.viewer` and their `.after` repeats in
+  `parity/allow-diffs.txt`). Shared code: `services/gzip.rs` gains a streaming reader (`GzReader`, an `std::io::Read`
+  over every member with CRC and length checks, bounded memory, `UnexpectedEof` after what could be decoded from a
+  truncated file) and a faster CRC (`crc_update_fast`, same values), and the reader can record seek points
+  (`GzReader::with_checkpoints`: a `GzCheckpoint` at a deflate block boundary about every 32 MiB of output, with its bit
+  offset, output offset, member start and the 32 KiB window; at most 160 per file, the spacing doubles past that, so
+  under about 5 MiB per file) and start again from one (`GzReader::resume`, which skips the CRC and length check of the
+  member it starts inside only). The trace index keeps a file's points with its identity (device, inode, size, mtime)
+  and the content route resumes at the nearest point at or before the line (after the usual head check; points of
+  another file are never used), so a line deep in a large rotation costs at most about one spacing of decompression. The
+  one-shot reader (`read_tail`, the Relay events route's) is unchanged: no line of the old code was edited. Content text
+  also gets a trace-explorer-only credential-pair pass after `scrub()` (`adapters/relay_traces/secrets.rs`, the `regex`
+  crate: JSON pairs plain, escaped and single-quoted, YAML/env/query forms); the shared `scrub()` is unchanged.
+  `adapters/relay.rs` gains the `trace_explorer` / `start_background` / `stop_background` implementations and helpers
+  (`scrub_count`, `ident_ok`, `atof_rotation`), and makes its file-opening helpers `pub(crate)`; its existing routes
+  behave as before.
 - **Test-only (workstream B):** in the DCGM `post_apply` restart test the fake upstream answers 503 instead of refusing the
   connection.
 - **Moot since A-7 (the private copies are deleted):** workstream B's "alias expansion over 1,000,000 nodes raises
