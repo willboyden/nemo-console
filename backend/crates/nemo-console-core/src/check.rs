@@ -22,6 +22,7 @@ use crate::diagnostics::{Diagnostic, Severity};
 use crate::schemas::{aiperf, evaluator, modelopt, relay, switchyard};
 use crate::services::common::find_secret;
 use crate::services::pyfmt::{float_repr, str_repr};
+use crate::services::pystr;
 use crate::services::pytoml::{self, TomlVal};
 use crate::services::pyyaml::{self, PyValue};
 
@@ -84,19 +85,80 @@ fn secret_line(text: &str) -> Option<i64> {
         .and_then(|i| i64::try_from(i + 1).ok())
 }
 
-/// The real loader's verdict on the file's syntax (`tomllib.loads`, PyYAML `compose`): `None` when it loads.
-fn syntax_error(format: &str, text: &str) -> Option<(String, Option<i64>)> {
+/// Why a draft does not load: the TOML or YAML loader's error.
+enum LoadError {
+    Toml(pytoml::TomlDecodeError),
+    Yaml(pyyaml::YamlError),
+}
+
+/// The loader the server's validators run (`tomllib.loads`, PyYAML `safe_load`, constructors included, so an
+/// impossible date or a refused tag fails here as it fails there): `None` when the draft loads.
+fn load_error(format: &str, text: &str) -> Option<LoadError> {
     match format {
-        "toml" => pytoml::loads(text)
-            .err()
-            .map(|e| (format!("TOML syntax: {e}"), switchyard::line_of(&e.0))),
-        "yaml" => pyyaml::compose(text).err().map(|e| {
-            let line = e
-                .problem_mark()
-                .and_then(|m| i64::try_from(m.line + 1).ok());
-            (format!("YAML syntax: {}", e.problem_or_str()), line)
-        }),
+        "toml" => pytoml::loads(text).err().map(LoadError::Toml),
+        "yaml" => pyyaml::safe_load(text).err().map(LoadError::Yaml),
         _ => None,
+    }
+}
+
+/// The finding for a draft that does not load, worded as the server's validator of that file words it.
+///
+/// * guardrails (`*.yml`, `*.yaml`): `YAML syntax: <first line of the error, 300 chars>`, with its line;
+/// * flare, openshell: `TOML syntax error: ...` / `YAML syntax error: ...` (300 chars), no line;
+/// * relay files other than routes: `TOML syntax error: <error>`, no line (it catches every exception);
+/// * every other system: `TOML syntax: <error>` / `YAML syntax: <problem>`, with its line. Their server validators
+///   run a tool or more checks first, so their texts differ (PORTING.md A-10).
+///
+/// An exception the server's validator does not catch (a `ValueError` for `2026-02-30`, a `KeyError` for
+/// `!!bool maybe`, a `RecursionError`) makes the server answer 500; here it is one error naming that exception.
+fn syntax_finding(system: &str, e: &LoadError) -> Value {
+    let (caught, class, text) = match e {
+        LoadError::Toml(t) => (t.is_decode() || system == "relay", t.class(), t.to_string()),
+        LoadError::Yaml(y) => (y.is_yaml(), y.class(), y.text()),
+    };
+    if !caught {
+        let why = AdapterError::failed(class, text).py_text();
+        return error(
+            &format!("the backend's validator stops with {why}"),
+            None,
+            "syntax",
+        );
+    }
+    let yaml_line = |y: &pyyaml::YamlError| {
+        y.problem_mark()
+            .and_then(|m| i64::try_from(m.line + 1).ok())
+    };
+    match (system, e) {
+        ("guardrails", LoadError::Yaml(y)) => {
+            let first = pystr::splitlines(&text)
+                .first()
+                .map(|l| pystr::head(l, 300).to_owned())
+                .unwrap_or_default();
+            error(&format!("YAML syntax: {first}"), yaml_line(y), "syntax")
+        }
+        ("flare" | "openshell", LoadError::Toml(_)) => error(
+            &format!("TOML syntax error: {}", pystr::head(&text, 300)),
+            None,
+            "syntax",
+        ),
+        ("flare" | "openshell", LoadError::Yaml(_)) => error(
+            &format!("YAML syntax error: {}", pystr::head(&text, 300)),
+            None,
+            "syntax",
+        ),
+        ("relay", LoadError::Toml(_)) => {
+            error(&format!("TOML syntax error: {text}"), None, "syntax")
+        }
+        (_, LoadError::Toml(t)) => error(
+            &format!("TOML syntax: {text}"),
+            switchyard::line_of(&t.0),
+            "syntax",
+        ),
+        (_, LoadError::Yaml(y)) => error(
+            &format!("YAML syntax: {}", y.problem_or_str()),
+            yaml_line(y),
+            "syntax",
+        ),
     }
 }
 
@@ -135,23 +197,21 @@ pub fn check(system: &str, file_id: &str, format: &str, text: &str) -> Value {
             "secret",
         ));
     }
-    let syntax = syntax_error(format, text);
+    let syntax = load_error(format, text);
     let schema = schema_of(system, file_id);
+    // a file that does not load gets its validator's own syntax message, so it is tagged as syntax
+    let source = if syntax.is_some() { "syntax" } else { "schema" };
     if schema.is_some() {
         match run_schema(system, file_id, text) {
-            // a file that does not load gets its validator's own syntax message, so it is tagged as syntax
-            Ok(ds) => {
-                let source = if syntax.is_some() { "syntax" } else { "schema" };
-                out.extend(ds.iter().map(|d| finding(d, source)));
-            }
+            Ok(ds) => out.extend(ds.iter().map(|d| finding(d, source))),
             Err(e) => out.push(error(
                 &format!("the backend's validator stops with {}", e.py_text()),
                 None,
-                "schema",
+                source,
             )),
         }
-    } else if let Some((message, line)) = &syntax {
-        out.push(error(message, *line, "syntax"));
+    } else if let Some(e) = &syntax {
+        out.push(syntax_finding(system, e));
     }
     let syntax_state = match format {
         "toml" | "yaml" if syntax.is_some() => "error",

@@ -108,6 +108,17 @@ fn the_vectors_pin_the_behaviour_that_matters() {
         v("dcgm", "counters", "text", "a: xsk-abcdefghijk\n"),
         json!([])
     );
+    // the server's loader runs constructors (safe_load, not compose): these are refused, never "syntax OK"
+    for text in [
+        "a: 2026-02-30\n",
+        "a: !!int x\n",
+        "a: !!python/object:os.system x\n",
+        "? [a, b]\n: 1\n",
+    ] {
+        let r = check::check("guardrails", "lab-input-output--config.yml", "yaml", text);
+        assert_eq!(r["syntax"], "error", "{text}");
+        assert_eq!(r["diagnostics"][0]["source"], "syntax", "{text}");
+    }
     // the nesting budget: 496 arrays load, 497 are Python's RecursionError
     let deep = |n: usize| format!("a = {}{}\n", "[".repeat(n), "]".repeat(n));
     assert_eq!(

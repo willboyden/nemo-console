@@ -149,7 +149,7 @@
         "counters",
         "text"
       ],
-      "text": "a: xsk-abcdefghijk\nb: _sk-abcdefghijk\n",
+      "text": "a: xsk-NOTAREALKEY\nb: _sk-NOTAREALKEY\n",
       "expect": {
         "api": 1,
         "schema": null,
@@ -173,7 +173,7 @@
         "counters",
         "text"
       ],
-      "text": "key: sk-abcdefghijk\n",
+      "text": "key: sk-NOTAREALKEY\n",
       "expect": {
         "api": 1,
         "schema": null,
@@ -197,7 +197,7 @@
         "counters",
         "text"
       ],
-      "text": "h: hf_abcdefghijk\n",
+      "text": "h: hf_NOTAREALTOKEN\n",
       "expect": {
         "api": 1,
         "schema": null,
@@ -245,7 +245,7 @@
         "counters",
         "text"
       ],
-      "text": "-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----\n",
+      "text": "-----BEGIN EXAMPLE PRIVATE KEY-----\nnot-a-real-key\n-----END EXAMPLE PRIVATE KEY-----\n",
       "expect": {
         "api": 1,
         "schema": null,
@@ -1080,7 +1080,7 @@
         "routes",
         "toml"
       ],
-      "text": "# Switchyard deployment for the NeMo Relay NATIVE PLUGIN (mock copy)\n# Validate with the plugin, not switchyard-server: the schemas differ.\nschema_version = 1\n\n[llm_clients.litellm_anthropic]\nformat = \"anthropic_messages\"\nbase_url = \"http://127.0.0.1:4000\"\napi_key_env = \"LITELLM_MASTER_KEY\"\nmax_retries = 2\n\n[targets.lightning]\nid = \"nemotron-lightning\"\nllm_client = \"litellm_anthropic\"\n\n[targets.qwen-27b-1m]\nid = \"qwen3.8-27b-1m\"\nllm_client = \"litellm_anthropic\"\n\n[targets.flash-next]\nid = \"qwen3.8-flash-next\"\nllm_client = \"litellm_anthropic\"\n\n[routes.auto-local]\nid = \"auto-local\"\ntype = \"stage_router\"\ncapable_target = \"flash-next\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\n\napi_key = \"sk-abcdefghijklmnopqrstu\"\n",
+      "text": "# Switchyard deployment for the NeMo Relay NATIVE PLUGIN (mock copy)\n# Validate with the plugin, not switchyard-server: the schemas differ.\nschema_version = 1\n\n[llm_clients.litellm_anthropic]\nformat = \"anthropic_messages\"\nbase_url = \"http://127.0.0.1:4000\"\napi_key_env = \"LITELLM_MASTER_KEY\"\nmax_retries = 2\n\n[targets.lightning]\nid = \"nemotron-lightning\"\nllm_client = \"litellm_anthropic\"\n\n[targets.qwen-27b-1m]\nid = \"qwen3.8-27b-1m\"\nllm_client = \"litellm_anthropic\"\n\n[targets.flash-next]\nid = \"qwen3.8-flash-next\"\nllm_client = \"litellm_anthropic\"\n\n[routes.auto-local]\nid = \"auto-local\"\ntype = \"stage_router\"\ncapable_target = \"flash-next\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\n\napi_key = \"sk-NOT-A-REAL-KEY-dummy\"\n",
       "expect": {
         "api": 1,
         "schema": "relay_routes",
@@ -1177,7 +1177,7 @@
           {
             "severity": "error",
             "line": null,
-            "message": "TOML syntax: maximum recursion depth exceeded",
+            "message": "TOML syntax error: maximum recursion depth exceeded",
             "source": "syntax"
           }
         ]
@@ -1260,7 +1260,7 @@
           {
             "severity": "error",
             "line": null,
-            "message": "TOML syntax: maximum recursion depth exceeded",
+            "message": "TOML syntax error: maximum recursion depth exceeded",
             "source": "syntax"
           }
         ]
@@ -1343,7 +1343,7 @@
           {
             "severity": "error",
             "line": null,
-            "message": "TOML syntax: maximum recursion depth exceeded",
+            "message": "TOML syntax error: maximum recursion depth exceeded",
             "source": "syntax"
           }
         ]
@@ -1410,7 +1410,7 @@
           {
             "severity": "error",
             "line": null,
-            "message": "YAML syntax: maximum recursion depth exceeded",
+            "message": "the backend's validator stops with RecursionError: maximum recursion depth exceeded",
             "source": "syntax"
           }
         ]
@@ -1531,7 +1531,7 @@
             "severity": "error",
             "line": null,
             "message": "the backend's validator stops with RecursionError: maximum recursion depth exceeded",
-            "source": "schema"
+            "source": "syntax"
           }
         ]
       }
@@ -1597,7 +1597,7 @@
           {
             "severity": "error",
             "line": null,
-            "message": "TOML syntax: Exceeds the limit (4300 digits) for integer string conversion: value has 4301 digits; use sys.set_int_max_str_digits() to increase the limit",
+            "message": "TOML syntax error: Exceeds the limit (4300 digits) for integer string conversion: value has 4301 digits; use sys.set_int_max_str_digits() to increase the limit",
             "source": "syntax"
           }
         ]
@@ -2383,6 +2383,198 @@
         "ok": true,
         "problem": null,
         "got": "the whole number 2"
+      }
+    },
+    {
+      "name": "constructor/guardrails-impossible-date",
+      "fn": "check",
+      "args": [
+        "guardrails",
+        "lab-input-output--config.yml",
+        "yaml"
+      ],
+      "text": "models: []\na: 2026-02-30\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "the backend's validator stops with ValueError: day is out of range for month",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "constructor/guardrails-int-tag",
+      "fn": "check",
+      "args": [
+        "guardrails",
+        "lab-input-output--config.yml",
+        "yaml"
+      ],
+      "text": "models: []\na: !!int x\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "the backend's validator stops with ValueError: invalid literal for int() with base 10: 'x'",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "constructor/guardrails-python-tag",
+      "fn": "check",
+      "args": [
+        "guardrails",
+        "lab-input-output--config.yml",
+        "yaml"
+      ],
+      "text": "models: []\na: !!python/object:os.system x\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 2,
+            "message": "YAML syntax: could not determine a constructor for the tag 'tag:yaml.org,2002:python/object:os.system'",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "constructor/guardrails-unhashable-key",
+      "fn": "check",
+      "args": [
+        "guardrails",
+        "lab-input-output--config.yml",
+        "yaml"
+      ],
+      "text": "models: []\n? [a, b]\n: 1\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 2,
+            "message": "YAML syntax: while constructing a mapping",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "syntax/guardrails-yaml",
+      "fn": "check",
+      "args": [
+        "guardrails",
+        "lab-input-output--config.yml",
+        "yaml"
+      ],
+      "text": "models: [\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 2,
+            "message": "YAML syntax: while parsing a flow node",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "syntax/flare-yaml",
+      "fn": "check",
+      "args": [
+        "flare",
+        "compose",
+        "yaml"
+      ],
+      "text": "services: [\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "YAML syntax error: while parsing a flow node\nexpected the node content, but found '<stream end>'\n  in \"<unicode string>\", line 2, column 1:\n    \n    ^",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "syntax/openshell-toml",
+      "fn": "check",
+      "args": [
+        "openshell",
+        "gateway",
+        "toml"
+      ],
+      "text": "a = \n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "TOML syntax error: Invalid value (at line 1, column 5)",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "syntax/relay-plugins-toml",
+      "fn": "check",
+      "args": [
+        "relay",
+        "plugins",
+        "toml"
+      ],
+      "text": "a = \n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "TOML syntax error: Invalid value (at line 1, column 5)",
+            "source": "syntax"
+          }
+        ]
       }
     }
   ]
