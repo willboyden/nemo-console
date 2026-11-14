@@ -588,6 +588,9 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
   against `SERIES_WINDOWS` by a test), so the `global.openapi.*` cases differ by one more path; those four cases are
   pinned in `parity/pinned-diffs.json` to exactly the twelve added paths (D-34 and D-36), so any other difference in
   the document fails the run. Tests: `tests/core_metrics_series.rs`.
+  Worst case with 12 DISTINCT keys sharing the 256-series budget (7d, release, from the re-audit): about 3.0 s
+  (split=0) and 4.2 s (split=1), a 10.7 MB answer: inherent data volume, off the async workers and off the store
+  lock. A cap on concurrent series reads (a small semaphore) is a possible follow-up.
 - **D-37 Data Designer run records are admin-only (addendum 9.13).** `GET
   /api/v1/systems/{system_id}/runs/{run_id}/records` returns model-written rows, like Relay span content (ADR-0021),
   so its role dependency is `admin` (the handler's `dep_admin`, the route table's role, the role test's admin-GET
