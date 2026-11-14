@@ -2,6 +2,8 @@
 // MOCK-ONLY: every number, version, path, container name and score below is invented so the UI can be built and
 // screenshotted against contract-shaped data (domain/models.py). None of it is a fact about the real systems, and
 // the real adapters are being written separately (metric keys beyond the documented ap.* / ev.score are guesses).
+import { dcgmWave2Points, hostPoints } from './mock-wave2.mjs';
+
 export const SEVEN = ['openshell', 'dcgm', 'aiperf', 'guardrails', 'evaluator', 'modelopt', 'gym', 'flare'];
 // skillevaluator is not new in 9.8; it is mocked here only so the twelve-system overview is complete in dev.
 export const MOCKED = [...SEVEN, 'skillevaluator'];
@@ -70,7 +72,7 @@ export function sevenStatus(id, now, flags = {}) {
       components: [
         { kind: 'container', name: 'dcgm-exporter', state: 'running', image: 'nvcr.io/nvidia/k8s/dcgm-exporter:4.4.1-4.1.0-mock', detail: 'healthy, up 6 d' },
         { kind: 'http', name: 'exporter /metrics', state: 'running', detail: '200, 2 GPUs' },
-        { kind: 'http', name: 'prometheus job dcgm-aitop100', state: 'failed', detail: 'target down: connection refused (mock)' },
+        { kind: 'http', name: 'prometheus job dcgm-d', state: 'failed', detail: 'target down: connection refused (mock)' },
         { kind: 'http', name: 'prometheus job dcgm', state: 'running', detail: '2 GPUs' },
       ],
       problems: flags.dcgmFixed
@@ -82,7 +84,7 @@ export function sevenStatus(id, now, flags = {}) {
               message: 'The running dcgm-exporter (4.4.1) is older than 4.8.3 and exposes /debug/pprof (CVE-2026-47483). A direct probe of /debug/pprof/ answered 200. (mock data)',
               fix: 'observability/dcgm/bump-exporter.sh 4.8.3   # then: docker compose up -d dcgm-exporter',
             },
-            { severity: 'warn', code: 'dcgm.host.down', message: 'Prometheus job dcgm-aitop100 has no live target; that host is missing from the numbers below.' },
+            { severity: 'warn', code: 'dcgm.host.down', message: 'Prometheus job dcgm-d has no live target; that host is missing from the numbers below.' },
           ],
       checked_at,
     };
@@ -279,13 +281,8 @@ export function sevenMetrics(id, ts, wob, flags = {}) {
           P('dcgm.pcie_rx_bps', 1.4e8, 'B/s', L),
         ];
       }),
-      ...[
-        ['node1', 'dcgm'],
-        ['node5', 'dcgm-aitop100'],
-      ].flatMap(([host, job], i) => {
-        const L = { host, job };
-        return [P('dcgm.host_up', i ? 0 : 1, '1', L), P('dcgm.fleet_gpus', i ? 0 : 2, '1', L), P('dcgm.fleet_temp_max_c', 58, 'C', L), P('dcgm.fleet_power_w', 410, 'W', L)];
-      }),
+      ...hostPoints(), // the fleet hosts (generic names: three up, one down), as in the fleet heatmap
+      ...dcgmWave2Points(gpus, wob), // the keys of addendum 9.14
     ];
   if (id === 'aiperf')
     return [
@@ -983,7 +980,8 @@ export function sevenRunAction(system, id, params, R) {
     'openshell/prove_policy': 'policy.yaml: default deny holds\nfilesystem: write limited to /sandbox/outputs\nnetwork: only litellm:4000 reachable\n[mock output]',
     'openshell/gateway_up': 'gateway container started\nmTLS listener on 127.0.0.1:8443',
     'openshell/gateway_stop': 'gateway container stopped',
-    'dcgm/discovery': 'GPU 0  NVIDIA RTX PRO 6000 Blackwell Max-Q  96 GB\nGPU 1  NVIDIA RTX PRO 6000 Blackwell Workstation  96 GB\nhost node1 up, host node5 DOWN\n[mock output]',
+    'dcgm/discovery':
+      'GPU 0  NVIDIA RTX PRO 6000 Blackwell Max-Q  96 GB\nGPU 1  NVIDIA RTX PRO 6000 Blackwell Workstation  96 GB\nhost host-a up, host host-b up, host host-c up, host host-d DOWN\n[mock output]',
     'dcgm/restart_exporter': 'container dcgm-exporter recreated\n/metrics 200 after 2.2 s',
     'guardrails/up': 'container ai-lab-guardrails started\nconfigs served: lab-input-output',
     'guardrails/restart': 'container ai-lab-guardrails recreated\nconfigs served: lab-input-output',

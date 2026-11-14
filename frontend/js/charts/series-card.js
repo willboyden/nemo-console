@@ -20,9 +20,10 @@ const fmtStep = (s) => (s < 60 ? `${+s.toFixed(1)} s` : `${+(s / 60).toFixed(1)}
  * @param opts.yFmt        (v) => axis tick text;  opts.valueFmt (v) => value text (tooltips, table)
  * @param opts.hash        a createHashState() (the picker's choice lives in it)
  * @param opts.win         () => the current window;  opts.showMax () => whether the max is drawn
+ * @param opts.emptyText   what to say when the answer has no point (default: no samples; the windowed latency keys say no request finished)
  * Returns {el, update(answer), fail(error), setWindow, redraw}.
  */
-export function seriesCard(scope, { title, key, rate = false, yFmt, valueFmt = yFmt, hash, win, showMax }) {
+export function seriesCard(scope, { title, key, rate = false, yFmt, valueFmt = yFmt, hash, win, showMax, emptyText }) {
   let answer = null,
     error = null,
     lines = [],
@@ -62,7 +63,7 @@ export function seriesCard(scope, { title, key, rate = false, yFmt, valueFmt = y
     const chart = drawn.length
       ? seriesChart({ lines: drawn, win: win(), from: answer.from, to: answer.to, width, height: width < 420 ? 190 : 210, yFmt, valueFmt: val, showMax: showMax() && !rate, ariaLabel: label })
       : null;
-    wrap.replaceChildren(chart ?? chartEmpty(lines.length ? t('series.none_shown') : t('series.empty')));
+    wrap.replaceChildren(chart ?? chartEmpty(lines.length ? t('series.none_shown') : (emptyText ?? t('series.empty'))));
     summary.textContent = chart ? label : '';
     if (details.open) fillTable(drawn);
     drawnNow = drawn;

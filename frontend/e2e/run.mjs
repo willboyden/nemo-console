@@ -32,7 +32,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { visitRelayTraces } from './relay-traces.mjs';
-import { visitVizPages, checkRealSeriesRoute } from './viz-pages.mjs';
+import { visitVizPages, checkRealSeriesRoute, checkRealFleetRoute } from './viz-pages.mjs';
 
 const FRONTEND = dirname(dirname(fileURLToPath(import.meta.url)));
 const BACKEND = join(FRONTEND, '..', 'backend');
@@ -386,6 +386,8 @@ export async function main(argv = process.argv.slice(2)) {
     // home does not have (e2e/viz-pages.mjs).
     route = 'series route (real backend)';
     await checkRealSeriesRoute(backend, (msg) => problems(msg));
+    route = 'fleet route (real backend)';
+    await checkRealFleetRoute(backend, (msg) => problems(msg));
     route = 'viz pages (mock sign-in)';
     mock = await startMock();
     await s('Page.navigate', { url: `${mock.base}/` });

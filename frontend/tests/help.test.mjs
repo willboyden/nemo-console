@@ -15,14 +15,18 @@ const doc = JSON.parse(fs.readFileSync(path.join(root, 'i18n/help.en.json'), 'ut
 const CONSOLE_PAGES = { overview: ['status'], audit: ['log'], settings: ['settings'] };
 const HELP_TABS = ['start', 'faq'];
 const TABS = {
-  switchyard: ['routing', 'config', 'playground', 'actions'],
+  switchyard: ['routing', 'flow', 'config', 'playground', 'actions'],
   relay: ['status', 'traces', 'sessions', 'analytics', 'trajectories', 'capture', 'config', 'diagnostics', 'playground'],
-  dynamo: ['status', 'params', 'lifecycle', 'playground'],
+  dynamo: ['status', 'events', 'params', 'lifecycle', 'playground'],
   skillevaluator: ['status', 'history', 'evaluate'],
   datadesigner: ['status', 'scripts', 'actions', 'runs', 'history'],
-  // The generic view: Status, the run History where the system has runs (addendum 9.13), Config / Playground when offered, Actions.
+  // The generic view: Status, the tabs a page adds after it (DCGM's Fleet, addendum 9.14), the run History where the system has runs
+  // (addendum 9.13), Config / Playground when offered, Actions.
   ...Object.fromEntries(
-    SEVEN_IDS.map((id) => [id, ['status', ...(['aiperf', 'dcgm', 'evaluator', 'gym', 'modelopt', 'guardrails'].includes(id) ? ['history'] : []), 'config', 'playground', 'actions']]),
+    SEVEN_IDS.map((id) => [
+      id,
+      ['status', ...(id === 'dcgm' ? ['fleet'] : []), ...(['aiperf', 'dcgm', 'evaluator', 'gym', 'modelopt', 'guardrails'].includes(id) ? ['history'] : []), 'config', 'playground', 'actions'],
+    ]),
   ),
 };
 const tabsBySystem = Object.fromEntries(Object.entries({ ...TABS, ...CONSOLE_PAGES }).map(([k, v]) => [k, [...v, ...HELP_TABS]]));
@@ -37,6 +41,7 @@ test('the tab table matches the tab ids the views define', () => {
   for (const id of ['switchyard', 'relay', 'dynamo', 'skillevaluator', 'datadesigner']) assert.deepEqual(ids(read(`js/views/${id}.js`)).sort(), [...TABS[id]].sort(), id);
   for (const [id, tabs] of Object.entries(CONSOLE_PAGES)) assert.deepEqual(ids(read(`js/views/${id}.js`)), tabs, id);
   // The generic view: Status, then History when the descriptor has runs, then Config / Playground when offered, then Actions.
+  assert.deepEqual(ids(read('js/views/dcgm.js')), ['fleet'], 'the tab DCGM adds to the generic view');
   const gen = read('js/components/generic-system.js');
   assert.deepEqual(ids(gen).sort(), ['actions', 'config', 'history', 'playground', 'status']);
   // The help tabs come from the page frame, after the view's own.

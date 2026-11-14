@@ -1,11 +1,10 @@
 import { NcView } from '../components/base.js';
-import { h, clear, setTrustedHtml } from '../dom.js';
+import { h, clear } from '../dom.js';
 import { t } from '../i18n.js';
 import { fmtInt, fmtCompact, fmtPct, fmtTick } from '../format.js';
-import { roundedShares, errorRate, topN } from '../share.js';
-import { counterRate, keyWith } from '../metrics.js';
-import { shareBars } from '../charts.js';
-import { card, select, stat, btn, emptyBox, errorBox, skeleton } from '../components/ui.js';
+import { errorRate } from '../share.js';
+import { counterRate } from '../metrics.js';
+import { card, select, stat, btn, errorBox, field, skeleton } from '../components/ui.js';
 import { lineChartCard } from '../components/chart-card.js';
 import { systemPage } from '../components/system-page.js';
 import { statusDetails } from '../components/status-panel.js';
@@ -13,56 +12,21 @@ import { eventsPanel } from '../components/events-panel.js';
 import { configEditor } from '../components/config-editor.js';
 import { playgroundPanel } from '../components/playground.js';
 import { actionsPanel } from '../components/actions-panel.js';
+import { createHashState } from '../charts/hash-state.js';
+import { filterCounts } from '../switchyard-model.js';
+import { shareCard } from '../switchyard/share-card.js';
+import { flowTab } from '../switchyard/flow-tab.js';
 
 const WINDOWS = ['15m', '1h', '24h'];
 
-function shareCard(title, data, unit, key) {
-  const rows = topN(
-    roundedShares(data).map((r) => ({ ...r, pct: r.pct })),
-    8,
-  );
-  const wrap = h('div');
-  setTrustedHtml(wrap, shareBars(rows, { unit, ariaLabel: t('routing.share_aria', { title }), pctFmt: (p) => fmtPct(p, 1), fmt: fmtInt }));
-  return card(
-    title,
-    rows.length
-      ? h(
-          'div',
-          {},
-          wrap,
-          h(
-            'details',
-            { class: 'chart-data' },
-            h('summary', t('chart.data_table')),
-            h(
-              'div',
-              { class: 'tablewrap' },
-              h(
-                'table',
-                { class: 'compact' },
-                h(
-                  'thead',
-                  h(
-                    'tr',
-                    h('th', { scope: 'col' }, t('routing.name')),
-                    h('th', { scope: 'col', class: 'al-right' }, t('routing.count')),
-                    h('th', { scope: 'col', class: 'al-right' }, t('routing.share')),
-                  ),
-                ),
-                h(
-                  'tbody',
-                  rows.map((r) => h('tr', h('td', r.name), h('td', { class: 'num al-right' }, fmtInt(r.value)), h('td', { class: 'num al-right' }, fmtPct(r.pct, 1)))),
-                ),
-              ),
-            ),
-          ),
-        )
-      : emptyBox(t('routing.no_data')),
-  );
-}
-
-function routingTab(scope) {
+function routingTab(scope, ctx) {
   let win = '1h';
+  // The route and model filters (addendum 9.14) are frontend filters over what the server sent: the by-route and by-model cards keep only the
+  // chosen name (the tier card has no route or model, so it is shown whole). They live in the URL hash.
+  const hash = createHashState({ path: 'switchyard', tab: 'routing', initial: ctx?.initial !== false });
+  let route = hash.get('route'),
+    model = hash.get('model');
+  let lastSum = null;
   const host = h('div', { class: 'stack-v' }),
     summaryHost = h('div', { class: 'stack-v' }),
     rateHost = h('div');
@@ -75,27 +39,51 @@ function routingTab(scope) {
     },
     { 'aria-label': t('routing.window') },
   );
+  const routeSel = h('select', { 'aria-label': t('sy.flow.route_filter'), onChange: (e) => setFilter({ route: e.target.value }) });
+  const modelSel = h('select', { 'aria-label': t('sy.flow.model_filter'), onChange: (e) => setFilter({ model: e.target.value }) });
+  function setFilter(patch) {
+    if ('route' in patch) route = patch.route;
+    if ('model' in patch) model = patch.model;
+    hash.set({ route: route || null, model: model || null });
+    renderSummary();
+  }
+  function fillFilters(sum) {
+    const fill = (selEl, names, current, allLabel) => {
+      const list = [...new Set([...(current ? [current] : []), ...names])];
+      selEl.replaceChildren(h('option', { value: '', selected: !current }, allLabel), ...list.map((n) => h('option', { value: n, selected: n === current }, n)));
+    };
+    fill(routeSel, Object.keys(sum.by_route || {}).sort(), route, t('sy.flow.all_routes'));
+    fill(modelSel, Object.keys(sum.by_model || {}).sort(), model, t('sy.flow.all_models'));
+  }
+  function renderSummary() {
+    const sum = lastSum;
+    if (!sum) return;
+    fillFilters(sum);
+    const tok = sum.tokens || {};
+    clear(summaryHost).append(
+      h(
+        'div',
+        { class: 'stats' },
+        stat(t('routing.requests'), fmtInt(sum.requests)),
+        stat(t('routing.errors'), fmtInt(sum.errors), t('routing.error_rate', { pct: fmtPct(errorRate(sum.errors, sum.requests), 2) })),
+        ...['prompt', 'completion', 'reasoning', 'cached', 'total'].filter((k) => tok[k] != null).map((k) => stat(t(`tokens.${k}`), fmtCompact(tok[k]), tok[k] != null ? fmtInt(tok[k]) : null)),
+      ),
+      route || model ? h('p', { class: 'note info', role: 'status' }, t('routing.filter_note')) : null,
+      h(
+        'div',
+        { class: 'grid three' },
+        shareCard(t('routing.by_tier'), sum.by_tier, t('unit.requests')),
+        shareCard(t('routing.by_route'), filterCounts(sum.by_route, route), t('unit.requests')),
+        shareCard(t('routing.by_model'), filterCounts(sum.by_model, model), t('unit.requests')),
+      ),
+    );
+  }
   async function load() {
     try {
       const [sum, hist] = await Promise.all([scope.api.routingSummary(win), scope.api.history('switchyard', 'sy.requests_total', win).catch(() => null)]);
       if (!scope.alive) return;
-      const tok = sum.tokens || {};
-      clear(summaryHost).append(
-        h(
-          'div',
-          { class: 'stats' },
-          stat(t('routing.requests'), fmtInt(sum.requests)),
-          stat(t('routing.errors'), fmtInt(sum.errors), t('routing.error_rate', { pct: fmtPct(errorRate(sum.errors, sum.requests), 2) })),
-          ...['prompt', 'completion', 'reasoning', 'cached', 'total'].filter((k) => tok[k] != null).map((k) => stat(t(`tokens.${k}`), fmtCompact(tok[k]), tok[k] != null ? fmtInt(tok[k]) : null)),
-        ),
-        h(
-          'div',
-          { class: 'grid three' },
-          shareCard(t('routing.by_tier'), sum.by_tier, t('unit.requests')),
-          shareCard(t('routing.by_route'), sum.by_route, t('unit.requests')),
-          shareCard(t('routing.by_model'), sum.by_model, t('unit.requests')),
-        ),
-      );
+      lastSum = sum;
+      renderSummary();
       const rate = counterRate(hist?.points || []).map(([ts, v]) => [ts, v * 60]);
       clear(rateHost).append(lineChartCard({ title: t('routing.rate_title'), series: [{ name: t('routing.requests'), points: rate }], yFormat: fmtTick, ariaLabel: t('routing.rate_aria') }));
     } catch (e) {
@@ -103,7 +91,15 @@ function routingTab(scope) {
     }
   }
   host.append(
-    h('div', { class: 'row gap wrap between' }, h('h2', t('routing.title')), h('div', { class: 'row gap' }, sel, btn(t('common.refresh'), { size: 'sm', icon: 'restart', onClick: load }))),
+    h('h2', t('routing.title')),
+    h(
+      'div',
+      { class: 'row gap wrap bottom w2-controls' },
+      field(t('routing.window'), sel),
+      field(t('sy.flow.route'), routeSel),
+      field(t('sy.flow.model'), modelSel),
+      btn(t('common.refresh'), { size: 'sm', icon: 'restart', onClick: load }),
+    ),
     summaryHost,
     rateHost,
     card(t('routing.live'), eventsPanel(scope, 'switchyard', { mode: 'routing', kinds: ['routing.decision'] })),
@@ -125,12 +121,13 @@ class NcSwitchyard extends NcView {
           id: 'routing',
           label: t('tab.routing'),
           render: (scope, ctx) => {
-            const el = routingTab(scope);
+            const el = routingTab(scope, ctx);
             const box = el.querySelector('#sy-status');
             ctx.onStatus((st) => clear(box).append(statusDetails(st)));
             return el;
           },
         },
+        { id: 'flow', label: t('tab.flow'), render: (scope, ctx) => flowTab(scope, ctx) },
         { id: 'config', label: t('tab.config'), render: (scope) => configEditor(scope, 'switchyard') },
         { id: 'playground', label: t('tab.playground'), render: (scope) => playgroundPanel(scope, 'switchyard') },
         { id: 'actions', label: t('tab.actions'), render: (scope) => actionsPanel(scope, 'switchyard') },

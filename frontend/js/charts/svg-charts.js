@@ -17,13 +17,13 @@ const xTimeTicks = (ticks, h) => ticks.map((tk) => svg('text', { class: 'tick', 
 export const compactNum = (v) => (Math.abs(v) >= 1000 ? fmtCompact(v) : String(Math.round(v * 10) / 10));
 
 /** Stacked bars over time. series: [{key, label, cls (bf1..), values}]. */
-export function stackedChart({ ts, bucketS, series, width = 560, height = 210, ariaLabel, yFmt = compactNum, unit = '' }) {
+export function stackedChart({ ts, bucketS, series, width = 560, height = 210, ariaLabel, yFmt = compactNum, unit = '', valueFmt = fmtInt }) {
   const live = series.some((s) => s.values.some((v) => v > 0));
   if (!ts?.length || !live) return null;
   const g = stackedBars({ ts, bucketS, series, width, height });
   const bars = g.rects.map((r) => {
     const el = svg('rect', { class: series[r.si].cls, x: r.x, y: r.y, width: r.w, height: r.h });
-    return titled(el, `${series[r.si].label}: ${fmtInt(r.v)}${unit} · ${fmtStamp(ts[r.i])} UTC`);
+    return titled(el, `${series[r.si].label}: ${valueFmt(r.v)}${unit} · ${fmtStamp(ts[r.i])} UTC`);
   });
   return frame(width, height, ariaLabel, [...yGrid(g.plot, g.yTicks, yFmt), ...bars, ...xTimeTicks(g.time.ticks, height)]);
 }
@@ -139,19 +139,25 @@ export function scatterChart(points, { modelClass, onOpen, width = 640, height =
   return frame(width, height, ariaLabel, [...grid, ...dots], 'scatterchart');
 }
 
-/** Three-column flow (route -> decision -> served model) from analytics.routing.flows. */
-export function flowChart(flows, { ariaLabel, width = 640, height = 250 }) {
+/**
+ * Three-column flow (route -> decision -> served model) from analytics.routing.flows. The Switchyard page (addendum 9.14) reuses it
+ * with `heads` (the column titles, already translated, one per layer) and `labelOf` (a node's shown name: its id may carry a column
+ * prefix so a route and a target of the same name stay two nodes).
+ */
+export function flowChart(flows, { ariaLabel, width = 640, height = 250, heads: customHeads = null, labelOf = (name) => name }) {
   const f = flowLayout({ flows, width, height, margin: { l: 4, r: 4, t: 22, b: 6 } });
   if (!f.nodes.length) return null;
-  const heads = f.layers === 3 ? ['rt.routing.route', 'rt.routing.decision', 'rt.routing.served'] : [];
+  const heads = customHeads ?? (f.layers === 3 ? ['rt.routing.route', 'rt.routing.decision', 'rt.routing.served'].map((k) => t(k)) : []);
   const lastLayer = f.layers - 1;
-  const links = f.links.map((l) => titled(svg('path', { class: `flow-link fl${l.sourceLayer % 3}`, d: l.d }), t('rt.flow.link', { from: l.source, to: l.target, n: fmtInt(l.value) })));
+  const links = f.links.map((l) =>
+    titled(svg('path', { class: `flow-link fl${l.sourceLayer % 3}`, d: l.d }), t('rt.flow.link', { from: labelOf(l.source), to: labelOf(l.target), n: fmtInt(l.value) })),
+  );
   const nodes = f.nodes.flatMap((n) => [
-    titled(svg('rect', { class: `flow-node fl${n.layer % 3}`, x: n.x, y: n.y, width: n.w, height: n.h, rx: 2 }), t('rt.flow.node', { name: n.name, n: fmtInt(n.value) })),
+    titled(svg('rect', { class: `flow-node fl${n.layer % 3}`, x: n.x, y: n.y, width: n.w, height: n.h, rx: 2 }), t('rt.flow.node', { name: labelOf(n.name), n: fmtInt(n.value) })),
     svg(
       'text',
       { class: 'flow-label', x: n.layer === lastLayer && lastLayer > 0 ? n.x - 6 : n.x + n.w + 6, y: n.y + n.h / 2 + 4, 'text-anchor': n.layer === lastLayer && lastLayer > 0 ? 'end' : 'start' },
-      `${n.name} · ${fmtInt(n.value)}`,
+      `${labelOf(n.name)} · ${fmtInt(n.value)}`,
     ),
   ]);
   const headers = f.nodes.length
@@ -162,7 +168,7 @@ export function flowChart(flows, { ariaLabel, width = 640, height = 250 }) {
             ? svg(
                 'text',
                 { class: 'flow-head', x: f.nodes.find((n) => n.layer === l).x + (l === lastLayer ? f.nodes.find((n) => n.layer === l).w : 0), y: 12, 'text-anchor': l === lastLayer ? 'end' : 'start' },
-                t(heads[l]),
+                heads[l],
               )
             : null,
         )
