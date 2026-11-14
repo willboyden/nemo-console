@@ -131,6 +131,13 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/systems/{system_id}/fleet",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-38"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/systems/{system_id}/metrics",
       "auth": "viewer",
       "body": false

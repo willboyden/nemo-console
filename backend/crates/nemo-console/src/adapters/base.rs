@@ -305,6 +305,13 @@ pub trait SystemAdapter: Send + Sync {
         Err(AdapterError::NoSuchEndpoint)
     }
 
+    // ── DCGM fleet history (addendum 9.14): other systems answer 404 ────────────────────────────
+    /// `GET /systems/dcgm/fleet`: per-GPU history of every DCGM host Prometheus scrapes. `metric` and `window` are
+    /// validated by the route against the DCGM adapter's tables; `Invalid` -> 422.
+    async fn dcgm_fleet(&self, _metric: &str, _window: &str) -> Result<Value, AdapterError> {
+        Err(AdapterError::NoSuchEndpoint)
+    }
+
     // ── standing background work (addendum 9.12) ────────────────────────────────────────────────
     /// Start the adapter's own standing background task, if it has one. Called once when the server starts and
     /// background tasks are on; never from a request.

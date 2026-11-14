@@ -135,6 +135,250 @@ pub fn histogram_quantile(q: f64, buckets: &[(f64, f64)]) -> Option<f64> {
     Some(prev_bound)
 }
 
+// ── addendum 9.14: per-model latency, errors, cache, context; routing overhead, fallbacks, decisions, outcomes ──
+
+/// A JSON number (never a bool), finite.
+fn num(v: Option<&PyJson>) -> Option<f64> {
+    match v {
+        #[allow(clippy::cast_precision_loss)]
+        Some(PyJson::Int(i)) => Some(*i as f64),
+        Some(PyJson::Float(f)) if f.is_finite() => Some(*f),
+        _ => None,
+    }
+}
+
+fn point_with(key: &str, value: f64, unit: &str, labels: &[(&str, &str)]) -> MetricPoint {
+    MetricPoint {
+        key: key.to_owned(),
+        value,
+        unit: unit.to_owned(),
+        labels: labels
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect(),
+    }
+}
+
+/// `{p50_ms, p99_ms, count}` of a `/v1/stats` latency block -> `[(q, ms)]`; nothing when `count` says 0.
+fn stats_quantiles(block: &IndexMap<String, PyJson>) -> Vec<(&'static str, f64)> {
+    if num(block.get("count")) == Some(0.0) {
+        return Vec::new();
+    }
+    [("p50", "p50_ms"), ("p99", "p99_ms")]
+        .into_iter()
+        .filter_map(|(q, field)| num(block.get(field)).map(|v| (q, v)))
+        .collect()
+}
+
+/// Cumulative `le` buckets of `<name>_bucket` grouped by one label (`None`: all summed under ""), unparseable
+/// bounds skipped.
+fn buckets_by(
+    samples: &[Sample],
+    name: &str,
+    by: Option<&str>,
+) -> IndexMap<String, Vec<(f64, f64)>> {
+    let bucket = format!("{name}_bucket");
+    let mut out: IndexMap<String, Vec<(f64, f64)>> = IndexMap::new();
+    for (n, labels, v) in samples {
+        if *n != bucket {
+            continue;
+        }
+        let Some(le) = labels.get("le") else {
+            continue;
+        };
+        let le = if le == "+Inf" || le == "Inf" {
+            f64::INFINITY
+        } else {
+            match py_float(le) {
+                Some(x) => x,
+                None => continue,
+            }
+        };
+        let group = match by {
+            Some(l) => match labels.get(l) {
+                Some(g) => g.clone(),
+                None => continue,
+            },
+            None => String::new(),
+        };
+        let slot = out.entry(group).or_default();
+        #[allow(clippy::float_cmp)]
+        match slot.iter_mut().find(|(b, _)| *b == le) {
+            Some(s) => s.1 += v,
+            None => slot.push((le, 0.0 + v)),
+        }
+    }
+    out
+}
+
+/// `name{labels}` summed per value of the given labels, ordered by those values.
+fn sum_by(samples: &[Sample], name: &str, by: &[&str]) -> Vec<(Vec<String>, f64)> {
+    let mut out: IndexMap<Vec<String>, f64> = IndexMap::new();
+    for (n, labels, v) in samples {
+        if n != name {
+            continue;
+        }
+        let Some(vals) = by
+            .iter()
+            .map(|l| labels.get(*l).cloned())
+            .collect::<Option<Vec<String>>>()
+        else {
+            continue;
+        };
+        *out.entry(vals).or_insert(0.0) += v;
+    }
+    let mut v: Vec<(Vec<String>, f64)> = out.into_iter().collect();
+    v.sort_by(|a, b| a.0.cmp(&b.0));
+    v
+}
+
+/// The keys of addendum 9.14 from one `/v1/stats` document and one `/metrics` scrape (pure). Per key the stats are
+/// read first and `/metrics` stands in when the stats lack that block; a value neither reports gives no point.
+#[must_use]
+pub fn points_9_14(
+    stats: Option<&IndexMap<String, PyJson>>,
+    samples: &[Sample],
+) -> Vec<MetricPoint> {
+    let mut pts: Vec<MetricPoint> = Vec::new();
+    // per model: latency p50/p99, errors, cache-hit ratio, largest observed context
+    if let Some(models) = dict(stats.and_then(|s| s.get("models"))) {
+        let mut sorted: Vec<(&String, &PyJson)> = models.iter().collect();
+        sorted.sort_by(|a, b| a.0.cmp(b.0));
+        for (mid, m) in sorted {
+            let PyJson::Dict(m) = m else {
+                continue;
+            };
+            if let Some(lat) = dict(m.get("model_call_latency")) {
+                for (q, v) in stats_quantiles(lat) {
+                    pts.push(point_with(
+                        "sy.model.latency_ms",
+                        v,
+                        "ms",
+                        &[("model", mid), ("q", q)],
+                    ));
+                }
+            }
+            for (field, key, unit) in [
+                ("errors", "sy.model.errors_total", "1"),
+                ("cache_hit_rate", "sy.model.cache_hit_ratio", "ratio"),
+                (
+                    "max_observed_context_tokens",
+                    "sy.model.max_context_tokens",
+                    "tok",
+                ),
+            ] {
+                if let Some(v) = num(m.get(field)) {
+                    pts.push(point_with(key, v, unit, &[("model", mid)]));
+                }
+            }
+        }
+    } else {
+        let mut by_model: Vec<(String, Vec<(f64, f64)>)> =
+            buckets_by(samples, "switchyard_model_call_latency_ms", Some("model"))
+                .into_iter()
+                .collect();
+        by_model.sort_by(|a, b| a.0.cmp(&b.0));
+        for (mid, buckets) in by_model {
+            for (q, p) in [("p50", 0.5), ("p99", 0.99)] {
+                if let Some(v) = histogram_quantile(p, &buckets) {
+                    pts.push(point_with(
+                        "sy.model.latency_ms",
+                        v,
+                        "ms",
+                        &[("model", &mid), ("q", q)],
+                    ));
+                }
+            }
+        }
+        for (vals, v) in sum_by(samples, "switchyard_errors_total", &["model"]) {
+            pts.push(point_with(
+                "sy.model.errors_total",
+                v,
+                "1",
+                &[("model", &vals[0])],
+            ));
+        }
+    }
+    // routing overhead p50/p99
+    if let Some(ro) = dict(stats.and_then(|s| s.get("routing_overhead"))) {
+        for (q, v) in stats_quantiles(ro) {
+            pts.push(point_with("sy.routing_overhead_ms", v, "ms", &[("q", q)]));
+        }
+    } else if let Some(buckets) =
+        buckets_by(samples, "switchyard_routing_overhead_ms", None).get("")
+    {
+        for (q, p) in [("p50", 0.5), ("p99", 0.99)] {
+            if let Some(v) = histogram_quantile(p, buckets) {
+                pts.push(point_with("sy.routing_overhead_ms", v, "ms", &[("q", q)]));
+            }
+        }
+    }
+    // fallbacks by reason (only /v1/stats reports them)
+    if let Some(fb) = dict(stats.and_then(|s| s.get("routing_fallbacks"))) {
+        let mut reasons: Vec<(&String, &PyJson)> = fb.iter().collect();
+        reasons.sort_by(|a, b| a.0.cmp(b.0));
+        for (reason, v) in reasons {
+            if let Some(v) = num(Some(v)) {
+                pts.push(point_with(
+                    "sy.fallbacks_total",
+                    v,
+                    "1",
+                    &[("reason", reason)],
+                ));
+            }
+        }
+    }
+    // stage-router decisions: source -> target
+    let decisions = dict(stats.and_then(|s| s.get("algorithm_stats")))
+        .and_then(|a| dict(a.get("stage_router")))
+        .and_then(|r| dict(r.get("routing_decisions")));
+    if let Some(dec) = decisions {
+        let mut rows: Vec<(String, String, f64)> = Vec::new();
+        for (source, d) in dec {
+            let Some(targets) = dict(Some(d)).and_then(|d| dict(d.get("targets"))) else {
+                continue;
+            };
+            for (target, v) in targets {
+                if let Some(v) = num(Some(v)) {
+                    rows.push((source.clone(), target.clone(), v));
+                }
+            }
+        }
+        rows.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+        for (source, target, v) in rows {
+            pts.push(point_with(
+                "sy.decisions_total",
+                v,
+                "1",
+                &[("source", &source), ("target", &target)],
+            ));
+        }
+    } else {
+        for (vals, v) in sum_by(
+            samples,
+            "switchyard_stage_router_routing_decisions_total",
+            &["decision_source", "target_name"],
+        ) {
+            pts.push(point_with(
+                "sy.decisions_total",
+                v,
+                "1",
+                &[("source", &vals[0]), ("target", &vals[1])],
+            ));
+        }
+    }
+    // what the clients got (only /metrics reports it)
+    for (vals, v) in sum_by(samples, "switchyard_client_responses_total", &["outcome"]) {
+        pts.push(point_with(
+            "sy.client_responses_total",
+            v,
+            "1",
+            &[("outcome", &vals[0])],
+        ));
+    }
+    pts
+}
+
 fn to_epoch(ts: Option<&PyJson>) -> Option<f64> {
     match ts {
         Some(PyJson::Str(s)) => fromisoformat(s).map(|d| d.timestamp()),
@@ -1263,6 +1507,8 @@ impl SwitchyardAdapter {
             }
         }
         pts.extend(self.route_call_points().await?);
+        // addendum 9.14: appended last, so under the per-system series cap the older keys keep their places
+        pts.extend(points_9_14(stats_d, &samples));
         Ok(MetricsSnapshot {
             system: SystemId::Switchyard,
             ts: now,

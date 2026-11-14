@@ -262,6 +262,183 @@ pub const GPU_METRICS: [(&str, &str, &str, f64); 15] = [
     ("DCGM_FI_PROF_PCIE_RX_BYTES", "dcgm.pcie_rx_bps", "B/s", 1.0),
 ];
 
+/// Addendum 9.14: more per-GPU families with the labels `{gpu, model}` of [`GPU_METRICS`] (family, key, unit,
+/// scale). A family the exporter does not serve gives no point. `dcgm.mem_temp_c` 0 is "not supported" (boards
+/// without a memory sensor report 0 C), so it gives no point either.
+pub const GPU_METRICS_9_14: [(&str, &str, &str, f64); 7] = [
+    (
+        "DCGM_FI_DEV_FB_RESERVED",
+        "dcgm.fb_reserved_b",
+        "B",
+        1_048_576.0,
+    ),
+    ("DCGM_FI_DEV_MEMORY_TEMP", "dcgm.mem_temp_c", "C", 1.0),
+    ("DCGM_FI_DEV_MEM_CLOCK", "dcgm.mem_clock_mhz", "MHz", 1.0),
+    ("DCGM_FI_DEV_ENC_UTIL", "dcgm.enc_util", "ratio", 0.01),
+    ("DCGM_FI_DEV_DEC_UTIL", "dcgm.dec_util", "ratio", 0.01),
+    (
+        "DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION",
+        "dcgm.energy_mj_total",
+        "mJ",
+        1.0,
+    ),
+    (
+        "DCGM_FI_DEV_ROW_REMAP_FAILURE",
+        "dcgm.row_remap_failure",
+        "1",
+        1.0,
+    ),
+];
+
+/// `dcgm.power_limit_w`: the configured management limit, else the enforced one (per GPU).
+pub const POWER_LIMIT_FAMILIES: [&str; 2] = [
+    "DCGM_FI_DEV_POWER_MGMT_LIMIT",
+    "DCGM_FI_DEV_ENFORCED_POWER_LIMIT",
+];
+
+/// `dcgm.violation_us_total{reason}`: the `*_VIOLATION` counters (family, reason).
+pub const VIOLATION_FAMILIES: [(&str, &str); 6] = [
+    ("DCGM_FI_DEV_POWER_VIOLATION", "power"),
+    ("DCGM_FI_DEV_THERMAL_VIOLATION", "thermal"),
+    ("DCGM_FI_DEV_BOARD_LIMIT_VIOLATION", "board"),
+    ("DCGM_FI_DEV_LOW_UTIL_VIOLATION", "low_util"),
+    ("DCGM_FI_DEV_RELIABILITY_VIOLATION", "reliability"),
+    ("DCGM_FI_DEV_SYNC_BOOST_VIOLATION", "sync_boost"),
+];
+
+/// The exporter's counters.csv documents the `*_VIOLATION` counters in ns; the key is in microseconds.
+pub const VIOLATION_SCALE: f64 = 0.001;
+
+/// `dcgm.remapped_rows{kind}` (family, kind).
+pub const REMAPPED_FAMILIES: [(&str, &str); 2] = [
+    ("DCGM_FI_DEV_CORRECTABLE_REMAPPED_ROWS", "correctable"),
+    ("DCGM_FI_DEV_UNCORRECTABLE_REMAPPED_ROWS", "uncorrectable"),
+];
+
+/// `{gpu, model}` of a per-GPU sample; `None` when the `gpu` label is not a short index (never a UUID).
+fn gpu_labels(labels: &IndexMap<String, String>) -> Option<IndexMap<String, String>> {
+    let g = labels.get("gpu").map_or("", String::as_str);
+    if !pystr::is_ascii_digits(g) || g.chars().count() > 3 {
+        return None;
+    }
+    let mut l = IndexMap::new();
+    l.insert("gpu".to_owned(), g.to_owned());
+    l.insert(
+        "model".to_owned(),
+        clean_label(&short_model(
+            labels.get("modelName").map_or("", String::as_str),
+        )),
+    );
+    Some(l)
+}
+
+fn gpu_point(
+    key: &str,
+    value: f64,
+    unit: &str,
+    mut labels: IndexMap<String, String>,
+    extra: Option<(&str, &str)>,
+) -> MetricPoint {
+    if let Some((k, v)) = extra {
+        labels.insert(k.to_owned(), v.to_owned());
+    }
+    MetricPoint {
+        key: key.to_owned(),
+        value,
+        unit: unit.to_owned(),
+        labels,
+    }
+}
+
+/// The per-GPU points of addendum 9.14 from one scrape (pure). Families the scrape lacks give no point.
+#[must_use]
+pub fn gpu_points_9_14(s: &Samples) -> Vec<MetricPoint> {
+    let rows = |fam: &str| s.get(fam).map_or(&[][..], Vec::as_slice);
+    let mut pts: Vec<MetricPoint> = Vec::new();
+    for (fam, key, unit, scale) in GPU_METRICS_9_14 {
+        for (labels, v) in rows(fam) {
+            #[allow(clippy::float_cmp)]
+            if key == "dcgm.mem_temp_c" && *v == 0.0 {
+                continue;
+            }
+            if let Some(l) = gpu_labels(labels) {
+                pts.push(gpu_point(key, v * scale, unit, l, None));
+            }
+        }
+    }
+    let mut limited: HashSet<String> = HashSet::new();
+    for fam in POWER_LIMIT_FAMILIES {
+        for (labels, v) in rows(fam) {
+            if let Some(l) = gpu_labels(labels)
+                && limited.insert(l["gpu"].clone())
+            {
+                pts.push(gpu_point("dcgm.power_limit_w", *v, "W", l, None));
+            }
+        }
+    }
+    for (fam, reason) in VIOLATION_FAMILIES {
+        for (labels, v) in rows(fam) {
+            if let Some(l) = gpu_labels(labels) {
+                pts.push(gpu_point(
+                    "dcgm.violation_us_total",
+                    v * VIOLATION_SCALE,
+                    "us",
+                    l,
+                    Some(("reason", reason)),
+                ));
+            }
+        }
+    }
+    for (fam, kind) in REMAPPED_FAMILIES {
+        for (labels, v) in rows(fam) {
+            if let Some(l) = gpu_labels(labels) {
+                pts.push(gpu_point(
+                    "dcgm.remapped_rows",
+                    *v,
+                    "1",
+                    l,
+                    Some(("kind", kind)),
+                ));
+            }
+        }
+    }
+    pts
+}
+
+// ── the fleet route (addendum 9.14): per-GPU history of every DCGM host Prometheus scrapes ──────────
+
+/// `metric` -> (DCGM family, unit, scale): the ONLY families the fleet route queries (ADR-0014: no client text in
+/// an expression). Units and scales are those of the per-GPU keys (`dcgm.gpu_util`, `dcgm.gpu_temp_c`,
+/// `dcgm.power_w`, `dcgm.fb_used_b`).
+pub const FLEET_METRICS: [(&str, &str, &str, f64); 4] = [
+    ("util", "DCGM_FI_DEV_GPU_UTIL", "ratio", 0.01),
+    ("temp", "DCGM_FI_DEV_GPU_TEMP", "C", 1.0),
+    ("power", "DCGM_FI_DEV_POWER_USAGE", "W", 1.0),
+    ("fb_used", "DCGM_FI_DEV_FB_USED", "B", 1_048_576.0),
+];
+/// `window` -> (span s, step s) of the fleet route; the default is `24h`.
+pub const FLEET_WINDOWS: [(&str, i64, i64); 3] = [
+    ("1h", 3600, 60),
+    ("24h", 86_400, 300),
+    ("7d", 604_800, 1800),
+];
+pub const FLEET_DEFAULT_WINDOW: &str = "24h";
+/// At most this many rows (host, GPU) per answer; the rest are dropped and `truncated` is true.
+pub const FLEET_MAX_ROWS: usize = 64;
+/// Answers are cached this long per (metric, window).
+pub const FLEET_CACHE_S: f64 = 30.0;
+/// At most this many Prometheus series are read before sorting (a bound on a misbehaving Prometheus).
+const FLEET_MAX_SERIES: usize = 1024;
+/// A `query_range` answer larger than this is refused.
+const FLEET_MAX_BYTES: usize = 32 * 1024 * 1024;
+
+/// The PromQL of a fleet metric over the given jobs regex: the table's family, grouped to the four labels the
+/// answer keeps (so no UUID or serial ever comes back).
+#[must_use]
+pub fn fleet_query(family: &str, jobs: &str) -> String {
+    format!("max by (job, host, gpu, modelName) ({family}{{job=~\"{jobs}\"}})")
+}
+
 /// `{family: [(labels, value)]}` in first-appearance order (a Python dict).
 pub type Samples = IndexMap<String, Vec<(IndexMap<String, String>, f64)>>;
 
@@ -628,6 +805,8 @@ struct St {
     events: VecDeque<(u64, SystemEvent)>,
     seq: u64,
     image_cache: Option<(Instant, bool)>,
+    /// The fleet route's answers per (metric, window), with when they were fetched (addendum 9.14).
+    fleet_cache: IndexMap<(String, String), (Instant, Value)>,
 }
 
 pub struct DcgmAdapter {
@@ -636,6 +815,8 @@ pub struct DcgmAdapter {
     timing: Mutex<DcgmTiming>,
     st: Mutex<St>,
     diag_lock: tokio::sync::Mutex<()>,
+    /// How long a fleet answer is reused (`FLEET_CACHE_S`; tests shorten it).
+    fleet_ttl: Mutex<f64>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -653,6 +834,7 @@ impl DcgmAdapter {
             timing: Mutex::new(DcgmTiming::default()),
             st: Mutex::new(St::default()),
             diag_lock: tokio::sync::Mutex::new(()),
+            fleet_ttl: Mutex::new(FLEET_CACHE_S),
         }
     }
 
@@ -940,6 +1122,184 @@ impl DcgmAdapter {
             .and_then(|a| a.get(1))
             .and_then(wsb::json_float)?;
         v.is_finite().then_some(v)
+    }
+
+    // ── the fleet route (addendum 9.14) ─────────────────────────────────────────────────────
+    /// How long a fleet answer is reused, in seconds (`FLEET_CACHE_S`; tests shorten it).
+    pub fn set_fleet_cache_ttl(&self, seconds: f64) {
+        *lock(&self.fleet_ttl) = seconds;
+    }
+
+    /// `query_range` against the configured Prometheus (the client, timeout and URL of the instant queries): the
+    /// result series, or `(code, message)` when Prometheus is down or answered something unusable.
+    async fn prom_range(
+        &self,
+        expr: &str,
+        start: i64,
+        end: i64,
+        step: i64,
+    ) -> Result<Vec<Map<String, Value>>, (String, String)> {
+        let url = format!("{}/api/v1/query_range", self.prom_url());
+        let (start, end, step) = (start.to_string(), end.to_string(), step.to_string());
+        let query = [
+            ("query", expr),
+            ("start", start.as_str()),
+            ("end", end.as_str()),
+            ("step", step.as_str()),
+        ];
+        let resp = match self.ctx.http.get_query(&url, &query, 5.0).await {
+            Ok(r) => r,
+            Err(e) => {
+                return Err((
+                    "dcgm.prometheus.unreachable".to_owned(),
+                    format!("Prometheus did not answer ({}); no fleet history", e.class),
+                ));
+            }
+        };
+        let bad = |why: String| ("dcgm.prometheus.bad_answer".to_owned(), why);
+        if resp.status != 200 {
+            return Err(bad(format!(
+                "Prometheus answered HTTP {}; no fleet history",
+                resp.status
+            )));
+        }
+        if resp.body.len() > FLEET_MAX_BYTES {
+            return Err(bad(
+                "Prometheus answer too large; no fleet history".to_owned()
+            ));
+        }
+        let unexpected =
+            || bad("Prometheus answered an unexpected document; no fleet history".to_owned());
+        let d = resp.json().map_err(|_| unexpected())?;
+        let d = d.as_object().ok_or_else(unexpected)?;
+        if d.get("status").and_then(Value::as_str) != Some("success") {
+            return Err(unexpected());
+        }
+        let res = as_obj(d.get("data")).and_then(|x| x.get("result"));
+        Ok(as_list(res)
+            .iter()
+            .filter_map(|r| r.as_object().cloned())
+            .take(FLEET_MAX_SERIES)
+            .collect())
+    }
+
+    /// One fleet row: `{host, job, gpu, model, points}` with `(host, gpu, job)` to sort by; `None` for a series
+    /// without a GPU index.
+    fn fleet_row(
+        series: &Map<String, Value>,
+        scale: f64,
+    ) -> Option<((String, u32, String), Value)> {
+        let labels = series.get("metric").and_then(Value::as_object);
+        let gpu = labels
+            .and_then(|m| m.get("gpu"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        if !pystr::is_ascii_digits(gpu) || gpu.chars().count() > 3 {
+            return None;
+        }
+        let (job, host) = Self::host_of(labels);
+        let model = clean_label(&short_model(
+            labels
+                .and_then(|m| m.get("modelName"))
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+        ));
+        let mut points: Vec<Value> = Vec::new();
+        for pair in as_list(series.get("values")) {
+            let Some(pair) = pair.as_array() else {
+                continue;
+            };
+            let (Some(ts), Some(v)) = (
+                pair.first().and_then(Value::as_f64),
+                pair.get(1).and_then(wsb::json_float),
+            ) else {
+                continue;
+            };
+            if !ts.is_finite() || !v.is_finite() {
+                continue;
+            }
+            #[allow(clippy::cast_possible_truncation, clippy::float_cmp)]
+            let ts = if ts.fract() == 0.0 {
+                json!(ts as i64)
+            } else {
+                json!(ts)
+            };
+            points.push(json!([ts, v * scale]));
+        }
+        let order = (
+            host.clone(),
+            gpu.parse::<u32>().unwrap_or(u32::MAX),
+            job.clone(),
+        );
+        Some((
+            order,
+            json!({"host": host, "job": job, "gpu": gpu, "model": model, "points": points}),
+        ))
+    }
+
+    /// `GET /systems/dcgm/fleet?metric=&window=` (addendum 9.14): per-GPU history of every host Prometheus scrapes
+    /// for the configured `dcgm_prometheus_jobs`. The expression comes from `FLEET_METRICS` and the configured job
+    /// names only. Prometheus down -> the answer with `rows: []` and `problem: {code, message}` (not cached).
+    pub async fn fleet(&self, metric: &str, window: &str) -> Result<Value, AdapterError> {
+        let Some((_, family, unit, scale)) = FLEET_METRICS.iter().find(|m| m.0 == metric).copied()
+        else {
+            return Err(AdapterError::Invalid(format!(
+                "unknown metric {}",
+                str_repr(metric)
+            )));
+        };
+        let Some((_, span, step)) = FLEET_WINDOWS.iter().find(|w| w.0 == window).copied() else {
+            return Err(AdapterError::Invalid(format!(
+                "unknown window {}",
+                str_repr(window)
+            )));
+        };
+        let key = (metric.to_owned(), window.to_owned());
+        let ttl = *lock(&self.fleet_ttl);
+        if let Some((at, doc)) = lock(&self.st).fleet_cache.get(&key)
+            && at.elapsed().as_secs_f64() < ttl
+        {
+            return Ok(doc.clone());
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        let now = now_ts().floor() as i64;
+        let end = now - now.rem_euclid(step);
+        let start = end - span;
+        let mut doc = json!({
+            "metric": metric, "unit": unit, "window": window, "step_s": step,
+            "from": start, "to": end, "rows": [], "truncated": false,
+        });
+        let jobs = self.jobs_regex();
+        if jobs.is_empty() {
+            doc["problem"] = json!({
+                "code": "dcgm.fleet.no_jobs",
+                "message": "no Prometheus job is configured for DCGM (dcgm_prometheus_jobs)",
+            });
+            return Ok(doc);
+        }
+        let series = match self
+            .prom_range(&fleet_query(family, &jobs), start, end, step)
+            .await
+        {
+            Ok(s) => s,
+            Err((code, message)) => {
+                doc["problem"] = json!({"code": code, "message": message});
+                return Ok(doc);
+            }
+        };
+        let mut rows: Vec<((String, u32, String), Value)> = series
+            .iter()
+            .filter_map(|s| Self::fleet_row(s, scale))
+            .collect();
+        rows.sort_by(|a, b| a.0.cmp(&b.0));
+        let truncated = rows.len() > FLEET_MAX_ROWS;
+        rows.truncate(FLEET_MAX_ROWS);
+        doc["rows"] = Value::Array(rows.into_iter().map(|(_, r)| r).collect());
+        doc["truncated"] = Value::Bool(truncated);
+        lock(&self.st)
+            .fleet_cache
+            .insert(key, (Instant::now(), doc.clone()));
+        Ok(doc)
     }
 
     async fn hosts_up(&self) -> Option<Vec<(String, String, bool)>> {
@@ -1349,24 +1709,9 @@ impl DcgmAdapter {
             self.observe(s);
             for (fam, key, unit, scale) in GPU_METRICS {
                 for (labels, v) in s.get(fam).map_or(&[][..], Vec::as_slice) {
-                    let g = labels.get("gpu").map_or("", String::as_str);
-                    if !pystr::is_ascii_digits(g) || g.chars().count() > 3 {
-                        continue;
+                    if let Some(l) = gpu_labels(labels) {
+                        pts.push(gpu_point(key, v * scale, unit, l, None));
                     }
-                    let mut l = IndexMap::new();
-                    l.insert("gpu".to_owned(), g.to_owned());
-                    l.insert(
-                        "model".to_owned(),
-                        clean_label(&short_model(
-                            labels.get("modelName").map_or("", String::as_str),
-                        )),
-                    );
-                    pts.push(MetricPoint {
-                        key: key.to_owned(),
-                        value: v * scale,
-                        unit: unit.to_owned(),
-                        labels: l,
-                    });
                 }
             }
         }
@@ -1407,6 +1752,10 @@ impl DcgmAdapter {
                     }
                 }
             }
+        }
+        // addendum 9.14: appended last, so under the per-system series cap the older keys keep their places
+        if let Some(s) = &samples {
+            pts.extend(gpu_points_9_14(s));
         }
         if pts.is_empty() {
             let e = format!(
@@ -2067,6 +2416,10 @@ impl SystemAdapter for DcgmAdapter {
 
     async fn metrics(&self) -> Result<MetricsSnapshot, AdapterError> {
         Ok(self.metrics_impl().await)
+    }
+
+    async fn dcgm_fleet(&self, metric: &str, window: &str) -> Result<Value, AdapterError> {
+        self.fleet(metric, window).await
     }
 
     async fn recent_events(&self, limit: usize) -> Result<Vec<SystemEvent>, AdapterError> {

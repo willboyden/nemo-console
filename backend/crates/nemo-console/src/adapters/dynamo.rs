@@ -543,6 +543,13 @@ pub fn histogram_quantile(samples: &[Sample], base: &str, q: f64) -> Option<f64>
             }
         }
     }
+    bucket_quantile(cum, q)
+}
+
+/// The quantile of cumulative `(le, count)` buckets (any order), linear interpolation inside a bucket; the overflow
+/// bucket answers its largest finite bound. `None` when there are no buckets or no observations.
+#[must_use]
+pub fn bucket_quantile(mut cum: Vec<(f64, f64)>, q: f64) -> Option<f64> {
     if cum.is_empty() {
         return None;
     }
@@ -568,6 +575,260 @@ pub fn histogram_quantile(samples: &[Sample], base: &str, q: f64) -> Option<f64>
         prev_c = c;
     }
     None
+}
+
+// ── addendum 9.14: windowed quantiles (requests that finished since the previous poll) ─────────────────
+
+/// Cumulative bucket counts of one histogram family: label set (every label but `le`, as text) -> `[(le, count)]`.
+pub type HistCounts = std::collections::BTreeMap<String, Vec<(f64, f64)>>;
+
+/// The `<base>_bucket` samples of one scrape as [`HistCounts`]; empty when the family is absent.
+#[must_use]
+pub fn hist_counts(samples: &[Sample], base: &str) -> HistCounts {
+    let bucket = format!("{base}_bucket");
+    let mut out = HistCounts::new();
+    for (n, lb, v) in samples {
+        if *n != bucket || !v.is_finite() {
+            continue;
+        }
+        let Some(le) = lb.get("le").and_then(|x| py_float(x)) else {
+            continue;
+        };
+        let mut rest: Vec<String> = lb
+            .iter()
+            .filter(|(k, _)| k.as_str() != "le")
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect();
+        rest.sort();
+        let slot = out.entry(rest.join(",")).or_default();
+        #[allow(clippy::float_cmp)]
+        match slot.iter_mut().find(|(b, _)| *b == le) {
+            Some(x) => x.1 += v,
+            None => slot.push((le, *v)),
+        }
+    }
+    out
+}
+
+/// What `cur` added over `prev`, summed over the label sets both have, as cumulative buckets. `None` is a counter
+/// reset: a bucket of a label set went down or disappeared. A label set only one of them has adds nothing (a worker
+/// that restarted under a new id starts its own baseline).
+#[must_use]
+pub fn hist_delta(prev: &HistCounts, cur: &HistCounts) -> Option<Vec<(f64, f64)>> {
+    let mut out: Vec<(f64, f64)> = Vec::new();
+    for (set, now) in cur {
+        let Some(before) = prev.get(set) else {
+            continue;
+        };
+        for (le, c0) in before {
+            #[allow(clippy::float_cmp)]
+            let c1 = now.iter().find(|(b, _)| b == le).map(|x| x.1)?;
+            if c1 < *c0 {
+                return None;
+            }
+            #[allow(clippy::float_cmp)]
+            match out.iter_mut().find(|(b, _)| b == le) {
+                Some(x) => x.1 += c1 - c0,
+                None => out.push((*le, c1 - c0)),
+            }
+        }
+    }
+    Some(out)
+}
+
+/// At most this many earlier reads are kept per family.
+const WINDOW_KEEP: usize = 16;
+
+/// The earlier reads of every windowed histogram family, oldest first, each with its time.
+#[derive(Default)]
+pub struct HistWindows {
+    reads: HashMap<String, std::collections::VecDeque<(f64, HistCounts)>>,
+}
+
+impl HistWindows {
+    /// Record the read `cur` of family `base` at `now` and return the buckets of the observations since the previous
+    /// poll: the newest earlier read at least `min_age` seconds old (else the oldest one kept), so an extra metrics
+    /// read between two poller ticks does not take the poller's window. `None` (no point) when there is no earlier
+    /// read, when the family is absent now (its history is dropped: after a gap the window starts afresh) and on a
+    /// counter reset (the history restarts from `cur`).
+    pub fn observe(
+        &mut self,
+        base: &str,
+        now: f64,
+        min_age: f64,
+        cur: Option<HistCounts>,
+    ) -> Option<Vec<(f64, f64)>> {
+        let Some(cur) = cur.filter(|c| !c.is_empty()) else {
+            self.reads.remove(base);
+            return None;
+        };
+        let reads = self.reads.entry(base.to_owned()).or_default();
+        let base_at = reads
+            .iter()
+            .rposition(|(t, _)| now - t >= min_age)
+            .or(if reads.is_empty() { None } else { Some(0) });
+        let delta = match base_at {
+            None => None,
+            Some(i) => {
+                let d = hist_delta(&reads[i].1, &cur);
+                if d.is_none() {
+                    reads.clear();
+                } else {
+                    reads.drain(..i);
+                }
+                d
+            }
+        };
+        reads.push_back((now, cur));
+        while reads.len() > WINDOW_KEEP {
+            reads.pop_front();
+        }
+        delta
+    }
+
+    /// Forget every family (the frontend could not be read: the next window starts afresh).
+    pub fn clear(&mut self) {
+        self.reads.clear();
+    }
+}
+
+/// One windowed latency key: the key, whether the worker (else the frontend) serves the histogram, the histogram
+/// family (seconds), an extra label, the quantiles.
+pub struct Windowed {
+    pub key: &'static str,
+    pub from_worker: bool,
+    pub family: &'static str,
+    pub label: Option<(&'static str, &'static str)>,
+    pub quantiles: &'static [(&'static str, f64)],
+}
+
+const Q3: &[(&str, f64)] = &[("p50", 0.5), ("p95", 0.95), ("p99", 0.99)];
+const Q2: &[(&str, f64)] = &[("p50", 0.5), ("p95", 0.95)];
+
+/// The windowed keys of addendum 9.14: TTFT and ITL from the frontend, the four request phases from vLLM's worker
+/// histograms.
+pub const WINDOWED: [Windowed; 6] = [
+    Windowed {
+        key: "dyn.ttft_window_ms",
+        from_worker: false,
+        family: "dynamo_frontend_time_to_first_token_seconds",
+        label: None,
+        quantiles: Q3,
+    },
+    Windowed {
+        key: "dyn.itl_window_ms",
+        from_worker: false,
+        family: "dynamo_frontend_inter_token_latency_seconds",
+        label: None,
+        quantiles: Q3,
+    },
+    Windowed {
+        key: "dyn.phase_ms",
+        from_worker: true,
+        family: "vllm:request_queue_time_seconds",
+        label: Some(("phase", "queue")),
+        quantiles: Q2,
+    },
+    Windowed {
+        key: "dyn.phase_ms",
+        from_worker: true,
+        family: "vllm:request_prefill_time_seconds",
+        label: Some(("phase", "prefill")),
+        quantiles: Q2,
+    },
+    Windowed {
+        key: "dyn.phase_ms",
+        from_worker: true,
+        family: "vllm:request_decode_time_seconds",
+        label: Some(("phase", "decode")),
+        quantiles: Q2,
+    },
+    Windowed {
+        key: "dyn.phase_ms",
+        from_worker: true,
+        family: "vllm:request_inference_time_seconds",
+        label: Some(("phase", "inference")),
+        quantiles: Q2,
+    },
+];
+
+/// `dyn.capacity{kind}`: the frontend's per-model gauges (kind, family, unit); the largest across models.
+pub const CAPACITY: [(&str, &str, &str); 4] = [
+    (
+        "context_length",
+        "dynamo_frontend_model_context_length",
+        "tok",
+    ),
+    ("kv_blocks", "dynamo_frontend_model_total_kv_blocks", "1"),
+    ("max_num_seqs", "dynamo_frontend_model_max_num_seqs", "1"),
+    (
+        "max_batched_tokens",
+        "dynamo_frontend_model_max_num_batched_tokens",
+        "tok",
+    ),
+];
+
+/// The non-windowed keys of addendum 9.14 (pure): `dyn.capacity{kind}` from the frontend scrape, and from the
+/// worker scrape (`None`: the worker was not read) `dyn.preemptions_total` and `dyn.spec_accept_pos{pos}` (accepted
+/// tokens at that draft position per draft, since the worker started).
+#[must_use]
+pub fn plain_points_9_14(fe: &[Sample], wm: Option<&[Sample]>) -> Vec<MetricPoint> {
+    let mut pts: Vec<MetricPoint> = Vec::new();
+    let one = |key: &str, value: f64, unit: &str, labels: &[(&str, &str)]| MetricPoint {
+        key: key.to_owned(),
+        value,
+        unit: unit.to_owned(),
+        labels: labels
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect(),
+    };
+    for (kind, family, unit) in CAPACITY {
+        let best = fe
+            .iter()
+            .filter(|(n, _, v)| n == family && v.is_finite())
+            .map(|s| s.2)
+            .reduce(f64::max);
+        if let Some(v) = best {
+            pts.push(one("dyn.capacity", v, unit, &[("kind", kind)]));
+        }
+    }
+    let Some(wm) = wm else {
+        return pts;
+    };
+    if let Some(v) = sum(wm, "vllm:num_preemptions_total") {
+        pts.push(one("dyn.preemptions_total", v, "1", &[]));
+    }
+    if let Some(drafts) = sum(wm, "vllm:spec_decode_num_drafts_total")
+        && drafts > 0.0
+    {
+        let mut by_pos: Vec<(u32, String, f64)> = Vec::new();
+        for (n, lb, v) in wm {
+            if n != "vllm:spec_decode_num_accepted_tokens_per_pos_total" {
+                continue;
+            }
+            let Some(pos) = lb.get("position") else {
+                continue;
+            };
+            let Ok(order) = pos.parse::<u32>() else {
+                continue;
+            };
+            match by_pos.iter_mut().find(|x| x.0 == order) {
+                Some(x) => x.2 += v,
+                None => by_pos.push((order, pos.clone(), *v)),
+            }
+        }
+        by_pos.sort_by_key(|x| x.0);
+        for (_, pos, accepted) in by_pos {
+            pts.push(one(
+                "dyn.spec_accept_pos",
+                accepted / drafts,
+                "ratio",
+                &[("pos", &pos)],
+            ));
+        }
+    }
+    pts
 }
 
 // ── override rendering (pure) ───────────────────────────────────────────────────────────────────
@@ -1546,6 +1807,8 @@ struct DynState {
     card_uuids: Vec<String>,
     uuid_cache: Option<UuidCache>,
     last_files: Option<ComposeFiles>,
+    /// The windowed histograms' earlier reads (addendum 9.14).
+    windows: HistWindows,
 }
 
 pub struct DynamoAdapter {
@@ -1557,6 +1820,10 @@ pub struct DynamoAdapter {
     pub policy: CardPolicy,
     /// The container replaces it (addendum 9.11).
     pub names: DynamoNames,
+    /// The windowed keys (addendum 9.14) compare with the newest earlier read at least this old (seconds), so an
+    /// extra `/metrics` read between two poller ticks does not take the poller's window. The container sets 90% of
+    /// the poll interval.
+    pub window_min_s: f64,
     st: Mutex<DynState>,
 }
 
@@ -1647,6 +1914,7 @@ impl DynamoAdapter {
             follow_interval: 2.0,
             policy: CardPolicy::default(),
             names: DynamoNames::default(),
+            window_min_s: 1.0,
             st: Mutex::new(DynState::default()),
         }
     }
@@ -1656,8 +1924,38 @@ impl DynamoAdapter {
     pub fn from_settings(ctx: &AdapterContext, cfg: &Settings) -> Self {
         let mut a = DynamoAdapter::new(ctx.clone());
         a.names = DynamoNames::from_settings(cfg);
+        a.window_min_s = (cfg.poll_interval_s * 0.9).max(0.0);
         a.policy = CardPolicy::from_settings(cfg, &a.names);
         a
+    }
+
+    /// The windowed keys of addendum 9.14 for this read (`wm` `None`: the worker was not read, so its windows start
+    /// afresh next time).
+    fn windowed_points(&self, now: f64, fe: &[Sample], wm: Option<&[Sample]>) -> Vec<MetricPoint> {
+        let mut pts: Vec<MetricPoint> = Vec::new();
+        let mut st = self.state();
+        for w in &WINDOWED {
+            let cur = if w.from_worker {
+                wm.map(|x| hist_counts(x, w.family))
+            } else {
+                Some(hist_counts(fe, w.family))
+            };
+            let Some(window) = st.windows.observe(w.family, now, self.window_min_s, cur) else {
+                continue;
+            };
+            for (qname, q) in w.quantiles {
+                if let Some(v) = bucket_quantile(window.clone(), *q) {
+                    let mut p = MetricPoint::new(w.key, v * 1000.0);
+                    p.unit = "ms".into();
+                    if let Some((k, val)) = w.label {
+                        p.labels.insert(k.to_owned(), val.to_owned());
+                    }
+                    p.labels.insert("q".to_owned(), (*qname).to_owned());
+                    pts.push(p);
+                }
+            }
+        }
+        pts
     }
 
     fn state(&self) -> std::sync::MutexGuard<'_, DynState> {
@@ -3783,6 +4081,7 @@ impl SystemAdapter for DynamoAdapter {
         {
             Ok(r) if (200..300).contains(&r.status) => parse_prom(&r.text()),
             Ok(_) => {
+                self.state().windows.clear();
                 return Ok(MetricsSnapshot {
                     system: SystemId::Dynamo,
                     ts,
@@ -3792,6 +4091,7 @@ impl SystemAdapter for DynamoAdapter {
                 });
             }
             Err(e) => {
+                self.state().windows.clear();
                 return Ok(MetricsSnapshot {
                     system: SystemId::Dynamo,
                     ts,
@@ -3912,6 +4212,7 @@ impl SystemAdapter for DynamoAdapter {
             .inspect(std::slice::from_ref(&self.names.worker))
             .await?;
         let mut worker_up = 0.0;
+        let mut worker_samples: Option<Vec<Sample>> = None;
         if let Some(wk) = insp.get(&self.names.worker)
             && container_state(Some(wk)) == "running"
             && self.project_ok(wk, &self.names.svc_worker)
@@ -3963,8 +4264,12 @@ impl SystemAdapter for DynamoAdapter {
                     &[],
                 );
             }
+            worker_samples = Some(wm);
         }
         add(&mut pts, "dyn.worker_up", Some(worker_up), "1", &[]);
+        // addendum 9.14: appended last, so under the per-system series cap the older keys keep their places
+        pts.extend(self.windowed_points(ts, &fe, worker_samples.as_deref()));
+        pts.extend(plain_points_9_14(&fe, worker_samples.as_deref()));
         Ok(MetricsSnapshot {
             system: SystemId::Dynamo,
             ts,
