@@ -201,12 +201,14 @@ export function configEditor(scope, systemId) {
   };
   root.append(pickerHost, bodyHost);
   // The live checks are the backend's validators as WebAssembly, loaded once when a Config tab first opens. When the
-  // module arrives (or traps and comes back) the checks run again.
+  // module arrives (or traps and comes back) the checks run again and a YAML Form view that waited for it is built.
   loadWasm();
   scope.own(
     onWasmState(() => {
       if (!scope.alive || !st.ui) return;
       runChecks();
+      // the Form waited for the module (YAML values are typed by it): show it now unless the person chose Text
+      if (st.ui.form && savedView() !== 'text' && !st.checks?.parse.unsupported) st.ui.setView('form');
     }),
   );
 

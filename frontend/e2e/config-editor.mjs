@@ -13,8 +13,9 @@
 //  2. Browser: the AIPerf Config tab in headless Chrome: the WebAssembly checks load under the real CSP (no CSP
 //     violation, no console error), the Form view renders, a value out of range is flagged on its field and in Edit
 //     checks, a value of the wrong type is refused (never written), the Text view marks the line, the server check
-//     runs, `token: abc"defghijk` is flagged with the server's own refusal text, and an unsaved draft survives
-//     leaving the page and coming back.
+//     runs, `token: abc"defghijk` is flagged with the server's own refusal text, a Form edit that would not read back
+//     as typed (a date PyYAML cannot build) is refused and never written, and an unsaved draft survives leaving the
+//     page and coming back.
 //
 //   cd frontend && node e2e/config-editor.mjs     (needs the built backend and a Chrome, like run.mjs)
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
@@ -280,6 +281,23 @@ async function browser(backend, profile) {
     expect(refused.status === 422, `the server did not refuse the secret line (${refused.status})`);
     await until(`document.querySelector('.chk-list').innerText.includes(${JSON.stringify(said)})`, `the editor to flag the secret with the server's text "${said}"`);
     await setDraft(`a.value.replace(${lit(`${SECRET_LINE}\n`)}, '')`);
+    // A Form edit the real loader would not read back as typed: PyYAML resolves 2026-02-30 as a date and then cannot
+    // build it. The edit is refused with the reason, and the draft keeps the old value.
+    await setDraft(`a.value.replace(${lit('  chat-short:\n')}, ${lit('  chat-short:\n    started: 2026-01-01\n')})`);
+    await sleep(300);
+    await ev(`document.querySelector('[data-view=form]').click(); true`);
+    const started = JSON.stringify(JSON.stringify(['profiles', 'chat-short', 'started']));
+    if (await until(`document.querySelector('.ff[data-path=' + JSON.stringify(${started}) + '] input')`, 'the Form field of the new date value')) {
+      await ev(
+        `(() => { const i = document.querySelector('.ff[data-path=' + JSON.stringify(${started}) + '] input'); i.value = '2026-02-30'; i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`,
+      );
+      await until(
+        `(() => { const r = document.querySelector('.ff[data-path=' + JSON.stringify(${started}) + ']'); return r.classList.contains('bad-input') && /would not read it back as typed/.test(r.innerText) && /day is out of range/.test(r.innerText); })()`,
+        'the Form to refuse a date PyYAML cannot read back, with the reason',
+      );
+      await ev(`document.querySelector('[data-view=text]').click(); true`);
+      await until(`/started: 2026-01-01/.test(document.querySelector('textarea.code-edit').value)`, 'the refused date to stay out of the draft');
+    }
     await ev(`location.hash = '#/overview'; true`);
     await sleep(800); // in-app navigation: the editor is disposed
     await ev(`location.hash = '#/aiperf?tab=config'; true`);
@@ -325,7 +343,7 @@ export async function main() {
     return 1;
   }
   console.log(
-    `e2e config editor: the WebAssembly checks give the server's exact answers (${summary}); in Chrome they load under the CSP, flag the secret with the server's text, and Form, Text, info pop-ups and draft restore work`,
+    `e2e config editor: the WebAssembly checks give the server's exact answers (${summary}); in Chrome they load under the CSP, flag the secret with the server's text, refuse a Form edit that would not read back, and Form, Text, info pop-ups and draft restore work`,
   );
   return 0;
 }
