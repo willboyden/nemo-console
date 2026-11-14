@@ -420,6 +420,7 @@
   "dd.live_stat": "Live create run",
   "dd.metrics_unavailable": "No numbers yet.",
   "dd.recent_events": "Run events",
+  "dd.records_admin_only": "The generated rows are admin-only: they are model-written content. Viewers see the run details and the artifact list.",
   "dd.scripts_note_title": "Scripts run locally.",
   "dd.scripts_note": "Validate and apply execute this script on this machine with your user's privileges (that is how Data Designer loads a config builder). Review it before you run either.",
   "dd.live_none": "No create run is running.",

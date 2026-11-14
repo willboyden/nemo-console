@@ -242,11 +242,11 @@ export function sevenMetrics(id, ts, wob, flags = {}) {
     ['0', 'NVIDIA RTX PRO 6000 Blackwell Max-Q'],
     ['1', 'NVIDIA RTX PRO 6000 Blackwell Workstation'],
     ['2', 'NVIDIA GeForce RTX 5090'],
-    ['3', 'NVIDIA GB10 spark1'],
-    ['4', 'NVIDIA GB10 spark2'],
-    ['5', 'NVIDIA GB10 spark3'],
-    ['6', 'NVIDIA GB10 spark4'],
-    ['7', 'NVIDIA RTX PRO 6000 Blackwell ai300b'],
+    ['3', 'NVIDIA GB10'],
+    ['4', 'NVIDIA GB10'],
+    ['5', 'NVIDIA GB10'],
+    ['6', 'NVIDIA GB10'],
+    ['7', 'NVIDIA RTX PRO 6000 Blackwell'],
   ].slice(0, Math.min(8, Math.max(2, flags.dcgmGpus || 2)));
   if (id === 'skillevaluator') return [P('se.skills', 66), P('se.runs', 12), P('se.last_quality_score', 87.5), P('se.last_judge_score', 82.0), P('se.last_skill_lift', 0.125), P('se.live_running', 0)];
   if (id === 'openshell')

@@ -2,6 +2,7 @@
 // actions (preview / create / report / check models / show config), and runs with a server-paginated
 // records table. Follows the SkillEvaluator page structure; every string goes through i18n (dd.*).
 import { NcView } from '../components/base.js';
+import { isAdmin } from '../app-context.js';
 import { h, clear } from '../dom.js';
 import { t } from '../i18n.js';
 import { fmtInt, fmtMs, fmtBytes, fmtDate } from '../format.js';
@@ -112,6 +113,11 @@ function recordsCard(scope, runId) {
   const body = h('div', { class: 'stack-v' }, controls, tableHost);
 
   async function load() {
+    // The rows are model-written content: admin-only (addendum 9.13). A viewer gets a note, not a 403 box.
+    if (!isAdmin()) {
+      clear(tableHost).append(h('p', { class: 'note info', role: 'note' }, t('dd.records_admin_only')));
+      return;
+    }
     clear(tableHost).append(skeleton(2));
     try {
       const r = await scope.api.get(`/systems/${SYS}/runs/${encodeURIComponent(runId)}/records`, { limit: RECORDS_LIMIT, offset: st.offset });

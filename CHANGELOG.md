@@ -8,7 +8,7 @@ implemented / verified-live / unverified defined in the README.
 ### Added
 
 - **Charts for every system, wave 1** (addendum 9.13): a Rust-only route `/systems/{id}/metrics/series` returns up to
-  12 series in one call, for 15 minutes, 1 hour, 24 hours or 7 days, with each bucket's maximum next to its average
+  12 metric keys in one call (each split into at most 32 series by label on request), for 15 minutes, 1 hour, 24 hours or 7 days, with each bucket's maximum next to its average
   and, on request, one series per label (per GPU, per model). Generic system pages use it: counters are drawn as
   rates, a 7-day window and a "show max" toggle are offered, and a chart with more than four lines gets a picker.
 - **Run history** on the eight run-based pages (AIPerf, NeMo Evaluator, NeMo Gym, Model Optimizer, SkillEvaluator,

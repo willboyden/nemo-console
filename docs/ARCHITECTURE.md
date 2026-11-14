@@ -312,7 +312,7 @@ nothing above changes. Contract: feature "datadesigner" (2026-10-23).
   `confirm:true`; admin; `data-designer-local check-models <script>` — the CLI's own --help requires a config
   source argument, so the action takes the script enum), `show_config` (safe; read-only provider/alias dump).
 * API (additive, viewer GET, headers/auth identical to the other observe endpoints):
-  `GET /api/v1/systems/datadesigner/runs/{run_id}/records?limit=50&offset=0` → `{run_id, total, columns, rows,
+  `GET /api/v1/systems/datadesigner/runs/{run_id}/records?limit=50&offset=0` (admin-only since 9.13) → `{run_id, total, columns, rows,
   truncated}` — reads records.jsonl ONLY (never parquet); values pass through as-is, no string over 2 KiB
   (truncated, no marker fields); total from run.json's records when present, else the counted lines. A live create
   run answers an empty records page (not 404). `GET /api/v1/systems/datadesigner/runs/{run_id}/files` →
