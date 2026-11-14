@@ -3,29 +3,14 @@ import { swap } from './ui.js';
 import { h } from '../dom.js';
 import { t } from '../i18n.js';
 import { select, btn } from '../components/ui.js';
+import { segPicker } from '../charts/controls.js';
 import { debounce } from '../format.js';
 import { WINDOWS, ANCHORS } from './nav.js';
 import { normalizeFacet } from './pure.js';
 
 export { normalizeFacet };
 
-/** Segmented picker over `values`; the pressed one is aria-pressed. `labelOf(v)` names a value. */
-export function segPicker({ values, current, labelOf, label, onPick, titleOf }) {
-  const wrap = h('div', { class: 'seg-control', role: 'group', 'aria-label': label });
-  const draw = () => {
-    swap(
-      wrap,
-      ...values.map((v) => {
-        const b = h('button', { type: 'button', 'aria-pressed': String(current() === v), title: titleOf?.(v) }, labelOf(v));
-        b.addEventListener('click', () => onPick(v));
-        return b;
-      }),
-    );
-  };
-  draw();
-  wrap.redraw = draw;
-  return wrap;
-}
+export { segPicker };
 
 /** Window (1h .. all) and anchor (latest event / now) controls bound to the tab's nav; onChange re-queries. */
 export function rangeControls(nav, onChange) {

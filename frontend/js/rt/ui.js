@@ -4,6 +4,10 @@ import { t } from '../i18n.js';
 import { badge, btn, emptyBox } from '../components/ui.js';
 import { toast } from '../components/toast.js';
 import { tokenSegments, shareOf, fmtTok, fmtDur, categoryOf } from '../viz/fmt.js';
+import { dash } from '../charts/parts.js';
+
+// Chart parts shared with every other page live in js/charts/parts.js; the explorer keeps importing them from here.
+export { legendList, dataTable, chartEmpty, dash, swap, inlineBar, clip } from '../charts/parts.js';
 import { fmtInt } from '../format.js';
 
 const STATUS_KIND = { ok: 'ok', error: 'bad', open: 'info' };
@@ -17,7 +21,6 @@ export const refusedBox = (e, onReset) => emptyBox(t('rt.filter.refused'), e?.me
 /** "in · out · cached" in a table cell: a single dash when the span carried no token counts at all. */
 export const tripletShort = (input, output, cached) =>
   input == null && output == null && cached == null ? '–' : t('rt.tokens.short', { input: fmtTok(input), output: fmtTok(output), cached: fmtTok(cached) });
-export const dash = () => h('span', { class: 'muted' }, '–');
 
 export function routingChip(r) {
   if (!r) return dash();
@@ -61,14 +64,6 @@ export function durBar(ms, max, label) {
   i.style.width = `${(shareOf(ms, max) * 100).toFixed(1)}%`;
   return bar.appendChild(i) && bar;
 }
-export function inlineBar(value, max, cls = '') {
-  const bar = h('span', { class: `inbar ${cls}`, 'aria-hidden': 'true' });
-  const i = h('i');
-  i.style.width = `${(shareOf(value, max) * 100).toFixed(1)}%`;
-  bar.append(i);
-  return bar;
-}
-
 export function copyBtn(text, label = t('common.copy')) {
   return btn('', {
     icon: 'copy',
@@ -127,61 +122,4 @@ export function pager({ offset, limit, total, onPage }) {
   );
 }
 
-/** Legend with a swatch, a shape cue and the name: series are told apart by label, not colour alone. */
-export function legendList(items) {
-  return h(
-    'ul',
-    { class: 'legend' },
-    items.map((it) => h('li', h('i', { class: `sw ${it.cls}${it.line ? ` ln-${it.line}` : ''}`, 'aria-hidden': 'true' }), h('span', it.label))),
-  );
-}
-
-/** A collapsed table as the text alternative of a chart; rows are built when it is first opened. */
-export function dataTable(title, columns, getRows) {
-  const body = h('div', { class: 'tablewrap tall' });
-  const d = h('details', { class: 'chart-data' }, h('summary', title ?? t('chart.data_table')), body);
-  let built = false;
-  d.addEventListener('toggle', () => {
-    if (!d.open || built) return;
-    built = true;
-    const rows = getRows();
-    body.append(
-      h(
-        'table',
-        { class: 'compact' },
-        h(
-          'thead',
-          h(
-            'tr',
-            columns.map((c, i) => h('th', { scope: 'col', class: i ? 'al-right' : '' }, c)),
-          ),
-        ),
-        h(
-          'tbody',
-          rows.map((r) =>
-            h(
-              'tr',
-              r.map((v, i) => h('td', { class: i ? 'num al-right' : '' }, v == null ? '–' : String(v))),
-            ),
-          ),
-        ),
-      ),
-    );
-  });
-  return d;
-}
-
-export const chartEmpty = (msg = t('common.no_data')) => h('p', { class: 'chart-empty muted', role: 'note' }, msg);
 export const tokText = (n) => fmtTok(n);
-
-/** Replace the children of a host in one step (no flash between the old and new content). */
-export const swap = (host, ...nodes) => {
-  host.replaceChildren(...nodes.flat().filter(Boolean));
-  return host;
-};
-
-/** Is a capture-derived string safe to show as an identifier-like chip? Everything is text anyway; this only trims length. */
-export const clip = (s, n = 64) => {
-  const x = String(s ?? '');
-  return x.length > n ? `${x.slice(0, n - 1)}…` : x;
-};
