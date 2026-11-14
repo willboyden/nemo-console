@@ -19,6 +19,7 @@ use serde_json::{Map, Value};
 use crate::adapters::base::{
     AdapterContext, AdapterError, AdapterRef, CommandResult, EventStream, RunOpts, SystemAdapter,
 };
+use crate::adapters::relay_traces::{Request as TraceRequest, TraceConfig, TraceDirs, TraceIndex};
 use crate::adapters::switchyard::{int_value, re, type_name};
 use crate::api::pyjson::PyJson;
 use crate::config::Settings;
@@ -123,7 +124,7 @@ pub const ROUTES_NOTE: &str = "Validated by a TOML parse plus a semantic pass th
 fn sub_fancy(
     rx: &fancy_regex::Regex,
     text: &str,
-    f: impl Fn(&fancy_regex::Captures<'_, str>) -> String,
+    mut f: impl FnMut(&fancy_regex::Captures<'_, str>) -> String,
 ) -> String {
     let mut out = String::with_capacity(text.len());
     let mut last = 0;
@@ -148,6 +149,43 @@ pub fn scrub(text: &str) -> String {
     sub_fancy(&SECRET_KV, &out, |c| {
         format!("{}\"[REDACTED]\"", c.get(1).map_or("", |m| m.as_str()))
     })
+}
+
+/// `scrub`, and how many secret-shaped substrings it replaced (the trace explorer reports that number with every
+/// piece of content it returns). Same patterns, same order, same output as [`scrub`].
+#[must_use]
+pub fn scrub_count(text: &str) -> (String, usize) {
+    let mut n = SECRET_SK.find_iter(text).count();
+    let out = SECRET_SK.replace_all(text, "[REDACTED]").into_owned();
+    n += SECRET_BEARER.find_iter(&out).count();
+    let out = SECRET_BEARER
+        .replace_all(&out, "Bearer [REDACTED]")
+        .into_owned();
+    let out = sub_fancy(&SECRET_KV, &out, |c| {
+        n += 1;
+        format!("{}\"[REDACTED]\"", c.get(1).map_or("", |m| m.as_str()))
+    });
+    (out, n)
+}
+
+/// The identifier rule every metadata string must pass (`IDENT`).
+#[must_use]
+pub fn ident_ok(s: &str) -> bool {
+    IDENT.is_match(s)
+}
+
+/// The rotation number of an ATOF file name (0 for the live file), `None` for any other name.
+#[must_use]
+pub fn atof_rotation(name: &str) -> Option<u64> {
+    if !ATOF_NAME.is_match(name) {
+        return None;
+    }
+    Some(
+        ATOF_ROTATION
+            .captures(name)
+            .and_then(|c| c[1].parse::<u64>().ok())
+            .unwrap_or(0),
+    )
 }
 
 fn ident(v: Option<&PyJson>) -> Option<String> {
@@ -200,14 +238,14 @@ pub struct FileErr {
 }
 
 impl FileErr {
-    fn perm(m: impl Into<String>) -> Self {
+    pub(crate) fn perm(m: impl Into<String>) -> Self {
         FileErr {
             class: "PermissionError",
             message: m.into(),
         }
     }
 
-    fn from_io(e: &std::io::Error, path: &Path) -> Self {
+    pub(crate) fn from_io(e: &std::io::Error, path: &Path) -> Self {
         let class = match e.kind() {
             std::io::ErrorKind::NotFound => "FileNotFoundError",
             std::io::ErrorKind::PermissionDenied => "PermissionError",
@@ -234,14 +272,14 @@ impl FileErr {
     }
 }
 
-fn name_of(path: &Path) -> String {
+pub(crate) fn name_of(path: &Path) -> String {
     path.file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default()
 }
 
 /// Open a regular, non-symlink file read-only (O_NOFOLLOW).
-fn open_regular(
+pub(crate) fn open_regular(
     path: &Path,
     cap: Option<u64>,
 ) -> Result<(std::fs::File, std::fs::Metadata), FileErr> {
@@ -274,7 +312,7 @@ fn open_regular(
     Ok((f, st))
 }
 
-fn contained(path: &Path, root: &Path) -> bool {
+pub(crate) fn contained(path: &Path, root: &Path) -> bool {
     resolve_lenient(path).starts_with(resolve_lenient(root))
 }
 
@@ -1314,6 +1352,8 @@ pub struct RelayAdapter {
     /// The module caps Python tests monkeypatch.
     pub max_gz_file_bytes: u64,
     pub max_gz_bytes: u64,
+    /// The trace explorer's index (addendum 9.12). Its background task runs only after `start_background`.
+    pub traces: Arc<TraceIndex>,
     cache: Mutex<Cache>,
 }
 
@@ -1341,6 +1381,13 @@ fn ms(t0: Instant) -> i64 {
 impl RelayAdapter {
     #[must_use]
     pub fn new(ctx: AdapterContext) -> Self {
+        RelayAdapter::with_traces(ctx, TraceConfig::default())
+    }
+
+    /// An adapter whose trace index has the given settings.
+    #[must_use]
+    pub fn with_traces(ctx: AdapterContext, traces: TraceConfig) -> Self {
+        let traces = TraceIndex::new(traces, TraceDirs::from_paths(&ctx.paths));
         RelayAdapter {
             ctx,
             unit: UNIT.to_owned(),
@@ -1350,6 +1397,7 @@ impl RelayAdapter {
             follow_interval: 1.0,
             max_gz_file_bytes: MAX_GZ_FILE_BYTES,
             max_gz_bytes: MAX_GZ_BYTES,
+            traces,
             cache: Mutex::new(Cache::default()),
         }
     }
@@ -1357,7 +1405,7 @@ impl RelayAdapter {
     /// `build_adapter` + `container._configure_relay`.
     #[must_use]
     pub fn from_settings(ctx: &AdapterContext, cfg: &Settings) -> Self {
-        let mut a = RelayAdapter::new(ctx.clone());
+        let mut a = RelayAdapter::with_traces(ctx.clone(), TraceConfig::from_settings(cfg));
         a.unit.clone_from(&cfg.relay_unit);
         a
     }
@@ -2764,5 +2812,37 @@ impl SystemAdapter for RelayAdapter {
 
     fn playground_url(&self) -> Option<String> {
         Some(format!("{}/v1/chat/completions", self.base()))
+    }
+
+    /// The trace explorer (addendum 9.12): everything is answered from the index's last snapshot, except the capture
+    /// view, which also needs the Relay version and `plugins.toml` (both of which this adapter already reads).
+    async fn trace_explorer(&self, request: TraceRequest) -> Result<Value, AdapterError> {
+        if !matches!(request, TraceRequest::Capture) {
+            return self.traces.handle(request).await;
+        }
+        let version = self.version().await;
+        let text = self
+            .read_file("plugins")
+            .ok()
+            .map(|(raw, _)| String::from_utf8_lossy(&raw).into_owned());
+        let mut v = self
+            .traces
+            .capture(text.as_deref(), version.as_deref(), &self.ctx.http)
+            .await;
+        // the index is switched off: the configured levels are still shown, nothing was observed (addendum 9.12)
+        if !self.traces.cfg.enabled
+            && let Some(m) = v.as_object_mut()
+        {
+            m.insert("state".to_owned(), Value::String("disabled".to_owned()));
+        }
+        Ok(v)
+    }
+
+    fn start_background(&self) {
+        self.traces.start();
+    }
+
+    async fn stop_background(&self) {
+        self.traces.aclose().await;
     }
 }

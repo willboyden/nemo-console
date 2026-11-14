@@ -22,6 +22,8 @@ pub mod gym;
 pub mod modelopt;
 // after the port: NVIDIA Flare (ADR-0020)
 pub mod flare;
+// after the port: the Relay trace explorer (addendum 9.12); not a system, a part of the Relay adapter
+pub mod relay_traces;
 
 use crate::adapters::base::{AdapterContext, AdapterError, AdapterRef};
 use crate::config::Settings;

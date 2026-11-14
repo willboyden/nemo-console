@@ -18,6 +18,7 @@ pub mod configure;
 pub mod observe;
 pub mod pyjson;
 pub mod static_files;
+pub mod traces;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -98,6 +99,17 @@ pub enum H {
     EventsStream,
     RunRecords,
     RunFiles,
+    TraceIndex,
+    Traces,
+    Trace,
+    SpanContent,
+    Sessions,
+    Session,
+    Analytics,
+    Trajectories,
+    Trajectory,
+    StepContent,
+    Capture,
     ConfigList,
     ConfigGet,
     ConfigValidate,
@@ -195,6 +207,73 @@ pub static ROUTES: &[RouteDef] = &[
         false,
         RunFiles
     ),
+    // observe: the Relay trace explorer (addendum 9.12; added after the port, PORTING.md D-34). The literal
+    // `/traces/index` comes before `/traces/{trace_id}` so that "index" is never read as an id.
+    r!(
+        GET,
+        "/systems/{system_id}/traces/index",
+        Viewer,
+        false,
+        TraceIndex
+    ),
+    r!(GET, "/systems/{system_id}/traces", Viewer, false, Traces),
+    r!(
+        GET,
+        "/systems/{system_id}/traces/{trace_id}",
+        Viewer,
+        false,
+        Trace
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/traces/{trace_id}/spans/{span_id}/content",
+        Admin,
+        false,
+        SpanContent
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/sessions",
+        Viewer,
+        false,
+        Sessions
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/sessions/{session_key}",
+        Viewer,
+        false,
+        Session
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/analytics",
+        Viewer,
+        false,
+        Analytics
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/trajectories",
+        Viewer,
+        false,
+        Trajectories
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/trajectories/{trajectory_id}",
+        Viewer,
+        false,
+        Trajectory
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/trajectories/{trajectory_id}/steps/{step_id}/content",
+        Admin,
+        false,
+        StepContent
+    ),
+    r!(GET, "/systems/{system_id}/capture", Viewer, false, Capture),
     // configure
     r!(
         GET,
@@ -1005,6 +1084,17 @@ async fn run_handler(h: H, req: Req) -> Result<Response<Body>, ApiError> {
         H::EventsStream => observe::events_stream(req).await,
         H::RunRecords => observe::run_records(req).await,
         H::RunFiles => observe::run_files(req).await,
+        H::TraceIndex => traces::index(req).await,
+        H::Traces => traces::traces(req).await,
+        H::Trace => traces::trace(req).await,
+        H::SpanContent => traces::span_content(req).await,
+        H::Sessions => traces::sessions(req).await,
+        H::Session => traces::session(req).await,
+        H::Analytics => traces::analytics(req).await,
+        H::Trajectories => traces::trajectories(req).await,
+        H::Trajectory => traces::trajectory(req).await,
+        H::StepContent => traces::step_content(req).await,
+        H::Capture => traces::capture(req).await,
         H::ConfigList => configure::config_list(req).await,
         H::ConfigGet => configure::config_get(req).await,
         H::ConfigValidate => configure::config_validate(req).await,

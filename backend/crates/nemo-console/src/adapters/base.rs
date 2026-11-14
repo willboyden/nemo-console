@@ -293,6 +293,25 @@ pub trait SystemAdapter: Send + Sync {
     async fn run_files(&self, _run_id: &str) -> Result<Value, AdapterError> {
         Err(AdapterError::NoSuchEndpoint)
     }
+
+    // ── Relay trace explorer (addendum 9.12): other systems answer 404 ──────────────────────────
+    /// One read of the trace explorer (the request is already validated). Errors and their answers: `UnknownId`
+    /// -> 404 "unknown <what>", `Invalid` -> 422, `FileNotFound` -> 409 `content_unavailable` (the source line can
+    /// no longer be read), `Failed { class: "PermissionError" }` -> 403 `content_disabled`.
+    async fn trace_explorer(
+        &self,
+        _request: crate::adapters::relay_traces::Request,
+    ) -> Result<Value, AdapterError> {
+        Err(AdapterError::NoSuchEndpoint)
+    }
+
+    // ── standing background work (addendum 9.12) ────────────────────────────────────────────────
+    /// Start the adapter's own standing background task, if it has one. Called once when the server starts and
+    /// background tasks are on; never from a request.
+    fn start_background(&self) {}
+
+    /// Stop that task and wait for it (server shutdown).
+    async fn stop_background(&self) {}
 }
 
 /// Shared handle to an adapter.
