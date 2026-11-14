@@ -44,11 +44,27 @@ fn test_every_route_carries_exactly_one_role_dependency() {
                 r.path
             );
         }
-        if is_get && r.path != "/api/v1/audit" {
+        // admin-only GETs: the audit log, and the two content routes of the Relay trace explorer (addendum 9.12),
+        // which return captured prompts, answers and tool payloads
+        if is_get && ADMIN_GETS.contains(&r.path) {
+            assert_eq!(r.role, RoleDep::Admin, "{} must be admin-only", r.path);
+        } else if is_get {
             assert_eq!(r.role, RoleDep::Viewer, "{}", r.path);
         }
     }
+    // every listed exception exists (a renamed route must not silently drop out of the admin check)
+    let paths: BTreeSet<&str> = all_routes().iter().map(|r| r.path).collect();
+    for p in ADMIN_GETS {
+        assert!(paths.contains(p), "{p} is not a route");
+    }
 }
+
+/// The only GET routes that are admin-only.
+const ADMIN_GETS: [&str; 3] = [
+    "/api/v1/audit",
+    "/api/v1/systems/{system_id}/traces/{trace_id}/spans/{span_id}/content",
+    "/api/v1/systems/{system_id}/trajectories/{trajectory_id}/steps/{step_id}/content",
+];
 
 #[test]
 fn test_openapi_and_app_routes_are_exactly_the_enumerated_ones() {

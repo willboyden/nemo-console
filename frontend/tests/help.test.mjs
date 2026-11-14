@@ -16,7 +16,7 @@ const CONSOLE_PAGES = { overview: ['status'], audit: ['log'], settings: ['settin
 const HELP_TABS = ['start', 'faq'];
 const TABS = {
   switchyard: ['routing', 'config', 'playground', 'actions'],
-  relay: ['status', 'config', 'diagnostics', 'playground'],
+  relay: ['status', 'traces', 'sessions', 'analytics', 'trajectories', 'capture', 'config', 'diagnostics', 'playground'],
   dynamo: ['status', 'params', 'lifecycle', 'playground'],
   skillevaluator: ['status', 'evaluate'],
   datadesigner: ['status', 'scripts', 'actions', 'runs'],

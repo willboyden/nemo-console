@@ -11,6 +11,11 @@ import { eventsPanel } from '../components/events-panel.js';
 import { configEditor } from '../components/config-editor.js';
 import { playgroundPanel } from '../components/playground.js';
 import { actionsPanel } from '../components/actions-panel.js';
+import { tracesTab } from '../rt/traces-tab.js';
+import { sessionsTab } from '../rt/sessions-tab.js';
+import { analyticsTab } from '../rt/analytics-tab.js';
+import { trajectoriesTab } from '../rt/trajectories-tab.js';
+import { captureTab } from '../rt/capture-tab.js';
 
 const ATT_KIND = { verified: 'ok', reported: 'info', failed: 'bad', unknown: 'warn', unreported: 'muted' };
 
@@ -71,6 +76,11 @@ class NcRelay extends NcView {
     if (!this.scope.alive) return;
     const tabDefs = [
       { id: 'status', label: t('tab.status'), render: (scope, ctx) => statusTab(scope, ctx) },
+      { id: 'traces', label: t('tab.traces'), render: (scope, ctx) => tracesTab(scope, ctx) },
+      { id: 'sessions', label: t('tab.sessions'), render: (scope, ctx) => sessionsTab(scope, ctx) },
+      { id: 'analytics', label: t('tab.analytics'), render: (scope, ctx) => analyticsTab(scope, ctx) },
+      { id: 'trajectories', label: t('tab.trajectories'), render: (scope, ctx) => trajectoriesTab(scope, ctx) },
+      { id: 'capture', label: t('tab.capture'), render: (scope, ctx) => captureTab(scope, ctx) },
       { id: 'config', label: t('tab.config'), render: (scope) => configEditor(scope, 'relay') },
       { id: 'diagnostics', label: t('tab.diagnostics'), render: (scope) => actionsPanel(scope, 'relay') },
     ];

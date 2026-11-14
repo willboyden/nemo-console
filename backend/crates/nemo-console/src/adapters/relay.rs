@@ -19,6 +19,7 @@ use serde_json::{Map, Value};
 use crate::adapters::base::{
     AdapterContext, AdapterError, AdapterRef, CommandResult, EventStream, RunOpts, SystemAdapter,
 };
+use crate::adapters::relay_traces::{Request as TraceRequest, TraceConfig, TraceDirs, TraceIndex};
 use crate::adapters::switchyard::{int_value, re, type_name};
 use crate::api::pyjson::PyJson;
 use crate::config::Settings;
@@ -88,12 +89,14 @@ static TOML_LINE: LazyLock<regex::Regex> = LazyLock::new(|| re(r"line (\d+)"));
 static SECRET_SK: LazyLock<regex::Regex> = LazyLock::new(|| re(r"\bsk-[A-Za-z0-9_\-]{16,}"));
 static SECRET_BEARER: LazyLock<regex::Regex> =
     LazyLock::new(|| re(r"(?i)\bBearer[^\S\r\n]+[A-Za-z0-9._~+/=\-]{8,}"));
-#[allow(clippy::expect_used)]
-static SECRET_KV: LazyLock<fancy_regex::Regex> = LazyLock::new(|| {
-    fancy_regex::Regex::new(
-        r#"(?im)^(\s*(?:api_key|apikey|secret|password|token|access_key|private_key)[^\S\r\n]*=[^\S\r\n]*)(["'])(?!\[REDACTED)[^"'\n]+\2"#,
+/// The Python reference's `key = "value"` pattern, `(?im)^(\s*KEY[^\S\r\n]*=[^\S\r\n]*)(["'])(?!\[REDACTED)[^"'\n]+\2`
+/// (with D-32's same-line blanks around `=`), in the `regex` crate so that it is linear: the back-reference becomes
+/// one alternative per quote, the look-ahead a check in [`kv_replace`]. Group 1: up to the value; group 2 or 3: the
+/// value inside `"` or `'`. It matches where the original does and its replacement is the same (D-35).
+static SECRET_KV: LazyLock<regex::Regex> = LazyLock::new(|| {
+    re(
+        r#"(?im)^(\s*(?:api_key|apikey|secret|password|token|access_key|private_key)[^\S\r\n]*=[^\S\r\n]*)(?:"([^"'\n]+)"|'([^"'\n]+)')"#,
     )
-    .expect("static regex")
 });
 
 pub const VALIDATION_CAVEATS: &str = "`nemo-relay plugins validate` and `doctor` can PASS while the gateway still \
@@ -119,23 +122,22 @@ pub const ROUTES_NOTE: &str = "Validated by a TOML parse plus a semantic pass th
 
 // ── small pure helpers ──────────────────────────────────────────────────────────────────────────
 
-/// `re.sub` with a closure over fancy-regex captures.
-fn sub_fancy(
-    rx: &fancy_regex::Regex,
-    text: &str,
-    f: impl Fn(&fancy_regex::Captures<'_, str>) -> String,
-) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut last = 0;
-    for caps in rx.captures_iter(text) {
-        let Ok(caps) = caps else { break };
-        let Some(m) = caps.get(0) else { continue };
-        out.push_str(&text[last..m.start()]);
-        out.push_str(&f(&caps));
-        last = m.end();
-    }
-    out.push_str(&text[last..]);
-    out
+/// [`SECRET_KV`] applied: `group 1 + "[REDACTED]"`, except where the value already starts with `[REDACTED` (the
+/// original's look-ahead; no other match can begin inside such a span, so keeping it as it is gives the same text).
+/// `n` counts the replacements.
+fn kv_replace(text: &str, n: &mut usize) -> String {
+    SECRET_KV
+        .replace_all(text, |c: &regex::Captures<'_>| {
+            let whole = c.get(0).map_or("", |m| m.as_str());
+            let value = c.get(2).or_else(|| c.get(3)).map_or("", |m| m.as_str());
+            if value.starts_with("[REDACTED") {
+                whole.to_owned()
+            } else {
+                *n += 1;
+                format!("{}\"[REDACTED]\"", c.get(1).map_or("", |m| m.as_str()))
+            }
+        })
+        .into_owned()
 }
 
 /// Redact secret-shaped substrings (defence in depth; the runner also redacts).
@@ -145,9 +147,49 @@ pub fn scrub(text: &str) -> String {
     let out = SECRET_BEARER
         .replace_all(&out, "Bearer [REDACTED]")
         .into_owned();
-    sub_fancy(&SECRET_KV, &out, |c| {
-        format!("{}\"[REDACTED]\"", c.get(1).map_or("", |m| m.as_str()))
-    })
+    kv_replace(&out, &mut 0)
+}
+
+/// The two linear patterns of [`scrub`] (`sk-` keys, bearer tokens) and how many they replaced: the trace explorer
+/// adds its own `key = "value"` pass (`adapters/relay_traces/secrets.rs`).
+#[must_use]
+pub fn scrub_keys_and_bearers(text: &str) -> (String, usize) {
+    let mut n = SECRET_SK.find_iter(text).count();
+    let out = SECRET_SK.replace_all(text, "[REDACTED]").into_owned();
+    n += SECRET_BEARER.find_iter(&out).count();
+    let out = SECRET_BEARER
+        .replace_all(&out, "Bearer [REDACTED]")
+        .into_owned();
+    (out, n)
+}
+
+/// `scrub`, and how many secret-shaped substrings it replaced (the trace explorer reports that number with every
+/// piece of content it returns). Same patterns, same order, same output as [`scrub`].
+#[must_use]
+pub fn scrub_count(text: &str) -> (String, usize) {
+    let (out, mut n) = scrub_keys_and_bearers(text);
+    let out = kv_replace(&out, &mut n);
+    (out, n)
+}
+
+/// The identifier rule every metadata string must pass (`IDENT`).
+#[must_use]
+pub fn ident_ok(s: &str) -> bool {
+    IDENT.is_match(s)
+}
+
+/// The rotation number of an ATOF file name (0 for the live file), `None` for any other name.
+#[must_use]
+pub fn atof_rotation(name: &str) -> Option<u64> {
+    if !ATOF_NAME.is_match(name) {
+        return None;
+    }
+    Some(
+        ATOF_ROTATION
+            .captures(name)
+            .and_then(|c| c[1].parse::<u64>().ok())
+            .unwrap_or(0),
+    )
 }
 
 fn ident(v: Option<&PyJson>) -> Option<String> {
@@ -200,14 +242,14 @@ pub struct FileErr {
 }
 
 impl FileErr {
-    fn perm(m: impl Into<String>) -> Self {
+    pub(crate) fn perm(m: impl Into<String>) -> Self {
         FileErr {
             class: "PermissionError",
             message: m.into(),
         }
     }
 
-    fn from_io(e: &std::io::Error, path: &Path) -> Self {
+    pub(crate) fn from_io(e: &std::io::Error, path: &Path) -> Self {
         let class = match e.kind() {
             std::io::ErrorKind::NotFound => "FileNotFoundError",
             std::io::ErrorKind::PermissionDenied => "PermissionError",
@@ -234,14 +276,14 @@ impl FileErr {
     }
 }
 
-fn name_of(path: &Path) -> String {
+pub(crate) fn name_of(path: &Path) -> String {
     path.file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default()
 }
 
 /// Open a regular, non-symlink file read-only (O_NOFOLLOW).
-fn open_regular(
+pub(crate) fn open_regular(
     path: &Path,
     cap: Option<u64>,
 ) -> Result<(std::fs::File, std::fs::Metadata), FileErr> {
@@ -274,7 +316,7 @@ fn open_regular(
     Ok((f, st))
 }
 
-fn contained(path: &Path, root: &Path) -> bool {
+pub(crate) fn contained(path: &Path, root: &Path) -> bool {
     resolve_lenient(path).starts_with(resolve_lenient(root))
 }
 
@@ -1314,6 +1356,8 @@ pub struct RelayAdapter {
     /// The module caps Python tests monkeypatch.
     pub max_gz_file_bytes: u64,
     pub max_gz_bytes: u64,
+    /// The trace explorer's index (addendum 9.12). Its background task runs only after `start_background`.
+    pub traces: Arc<TraceIndex>,
     cache: Mutex<Cache>,
 }
 
@@ -1341,6 +1385,13 @@ fn ms(t0: Instant) -> i64 {
 impl RelayAdapter {
     #[must_use]
     pub fn new(ctx: AdapterContext) -> Self {
+        RelayAdapter::with_traces(ctx, TraceConfig::default())
+    }
+
+    /// An adapter whose trace index has the given settings.
+    #[must_use]
+    pub fn with_traces(ctx: AdapterContext, traces: TraceConfig) -> Self {
+        let traces = TraceIndex::new(traces, TraceDirs::from_paths(&ctx.paths));
         RelayAdapter {
             ctx,
             unit: UNIT.to_owned(),
@@ -1350,6 +1401,7 @@ impl RelayAdapter {
             follow_interval: 1.0,
             max_gz_file_bytes: MAX_GZ_FILE_BYTES,
             max_gz_bytes: MAX_GZ_BYTES,
+            traces,
             cache: Mutex::new(Cache::default()),
         }
     }
@@ -1357,7 +1409,7 @@ impl RelayAdapter {
     /// `build_adapter` + `container._configure_relay`.
     #[must_use]
     pub fn from_settings(ctx: &AdapterContext, cfg: &Settings) -> Self {
-        let mut a = RelayAdapter::new(ctx.clone());
+        let mut a = RelayAdapter::with_traces(ctx.clone(), TraceConfig::from_settings(cfg));
         a.unit.clone_from(&cfg.relay_unit);
         a
     }
@@ -2764,5 +2816,37 @@ impl SystemAdapter for RelayAdapter {
 
     fn playground_url(&self) -> Option<String> {
         Some(format!("{}/v1/chat/completions", self.base()))
+    }
+
+    /// The trace explorer (addendum 9.12): everything is answered from the index's last snapshot, except the capture
+    /// view, which also needs the Relay version and `plugins.toml` (both of which this adapter already reads).
+    async fn trace_explorer(&self, request: TraceRequest) -> Result<Value, AdapterError> {
+        if !matches!(request, TraceRequest::Capture) {
+            return self.traces.handle(request).await;
+        }
+        let version = self.version().await;
+        let text = self
+            .read_file("plugins")
+            .ok()
+            .map(|(raw, _)| String::from_utf8_lossy(&raw).into_owned());
+        let mut v = self
+            .traces
+            .capture(text.as_deref(), version.as_deref(), &self.ctx.http)
+            .await;
+        // the index is switched off: the configured levels are still shown, nothing was observed (addendum 9.12)
+        if !self.traces.cfg.enabled
+            && let Some(m) = v.as_object_mut()
+        {
+            m.insert("state".to_owned(), Value::String("disabled".to_owned()));
+        }
+        Ok(v)
+    }
+
+    fn start_background(&self) {
+        self.traces.start();
+    }
+
+    async fn stop_background(&self) {
+        self.traces.aclose().await;
     }
 }

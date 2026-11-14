@@ -269,12 +269,27 @@
     ]
   },
   "relay": {
-    "lead": "NeMo Relay is the agent gateway: it forwards agent traffic to the router under a plugin policy and records ATOF events and ATIF trajectories. It runs as a systemd user unit (default `nemo-relay-gateway.service`). Here you read its health, policy findings and trace counts, edit its routes and run diagnostics.",
+    "lead": "NeMo Relay is the agent gateway: it forwards agent traffic to the router under a plugin policy and records ATOF events and ATIF trajectories. It runs as a systemd user unit (default `nemo-relay-gateway.service`). Here you read its health, policy findings and trace counts, edit its routes and run diagnostics.\n\nThe Traces, Sessions, Analytics, Trajectories and Capture tabs read what Relay captured on this machine, read-only: every request as a trace you can open, sessions, charts, agent trajectories and a list of what is switched on.",
     "steps": [
       {
         "title": "Check the gateway",
         "body": "The Status tab shows the plugin attestation, the unit and gateway state, and how many ATOF files and ATIF trajectories exist. Any answer under 500 from the gateway's `/health` counts as up; a 404 is expected.",
         "tab": "status"
+      },
+      {
+        "title": "Look at a trace",
+        "body": "The Traces tab lists what Relay captured, newest first, with a window picker (1h to all) and filters. Open one to see a waterfall of its spans, an icicle of the same tree and a span table; select a span for its details. Drag on the time axis of the waterfall to zoom.",
+        "tab": "traces"
+      },
+      {
+        "title": "Follow a conversation",
+        "body": "Sessions groups traces that belong to one client conversation and charts how the context grew from call to call and how much of it came from the cache. Analytics shows rates, latency, tokens, models, tools, routing and errors for the window; Trajectories lists the agent step-by-step records.",
+        "tab": "sessions"
+      },
+      {
+        "title": "Check what is being recorded",
+        "body": "The Capture tab answers how much of what Relay can record is switched on here: the capture levels, what is configured, what the console last saw written, and a to-do list of what you are missing.",
+        "tab": "capture"
       },
       {
         "title": "Bring it back if it is down",
@@ -322,6 +337,48 @@
       {
         "q": "A problem says `binary 'nemo-relay' not found on PATH`.",
         "a": "The console searches `PATH` plus `NEMO_CONSOLE_EXTRA_BIN_DIRS` (default `~/.local/bin`). Add the directory that holds `nemo-relay` to that setting and restart the console."
+      },
+      {
+        "q": "The Traces, Sessions or Analytics tab is empty. Why?",
+        "a": "The strip at the top says why. `empty` means the console found no ATOF files from Relay: turn the ATOF exporter on and send a request. `disabled` means the console was started with `NEMO_CONSOLE_RELAY_TRACE_INDEX=off`; set it to `on` in the environment or in `~/.config/nemo-console/env` and restart the console. `building` means the index is still reading the files and the lists are partial. With the window set to `24h` and the anchor to `Now`, an idle lab shows nothing: use `Latest event` or a wider window.",
+        "tab": "capture"
+      },
+      {
+        "q": "What is the difference between Latest event and Now?",
+        "a": "Both pick where the time window ends. `Latest event` ends it at the newest captured event, so a quiet lab still shows its last activity. `Now` ends it at the current time, so it only shows what happened recently."
+      },
+      {
+        "q": "How do I read the prompt and response of a span?",
+        "a": "Select the span and press Load content in its details panel. The console reads the text from the capture file only then, scrubs secrets and never keeps it. Nothing is fetched while you browse or while the page refreshes."
+      },
+      {
+        "q": "Why is Load content refused?",
+        "a": "`content_disabled` means this console runs with `NEMO_CONSOLE_RELAY_TRACE_CONTENT=off`; set it to `admin` in the environment or in `~/.config/nemo-console/env` and restart the console. Any other 403 is the role check: content needs an admin key (the key button in the top bar). `content_unavailable` means the capture file that held the span was rotated or deleted."
+      },
+      {
+        "q": "Does the console store my prompts?",
+        "a": "No. The trace index keeps metadata only (ids, names, timings, token counts) in memory and writes nothing to disk. Prompts and responses are read on demand from Relay's own files, for an admin, and are not logged or audited."
+      },
+      {
+        "q": "What does a hatched bar in the waterfall mean?",
+        "a": "The span has started but no end event was captured yet, so it is still running or the capture stopped. The hatched tail runs to the end of the trace so far. A red outline and a cross mark an error; diamonds on a row are routing decisions."
+      },
+      {
+        "q": "How is a session identified?",
+        "a": "By the session id the client sent in its first request (for example an `x-session-id` style header), else by Relay's own session id, else by the trace itself. Traces with the same key are shown together on the Sessions tab."
+      },
+      {
+        "q": "What do the states on the Capture tab mean?",
+        "a": "`active`: something was written in the last 15 minutes. `idle`: within 7 days. `stale`: longer ago. `off`: not configured. `not observable`: the level leaves this machine (OpenTelemetry exports), so the console can only show how it is configured. An endpoint on this machine is probed once a minute and shows `reachable` or `not reachable`; any other endpoint shows `not checked`."
+      },
+      {
+        "q": "What does \"once per trace endpoint\" mean on the Capture tab?",
+        "a": "OpenTelemetry logs and metrics with no endpoint of their own are sent to every trace endpoint. With one trace endpoint that is fine. With several, every log record and metric is exported once per endpoint, so a backend that receives from more than one of them sees duplicates. The row warns about it; give the signal its own endpoint, or keep a single trace endpoint.",
+        "tab": "capture"
+      },
+      {
+        "q": "What does `complete request on every call` mean?",
+        "a": "The payload setting `full` writes the complete request, every message, on every call, so a long conversation is stored again and again. `newest turn only` (`turn_filtered`) writes just the newest turn of each request: smaller files, but earlier messages are not in the capture."
       }
     ]
   },

@@ -5,6 +5,7 @@
 // secret redaction ("[set, N chars]"), strict CSP + security headers on every response, optional bearer (MOCK_KEY).
 // All data is canned or simulated. Nothing here is a verified fact about the real systems.
 // Usage: node dev/mock-server.mjs [--port 18796] [--host 127.0.0.1]     env: MOCK_KEY=secret  MOCK_ROLE=viewer  MOCK_DYNAMO=up|loading|down
+//   Relay trace explorer (9.12): MOCK_TRACES=ready|building|empty|disabled  MOCK_CAPTURE=full|gen_ai  MOCK_TRACES_STALE=1  (or /__dev/traces?index=&content=admin|off&capture=&truncated=1&stale=1)
 // Dev helpers (not part of the contract): /__dev/scenario /__dev/touch /__dev/role /__dev/fail /__dev/vllm /__shot
 import http from 'node:http';
 import fs from 'node:fs';
@@ -31,6 +32,7 @@ import {
   GR_PLAY,
   GR_REFUSAL,
 } from './mock-seven.mjs';
+import { createTracesMock } from './mock-traces.mjs';
 import { SWITCHYARD_ROUTES, RELAY_ROUTES, RELAY_PLUGINS, RELAY_CONFIG, DYNAMO_CATALOG, DD_SCRIPTS, DD_SCRIPT, DD_COLS, ddRows, DD_RUNS, DD_PREVIEW_FILES, DD_CREATE_FILES } from './mock-data.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -49,6 +51,7 @@ const KEY = process.env.MOCK_KEY || '';
 // --proxy http://127.0.0.1:8793 forwards /api/ to a REAL backend (screenshot/verification use), keeping the static host and /__shot helpers.
 const PROXY = argv('proxy', process.env.MOCK_PROXY || '');
 const now = () => Date.now() / 1000;
+const traceMock = createTracesMock({ now });
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 let seed = 7;
 const rnd = () => {
@@ -1175,6 +1178,11 @@ async function api(req, res, url) {
       req.on('close', () => streams.delete(c));
       return;
     }
+    if (id === 'relay' && M === 'GET' && /^\/(traces|sessions|analytics|trajectories|capture)(\/|$)/.test(sub)) {
+      const r = traceMock.route(sub, url.searchParams, { admin });
+      if (r) return json(res, r.status, r.body);
+    }
+    if (id !== 'relay' && /^\/(traces|sessions|analytics|trajectories|capture)(\/|$)/.test(sub)) return err(res, 404, 'not_found', `${id} has no trace explorer`);
     if (sub === '/config') return json(res, 200, specs[id]);
     let rm;
     if (id === 'datadesigner' && (rm = sub.match(/^\/runs\/([^/]+)\/(records|files)$/))) {
@@ -1306,6 +1314,15 @@ function dev(req, res, url) {
   if (p === '/__dev/fail') {
     state.failNext = { status: Number(q.get('status') || 503), n: Number(q.get('n') || 1) };
     return json(res, 200, state.failNext);
+  }
+  if (p === '/__dev/traces') {
+    const f = traceMock.flags;
+    if (['ready', 'building', 'empty', 'disabled'].includes(q.get('index'))) f.index = q.get('index');
+    if (['admin', 'off'].includes(q.get('content'))) f.content = q.get('content');
+    if (['full', 'gen_ai'].includes(q.get('capture'))) f.capture = q.get('capture');
+    if (q.has('truncated')) f.truncated = q.get('truncated') === '1';
+    if (q.has('stale')) traceMock.setStale(q.get('stale') === '1');
+    return json(res, 200, f);
   }
   if (p === '/__dev/seven') {
     if (q.has('dcgm_fixed')) state.seven.dcgmFixed = q.get('dcgm_fixed') === '1';

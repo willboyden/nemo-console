@@ -37,3 +37,8 @@ sec.origin.cross-on-get  # D-7: the extra modelopt entry (the Python reference h
 
 cfgread.openshell.provider-profile  # D-32: masks stop at the end of a line (the Python reference swallows the next line)
 cfgread.openshell.provider-profile.viewer  # D-32: masks stop at the end of a line (the Python reference swallows the next line)
+
+global.openapi.admin  # D-34: the OpenAPI document lists the eleven Relay trace explorer routes (the Python reference has none)
+global.openapi.viewer  # D-34: the OpenAPI document lists the eleven Relay trace explorer routes (the Python reference has none)
+global.openapi.admin.after  # D-34: the OpenAPI document lists the eleven Relay trace explorer routes (the Python reference has none)
+global.openapi.viewer.after  # D-34: the OpenAPI document lists the eleven Relay trace explorer routes (the Python reference has none)

@@ -10,7 +10,8 @@ the browser, kept in ring buffers, and could be scraped by anyone with viewer ac
 ## Decision
 
 Events (`SystemEvent`) carry route, tier, model, token counts, latency, event type and identifiers, never prompt
-or completion text.
+or completion text. (The Relay trace explorer's admin-only content routes are a separate, switchable exception:
+ADR-0021.)
 
 - **Switchyard:** `parse_routing_line` copies a fixed set of fields; `route`, `algorithm`, `model`, `tier` and `session_id`
   are kept only when identifier-shaped, otherwise replaced by `<redacted>`.
