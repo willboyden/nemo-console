@@ -5,8 +5,34 @@ implemented / verified-live / unverified defined in the README.
 
 ## [Unreleased]
 
+### Changed
+
+- **The config editor runs the backend's own validators in the browser** (ADR-0022). The live checks used to be a
+  hand-written JavaScript copy of the backend's rules; they are now the backend's Rust code (the tomllib and PyYAML
+  ports, the AIPerf / Model Optimizer / Evaluator / Switchyard / Relay schemas and the save path's secret scan),
+  moved into a new pure crate `nemo-console-core` and compiled to one WebAssembly module (`nemo-console-wasm`,
+  `wasm-bindgen` 0.2.129). The editor shows the server's exact messages as you type, and YAML the Form view cannot
+  model (anchors, aliases, tags, several documents) is now checked live too. The server's validator still decides
+  every apply; without the module the editor says "live checks unavailable" instead of passing silently.
+- **Form edits are read back by the real loaders**: after each edit the text is loaded before and after; the edit is
+  written only when the value reads back as typed and nothing else in the file changed. Plain YAML values are typed
+  by PyYAML's own resolver instead of a copy of its regexes.
+- **One build step for the frontend**: `make wasm` (needs the `wasm32-unknown-unknown` target, installed by
+  `backend/rust-toolchain.toml`, and `wasm-bindgen-cli` 0.2.129) writes `frontend/js/wasm/`, which is generated and
+  never committed. `build`, `release`, `e2e` and `frontend-test` run it; it refuses another CLI version, a
+  build-machine path in the output and a module over 1,500,000 bytes (1,354,745 bytes, 495,098 gzipped today). CI
+  builds it and runs clippy for wasm32 as well.
+
+### Fixed
+
+- The editor no longer passes `token: abc"defghijk` (an unquoted value with an inner quote) that the backend refuses
+  to save: the browser now runs the backend's scan.
+
 ### Security
 
+- The CSP's `script-src` is `'self' 'wasm-unsafe-eval'` (was `'self'`): the page may compile WebAssembly from its own
+  origin; `eval`, `new Function` and inline script stay forbidden. `.wasm` files are served as `application/wasm`.
+  For the parity harness this is deviation D-34 (one documented normalisation rule).
 - **rusqlite 0.41.0** (was 0.40.2) brings the bundled SQLite of `libsqlite3-sys` 0.39.1, which fixes CVE-2026-119375
   (RUSTSEC-2026-0459). Both versions pass the 14-day crate-age cooldown on their own; no code change was needed.
 

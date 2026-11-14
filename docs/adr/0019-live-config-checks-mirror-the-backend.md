@@ -1,6 +1,8 @@
 # ADR-0019: Live config checks in the browser mirror the backend validators; the backend still decides
 
-Status: Accepted (0.8.0)
+Status: Accepted (0.8.0). Amended by ADR-0022: the live checks and the Form's read-back now run the backend's own
+validators compiled to WebAssembly; decisions 1 (the layout parser for the Form view) and 3 (the backend decides)
+stand, the JavaScript copies of the rules in decisions 2 and 4 are gone.
 
 ## Context
 

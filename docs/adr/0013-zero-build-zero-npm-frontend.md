@@ -1,6 +1,7 @@
 # ADR-0013: Zero-build frontend with zero runtime npm dependencies and a strict CSP
 
-Status: Accepted (v0.1.0)
+Status: Accepted (v0.1.0). Amended by ADR-0022: one generated module (the config validators as WebAssembly) and
+`'wasm-unsafe-eval'` in `script-src`.
 
 ## Context
 
@@ -26,6 +27,11 @@ The DOM helper `h()` refuses a `style` attribute and builds text via `textConten
   with a committed `package-lock.json`. It formats and checks the source (`make fmt`, `make fmt-check`, CI) and
   nothing else: `node_modules/` is outside the static allowlist, so nothing from npm is ever served, and there is
   still no build step. The frontend keeps zero runtime dependencies.
+- Addendum (ADR-0022): one build step, for one file. `make wasm` compiles the backend's config validators
+  (`backend/crates/nemo-console-wasm`) to WebAssembly into `frontend/js/wasm/` (generated, never committed; served
+  from `js/` as `application/wasm`). The CSP's `script-src` is `'self' 'wasm-unsafe-eval'`: WebAssembly compilation
+  from the console's own origin, still no `eval`, `new Function` or inline script. The rest of the frontend is
+  still plain ES modules with no bundler, and nothing comes from npm.
 - `frontend/tests/static-guards.test.mjs` fails the build on inline handlers, style attributes, `eval`,
   external origins, `innerHTML` outside `dom.js`, missing i18n keys, and unresolved imports.
 - Browser coverage: frontend rendered against the real backend in headless Firefox (verified live). Other
