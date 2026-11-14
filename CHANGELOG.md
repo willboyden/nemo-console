@@ -23,8 +23,14 @@ implemented / verified-live / unverified defined in the README.
   (RUSTSEC-2026-0459). Both versions pass the 14-day crate-age cooldown on their own; no code change was needed.
 - The index and every viewer route carry metadata only; a test plants a marker in every payload field of the
   fixtures and proves it never reaches a viewer route (and does reach the admin content route). Content routes are
-  admin-only, can be switched off, scrub secrets (the adapter's `scrub()` plus secret-named `key: value` pairs, which
-  also catches credentials inside tool results) and return only allowlisted headers. No route takes a path.
+  admin-only, can be switched off, scrub secrets (the adapter's patterns plus secret-named `key: value` pairs, which
+  also catches credentials inside tool results; linear-time regexes only), return an exact allowlist of headers with
+  identifier-shaped values, and stay under 4 MiB. No route takes a path; a trajectory whose file or directories changed
+  since indexing is refused. Index memory is bounded by `relay_trace_max_spans` (spans, marks, ids and labels) and the
+  scan budget counts decompressed bytes, whatever a gzip trailer claims.
+- The Relay adapter's shared secret scrubber runs on the linear `regex` engine (it was a backtracking engine that
+  could give up on long runs of blank lines and leave the rest of a text unredacted); its output is checked against
+  the old pattern as an oracle.
 
 ### Performance
 

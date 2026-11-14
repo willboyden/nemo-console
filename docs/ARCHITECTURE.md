@@ -25,7 +25,7 @@ additive only, appended to §9 and relayed to affected agents immediately.
 | 7 | Trust/policy files (`~/.config/nemo-relay/plugins.toml`, `config.toml`) are **read-only** in v1 | They hold the signature-enforcement key and attestation mode; editing is a human security decision (AGENTS.md rule 4) |
 | 8 | Dynamo tunables = structured param catalog → generated compose **override** in the console state dir; repo compose never edited | Verified against the pinned image `--help`; reversible by deleting one file |
 | 9 | Dynamo lifecycle by `docker compose` directly, **never `scripts/use-model.sh`** | use-model.sh also stops the other card's engine (measured 2026-09-23). Preflight names what shares the card and requires explicit confirm |
-| 10 | Events carry **metadata only** (route, tier, tokens, latency, event type) — never prompt/completion text | ATOF/ATIF and routing logs can contain conversation content |
+| 10 | Events carry **metadata only** (route, tier, tokens, latency, event type) — never prompt/completion text | ATOF/ATIF and routing logs can contain conversation content. The one exception is the Relay trace explorer's two admin-only content routes (addendum 9.12, ADR-0021) |
 | 11 | Playground chat is proxied, streamed, **never persisted**; credential resolved server-side by env NAME | Secrets never touch disk or the browser |
 | 12 | SQLite (WAL) for metrics rollups, config revisions, audit, settings; SSE for live streams | Single node, zero ops |
 | 13 | Zero-build frontend with zero runtime npm dependencies (ES modules + web components, SVG charts), strict CSP | No supply-chain surface (same as Engine Console) |
@@ -517,7 +517,7 @@ machine. Decision record: ADR 0021.
   | `/sessions/{session_key}` | `{session: SessionSummary, traces: TraceSummary[] (<= 500, by start), calls: SessionCall[] (<= 2000, by time)}`; 404 unknown |
   | `/analytics` | `Analytics` for the window; filters `client`, `model`, `kind`; `buckets` 12..240 (default 60) |
   | `/trajectories` | `{total, offset, limit, items: TrajectorySummary[]}`; filters `source`, `q`, `trace` (a trace id: only the trajectories linked to that trace; 422 if not UUID-shaped); newest first; `limit` 1..200 (default 50) |
-  | `/trajectories/{id}` | `{trajectory: TrajectorySummary, steps: TrajectoryStep[] (<= 2000), truncated}`; query `source` when the id is not unique; 404 unknown |
+  | `/trajectories/{id}` | `{trajectory: TrajectorySummary, steps: TrajectoryStep[] (<= 2000), truncated}`; query `source` when the id is not unique; 404 unknown (or when its `<agent>` or `atif` directory is now a symlink); 409 `content_unavailable` when the file changed since it was indexed (device, inode, size or mtime) |
   | `/trajectories/{id}/steps/{step_id}/content` | **admin**, same switch and errors as span content; takes `source` like the route above. `StepContent` |
   | `/capture` | `Capture` (which capture levels are configured, and what was observed for each) |
 
@@ -550,7 +550,8 @@ machine. Decision record: ADR 0021.
       usual shape, empty, plus one extra key `state: "disabled"` (the only answers that carry `state`; it is absent
       while the index is on); the detail routes answer 404 `not_found` with a message naming `relay_trace_index =
       off`; the content routes answer 403 `content_disabled` when content is also off, else 404 like the details.
-    * Content scrubbing = the adapter's `scrub()` plus a content-only pass for `key: value`, `"key": "value"`
+    * Content scrubbing = the adapter's `sk-`/Bearer patterns, its `key = "value"` line rule (run with the linear
+      `regex` engine), plus a content-only pass for `key: value`, `"key": "value"`
       (also escaped inside JSON strings) and `KEY=value` pairs whose key names a secret (`api_key`, `secret`,
       `password`, `token`, `private_key`, `access_key`, `credential`, `auth`, ...; values of 8+ chars; config
       placeholders such as `${...}`, `{env:...}`, `{file:...}` are kept). Added 2026-11-14: tool results can
@@ -585,10 +586,13 @@ machine. Decision record: ADR 0021.
     response: {model, finish_reason, parts: Part[], usage} | null, tool: {arguments: Part | null, result: Part | null}
     | null, headers: {name: value}, truncated, redactions}` with `Part = {type: "text"|"reasoning"|"tool_call"|
     "tool_result"|"image"|"other", text, name, call_id, chars, truncated}`. `params` are scalars only. `headers` is an
-    allowlist (`user-agent`, `content-type`, `traceparent`, `x-opencode-client`, `x-nemo-relay-*`, the session
-    headers); never `authorization`, `cookie`, `x-api-key` or any `*-key`/`*-token` header. Every text goes through
-    the adapter's `scrub()`; `redactions` counts what it replaced. At most 400 messages; the whole answer <= 4 MiB
-    (texts are cut further, `truncated = true`). Images are reported as a part with `chars` and no data.
+    exact allowlist of 18 names (`user-agent`, `content-type`, `traceparent`, `tracestate`, `x-opencode-client`, the
+    session headers and named `x-nemo-relay-*` id headers such as `-session-id`, `-turn-id`, `-request-id`; no
+    wildcard), and a value is shown only when it is identifier-shaped (user-agent: printable ASCII, <= 256 chars) and
+    the scrubber changes nothing in it. Every text goes through the content scrubbing below; `redactions` counts what it
+    replaced. At most 400 messages; the whole answer <= 4 MiB, a hard bound (texts are cut, then every string, then the
+    longest lists are halved; `truncated = true`). Images and any block of an unknown type are reported as a part with
+    its type and `chars` only, never its data.
   * `SessionSummary`: `{session_key, client, kind, first_ts, last_ts, span_ms, traces, llm_calls, tool_calls, errors,
     models: [..], input_tokens, output_tokens, cached_tokens, max_input_tokens}`.
     `SessionCall`: `{ts, trace_id, span_id, model, input_tokens, cached_tokens, output_tokens, reasoning_tokens,

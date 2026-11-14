@@ -143,6 +143,9 @@ outbound network beyond configured loopback URLs.
 
 ## Known limitations
 
+- **The Relay trace explorer shows captured conversations to admin keys.** Content is scrubbed by patterns, which
+  cannot recognise every secret, and reading it writes no audit row (no GET does). Hand out viewer keys, or set
+  `NEMO_CONSOLE_RELAY_TRACE_CONTENT=off`; threat model R-25.
 - **Switchyard "capable tier dark" detection is indirect unless you turn on the active probe.** Two passive signals
   exist, and an opt-in third:
   (a) `switchyard.tier.capable_dark` (setting `engine_probes`, alias to engine container) fires when a mapped alias
