@@ -7,6 +7,15 @@ implemented / verified-live / unverified defined in the README.
 
 ### Added
 
+- **Charts, wave 2** (addendum 9.14). **GPU telemetry:** a Fleet tab with a heatmap of every GPU of every DCGM host
+  Prometheus scrapes (utilisation, temperature, power or memory over 1 h, 24 h or 7 d; gaps drawn as gaps), from a new
+  route that builds its queries from a fixed table; on Status, an "is it really busy?" card per GPU (utilisation next
+  to graphics, tensor and DRAM activity), memory used / reserved / free, power against its limit, energy over the
+  window, throttling by reason, remapped rows and an XID / diagnostics timeline. **Switchyard:** a "Decisions and
+  models" tab (decision flow, per-model latency, error rate, cache hit and largest context, a call-rate heatmap,
+  fallbacks, routing overhead, client outcomes) and route / model filters on the Routing tab. **Dynamo:** latency for
+  the chosen window (not only since start), a queue / prefill / decode breakdown, load, output tokens per second,
+  prefix-cache hit ratio, capacity, spec-decode acceptance by position, and an Events tab for the containers' logs.
 - **Charts for every system, wave 1** (addendum 9.13): a Rust-only route `/systems/{id}/metrics/series` returns up to
   12 metric keys in one call (each split into at most 32 series by label on request), for 15 minutes, 1 hour, 24 hours or 7 days, with each bucket's maximum next to its average
   and, on request, one series per label (per GPU, per model). Generic system pages use it: counters are drawn as
