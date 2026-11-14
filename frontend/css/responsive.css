@@ -91,3 +91,83 @@
     padding: var(--s2);
   }
 }
+
+/* Relay trace explorer tiers (the rules are in components.css; these override them and so come after). */
+@media (max-width: 1439px) {
+  .trace-table .col-ttfc {
+    display: none;
+  }
+}
+@media (max-width: 1280px) {
+  .trace-grid.has-panel {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+  }
+  .wf-frame {
+    --wf-name-w: 250px;
+  }
+}
+@media (max-width: 1100px) {
+  .trace-grid.has-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sd {
+    position: static;
+    max-height: none;
+  }
+  .kpis {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .wf-frame {
+    --wf-name-w: 160px;
+  }
+  .wf-dur {
+    display: none;
+  }
+  .wf-name-head span {
+    display: none;
+  }
+  .rt-filters .field.filter,
+  .rt-filters .field.filter.grow,
+  .rt-filters .field.filter.narrow {
+    flex: 1 1 calc(50% - var(--s3));
+  }
+  .rt-filters .field.filter.end {
+    flex: 0 0 auto;
+  }
+  .ix-stats {
+    gap: var(--s2) var(--s4);
+  }
+  .ix-body {
+    padding: var(--s3);
+  }
+  .trace-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rt-facts .kv,
+  .rt-facts.tight .kv {
+    grid-template-columns: 110px minmax(0, 1fr);
+    gap: var(--s2);
+  }
+  .rflow-meta {
+    margin-left: 0;
+    width: 100%;
+  }
+  .timeline {
+    padding-left: 22px;
+  }
+  .tl-dot {
+    left: -22px;
+  }
+  .tl-card {
+    padding: var(--s3);
+  }
+  .cap-table td,
+  .cap-table th {
+    min-width: 130px;
+  }
+  .cap-table th.cap-level {
+    min-width: 160px;
+  }
+}

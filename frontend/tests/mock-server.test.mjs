@@ -268,3 +268,349 @@ test('dev helpers need X-Console; static server refuses traversal spellings and 
   assert.equal(r.status, 2);
   assert.match(String(r.stderr), /refusing --host 0\.0\.0\.0/);
 });
+
+// ---- Relay trace explorer (docs/ARCHITECTURE.md addendum 9.12): every route answers with exactly the documented keys.
+const keysOf = (o) => Object.keys(o).sort();
+const same = (o, list, what) => assert.deepEqual(keysOf(o), [...list].sort(), what);
+const K = {
+  index: 'state generation last_refresh_ts build_ms files events spans open_spans marks chunk_marks traces sessions trajectories coverage truncated limits content problems',
+  file: 'name bytes scanned_bytes compressed events skipped_lines state first_ts last_ts',
+  trace:
+    'trace_id root_name kind client session_key relay_session_id start_ts end_ts duration_ms status spans llm_calls tool_calls tool_errors marks subagents models input_tokens output_tokens cached_tokens reasoning_tokens total_tokens max_input_tokens ttfc_ms routing error has_trajectory',
+  routing: 'algorithm route decision served_model overhead_ms errors',
+  span: 'id parent_id name category subtype role flags start_ts end_ts duration_ms status depth turn_index llm tool error content_available size_bytes',
+  llm: 'model served_model provider api stream input_tokens output_tokens cached_tokens cache_write_tokens reasoning_tokens total_tokens ttfc_ms tokens_per_s finish_reason messages tool_defs tool_calls_requested requested_tools max_tokens reasoning_effort chunks chunk_offsets_ms max_chunk_gap_ms correlation',
+  mark: 'id parent_id ts name category schema severity data',
+  content: 'span_id category source request response tool headers truncated redactions',
+  request: 'model params system messages tools messages_total messages_returned',
+  part: 'type text name call_id chars truncated',
+  session: 'session_key client kind first_ts last_ts span_ms traces llm_calls tool_calls errors models input_tokens output_tokens cached_tokens max_input_tokens',
+  call: 'ts trace_id span_id model input_tokens cached_tokens output_tokens reasoning_tokens duration_ms ttfc_ms status',
+  analytics: 'range bucket_s totals series by_model by_client by_kind histograms heatmap tools tool_requests routing errors scatter',
+  totals:
+    'traces sessions llm_calls tool_calls errors error_rate input_tokens output_tokens cached_tokens reasoning_tokens cache_hit_ratio p50_ms p95_ms p99_ms ttfc_p50_ms ttfc_p95_ms tokens_per_s_p50',
+  series: 'ts traces llm_calls errors input_tokens output_tokens cached_tokens p50_ms p95_ms ttfc_p50_ms by_model',
+  byModel: 'model llm_calls errors input_tokens output_tokens cached_tokens reasoning_tokens p50_ms p95_ms ttfc_p50_ms ttfc_p95_ms tokens_per_s_p50 tokens_per_s_p95',
+  hist: 'duration_ms ttfc_ms input_tokens output_tokens tokens_per_s chunk_gap_ms',
+  routingA: 'requests by_algorithm decisions judge overhead_p50_ms overhead_p95_ms failures flows',
+  errorsA: 'by_type by_status finish_reasons recent',
+  scatter: 'trace_id span_id ts duration_ms input_tokens output_tokens model status',
+  traj: 'id source file bytes mtime schema_version agent session_id steps tool_calls prompt_tokens completion_tokens cached_tokens first_ts last_ts trace_id',
+  step: 'step_id ts source model message_chars reasoning_chars tool_calls observations metrics duration_ms span_id status',
+  stepContent: 'step_id message reasoning tool_calls observations truncated redactions',
+  capture: 'relay_version levels projections hints',
+  level: 'id label enabled state detail observed',
+};
+const kw = (k) => K[k].split(' ');
+const J = async (p) => {
+  const r = await get(`/systems/relay${p}`);
+  return [r.status, await r.json()];
+};
+
+test('9.12: the index state, the trace list and one trace carry exactly the documented keys', async () => {
+  let [st, ix] = await J('/traces/index');
+  assert.equal(st, 200);
+  same(ix, kw('index'), 'IndexState');
+  assert.equal(ix.state, 'ready');
+  same(ix.files[0], kw('file'), 'file');
+  same(ix.coverage, ['from_ts', 'to_ts']);
+  same(ix.limits, ['scan_bytes', 'max_spans', 'max_line_bytes']);
+  assert.ok(ix.problems.every((p) => p.code && p.message));
+  let list;
+  [st, list] = await J('/traces?window=all&limit=200');
+  same(list, ['range', 'total', 'offset', 'limit', 'items', 'facets']);
+  same(list.range, ['from', 'to']);
+  assert.ok(list.total >= 40 && list.items.length === list.total);
+  for (const it of list.items) same(it, kw('trace'), 'TraceSummary');
+  // facets are pinned: exactly these four lists of {value, count}, counted over the window BEFORE any filter, sorted, at most 50
+  assert.deepEqual(keysOf(list.facets), ['client', 'kind', 'model', 'status']);
+  for (const f of ['client', 'model', 'kind', 'status']) {
+    assert.ok(list.facets[f].length > 0 && list.facets[f].length <= 50, `facet ${f}`);
+    for (const x of list.facets[f]) {
+      assert.deepEqual(keysOf(x), ['count', 'value'], `facet ${f} item`);
+      assert.ok(Number.isInteger(x.count) && x.count > 0);
+    }
+    const counts = list.facets[f].map((x) => x.count);
+    assert.deepEqual(
+      counts,
+      [...counts].sort((a, b) => b - a),
+      `facet ${f} is sorted by count descending`,
+    );
+  }
+  assert.deepEqual(list.facets.client.at(-1), { value: null, count: 1 }, 'a null client is counted under value null');
+  assert.equal(
+    list.facets.client.reduce((a, x) => a + x.count, 0),
+    list.total,
+  );
+  const filtered = (await J('/traces?window=all&status=error&client=opencode&limit=200'))[1];
+  assert.deepEqual(filtered.facets, list.facets, 'choosing filters does not change the facets');
+  assert.deepEqual(new Set(list.items.map((x) => x.client).filter(Boolean)), new Set(['opencode', 'claude-cli', 'example-agent']));
+  assert.ok(
+    list.items.some((x) => x.client === null),
+    'a trace with no recognisable client',
+  );
+  assert.ok(new Set(list.items.flatMap((x) => x.models)).size >= 4);
+  assert.ok(list.items.some((x) => x.status === 'open') && list.items.some((x) => x.status === 'error'));
+  const routed = list.items.filter((x) => x.routing);
+  assert.ok(routed.length >= 4 && routed.some((x) => x.routing.errors > 0), 'routed traces, one with a routing failure');
+  same(routed[0].routing, kw('routing'));
+  assert.ok(
+    list.items.some((x) => x.subagents > 0 && x.tool_calls > 0),
+    'a trace with tools and a subagent',
+  );
+  assert.ok(list.items.some((x) => x.kind === 'gateway') && list.items.some((x) => x.kind !== 'gateway'));
+  const one = list.items.find((x) => x.subagents > 0);
+  let d;
+  [st, d] = await J(`/traces/${one.trace_id}`);
+  same(d, ['trace', 'spans', 'marks', 'truncated']);
+  same(d.trace, kw('trace'));
+  assert.ok(d.spans.length === one.spans && d.spans.every((s) => keysOf(s).join() === [...kw('span')].sort().join()));
+  assert.ok(d.spans.filter((s) => s.llm).every((s) => keysOf(s.llm).join() === [...kw('llm')].sort().join()));
+  assert.ok(d.marks.length && d.marks.every((m) => keysOf(m).join() === [...kw('mark')].sort().join()));
+  assert.ok(
+    d.spans.some((s) => s.llm?.chunk_offsets_ms.length > 0 && s.llm.ttfc_ms != null),
+    'a streaming span with chunk cadence',
+  );
+});
+
+test('9.12: list filters, sort, pagination and window/anchor are honoured; bad values are 422 invalid_request', async () => {
+  const L = async (qs) => (await J(`/traces?${qs}`))[1];
+  const all = await L('window=all&limit=200');
+  const err = await L('window=all&status=error&limit=200');
+  assert.ok(err.total >= 3 && err.items.every((x) => x.status === 'error'));
+  assert.ok((await L('window=all&client=opencode&limit=200')).items.every((x) => x.client === 'opencode'));
+  assert.ok((await L('window=all&model=judge-small&limit=200')).items.every((x) => x.models.includes('judge-small')));
+  assert.ok((await L('window=all&min_ms=15000&limit=200')).items.every((x) => x.duration_ms >= 15000));
+  const page = await L('window=all&limit=5&offset=5&sort=duration&order=desc');
+  assert.equal(page.items.length, 5);
+  assert.equal(page.offset, 5);
+  const durs = (await L('window=all&sort=duration&order=desc&limit=200')).items.map((x) => x.duration_ms).filter((v) => v != null);
+  assert.deepEqual(
+    durs,
+    [...durs].sort((a, b) => b - a),
+  );
+  const w1 = await L('window=1h&anchor=latest');
+  assert.ok(w1.total < all.total, 'a short window keeps fewer traces');
+  const now1 = await L('window=1h&anchor=now');
+  assert.ok(now1.range.to > w1.range.to - 1, 'anchor=now ends at the current time');
+  assert.ok((await L(`window=all&q=${all.items[3].session_key}`)).total >= 1);
+  for (const bad of ['window=2d', 'anchor=never', 'limit=0', 'limit=500', 'sort=colour', 'order=up', 'status=maybe', 'min_ms=-1', `q=${'x'.repeat(81)}`, 'q=has%20space']) {
+    const [s, b] = await J(`/traces?${bad}`);
+    assert.equal(s, 422, bad);
+    assert.equal(b.error.code, 'invalid_request', bad);
+  }
+});
+
+test('9.12: unknown and malformed ids; other systems have no explorer', async () => {
+  assert.equal((await J('/traces/00000000-0000-7000-8000-000000000000'))[0], 404);
+  assert.equal((await J('/traces/not-a-uuid'))[0], 422);
+  assert.equal((await J('/sessions/no-such-session'))[0], 404);
+  assert.equal((await J('/trajectories/00000000-0000-7000-8000-000000000000'))[0], 404);
+  assert.equal((await J('/trajectories/not-a-uuid'))[0], 422);
+  const r = await get('/systems/switchyard/traces');
+  assert.equal(r.status, 404);
+  assert.equal((await r.json()).error.code, 'not_found');
+  const w = await fetch(`${base}/api/v1/systems/relay/traces`, { method: 'POST', headers: H, body: '{}' });
+  assert.equal(w.status, 404, 'the explorer routes are GET only');
+});
+
+test('9.12: span content is admin only, can be switched off, and its shapes match', async () => {
+  const list = (await J('/traces?window=all&limit=200'))[1].items;
+  const withLlm = list.find((x) => x.subagents > 0);
+  const tr = (await J(`/traces/${withLlm.trace_id}`))[1];
+  const llm = tr.spans.find((s) => s.category === 'llm');
+  const tool = tr.spans.find((s) => s.category === 'tool');
+  let [st, c] = await J(`/traces/${withLlm.trace_id}/spans/${llm.id}/content`);
+  assert.equal(st, 200);
+  same(c, kw('content'));
+  same(c.request, kw('request'));
+  assert.ok(c.request.system.every((p) => keysOf(p).join() === [...kw('part')].sort().join()));
+  assert.ok(c.request.messages.length && c.request.messages_returned === c.request.messages.length);
+  assert.ok(c.request.messages.some((m) => m.parts.some((p) => p.type === 'reasoning')) && c.request.messages.some((m) => m.parts.some((p) => p.type === 'tool_call')));
+  assert.deepEqual(c.source, { file: 'relay-events.jsonl', compressed: false });
+  assert.ok(!Object.keys(c.headers).some((h) => /authorization|cookie|key|token/i.test(h)), 'only allowlisted headers');
+  [st, c] = await J(`/traces/${withLlm.trace_id}/spans/${tool.id}/content`);
+  assert.ok(c.tool.arguments && c.tool.result);
+  assert.equal((await J(`/traces/${withLlm.trace_id}/spans/${llm.id}/content?max_chars=10`))[0], 422);
+  assert.equal((await J(`/traces/${withLlm.trace_id}/spans/${llm.id}/content?messages=middle`))[0], 422);
+  // 409: the source line of the oldest trace's first call is gone
+  const oldest = (await J('/traces?window=all&limit=1&sort=start&order=asc'))[1].items[0];
+  const oldSpan = (await J(`/traces/${oldest.trace_id}`))[1].spans.find((s) => s.category === 'llm');
+  [st, c] = await J(`/traces/${oldest.trace_id}/spans/${oldSpan.id}/content`);
+  assert.equal(st, 409);
+  assert.equal(c.error.code, 'content_unavailable');
+  // switched off
+  await dev(`${base}/__dev/traces?content=off`);
+  [st, c] = await J(`/traces/${withLlm.trace_id}/spans/${llm.id}/content`);
+  assert.equal(st, 403);
+  assert.equal(c.error.code, 'content_disabled');
+  assert.equal((await J('/traces/index'))[1].content, 'off');
+  await dev(`${base}/__dev/traces?content=admin`);
+  // viewer
+  await dev(`${base}/__dev/role?set=viewer`);
+  [st, c] = await J(`/traces/${withLlm.trace_id}/spans/${llm.id}/content`);
+  assert.equal(st, 403);
+  assert.equal(c.error.code, 'forbidden');
+  assert.equal((await J(`/traces/${withLlm.trace_id}`))[0], 200, 'metadata stays readable for a viewer');
+  await dev(`${base}/__dev/role?set=admin`);
+});
+
+test('9.12: sessions, with context that grows; analytics, trajectories and capture carry the documented keys', async () => {
+  const [, s] = await J('/sessions?window=all&limit=200');
+  same(s, ['range', 'total', 'offset', 'limit', 'items']);
+  for (const it of s.items) same(it, kw('session'), 'SessionSummary');
+  const big = s.items.sort((a, b) => b.traces - a.traces)[0];
+  assert.ok(big.traces >= 8);
+  const [st, d] = await J(`/sessions/${encodeURIComponent(big.session_key)}`);
+  assert.equal(st, 200);
+  same(d, ['session', 'traces', 'calls']);
+  same(d.session, kw('session'));
+  assert.ok(d.calls.every((c) => keysOf(c).join() === [...kw('call')].sort().join()));
+  const inputs = d.calls.map((c) => c.input_tokens);
+  assert.ok(inputs.at(-1) > inputs[0] * 3, 'the context grows over the session');
+  assert.ok(d.calls.at(-1).cached_tokens / d.calls.at(-1).input_tokens > d.calls[0].cached_tokens / d.calls[0].input_tokens, 'and the cache share grows with it');
+  const a = (await J('/analytics?window=all'))[1];
+  same(a, kw('analytics'));
+  same(a.totals, kw('totals'));
+  same(a.series, kw('series'));
+  same(a.series.by_model[0], ['model', 'llm_calls', 'tokens']);
+  same(a.by_model[0], kw('byModel'));
+  same(a.histograms, kw('hist'));
+  for (const h of Object.values(a.histograms)) assert.equal(h.edges.length, h.counts.length + 1);
+  same(a.heatmap, ['activity', 'latency']);
+  same(a.heatmap.activity, ['days', 'hours', 'counts']);
+  same(a.heatmap.latency, ['ts', 'edges_ms', 'counts']);
+  // pinned orientation: latency counts[time][bucket], activity counts[day][hour]
+  assert.equal(a.heatmap.latency.counts.length, a.heatmap.latency.ts.length);
+  assert.ok(a.heatmap.latency.counts.every((row) => row.length === a.heatmap.latency.edges_ms.length - 1));
+  assert.equal(a.heatmap.activity.counts.length, a.heatmap.activity.days.length);
+  assert.ok(a.heatmap.activity.counts.every((row) => row.length === 24) && a.heatmap.activity.hours.length === 24);
+  same(a.routing, kw('routingA'));
+  assert.ok(a.routing.flows.length && a.routing.decisions.length && a.routing.failures.length);
+  same(a.errors, kw('errorsA'));
+  assert.ok(a.scatter.length > 0 && a.scatter.length <= 600);
+  same(a.scatter[0], kw('scatter'));
+  for (const k of ['ts', 'traces', 'llm_calls', 'errors', 'input_tokens', 'output_tokens', 'cached_tokens', 'p50_ms', 'p95_ms', 'ttfc_p50_ms']) assert.equal(a.series[k].length, a.series.ts.length, k);
+  assert.ok((await J('/analytics?window=all&client=opencode'))[1].totals.traces < a.totals.traces, 'filters narrow the totals');
+  assert.equal((await J('/analytics?buckets=5'))[0], 422);
+  const [, tj] = await J('/trajectories');
+  same(tj, ['total', 'offset', 'limit', 'items']);
+  assert.equal(tj.total, 6);
+  assert.deepEqual(new Set(tj.items.map((x) => x.source)), new Set(['gateway', 'example-agent']));
+  for (const it of tj.items) same(it, kw('traj'));
+  assert.equal((await J('/trajectories?source=example-agent'))[1].total, 3);
+  const linkedId = tj.items.find((x) => x.trace_id).trace_id;
+  const byTrace = await J(`/trajectories?trace=${linkedId}`);
+  assert.equal(byTrace[0], 200);
+  assert.equal(byTrace[1].total, 1);
+  assert.ok(byTrace[1].items.every((x) => x.trace_id === linkedId));
+  assert.equal((await J('/trajectories?trace=00000000-0000-7000-8000-000000000000'))[1].total, 0, 'a trace without a trajectory: an empty list, not an error');
+  assert.equal((await J('/trajectories?trace=not-a-uuid'))[0], 422);
+  const linked = tj.items.find((x) => x.trace_id);
+  assert.ok(linked);
+  const [, td] = await J(`/trajectories/${linked.id}`);
+  same(td, ['trajectory', 'steps', 'truncated']);
+  assert.ok(td.steps.every((x) => keysOf(x).join() === [...kw('step')].sort().join()));
+  const sc = (await J(`/trajectories/${linked.id}/steps/${td.steps[2].step_id}/content`))[1];
+  same(sc, kw('stepContent'));
+  const cap = (await J('/capture'))[1];
+  same(cap, kw('capture'));
+  assert.deepEqual(
+    cap.levels.map((l) => l.id),
+    ['atof', 'atif', 'otel_traces', 'otel_logs', 'otel_metrics', 'payloads', 'redaction', 'resource_metrics', 'pricing'],
+  );
+  for (const l of cap.levels) same(l, kw('level'));
+  assert.deepEqual(cap.projections, { gen_ai: true, openinference: true, full: true });
+  // pinned keys per level, in both variants (a level that is off still carries every key)
+  const DETAIL = {
+    atof: ['sinks'],
+    atif: ['agent_name'],
+    otel_traces: ['endpoints'],
+    otel_logs: ['derived', 'endpoints', 'minimum_severity'],
+    otel_metrics: ['derived', 'endpoints', 'export_interval_ms'],
+    payloads: ['mode'],
+    redaction: ['detectors'],
+    resource_metrics: ['interval_ms', 'polling'],
+    pricing: [],
+  };
+  const OBSERVED = { atof: ['bytes', 'events', 'files', 'last_ts'], atif: ['bytes', 'last_ts', 'trajectories'] };
+  for (const variant of ['full', 'gen_ai']) {
+    await dev(`${base}/__dev/traces?capture=${variant}`);
+    const cv = (await J('/capture'))[1];
+    for (const l of cv.levels) {
+      assert.deepEqual(keysOf(l.detail), DETAIL[l.id], `${variant} ${l.id} detail`);
+      if (OBSERVED[l.id]) assert.deepEqual(keysOf(l.observed), OBSERVED[l.id], `${variant} ${l.id} observed`);
+      else if (l.id.startsWith('otel_') || ['redaction', 'resource_metrics', 'pricing'].includes(l.id)) assert.deepEqual(l.observed, {}, `${l.id}: the console cannot observe it, so observed is {}`);
+    }
+    const lv = Object.fromEntries(cv.levels.map((l) => [l.id, l]));
+    assert.deepEqual(keysOf(lv.atof.detail.sinks[0]), ['file', 'mode', 'type']);
+    for (const e of lv.otel_traces.detail.endpoints) {
+      assert.deepEqual(keysOf(e), ['projection', 'reachable', 'service_name', 'target', 'transport']);
+      assert.match(e.target, /^[\w.-]+:\d+$/, 'target is host:port');
+      assert.ok(e.reachable === null || typeof e.reachable === 'boolean');
+    }
+    for (const id of ['otel_logs', 'otel_metrics']) for (const e of lv[id].detail.endpoints) assert.deepEqual(keysOf(e), ['reachable', 'target', 'transport']);
+    assert.ok(['full', 'turn_filtered'].includes(lv.payloads.detail.mode));
+    assert.deepEqual(lv.pricing.detail, {});
+    assert.ok(
+      lv.otel_traces.detail.endpoints.some((e) => e.reachable === null),
+      'an endpoint that is not on this machine is not checked',
+    );
+  }
+  await dev(`${base}/__dev/traces?capture=full`);
+  const dup = (await J('/capture'))[1].levels;
+  assert.ok(
+    dup.find((l) => l.id === 'otel_logs').detail.derived === true && dup.find((l) => l.id === 'otel_traces').detail.endpoints.length > 1,
+    'derived logs beside several trace endpoints: the duplicate export case',
+  );
+  await dev(`${base}/__dev/traces?capture=gen_ai`);
+  assert.deepEqual((await J('/capture'))[1].projections, { gen_ai: true, openinference: false, full: false });
+  await dev(`${base}/__dev/traces?capture=full`);
+});
+
+test('9.12: the index states building, empty and disabled are selectable and the lists follow', async () => {
+  for (const [state, expectTraces] of [
+    ['building', (n) => n > 0 && n < 47],
+    ['empty', (n) => n === 0],
+    ['disabled', (n) => n === 0],
+  ]) {
+    await dev(`${base}/__dev/traces?index=${state}`);
+    const ix = (await J('/traces/index'))[1];
+    same(ix, kw('index'), state);
+    assert.equal(ix.state, state);
+    assert.ok(expectTraces((await J('/traces?window=all'))[1].total), `${state}: list`);
+    assert.equal((await J('/analytics?window=all'))[0], 200, `${state}: analytics`);
+    if (state === 'building') {
+      const f = ix.files.find((x) => x.state === 'partial');
+      assert.ok(f && f.scanned_bytes > 0 && f.scanned_bytes < f.bytes, 'a build in progress has a partial file');
+    }
+    if (state === 'empty') assert.deepEqual(ix.files, []);
+  }
+  await dev(`${base}/__dev/traces?index=ready`);
+  assert.equal((await J('/traces/index'))[1].state, 'ready');
+});
+
+test('9.12: span flags are ATOF flags, roles are session | turn | subagent | null, a stale capture shows an old coverage', async () => {
+  const list = (await J('/traces?window=all&limit=200'))[1].items;
+  const tr = (await J(`/traces/${list.find((x) => x.subagents > 0).trace_id}`))[1];
+  const ATOF = new Set(['streaming', 'parallel', 'remote', 'stateful', 'relocatable']);
+  for (const sp of tr.spans) {
+    assert.ok(
+      sp.flags.every((f) => ATOF.has(f)),
+      `flags ${sp.flags}`,
+    );
+    assert.ok([null, 'session', 'turn', 'subagent'].includes(sp.role), `role ${sp.role}`);
+  }
+  assert.ok(tr.spans.some((sp) => sp.role === 'subagent') && tr.spans.some((sp) => sp.role === 'turn') && tr.spans.some((sp) => sp.role === 'session'));
+  assert.ok(tr.spans.some((sp) => sp.llm?.stream && sp.flags.includes('streaming')));
+  const fresh = (await J('/traces/index'))[1];
+  assert.ok(Date.now() / 1000 - fresh.coverage.to_ts < 3600, 'by default the newest event is recent');
+  await dev(`${base}/__dev/traces?stale=1`);
+  const stale = (await J('/traces/index'))[1];
+  assert.equal(stale.state, 'ready');
+  assert.ok(Date.now() / 1000 - stale.coverage.to_ts > 2 * 86400, 'a stale capture: the newest event is days old');
+  assert.equal((await J('/traces?window=24h&anchor=now'))[1].total, 0, 'nothing in the last 24 hours');
+  assert.ok((await J('/traces?window=24h&anchor=latest'))[1].total > 0, 'but the latest-event anchor still shows the last activity');
+  await dev(`${base}/__dev/traces?stale=0`);
+  assert.ok(Date.now() / 1000 - (await J('/traces/index'))[1].coverage.to_ts < 3600);
+});
