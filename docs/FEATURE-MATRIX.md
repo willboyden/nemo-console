@@ -135,7 +135,7 @@ Dynamo `restart`, assistive technology, browsers other than headless Firefox and
 
 | Feature | Status | Verification | Notes |
 |---|---|---|---|
-| Views: Overview, Switchyard, Relay, Dynamo, Audit (admin), Settings | Implemented | frontend rendered against the real backend: verified live (headless Firefox) | Dynamo tabs: Status, Params, Lifecycle, Playground. Switchyard: Routing, Config, Playground, Actions. Relay: Status, Config, Diagnostics, Playground (if offered). |
+| Views: Overview, Switchyard, Relay, Dynamo, Audit (admin), Settings | Implemented | frontend rendered against the real backend: verified live (headless Firefox) | Dynamo tabs: Status, Params, Lifecycle, Playground. Switchyard: Routing, Config, Playground, Actions. Relay: Status, Traces, Sessions, Analytics, Trajectories, Capture, Config, Diagnostics, Playground (if offered). |
 | Getting started and FAQ tabs on every system page, Overview, Audit and Settings | Implemented | 2026-11-04: `tests/help.test.mjs` (content complete, tab and page links valid), browser suite 86 pages and tabs (77 with the system pages only) with no error state, and in headless Chrome against the dev mock: tab links switch tab and hash, the filter narrows and opens matches, Expand all, no exceptions | Content in `frontend/i18n/help.en.json` (plain text, `code` spans, rendered as text nodes), loaded once on first open. Written from the docs, not checked against every live system: where a system's behaviour changes, update the file with it. |
 | Config editor: Form view (a typed control per value, edits written in place), line-numbered Text view, live edit checks (syntax, the AIPerf / Model Optimizer / Evaluator / Switchyard rules, secrets the backend refuses), unsaved drafts kept for the session | Implemented | 2026-11-04: `tests/cfg-parse.test.mjs`, `cfg-checks.test.mjs` (schema constants read from the Rust adapters), `cfg-edit.test.mjs`; `e2e/config-editor.mjs` in `make e2e` and CI: the browser checks agree with the real backend validators on 600 seeded mutations per file (also run at 600 x 3 seeds by hand), and in headless Chrome the Form view flags an out-of-range value, refuses a wrong type, the Text view marks the line, the server check runs and a draft survives leaving the page. Driven by hand against the dev mock in both themes, as a viewer and at phone width | ADR 0019. Advisory only: the server's validator still decides every apply. YAML anchors, aliases, tags, several documents and multi-line flow or quoted values are not modeled: such files open in the Text view. Not yet used against the live lab's files through the deployed console. |
 | Config editor field help: an info pop-up on every Form setting (what it is, what a change does, accepted values, when it takes effect; Dynamo flags from the Params catalog) | Implemented | 2026-11-05: `tests/cfg-help.test.mjs` (every field of every mock file and every schema key has a description); `e2e/config-editor.mjs` opens a pop-up against the real backend and closes it with Esc; all 661 fields of the author's real lab configs covered (checked with a throwaway backend, read only); driven in headless Chrome at desktop and phone width | Descriptions are the console's own wording from the systems' docs and config comments; where upstream does not document a behaviour the text says less rather than guess. |
@@ -255,6 +255,25 @@ Dynamo `restart`, assistive technology, browsers other than headless Firefox and
 | `smoke` action (a console-owned background run, one at a time), `verify`, `report` | Implemented | fakes only | `smoke` is **disruptive** (router tokens on a shared engine; 1-20 tasks); `verify` (the wrapper's read-only network check) and `report` are **safe**. A restart leaves a running run `interrupted`. |
 | Config | Not applicable | — | The Gym environment config belongs to the lab wrapper; no Configure tab. |
 | NeMo RL training on the rollouts | Not planned for v1 | — | Nothing to start or read yet. |
+
+## Relay trace explorer (addendum 9.12)
+
+Verification below says **verified live (2026-11-14)** only for what the documentation author ran: a debug build on a
+spare port against the real captures of one workstation (Relay 0.9.2: 7 ATOF files, 2.4 GiB on disk, 565,467 events,
+1,889 traces, 153 sessions, 833 trajectories), with an independent checker of the 9.12 shapes and status codes (98 of
+98 checks on the real data, 95 of 95 on the synthetic fixtures) and headless-Chrome screenshots of every tab.
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| Trace index (pairing, traces, sessions, rotations incl. gzip, copytruncate, bounds) | Implemented | verified live (2026-11-14, real captures: all 7 files `indexed`, first build ~80 s debug, ~110 MB resident); fakes `tests/relay_traces_index.rs` | One background task, in memory only, metadata only. Incremental: per-file identity and offsets; a rotated copy is not read twice. |
+| Traces list and trace detail (waterfall, icicle, span table, routing, tokens) | Implemented | verified live (read path; every list and detail route < 100 ms on the real data, debug build) | Filters and facets per 9.12; deep links `#/relay?tab=traces&trace=<id>&span=<id>`. |
+| Sessions (swim lane, context growth, calls) | Implemented | verified live (read path) | The swim lane keeps at most 12 lanes; overlapping short traces are counted in a note (a real 494-trace session needed ~100 lanes before this). |
+| Analytics (totals, series, histograms, heatmaps, routing flows, tools, errors, scatter) | Implemented | verified live (read path) | Window ends at the newest event by default (`anchor=latest`), so an idle lab still shows its last activity. |
+| Trajectories (gateway ATIF and Hermes agents) | Implemented | verified live (820 gateway + 13 Hermes) | Hermes ids are not UUIDs: a stable derived UUIDv8 is used, the original id stays visible as `session_id`. |
+| Capture coverage (which Relay capture levels are on, what was observed, what a reader is missing) | Implemented | verified live (matched the gateway's real `plugins.toml`) | OTLP exports cannot be observed from the console: shown as `not observable`, with a reachability check of loopback endpoints. |
+| Span and step content (admin only) | Implemented | verified live (300 real span contents: no credential pattern left after scrubbing, only allowlisted header names); fakes incl. the marker test `tests/relay_traces_api.rs` | Read from the source line on demand; `scrub()` plus a content-only pass for secret-named `key: value` pairs; caps per 9.12; `RELAY_TRACE_CONTENT=off` turns it off. |
+| Content from gzip rotations | Implemented | see the CHANGELOG entry for the measured read times | Seek points recorded during the index scan bound how much of a rotation one content read decompresses. |
+| Index off / content off switches | Implemented | fakes only | See OPERATIONS. |
 
 ## Not planned for v1
 

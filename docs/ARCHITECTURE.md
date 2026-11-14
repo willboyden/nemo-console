@@ -466,3 +466,184 @@ Additive; defaults reproduce the earlier constants exactly.
   `switchyard.tier.capable_broken` (warn, degrades Switchyard, summary prefix "capable tier not answering"),
   `switchyard.tier.probe_unconfigured` and `switchyard.tier.probe_denied` (info). Only the verdict and a status are kept
   and logged.
+
+**9.12 (2026-11-14): Relay trace explorer — sessions, traces, trajectories, analytics and capture coverage.**
+Additive; no existing route, model or metric key changes. Read-only views over what NeMo Relay captured on this
+machine. Decision record: ADR 0021.
+
+* **Sources** (all under `ctx.paths`, read-only, `O_NOFOLLOW`, regular files only, contained in their directory):
+  `relay_atof_dir` (files matching `^.+\.jsonl(\.\d+)?(\.gz)?$`: the live file, plain rotations, gzip rotations),
+  `relay_atif_dir` (`*.json`), `relay_plugins` (already known), and the new optional `relay_hermes_dir`
+  (`~/.local/share/nemo-relay/hermes`; trajectories in `<agent>/atif/*.json`, `<agent>` matching
+  `^[a-z][a-z0-9-]{0,40}$`). A missing directory is an empty source, never an error.
+* **Trace index** (`adapters/relay_traces.rs`, new): built and refreshed by ONE background task, never on the request
+  path; requests read a snapshot. In memory only (nothing is written to disk). It pairs ATOF `scope` start/end events by
+  `uuid` into spans, keeps non-chunk `mark` events, and groups spans into traces (a trace = a root span and its
+  descendants; the root is the span whose parent is null or not in the index) and sessions (below).
+  * It stores **metadata only**: identifier-shaped strings (the adapter's `IDENT` rule), numbers, booleans and
+    timestamps. No prompt, message, tool argument, tool result or header value (except the allowlisted identifiers
+    named below) is ever held in the index. Content is read from the source file on demand (see the content route).
+  * `llm.chunk` marks are not stored one by one: per parent LLM span the index keeps their count, the largest gap
+    between two chunks and at most 64 evenly thinned offsets (ms from the span start).
+  * Unpaired scopes are data: a start without an end is a span with `status = "open"`; an end without a start is
+    kept with `start_ts = null`.
+  * Refresh is incremental: per file it remembers (device, inode, size, a hash of the first 4 KiB) and the consumed
+    offset; a file that grew is read from that offset, a file that shrank (logrotate `copytruncate`) is re-read from
+    0, a rotated copy with a known first-4-KiB hash and size is not read again. gzip rotations are stream-decompressed.
+  * Bounds (settings, environment or the user env file only, validated at start):
+    `relay_trace_scan_bytes` (uncompressed bytes one full build may read, newest file first; default 16 GiB, min 16
+    MiB, max 256 GiB), `relay_trace_max_spans` (default 300000, 1000..5000000; the oldest traces are dropped first),
+    `relay_trace_max_line_bytes` (default 64 MiB, 64 KiB..1 GiB; a longer line is skipped and counted),
+    `relay_trace_max_atif_bytes` (default 256 MiB per trajectory file), `relay_trace_refresh_s` (default 5, 2..3600),
+    `relay_trace_index` (`on` default | `off`: no task; see "Index off" below),
+    `relay_trace_content` (`admin` default | `off`).
+  * Session key of a trace, first match: the client session id taken from the first LLM request's headers
+    (`x-opencode-session-id`, `x-session-id`, `x-claude-code-session-id`), else Relay's `metadata.session_id`, else the
+    trace id. `client` is derived from the `user-agent` product token (`opencode`, `claude-cli`, …; identifier-shaped,
+    else null). `kind` is `metadata.agent_kind` (`gateway`, `claude-code`, `codex`, …; else `unknown`).
+* **Routes** (all `GET`, under `/api/v1/systems/{id}`; any system other than `relay` answers 404 `not_found`, as the
+  Data Designer run routes do). `viewer` unless stated. Timestamps are epoch seconds (float). Absent data is `null`,
+  never 0. Common query: `window` = `1h|6h|24h|7d|30d|all` (default `24h`), `anchor` = `latest|now` (default
+  `latest`: the window ends at the newest indexed event, so an idle lab still shows its last activity); every answer
+  that takes them returns `range: {from, to}`. Invalid query values are 422 `invalid_request`.
+
+  | Path | Returns |
+  |---|---|
+  | `/traces/index` | `IndexState` |
+  | `/traces` | `{range, total, offset, limit, items: TraceSummary[], facets}`. Filters: `client`, `model`, `kind`, `status` (`ok\|error\|open`), `session`, `q` (substring of trace id, session key, model or root name; <= 80 chars of the `IDENT` alphabet), `min_ms`. `sort` = `start\|duration\|tokens\|llm_calls` (default `start`), `order` = `asc\|desc` (default `desc`), `limit` 1..200 (default 50), `offset` |
+  | `/traces/{trace_id}` | `{trace: TraceSummary, spans: Span[], marks: Mark[], truncated}` (at most 5000 spans and 5000 marks, earliest first); 404 unknown, 422 if the id is not UUID-shaped |
+  | `/traces/{trace_id}/spans/{span_id}/content` | **admin**. `SpanContent`. 403 `content_disabled` when `relay_trace_content = off`; 404 unknown; 409 `content_unavailable` when the source line can no longer be read. Query: `max_chars` 1000..200000 (default 32768, per text), `messages` = `tail\|head` (default `tail`) |
+  | `/sessions` | `{range, total, offset, limit, items: SessionSummary[]}`. Filters `client`, `kind`, `q`; `sort` = `last\|traces\|tokens` (default `last`), `order`, `limit`, `offset` |
+  | `/sessions/{session_key}` | `{session: SessionSummary, traces: TraceSummary[] (<= 500, by start), calls: SessionCall[] (<= 2000, by time)}`; 404 unknown |
+  | `/analytics` | `Analytics` for the window; filters `client`, `model`, `kind`; `buckets` 12..240 (default 60) |
+  | `/trajectories` | `{total, offset, limit, items: TrajectorySummary[]}`; filters `source`, `q`, `trace` (a trace id: only the trajectories linked to that trace; 422 if not UUID-shaped); newest first; `limit` 1..200 (default 50) |
+  | `/trajectories/{id}` | `{trajectory: TrajectorySummary, steps: TrajectoryStep[] (<= 2000), truncated}`; query `source` when the id is not unique; 404 unknown |
+  | `/trajectories/{id}/steps/{step_id}/content` | **admin**, same switch and errors as span content; takes `source` like the route above. `StepContent` |
+  | `/capture` | `Capture` (which capture levels are configured, and what was observed for each) |
+
+  Shapes (every key is always present; unknown values are `null`):
+  * Pinned details (2026-11-14, after the first frontend pass asked):
+    * `facets` = `{client: [{value, count}], model: [..], kind: [..], status: [..]}`: the keys are the filter
+      names; each list is counted over the window BEFORE any filter (so choosing one value does not empty the other
+      lists), sorted by count descending then value, at most 50 entries. A null client or kind is counted under
+      `value: null`.
+    * `Span.flags` are the ATOF `attributes` flags (`streaming`, `parallel`, `remote`, `stateful`, `relocatable`,
+      or any other identifier-shaped flag). `Span.role` is `session`, `turn`, `subagent` or null
+      (`metadata.nemo_relay_scope_role`). `Span.subtype` is `category_profile.subtype` or null.
+    * `heatmap.latency.counts[t][b]`: first index time bucket (`ts[t]`), second index duration bucket
+      (`edges_ms[b]`..`edges_ms[b+1]`). `heatmap.activity.counts[d][h]`: first index day, second hour (UTC).
+    * `Capture.levels[].detail` and `.observed` are objects with these keys (unknown values null; `observed` is `{}`
+      for a level the console cannot observe):
+      `atof`: detail `{sinks: [{type, file, mode}]}`, observed `{last_ts, events, bytes, files}`;
+      `atif`: detail `{agent_name}`, observed `{last_ts, trajectories, bytes}`;
+      `otel_traces`: detail `{endpoints: [{projection, target, transport, service_name, reachable}]}`;
+      `otel_logs`: detail `{minimum_severity, derived, endpoints: [{target, transport, reachable}]}`;
+      `otel_metrics`: detail `{export_interval_ms, derived, endpoints: [{target, transport, reachable}]}`
+      (`derived` = true when the section has no explicit endpoints, so Relay exports the signal once per trace
+      endpoint: with more than one trace endpoint that is a duplicate export and a hint says so);
+      `payloads`: detail `{mode: "full" | "turn_filtered"}`; `redaction`: detail `{detectors: [..]}`;
+      `resource_metrics`: detail `{polling, interval_ms}`; `pricing`: detail `{}`.
+      `target` is `host:port`. `Capture.projections` = `{gen_ai, openinference, full}` booleans.
+    * A 403 on a content route is `content_disabled` when the switch is off; any other 403 is the role check.
+    * Index off (`relay_trace_index = off`; amended 2026-11-14 to match the implementation): `/traces/index` answers
+      `state: "disabled"`; `/traces`, `/sessions`, `/analytics`, `/trajectories` and `/capture` answer 200 with their
+      usual shape, empty, plus one extra key `state: "disabled"` (the only answers that carry `state`; it is absent
+      while the index is on); the detail routes answer 404 `not_found` with a message naming `relay_trace_index =
+      off`; the content routes answer 403 `content_disabled` when content is also off, else 404 like the details.
+    * Content scrubbing = the adapter's `scrub()` plus a content-only pass for `key: value`, `"key": "value"`
+      (also escaped inside JSON strings) and `KEY=value` pairs whose key names a secret (`api_key`, `secret`,
+      `password`, `token`, `private_key`, `access_key`, `credential`, `auth`, ...; values of 8+ chars; config
+      placeholders such as `${...}`, `{env:...}`, `{file:...}` are kept). Added 2026-11-14: tool results can
+      carry configuration text whose credential pairs `scrub()` does not match.
+    * Settings are read from the environment as `NEMO_CONSOLE_<NAME IN UPPER CASE>`, for example
+      `NEMO_CONSOLE_RELAY_TRACE_INDEX=off` and `NEMO_CONSOLE_RELAY_TRACE_CONTENT=off`.
+  * `IndexState`: `{state: "building"|"ready"|"empty"|"disabled", generation, last_refresh_ts, build_ms,
+    files: [{name, bytes, scanned_bytes, compressed, events, skipped_lines, state: "indexed"|"partial"|"skipped"|"error",
+    first_ts, last_ts}], events, spans, open_spans, marks, chunk_marks, traces, sessions, trajectories,
+    coverage: {from_ts, to_ts}, truncated, limits: {scan_bytes, max_spans, max_line_bytes}, content: "admin"|"off",
+    problems: [{code, message}]}`. File names only, never directories.
+  * `TraceSummary`: `{trace_id, root_name, kind, client, session_key, relay_session_id, start_ts, end_ts, duration_ms,
+    status: "ok"|"error"|"open", spans, llm_calls, tool_calls, tool_errors, marks, subagents, models: [..<=8],
+    input_tokens, output_tokens, cached_tokens, reasoning_tokens, total_tokens, max_input_tokens, ttfc_ms,
+    routing: {algorithm, route, decision, served_model, overhead_ms, errors} | null,
+    error: {type, phase} | null, has_trajectory}`. A trace is `error` when any of its spans is; `open` when its root
+    has no end and nothing failed.
+  * `Span`: `{id, parent_id, name, category, subtype, role, flags: [..], start_ts, end_ts, duration_ms, status, depth,
+    turn_index, llm: Llm | null, tool: {name, call_id, type, mcp} | null, error: {type, status_code} | null,
+    content_available, size_bytes}` with `Llm = {model, served_model, provider, api, stream, input_tokens,
+    output_tokens, cached_tokens, cache_write_tokens, reasoning_tokens, total_tokens, ttfc_ms, tokens_per_s,
+    finish_reason, messages, tool_defs, tool_calls_requested, requested_tools: [..<=16 names], max_tokens,
+    reasoning_effort, chunks, chunk_offsets_ms: [..<=64], max_chunk_gap_ms, correlation}`. `category` is the ATOF
+    category; `api` is the scope name (`openai.chat_completions`, `anthropic.messages`, …); `tokens_per_s` =
+    output tokens / (duration - time to first chunk) when both are known and positive.
+  * `Mark`: `{id, parent_id, ts, name, category, schema, severity, data}`; `data` holds only allowlisted scalar
+    fields (the ones `parse_atof_line` already allows, plus `selected_model`, `decision`, `route`, `tier`,
+    `hook_event_name`, `tool_name`) and, for a metric mark, `measurements: [{name, kind, value, unit, attributes}]`
+    (<= 8, attributes <= 8 identifier pairs).
+  * `SpanContent`: `{span_id, category, source: {file, compressed}, request: {model, params, system: Part[],
+    messages: [{role, parts: Part[]}], tools: [{name, description}], messages_total, messages_returned} | null,
+    response: {model, finish_reason, parts: Part[], usage} | null, tool: {arguments: Part | null, result: Part | null}
+    | null, headers: {name: value}, truncated, redactions}` with `Part = {type: "text"|"reasoning"|"tool_call"|
+    "tool_result"|"image"|"other", text, name, call_id, chars, truncated}`. `params` are scalars only. `headers` is an
+    allowlist (`user-agent`, `content-type`, `traceparent`, `x-opencode-client`, `x-nemo-relay-*`, the session
+    headers); never `authorization`, `cookie`, `x-api-key` or any `*-key`/`*-token` header. Every text goes through
+    the adapter's `scrub()`; `redactions` counts what it replaced. At most 400 messages; the whole answer <= 4 MiB
+    (texts are cut further, `truncated = true`). Images are reported as a part with `chars` and no data.
+  * `SessionSummary`: `{session_key, client, kind, first_ts, last_ts, span_ms, traces, llm_calls, tool_calls, errors,
+    models: [..], input_tokens, output_tokens, cached_tokens, max_input_tokens}`.
+    `SessionCall`: `{ts, trace_id, span_id, model, input_tokens, cached_tokens, output_tokens, reasoning_tokens,
+    duration_ms, ttfc_ms, status}`.
+  * `Analytics`: `{range, bucket_s, totals: {traces, sessions, llm_calls, tool_calls, errors, error_rate,
+    input_tokens, output_tokens, cached_tokens, reasoning_tokens, cache_hit_ratio, p50_ms, p95_ms, p99_ms,
+    ttfc_p50_ms, ttfc_p95_ms, tokens_per_s_p50}, series: {ts: [..], traces: [..], llm_calls: [..], errors: [..],
+    input_tokens: [..], output_tokens: [..], cached_tokens: [..], p50_ms: [..], p95_ms: [..], ttfc_p50_ms: [..],
+    by_model: [{model, llm_calls: [..], tokens: [..]}]}, by_model: [{model, llm_calls, errors, input_tokens,
+    output_tokens, cached_tokens, reasoning_tokens, p50_ms, p95_ms, ttfc_p50_ms, ttfc_p95_ms, tokens_per_s_p50,
+    tokens_per_s_p95}], by_client: [{client, traces, llm_calls, tokens, errors}], by_kind: [{kind, traces, llm_calls,
+    tokens, errors}], histograms: {duration_ms, ttfc_ms, input_tokens, output_tokens, tokens_per_s, chunk_gap_ms}
+    (each `{edges: [..n+1], counts: [..n]}`), heatmap: {activity: {days: [..<=31 "YYYY-MM-DD" UTC], hours: [0..23],
+    counts: [[..24]..]}, latency: {ts: [..], edges_ms: [..], counts: [[..]..]}}, tools: [{name, calls, errors, p50_ms,
+    p95_ms}], tool_requests: [{name, count}], routing: {requests, by_algorithm: [{algorithm, count}], decisions:
+    [{route, decision, served_model, count}], judge: {calls, errors, p50_ms, p95_ms}, overhead_p50_ms,
+    overhead_p95_ms, failures: [{kind, phase, count}], flows: [{source, target, value}]}, errors: {by_type: [{type,
+    count}], by_status: [{status, count}], finish_reasons: [{reason, count}], recent: [{ts, trace_id, span_id, model,
+    type}]}, scatter: [{trace_id, span_id, ts, duration_ms, input_tokens, output_tokens, model, status}]}`.
+    Durations and percentiles are over LLM spans unless the key says otherwise (`totals.p*_ms` and
+    `series.p*_ms`: LLM span duration). `series.by_model` and `by_model` list the 8 busiest models, the rest as
+    `other`. `tools`, `tool_requests` <= 30 rows, `errors.recent` <= 20, `scatter` <= 600 evenly sampled LLM spans.
+    Percentiles of an empty set are `null`. `routing.flows` are the edges route -> decision -> served model.
+  * `TrajectorySummary`: `{id, source, file, bytes, mtime, schema_version, agent: {name, version, model}, session_id,
+    steps, tool_calls, prompt_tokens, completion_tokens, cached_tokens, first_ts, last_ts, trace_id}`. `source` is
+    `gateway` for `relay_atif_dir`, else the Hermes agent directory name. `trace_id` links to an indexed trace when
+    a step's `extra.ancestry` names one of its spans. `id` is the first UUID among `trajectory_id`, `session_id` and
+    the file name; when there is none (Hermes writes `IDENT`-shaped ids such as `<name>_<hex>_<date>_<time>`), it is
+    DERIVED: the first 16 bytes of SHA-256 over `"nemo-console/atif-id\0" + source + "\0" + trajectory_id (else
+    session_id)`, with the UUIDv8 version and variant bits set, so it is stable across restarts and the routes keep
+    one id shape; the original id stays visible as `session_id`. A file with neither is counted as not readable.
+    (Amended 2026-11-14 after the first run on real captures: all Hermes trajectories were being skipped.)
+    `TrajectoryStep`: `{step_id, ts, source, model, message_chars, reasoning_chars, tool_calls: [{id, name,
+    arguments_chars}], observations, metrics: {prompt_tokens, completion_tokens, cached_tokens, reasoning_tokens},
+    duration_ms, span_id, status}`. `StepContent`: `{step_id, message: Part | null, reasoning: Part | null,
+    tool_calls: [{id, name, arguments: Part}], observations: [{call_id, content: Part}], truncated, redactions}`.
+  * `Capture`: `{relay_version, levels: [{id, label, enabled, state: "active"|"idle"|"stale"|"off"|"unknown",
+    detail, observed}], projections: {gen_ai, openinference, full}, hints: [{code, message}]}` with level ids
+    `atof`, `atif`, `otel_traces`, `otel_logs`, `otel_metrics`, `payloads`, `redaction`, `resource_metrics`,
+    `pricing`. `detail` comes from `plugins.toml` (exporter kinds, projection per trace endpoint, `host:port` of an
+    endpoint, never its path, query, user info or headers); `observed` from the index (`last_ts`, counts, bytes).
+    `state`: `off` when not configured; `active` when something was written in the last 15 minutes, `idle` within 7
+    days, `stale` beyond; `unknown` when the console cannot observe that level (OTLP exports). An OTLP endpoint on a
+    loopback host also gets `reachable` (one cached HTTP GET, 300 ms timeout, at most once a minute; anything that
+    answers counts). `hints` name what a reader of the traces is missing (for example only the `gen_ai` projection is
+    exported, marks are not exported as logs, payloads are turn-filtered).
+* **Security.** The index and every viewer route are metadata-only, as `parse_atof_line` is. Content routes are
+  admin-only, can be switched off, scrub secrets and cap sizes. Like every other GET they write no audit row; the
+  access log line carries the route label only (no ids). Ids in paths are
+  validated before use (UUID shape for trace, span and trajectory ids; `IDENT` for session keys; a decimal for step
+  ids). No route takes a file name or path. The frontend renders every string with `textContent`; nothing from a
+  capture is ever parsed as HTML. Threat model rows I-9 / R-25.
+* **Frontend.** The Relay page gains the tabs `traces`, `sessions`, `analytics`, `trajectories` and `capture`
+  (after `status`, before `config`). Charts are dependency-free SVG built by pure geometry functions in
+  `frontend/js/viz/` (unit-tested in Node) and rendered with `dom.js`; no library, no canvas, no inline style or
+  script (the CSP is unchanged). Deep links: `#/relay?tab=traces&trace=<id>&span=<id>`,
+  `#/relay?tab=sessions&session=<key>`, `#/relay?tab=trajectories&id=<id>`. The mock server serves every route above
+  with deterministic data, and the browser suite visits every new tab and one detail view of each.

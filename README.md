@@ -68,7 +68,7 @@ rendered**; treat them as unvalidated.
 
 | Area | What you get |
 |---|---|
-| Observe | Health and status per system with actionable problems (each with one copy-pasteable fix), live metrics with 15 min / 1 h / 24 h history, a topology view, live event streams (SSE), and a routing summary (by route, model, tier, tokens, errors) derived from Switchyard's routing log. |
+| Observe | Health and status per system with actionable problems (each with one copy-pasteable fix), live metrics with 15 min / 1 h / 24 h history, a topology view, live event streams (SSE), and a routing summary (by route, model, tier, tokens, errors) derived from Switchyard's routing log. A Relay trace explorer over the gateway's own capture files: traces (waterfall, icicle), agent sessions, analytics, ATIF trajectories and which capture levels are on (content admin-only, secrets scrubbed). |
 | Configure | Switchyard `routes.toml` editor: validate, diff, confirm, backup, atomic write, recreate the container, health check, **automatic rollback** if unhealthy, revision history and manual rollback. Relay `routes.toml` the same way (with a weaker validator, stated in the UI). Dynamo tunables as a structured parameter form that renders a compose override file. |
 | Act | Per-system actions with danger levels (safe / disruptive / destructive) and mandatory confirmation. Dynamo up/down/restart with a **preflight** that names what shares the GPU. |
 | Interact | A playground that sends one chat request through a system, streamed, never stored. |

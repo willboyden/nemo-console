@@ -27,3 +27,4 @@ its files (`*.py`), which map one to one to `backend/crates/nemo-console/src/**/
 | [0018](0018-nemo-gym-smoke-is-a-console-owned-background-run.md) | A NeMo Gym smoke run is a background run the console owns; containment is part of health (addendum 10.10) |
 | [0019](0019-live-config-checks-mirror-the-backend.md) | Live config checks in the browser mirror the backend validators (drift-tested); the backend still decides |
 | [0020](0020-flare-runs-through-the-lab-launcher-on-sm120-and-sm121.md) | NVIDIA Flare runs through the lab launcher on sm120 and sm121 targets; the console never talks to a remote engine |
+| [0021](0021-relay-traces-are-read-from-the-capture-files-content-is-admin-only.md) | Relay traces are read from Relay's own capture files; the index holds metadata only; content is an admin-only, switchable read (addendum 9.12) |

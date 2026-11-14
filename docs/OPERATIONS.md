@@ -62,6 +62,13 @@ Names read by `backend/crates/nemo-console/src/config.rs` (each is `NEMO_CONSOLE
 | `SWITCHYARD_IMAGE` | `ai-lab-switchyard:0.3.0` | Image the routes validator's `--dry-run` uses when the container cannot be inspected. |
 | `SWITCHYARD_LOG_PATH` | `/var/log/switchyard/routing.jsonl` | The routing log inside the container (absolute; read with `docker exec ... tail`). |
 | `RELAY_UNIT` | `nemo-relay-gateway.service` | systemd `--user` unit of the Relay gateway (must end in `.service`). |
+| `RELAY_TRACE_INDEX` | `on` | The Relay trace explorer's index (addendum 9.12): one background task reads Relay's ATOF files (`~/.local/share/nemo-relay/atof`, plain and gzip rotations), its ATIF trajectories (`.../atif`) and the Hermes trajectories (`.../hermes/<agent>/atif`) into memory, metadata only. `off`: no task; the list views answer empty with `state: "disabled"`, the detail views 404. |
+| `RELAY_TRACE_CONTENT` | `admin` | Who may open a span's or step's content (prompts, completions, tool arguments and results, read from the source line on demand, secrets scrubbed, sizes capped): `admin`, or `off` for nobody (403 `content_disabled`). |
+| `RELAY_TRACE_SCAN_BYTES` | `17179869184` (16 GiB) | Uncompressed bytes one full index build may read, newest file first (16 MiB to 256 GiB); older files beyond it are `partial` or `skipped`. |
+| `RELAY_TRACE_MAX_SPANS` | `300000` | Spans kept in memory (1000 to 5000000); the oldest traces are dropped first and the index says `truncated`. |
+| `RELAY_TRACE_MAX_LINE_BYTES` | `67108864` (64 MiB) | A longer ATOF line is skipped and counted (64 KiB to 1 GiB). |
+| `RELAY_TRACE_MAX_ATIF_BYTES` | `268435456` (256 MiB) | A larger trajectory file is skipped and counted (64 KiB to 16 GiB). |
+| `RELAY_TRACE_REFRESH_S` | `5` | Seconds between incremental refreshes (2 to 3600). Measured 2026-11-14 on 2.4 GiB of real captures (7 files, 565k events) first build about 15 s with the release build (about 80 s debug), then refreshes of a few ms, about 100 MB resident. |
 | `DYNAMO_COMPOSE_PROJECT` | `ai-lab-dynamo` | Compose project label the Dynamo containers must carry. |
 | `DYNAMO_SERVICES` | `frontend dynamo-frontend`, `worker dynamo-worker`, `mocker dynamo-mocker`, `sv_frontend dynamo-sv-frontend` | JSON object role -> compose service; single roles merge over the defaults (`NEMO_CONSOLE_DYNAMO_SERVICES__WORKER=...`). The generated override and the GPU parse use these names. |
 | `DYNAMO_CONTAINERS` | `ai-lab-dynamo-dynamo-<service>-1` per role | JSON object role -> container name; merges like `DYNAMO_SERVICES`; each role needs its own name. |

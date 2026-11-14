@@ -5,10 +5,33 @@ implemented / verified-live / unverified defined in the README.
 
 ## [Unreleased]
 
+### Added
+
+- **Relay trace explorer** (addendum 9.12, ADR-0021): five new tabs on the Relay page, read from the files NeMo Relay
+  writes on this machine. **Traces**: a filterable list (client, model, kind, status, duration) and a trace view with a
+  waterfall, an icicle and a span table sharing one selection, the routing decision, tokens, first chunk and chunk
+  cadence. **Sessions**: every trace of an agent session on one timeline and the context growth call by call (cached
+  and uncached input, output). **Analytics**: totals, time series, latency and token histograms, an activity heatmap,
+  routing flows, tools, errors and a duration/output scatter. **Trajectories**: Relay's ATIF trajectories and the
+  Hermes agents' own, step by step. **Capture**: which of Relay's capture levels are switched on, what was observed for
+  each, and what a reader of the traces is missing. Charts are dependency-free SVG; the CSP is unchanged.
+- Seven settings `RELAY_TRACE_*` (OPERATIONS), and the optional `relay_hermes_dir` path.
+
 ### Security
 
 - **rusqlite 0.41.0** (was 0.40.2) brings the bundled SQLite of `libsqlite3-sys` 0.39.1, which fixes CVE-2026-119375
   (RUSTSEC-2026-0459). Both versions pass the 14-day crate-age cooldown on their own; no code change was needed.
+- The index and every viewer route carry metadata only; a test plants a marker in every payload field of the
+  fixtures and proves it never reaches a viewer route (and does reach the admin content route). Content routes are
+  admin-only, can be switched off, scrub secrets (the adapter's `scrub()` plus secret-named `key: value` pairs, which
+  also catches credentials inside tool results) and return only allowlisted headers. No route takes a path.
+
+### Performance
+
+- Content of a span in a gzip-rotated capture is read through seek points recorded while the index scans the file
+  (about every 32 MiB of decompressed output, at most 160 per file, about 33 KB each), so one read decompresses at
+  most one spacing. Measured 2026-11-14 on the real 1 GB `relay-events.jsonl.3.gz` with a debug build: the deepest
+  spans went from up to 54 s to under 1 s.
 
 ## [0.10.0] - 2026-11-05
 
