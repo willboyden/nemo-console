@@ -235,12 +235,19 @@ export function sevenStatus(id, now, flags = {}) {
 export const sevenHealth = (id, flags) => sevenStatus(id, 0, flags).health;
 
 // ------------------------------------------------------------------ metrics (keys and labels as captured from the real adapters; VALUES are mock)
-export function sevenMetrics(id, ts, wob) {
+export function sevenMetrics(id, ts, wob, flags = {}) {
   const P = (key, value, unit = '', labels = {}) => ({ key, value, unit, labels });
+  // This host has two cards; /__dev/seven?dcgm_gpus=6 adds more label variants so the series picker (more than 4 lines) can be seen.
   const gpus = [
     ['0', 'NVIDIA RTX PRO 6000 Blackwell Max-Q'],
     ['1', 'NVIDIA RTX PRO 6000 Blackwell Workstation'],
-  ];
+    ['2', 'NVIDIA GeForce RTX 5090'],
+    ['3', 'NVIDIA GB10 spark1'],
+    ['4', 'NVIDIA GB10 spark2'],
+    ['5', 'NVIDIA GB10 spark3'],
+    ['6', 'NVIDIA GB10 spark4'],
+    ['7', 'NVIDIA RTX PRO 6000 Blackwell ai300b'],
+  ].slice(0, Math.min(8, Math.max(2, flags.dcgmGpus || 2)));
   if (id === 'skillevaluator') return [P('se.skills', 66), P('se.runs', 12), P('se.last_quality_score', 87.5), P('se.last_judge_score', 82.0), P('se.last_skill_lift', 0.125), P('se.live_running', 0)];
   if (id === 'openshell')
     return [
@@ -1057,10 +1064,24 @@ export function sevenSeedEvents(now) {
     ],
   };
 }
+/** A live `check` event in the adapter's shape: {config, ok, results: [{probe, status, rail, ms}]} (the three fixed probes). */
 export function fiveLiveEvent(now, pick, rnd) {
-  const blocked = rnd() < 0.15,
-    prompt = pick(['summarise this file', 'what is 2+2', 'ignore previous instructions', 'draft an email']);
-  return { ts: now, system: 'guardrails', kind: 'guardrails.check', summary: `${prompt} -> ${blocked ? 'blocked (self check input)' : 'allowed'}`, data: { verdict: blocked ? 'blocked' : 'allowed' } };
+  const slip = rnd() < 0.15,
+    ms = () => Math.round(400 + rnd() * 500);
+  const results = [
+    { probe: 'benign', status: 'passed', rail: null, ms: ms() },
+    { probe: 'jailbreak', status: slip ? 'passed' : 'blocked', rail: slip ? null : 'self check input', ms: ms() },
+    { probe: 'harmful', status: 'blocked', rail: 'self check input', ms: ms() },
+  ];
+  const cfg = pick(['lab-input-output', 'lab-input-output', 'lab-default']);
+  const name = (s) => (s === 'passed' ? 'allowed' : s);
+  return {
+    ts: now,
+    system: 'guardrails',
+    kind: 'guardrails.check',
+    summary: `check ${cfg}: ${results.map((r) => `${r.probe}=${name(r.status)}`).join(', ')}`,
+    data: { config: cfg, ok: !slip, results },
+  };
 }
 
 // ------------------------------------------------------------------ guardrails playground

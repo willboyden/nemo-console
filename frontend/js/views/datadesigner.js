@@ -8,6 +8,8 @@ import { fmtInt, fmtMs, fmtBytes, fmtDate } from '../format.js';
 import { valueOf } from '../metrics.js';
 import { badge, btn, card, kv, stat, errorBox, emptyBox, skeleton } from '../components/ui.js';
 import { systemPage } from '../components/system-page.js';
+import { runHistoryPanel } from '../components/run-history.js';
+import { DATADESIGNER } from '../run-descriptors.js';
 import { componentsTable, endpointsList } from '../components/status-panel.js';
 import { eventsPanel, pushEvent } from '../components/events-panel.js';
 import { actionsPanel } from '../components/actions-panel.js';
@@ -387,6 +389,7 @@ class NcDataDesigner extends NcView {
         { id: 'scripts', label: t('tab.scripts'), render: (scope) => scriptsTab(scope) },
         { id: 'actions', label: t('tab.actions'), render: (scope) => actionsPanel(scope, SYS) },
         { id: 'runs', label: t('tab.runs'), render: (scope) => runsTab(scope) },
+        { id: 'history', label: t('tab.history'), render: (scope, ctx) => runHistoryPanel(scope, ctx, DATADESIGNER) },
       ],
     });
   }

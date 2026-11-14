@@ -18,9 +18,12 @@ const TABS = {
   switchyard: ['routing', 'config', 'playground', 'actions'],
   relay: ['status', 'traces', 'sessions', 'analytics', 'trajectories', 'capture', 'config', 'diagnostics', 'playground'],
   dynamo: ['status', 'params', 'lifecycle', 'playground'],
-  skillevaluator: ['status', 'evaluate'],
-  datadesigner: ['status', 'scripts', 'actions', 'runs'],
-  ...Object.fromEntries(SEVEN_IDS.map((id) => [id, ['status', 'config', 'playground', 'actions']])),
+  skillevaluator: ['status', 'history', 'evaluate'],
+  datadesigner: ['status', 'scripts', 'actions', 'runs', 'history'],
+  // The generic view: Status, the run History where the system has runs (addendum 9.13), Config / Playground when offered, Actions.
+  ...Object.fromEntries(
+    SEVEN_IDS.map((id) => [id, ['status', ...(['aiperf', 'dcgm', 'evaluator', 'gym', 'modelopt', 'guardrails'].includes(id) ? ['history'] : []), 'config', 'playground', 'actions']]),
+  ),
 };
 const tabsBySystem = Object.fromEntries(Object.entries({ ...TABS, ...CONSOLE_PAGES }).map(([k, v]) => [k, [...v, ...HELP_TABS]]));
 
@@ -33,9 +36,9 @@ test('the tab table matches the tab ids the views define', () => {
   const ids = (src) => [...src.matchAll(/\{\s*id:\s*'([a-z_]+)',\s*label:\s*t\('tab\./g)].map((m) => m[1]);
   for (const id of ['switchyard', 'relay', 'dynamo', 'skillevaluator', 'datadesigner']) assert.deepEqual(ids(read(`js/views/${id}.js`)).sort(), [...TABS[id]].sort(), id);
   for (const [id, tabs] of Object.entries(CONSOLE_PAGES)) assert.deepEqual(ids(read(`js/views/${id}.js`)), tabs, id);
-  // The generic view: Status, then Config / Playground when offered, then Actions.
+  // The generic view: Status, then History when the descriptor has runs, then Config / Playground when offered, then Actions.
   const gen = read('js/components/generic-system.js');
-  assert.deepEqual(ids(gen).sort(), ['actions', 'config', 'playground', 'status']);
+  assert.deepEqual(ids(gen).sort(), ['actions', 'config', 'history', 'playground', 'status']);
   // The help tabs come from the page frame, after the view's own.
   assert.deepEqual(ids(read('js/components/system-page.js')), HELP_TABS);
 });

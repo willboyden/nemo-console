@@ -171,3 +171,50 @@
     min-width: 160px;
   }
 }
+
+/* Series charts and run history (rules in components.css; these override them and so come after). */
+@media (max-width: 720px) {
+  .rh-mark {
+    width: 32px;
+    height: 32px;
+  }
+  .rh-mark.mini {
+    width: 18px;
+    height: 18px;
+  }
+  .rh-count {
+    margin-left: 0;
+    width: 100%;
+  }
+  .rh-filters .field.filter {
+    flex: 1 1 calc(50% - var(--s3));
+  }
+  .rh-pick .field.filter {
+    flex: 1 1 100%;
+  }
+  .rh-card .card-head .row {
+    flex: 1 1 100%;
+  }
+  .rh-card .card-head .field.filter {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .tablewrap .rh-table {
+    min-width: 0;
+  }
+  .rh-table .rh-col-pct,
+  .rh-table .rh-fact-id {
+    display: none;
+  }
+  .rh-table th,
+  .rh-table th[scope='row'] {
+    white-space: normal;
+  }
+  .rh-table td.num {
+    padding-left: var(--s1);
+    padding-right: var(--s1);
+  }
+  .series-chip-name {
+    max-width: 150px;
+  }
+}
