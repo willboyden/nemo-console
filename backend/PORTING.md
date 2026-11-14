@@ -668,7 +668,7 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
   Only the poller moves a baseline: the adapter port gains `poll_metrics()` (default: `metrics()`), which
   `MetricsPoller::tick` calls through `StatusService::poll_metrics`; Dynamo's `poll_metrics` reads and then makes this
   read the next baseline, its `metrics()` (the `/systems/dynamo/metrics` route, the UI) compares with the previous
-  poll and changes nothing, so the window is exactly one poll interval whatever the interval is (a `PUT /settings`
+  poll and changes nothing, so the window is one poll interval (longer after a poll that aborted midway, which neither advances nor clears the baseline) whatever the interval is (a `PUT /settings`
   change included) and however often the UI reads. No point before the first poll, when nothing finished, on a
   counter reset (a bucket of a label set went down: on a poll the reset read becomes the baseline) or, on a poll, after
   the family was absent or the frontend unreadable (the window starts afresh); a label set only one read has adds

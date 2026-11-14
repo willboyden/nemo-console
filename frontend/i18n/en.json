@@ -1633,7 +1633,7 @@
   "dynv.ev_unknown": "Dynamo's state could not be read ({why}), so its logs probably cannot be read either.",
   "dynv.ev_try": "Read the logs anyway",
   "dynv.ev_empty": "No log lines yet",
-  "dynv.ev_empty_hint": "New lines from the Dynamo containers appear here live. They are log text with secrets redacted on the server, shown as plain text.",
+  "dynv.ev_empty_hint": "New lines from the Dynamo containers appear here live. They are log text, shown as plain text; the server replaces secret-looking patterns, so treat them as sensitive.",
   "dynv.ev_lead": "The recent log lines of the Dynamo containers, newest first, live while this tab is open. Before a line leaves the server the console replaces secret-looking patterns in it; the redaction is pattern-based, so treat the lines as sensitive.",
   "dynv.ev_levels": "Log levels",
   "dynv.ev_toggle": "Show or hide {level} lines",
