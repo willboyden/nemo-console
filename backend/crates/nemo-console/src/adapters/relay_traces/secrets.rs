@@ -1,5 +1,5 @@
-//! The trace explorer's own secret scrubbing of content (on top of the adapter's shared `scrub()`, which is kept as
-//! it is because the parity harness compares it with the Python reference).
+//! The trace explorer's own secret scrubbing of content, on top of the adapter's shared `scrub()` (which the parity
+//! harness compares with the Python reference, and which is linear too since D-35).
 //!
 //! Captured content holds credentials in more shapes than `scrub()` knows: a JSON pair inside a tool result
 //! (`"token": "…"`), the same pair inside JSON that is itself a string (`\"token\": \"…\"`), a Python dict
@@ -91,8 +91,8 @@ pub fn scrub_pairs(text: &str) -> (String, usize) {
     (out, n)
 }
 
-/// Everything content goes through before it leaves the console: the adapter's `scrub()` (keys, bearer tokens,
-/// `key = "value"` lines), then the credential pairs above. The count is the sum of both.
+/// Everything content goes through before it leaves the console, all of it linear: the adapter's `scrub()` (`sk-`
+/// keys, bearer tokens, `key = "value"` lines), then the credential pairs above. The count is the sum.
 #[must_use]
 pub fn scrub_content(text: &str) -> (String, usize) {
     let (first, a) = scrub_count(text);
@@ -207,10 +207,61 @@ mod tests {
         assert_eq!(n, 2);
     }
 
+    /// The audit's input: blank lines, an unclosed `password = "` line, then a real one. The old fancy-regex pattern
+    /// gave up on it; content and `scrub()` must both redact the second line.
+    #[test]
+    fn a_password_after_hostile_whitespace_is_redacted() {
+        let text = format!(
+            "{}password = \"{}\npassword = \"correct horse battery staple\"\n",
+            "\n".repeat(1000),
+            "y".repeat(1000)
+        );
+        let (out, n) = scrub_content(&text);
+        assert!(!out.contains("correct horse battery staple"), "content");
+        assert!(out.ends_with("password = \"[REDACTED]\"\n"));
+        assert!(n >= 1);
+        let shared = crate::adapters::relay::scrub(&text);
+        assert!(!shared.contains("correct horse battery staple"), "scrub()");
+        let (counted, m) = crate::adapters::relay::scrub_count(&text);
+        assert!(
+            !counted.contains("correct horse battery staple"),
+            "scrub_count()"
+        );
+        assert!(m >= 1);
+    }
+
+    #[test]
+    fn kv_lines_like_scrub() {
+        for (input, want) in [
+            ("password = \"hunter2hunter2\"", "password = \"[REDACTED]\""),
+            ("  token='abc def ghi'", "  token=\"[REDACTED]\""),
+            ("API_KEY = \"x\"", "API_KEY = \"[REDACTED]\""),
+            ("password = \"[REDACTED]\"", "password = \"[REDACTED]\""),
+            ("my password = \"abc\"", "my password = \"abc\""),
+            // every blank but a line break counts around `=` (audit R2): no-break space, vertical tab, form feed
+            (
+                "password\u{a0}=\u{a0}\"abcdefghij\"",
+                "password\u{a0}=\u{a0}\"[REDACTED]\"",
+            ),
+            (
+                "password\x0b=\x0b\"abcdefghij\"",
+                "password\x0b=\x0b\"[REDACTED]\"",
+            ),
+            (
+                "\u{a0}\x0csecret\x0c=\"abcdefghij\"",
+                "\u{a0}\x0csecret\x0c=\"[REDACTED]\"",
+            ),
+        ] {
+            let (out, n) = scrub_content(input);
+            assert_eq!(out, want, "{input:?}");
+            assert_eq!(n, usize::from(out != input), "{input:?}");
+        }
+    }
+
     #[test]
     fn hostile_text_stays_linear() {
         // inputs built to make a backtracking matcher blow up; each at n and 4n repetitions
-        let shapes: [fn(usize) -> String; 7] = [
+        let shapes: [fn(usize) -> String; 8] = [
             |n| "\"token".repeat(n),
             |n| "\\\"token\\\":\\\"".repeat(n / 2),
             |n| "token=".repeat(n),
@@ -218,6 +269,8 @@ mod tests {
             |n| format!("'secret': '{}", "\\x".repeat(n)),
             |n| format!("auth:{}", " ".repeat(4 * n)),
             |n| format!("{}=", "api_key".repeat(n)),
+            // blank lines, then an unclosed quoted value: what made `scrub()`'s fancy-regex give up
+            |n| format!("{}password = \"{}", "\n".repeat(n), "x".repeat(n)),
         ];
         let time = |n: usize| {
             let t0 = std::time::Instant::now();

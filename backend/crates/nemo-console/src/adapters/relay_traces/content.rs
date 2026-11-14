@@ -44,37 +44,56 @@ pub struct ContentQuery {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Unavailable;
 
-/// A request header that may be shown: the client's name, content type, trace context, the session ids and Relay's
-/// own headers. Anything that could carry a credential is refused first, whatever its prefix.
+/// The request headers that may be shown, by exact name: the client's name, content type, trace context, the
+/// session ids and NeMo Relay's own id headers. Nothing else, whatever its prefix (audit F5).
+const HEADER_ALLOWLIST: [&str; 18] = [
+    "user-agent",
+    "content-type",
+    "traceparent",
+    "tracestate",
+    "x-opencode-client",
+    "x-opencode-session-id",
+    "x-session-id",
+    "x-claude-code-session-id",
+    "x-nemo-relay-agent-kind",
+    "x-nemo-relay-identity-quality",
+    "x-nemo-relay-parent-scope-id",
+    "x-nemo-relay-request-id",
+    "x-nemo-relay-root-scope-id",
+    "x-nemo-relay-session-id",
+    "x-nemo-relay-source",
+    "x-nemo-relay-turn-id",
+    "x-nemo-relay-owner-id",
+    "x-nemo-relay-subagent-id",
+];
+
+/// True for a header name on [`HEADER_ALLOWLIST`] (case-insensitive).
 #[must_use]
 pub fn header_allowed(name: &str) -> bool {
-    let n = name.to_ascii_lowercase();
-    let secretish = [
-        "auth",
-        "cookie",
-        "secret",
-        "password",
-        "credential",
-        "signature",
-    ]
-    .iter()
-    .any(|w| n.contains(w))
-        || n.ends_with("-key")
-        || n.ends_with("-token")
-        || n == "x-api-key";
-    if secretish {
+    HEADER_ALLOWLIST
+        .iter()
+        .any(|h| h.eq_ignore_ascii_case(name))
+}
+
+/// True when the (scrubbed) value of an allowlisted header may be shown: a user agent is printable ASCII of at most
+/// 256 characters; every other header is identifier-shaped (at most 200 characters of letters, digits and
+/// `_ . : / @ + -`, plus `, ; =` and blanks for the trace context lists).
+#[must_use]
+pub fn header_value_ok(name: &str, value: &str) -> bool {
+    if value.is_empty() {
         return false;
     }
-    matches!(
-        n.as_str(),
-        "user-agent"
-            | "content-type"
-            | "traceparent"
-            | "x-opencode-client"
-            | "x-opencode-session-id"
-            | "x-session-id"
-            | "x-claude-code-session-id"
-    ) || n.starts_with("x-nemo-relay-")
+    if name.eq_ignore_ascii_case("user-agent") {
+        return value.len() <= 256 && value.bytes().all(|b| (0x20..0x7f).contains(&b));
+    }
+    value.len() <= 200
+        && value.bytes().all(|b| {
+            b.is_ascii_alphanumeric()
+                || matches!(
+                    b,
+                    b'_' | b'.' | b':' | b'/' | b'@' | b'+' | b'-' | b',' | b';' | b'=' | b' '
+                )
+        })
 }
 
 /// The allowlisted headers of a request, values capped.
@@ -558,12 +577,12 @@ pub fn span_content(
                 request = request_json(&mut mk, req, q);
             }
             for (k, v) in data.headers.0 {
-                let (mut v, hits) = scrub_content(&v);
+                let (v, hits) = scrub_content(&v);
                 mk.redactions += hits as u64;
-                if let Some((i, _)) = v.char_indices().nth(512) {
-                    v.truncate(i);
+                // a value that is not plain (or that the scrubber changed) is not shown at all
+                if hits == 0 && header_value_ok(&k, &v) {
+                    headers.insert(k, Value::String(v));
                 }
-                headers.insert(k, Value::String(v));
             }
         }
         if let Some((bytes, ..)) = &end
@@ -636,9 +655,25 @@ mod tests {
             "x-stainless-os",
             "b3",
             "x-opencode-project",
+            "x-nemo-relay-apikey",
+            "x-nemo-relay-api_key",
+            "x-nemo-relay-bearer",
+            "x-nemo-relay-passwd",
+            "x-nemo-relay-pwd",
+            "x-nemo-relay-pat",
+            "x-nemo-relay-jwt",
+            "x-nemo-relay-anything",
         ] {
             assert!(!header_allowed(no), "{no}");
         }
+        assert!(header_value_ok(
+            "user-agent",
+            "claude-cli/1.0 (external, cli)"
+        ));
+        assert!(!header_value_ok("user-agent", "bad\u{7}bell"));
+        assert!(header_value_ok("tracestate", "a=1,b=2"));
+        assert!(!header_value_ok("x-session-id", "<script>"));
+        assert!(!header_value_ok("x-session-id", &"a".repeat(201)));
     }
 
     #[test]

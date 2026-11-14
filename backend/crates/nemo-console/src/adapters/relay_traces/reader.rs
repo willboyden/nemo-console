@@ -86,6 +86,24 @@ pub fn find_newline(h: &[u8]) -> Option<usize> {
     rest.iter().position(|&b| b == b'\n').map(|p| base + p)
 }
 
+/// A long line was abandoned because the reader's `stop` check said so (see [`LineReader::next_line_until`]).
+#[derive(Debug)]
+pub struct Stopped;
+
+impl std::fmt::Display for Stopped {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("read stopped")
+    }
+}
+
+impl std::error::Error for Stopped {}
+
+/// True for the error of a stopped read.
+#[must_use]
+pub fn is_stopped(e: &std::io::Error) -> bool {
+    e.get_ref().is_some_and(|i| i.is::<Stopped>())
+}
+
 /// One line of a stream.
 pub enum Line<'a> {
     /// A line of at most the limit. `start` is its offset in the stream, `consumed` its length including the newline
@@ -246,6 +264,13 @@ impl<R: Read> LineReader<R> {
 
     /// The next line. After an error the reader must not be used again.
     pub fn next_line(&mut self) -> std::io::Result<Line<'_>> {
+        self.next_line_until(&|_| false)
+    }
+
+    /// [`Self::next_line`], asking `stop` (with the stream offset reached so far) after every refill of a line too
+    /// long for the buffer: when it says yes, the read ends with a [`Stopped`] error instead of going through the
+    /// rest of the line (a cancelled pass, a scan budget used up inside one endless line).
+    pub fn next_line_until(&mut self, stop: &dyn Fn(u64) -> bool) -> std::io::Result<Line<'_>> {
         loop {
             if let Some(i) = find_newline(&self.buf[self.pos..self.len]) {
                 let start = self.offset;
@@ -297,14 +322,14 @@ impl<R: Read> LineReader<R> {
                 self.pos = 0;
             }
             if self.len == self.buf.len() {
-                return self.long_line();
+                return self.long_line(stop);
             }
             self.fill()?;
         }
     }
 
     /// A line that does not fit the buffer: collect it in the spill buffer up to the limit, then only count.
-    fn long_line(&mut self) -> std::io::Result<Line<'_>> {
+    fn long_line(&mut self, stop: &dyn Fn(u64) -> bool) -> std::io::Result<Line<'_>> {
         let start = self.offset;
         let mut total: u64 = 0;
         let mut over = false;
@@ -333,6 +358,10 @@ impl<R: Read> LineReader<R> {
             self.len = 0;
             if self.eof {
                 break false;
+            }
+            if stop(self.offset + total) {
+                self.spill = Vec::new();
+                return Err(std::io::Error::other(Stopped));
             }
             self.fill()?;
             if self.eof && self.len == 0 {

@@ -16,6 +16,7 @@ import { searchBox, resetButton } from './controls.js';
 import { colTh, tripletShort, tokenBar, pager, copyBtn, kvList, legendList, dataTable, chartEmpty, swap, dash, statusChip, kindChip } from './ui.js';
 import { contentSection, renderStepContent } from './content.js';
 import { fitted } from './fit.js';
+import { trajectoryProblem } from './pure.js';
 
 export function trajectoriesTab(scope, ctx) {
   const nav = createNav('trajectories', ctx);
@@ -374,8 +375,8 @@ function trajectoryDetail(scope, nav) {
       render();
     },
     onError: (e) => {
-      if (e?.status === 404 || e?.status === 422)
-        swap(body, emptyBox(e.status === 404 ? t('rt.traj.not_found') : t('rt.traj.bad_id'), e.status === 404 ? t('rt.traj.not_found_hint') : describeError(e), mkBack()));
+      const problem = trajectoryProblem(e);
+      if (problem) swap(body, emptyBox(problem.title, problem.text, mkBack()));
       else
         swap(
           body,

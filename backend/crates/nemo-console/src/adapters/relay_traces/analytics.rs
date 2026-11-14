@@ -361,9 +361,9 @@ pub fn analytics(snap: &Snapshot, q: &AnalyticsQuery, lb: &Labels, now_us: i64) 
                 }
                 let Some(l) = core.llm_of(s) else { continue };
                 s_calls[b] += 1;
-                s_in[b] += l.input.max(0);
-                s_out[b] += l.output.max(0);
-                s_cached[b] += l.cached.max(0);
+                s_in[b] = s_in[b].saturating_add(l.input.max(0));
+                s_out[b] = s_out[b].saturating_add(l.output.max(0));
+                s_cached[b] = s_cached[b].saturating_add(l.cached.max(0));
                 #[allow(clippy::cast_precision_loss)]
                 let ttfc = (l.ttfc_us >= 0).then(|| l.ttfc_us as f64 / 1e3);
                 let tps = Core::tokens_per_s(s, l);

@@ -434,7 +434,9 @@ impl Maker {
                     self.truncated = true;
                 }
             }
-            other => out.push(self.value("other", other)),
+            // one block on its own (an object), or a bare number or flag
+            other @ Node::Obj(_) => self.block(other, default_kind, out),
+            other => out.push(Maker::sized("other", other.text_chars())),
         }
     }
 
@@ -492,7 +494,8 @@ impl Maker {
                 // never the data: only how large it is
                 out.push(Maker::sized("image", b.text_chars()));
             }
-            _ => out.push(self.value("other", b)),
+            // a block the console does not know: its kind and size only, never its data (audit F7)
+            _ => out.push(Maker::sized("other", b.text_chars())),
         }
     }
 
@@ -543,8 +546,127 @@ impl Maker {
 /// Parts kept of one message.
 const MAX_PARTS: usize = 64;
 
-/// Cut the texts of a finished answer further until it fits `budget` bytes of text. True when anything was cut.
+/// The most bytes a content answer may have as JSON (addendum 9.12: "the whole answer <= 4 MiB"), less a little
+/// room for the two fields the caller sets after [`fit`].
+pub const ANSWER_MAX_BYTES: usize = 4 * 1024 * 1024 - 4096;
+
+/// Cut the texts of a finished answer further until it fits `budget` bytes of text, then, if the JSON is still over
+/// [`ANSWER_MAX_BYTES`] (many parts with long names or ids), shorten every string and drop the second half of the
+/// largest list until it fits. True when anything was cut.
 pub fn fit(v: &mut Value, budget: usize) -> bool {
+    let mut any = fit_texts(v, budget);
+    let size = |v: &Value| serde_json::to_vec(v).map_or(usize::MAX, |b| b.len());
+    let mut shortened = false;
+    while size(v) > ANSWER_MAX_BYTES {
+        any = true;
+        if !shortened {
+            shorten_strings(v, 64);
+            shortened = true;
+            continue;
+        }
+        if !halve_largest_list(v) {
+            break;
+        }
+    }
+    any
+}
+
+fn shorten_strings(v: &mut Value, cap: usize) {
+    match v {
+        Value::String(s) => {
+            cut_chars(s, cap);
+        }
+        Value::Array(a) => a.iter_mut().for_each(|x| shorten_strings(x, cap)),
+        Value::Object(o) => {
+            let shortened = match o.get_mut("text") {
+                Some(Value::String(s)) => s.chars().count() > cap,
+                _ => false,
+            };
+            o.values_mut().for_each(|x| shorten_strings(x, cap));
+            if shortened && o.contains_key("truncated") {
+                o.insert("truncated".to_owned(), Value::Bool(true));
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Drop the second half of the largest list with two or more elements. False when there is none.
+fn halve_largest_list(v: &mut Value) -> bool {
+    fn weight(v: &Value) -> usize {
+        match v {
+            Value::String(s) => s.len() + 2,
+            Value::Array(a) => a.iter().map(weight).sum::<usize>() + 2,
+            Value::Object(o) => {
+                o.iter()
+                    .map(|(k, x)| k.len() + 3 + weight(x))
+                    .sum::<usize>()
+                    + 2
+            }
+            _ => 8,
+        }
+    }
+    // the path to the heaviest list: walk down, remembering the best list seen
+    fn best(v: &Value, path: &mut Vec<PathStep>, out: &mut Option<(usize, Vec<PathStep>)>) {
+        match v {
+            Value::Array(a) => {
+                if a.len() >= 2 {
+                    let w = weight(v);
+                    if out.as_ref().is_none_or(|(bw, _)| w > *bw) {
+                        *out = Some((w, path.clone()));
+                    }
+                }
+                for (i, x) in a.iter().enumerate() {
+                    path.push(PathStep::Index(i));
+                    best(x, path, out);
+                    path.pop();
+                }
+            }
+            Value::Object(o) => {
+                for (k, x) in o {
+                    path.push(PathStep::Key(k.clone()));
+                    best(x, path, out);
+                    path.pop();
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut found = None;
+    best(v, &mut Vec::new(), &mut found);
+    let Some((_, path)) = found else {
+        return false;
+    };
+    let mut at = v;
+    for step in &path {
+        let next = match (step, at) {
+            (PathStep::Index(i), Value::Array(a)) => a.get_mut(*i),
+            (PathStep::Key(k), Value::Object(o)) => o.get_mut(k),
+            _ => None,
+        };
+        let Some(n) = next else {
+            return false;
+        };
+        at = n;
+    }
+    match at {
+        Value::Array(a) if a.len() >= 2 => {
+            let keep = a.len() / 2;
+            a.truncate(keep);
+            true
+        }
+        _ => false,
+    }
+}
+
+#[derive(Clone)]
+enum PathStep {
+    Index(usize),
+    Key(String),
+}
+
+/// The text cuts of [`fit`]: shorten texts and descriptions until the answer holds about `budget` bytes of text.
+fn fit_texts(v: &mut Value, budget: usize) -> bool {
     fn total(v: &Value) -> usize {
         match v {
             Value::String(s) => s.len(),
@@ -783,5 +905,51 @@ mod tests {
         let mut small = json!({"parts": [{"text": "short", "truncated": false}]});
         assert!(!fit(&mut small, 1000));
         assert_eq!(small["parts"][0]["truncated"], false);
+    }
+
+    /// Audit F7: many parts with long names and call ids (which the text cuts do not shorten) still fit 4 MiB.
+    #[test]
+    fn an_answer_never_exceeds_four_mib() {
+        let long = "n".repeat(200);
+        let part = json!({"type": "tool_call", "text": "x", "name": long, "call_id": long, "chars": 1, "truncated": false});
+        let messages: Vec<Value> = (0..400)
+            .map(|_| json!({"role": "assistant", "parts": vec![part.clone(); 64]}))
+            .collect();
+        let mut v = json!({"request": {"messages": messages}, "truncated": false, "redactions": 0});
+        assert!(serde_json::to_vec(&v).unwrap().len() > 8 * 1024 * 1024);
+        assert!(fit(&mut v, 3_400_000));
+        assert!(
+            serde_json::to_vec(&v).unwrap().len() <= ANSWER_MAX_BYTES,
+            "over 4 MiB"
+        );
+        assert!(!v["request"]["messages"].as_array().unwrap().is_empty());
+    }
+
+    /// Audit F7: a block of a type the console does not know is reported by its size only, never its data.
+    #[test]
+    fn an_unknown_block_carries_only_its_type_and_size() {
+        let blob = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo".repeat(100);
+        let mut mk = Maker::new(MAX_CHARS);
+        let mut parts = Vec::new();
+        mk.content(
+            &node(&format!(
+                r#"[{{"type":"weird_blob","data":"{blob}"}},{{"type":"text","text":"ok"}}]"#
+            )),
+            "text",
+            &mut parts,
+        );
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0].kind, "other");
+        assert_eq!(parts[0].text, None);
+        assert!(parts[0].chars > 3000);
+        assert!(!parts[0].json().to_string().contains("QUJD"));
+        // content that is a bare object or number: the same
+        let mut more = Vec::new();
+        mk.content(&node(&format!(r#"{{"blob":"{blob}"}}"#)), "text", &mut more);
+        mk.content(&node("12345"), "text", &mut more);
+        for p in &more {
+            assert_eq!(p.kind, "other");
+            assert_eq!(p.text, None);
+        }
     }
 }

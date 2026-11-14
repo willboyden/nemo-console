@@ -89,12 +89,14 @@ static TOML_LINE: LazyLock<regex::Regex> = LazyLock::new(|| re(r"line (\d+)"));
 static SECRET_SK: LazyLock<regex::Regex> = LazyLock::new(|| re(r"\bsk-[A-Za-z0-9_\-]{16,}"));
 static SECRET_BEARER: LazyLock<regex::Regex> =
     LazyLock::new(|| re(r"(?i)\bBearer[^\S\r\n]+[A-Za-z0-9._~+/=\-]{8,}"));
-#[allow(clippy::expect_used)]
-static SECRET_KV: LazyLock<fancy_regex::Regex> = LazyLock::new(|| {
-    fancy_regex::Regex::new(
-        r#"(?im)^(\s*(?:api_key|apikey|secret|password|token|access_key|private_key)[^\S\r\n]*=[^\S\r\n]*)(["'])(?!\[REDACTED)[^"'\n]+\2"#,
+/// The Python reference's `key = "value"` pattern, `(?im)^(\s*KEY[^\S\r\n]*=[^\S\r\n]*)(["'])(?!\[REDACTED)[^"'\n]+\2`
+/// (with D-32's same-line blanks around `=`), in the `regex` crate so that it is linear: the back-reference becomes
+/// one alternative per quote, the look-ahead a check in [`kv_replace`]. Group 1: up to the value; group 2 or 3: the
+/// value inside `"` or `'`. It matches where the original does and its replacement is the same (D-35).
+static SECRET_KV: LazyLock<regex::Regex> = LazyLock::new(|| {
+    re(
+        r#"(?im)^(\s*(?:api_key|apikey|secret|password|token|access_key|private_key)[^\S\r\n]*=[^\S\r\n]*)(?:"([^"'\n]+)"|'([^"'\n]+)')"#,
     )
-    .expect("static regex")
 });
 
 pub const VALIDATION_CAVEATS: &str = "`nemo-relay plugins validate` and `doctor` can PASS while the gateway still \
@@ -120,23 +122,22 @@ pub const ROUTES_NOTE: &str = "Validated by a TOML parse plus a semantic pass th
 
 // ── small pure helpers ──────────────────────────────────────────────────────────────────────────
 
-/// `re.sub` with a closure over fancy-regex captures.
-fn sub_fancy(
-    rx: &fancy_regex::Regex,
-    text: &str,
-    mut f: impl FnMut(&fancy_regex::Captures<'_, str>) -> String,
-) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut last = 0;
-    for caps in rx.captures_iter(text) {
-        let Ok(caps) = caps else { break };
-        let Some(m) = caps.get(0) else { continue };
-        out.push_str(&text[last..m.start()]);
-        out.push_str(&f(&caps));
-        last = m.end();
-    }
-    out.push_str(&text[last..]);
-    out
+/// [`SECRET_KV`] applied: `group 1 + "[REDACTED]"`, except where the value already starts with `[REDACTED` (the
+/// original's look-ahead; no other match can begin inside such a span, so keeping it as it is gives the same text).
+/// `n` counts the replacements.
+fn kv_replace(text: &str, n: &mut usize) -> String {
+    SECRET_KV
+        .replace_all(text, |c: &regex::Captures<'_>| {
+            let whole = c.get(0).map_or("", |m| m.as_str());
+            let value = c.get(2).or_else(|| c.get(3)).map_or("", |m| m.as_str());
+            if value.starts_with("[REDACTED") {
+                whole.to_owned()
+            } else {
+                *n += 1;
+                format!("{}\"[REDACTED]\"", c.get(1).map_or("", |m| m.as_str()))
+            }
+        })
+        .into_owned()
 }
 
 /// Redact secret-shaped substrings (defence in depth; the runner also redacts).
@@ -146,25 +147,28 @@ pub fn scrub(text: &str) -> String {
     let out = SECRET_BEARER
         .replace_all(&out, "Bearer [REDACTED]")
         .into_owned();
-    sub_fancy(&SECRET_KV, &out, |c| {
-        format!("{}\"[REDACTED]\"", c.get(1).map_or("", |m| m.as_str()))
-    })
+    kv_replace(&out, &mut 0)
 }
 
-/// `scrub`, and how many secret-shaped substrings it replaced (the trace explorer reports that number with every
-/// piece of content it returns). Same patterns, same order, same output as [`scrub`].
+/// The two linear patterns of [`scrub`] (`sk-` keys, bearer tokens) and how many they replaced: the trace explorer
+/// adds its own `key = "value"` pass (`adapters/relay_traces/secrets.rs`).
 #[must_use]
-pub fn scrub_count(text: &str) -> (String, usize) {
+pub fn scrub_keys_and_bearers(text: &str) -> (String, usize) {
     let mut n = SECRET_SK.find_iter(text).count();
     let out = SECRET_SK.replace_all(text, "[REDACTED]").into_owned();
     n += SECRET_BEARER.find_iter(&out).count();
     let out = SECRET_BEARER
         .replace_all(&out, "Bearer [REDACTED]")
         .into_owned();
-    let out = sub_fancy(&SECRET_KV, &out, |c| {
-        n += 1;
-        format!("{}\"[REDACTED]\"", c.get(1).map_or("", |m| m.as_str()))
-    });
+    (out, n)
+}
+
+/// `scrub`, and how many secret-shaped substrings it replaced (the trace explorer reports that number with every
+/// piece of content it returns). Same patterns, same order, same output as [`scrub`].
+#[must_use]
+pub fn scrub_count(text: &str) -> (String, usize) {
+    let (out, mut n) = scrub_keys_and_bearers(text);
+    let out = kv_replace(&out, &mut n);
     (out, n)
 }
 

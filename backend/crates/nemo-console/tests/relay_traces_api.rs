@@ -810,3 +810,124 @@ async fn test_trajectory_content_and_detail_of_a_gateway_trajectory() {
             .contains("a.txt")
     );
 }
+
+// ── audit F4: a trajectory is read only from the file the index saw, through real directories ──────
+
+fn hermes_trajectory_lab() -> (Lab, String) {
+    let lab = Lab::empty(config());
+    let dir = lab.hermes.join("hermes-a").join("atif");
+    std::fs::create_dir_all(&dir).unwrap();
+    let id = "01a0f1e0-cccc-7000-8000-0000000000cc";
+    std::fs::write(
+        dir.join(format!("{id}.json")),
+        traj_doc(id, "hermes says hello").to_string(),
+    )
+    .unwrap();
+    lab.refresh();
+    (lab, id.to_owned())
+}
+
+#[tokio::test]
+async fn test_a_trajectory_rewritten_after_indexing_is_409() {
+    let (lab, id) = hermes_trajectory_lab();
+    let st = app(&lab);
+    let detail = format!("/trajectories/{id}");
+    let step = format!("/trajectories/{id}/steps/1/content");
+    assert_eq!(status(&st, &detail).await.0, 200);
+    assert_eq!(status(&st, &step).await.0, 200);
+    // the same name, other text of the same length, written after the index read it
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(
+        lab.hermes.join("hermes-a/atif").join(format!("{id}.json")),
+        traj_doc(&id, "hermes says HELLO").to_string(),
+    )
+    .unwrap();
+    for sub in [&detail, &step] {
+        let r = get(&st, &format!("{API}{sub}")).await;
+        assert_eq!(
+            (r.status, r.code()),
+            (409, "content_unavailable".to_owned()),
+            "{sub}: {}",
+            r.text()
+        );
+        assert!(!r.text().contains("HELLO"));
+    }
+}
+
+#[tokio::test]
+async fn test_a_trajectory_directory_swapped_for_a_symlink_is_not_read() {
+    for swap in ["atif", "agent"] {
+        let (lab, id) = hermes_trajectory_lab();
+        let st = app(&lab);
+        let detail = format!("/trajectories/{id}");
+        assert_eq!(status(&st, &detail).await.0, 200);
+        // the very same files, now reached through a link
+        let agent = lab.hermes.join("hermes-a");
+        if swap == "atif" {
+            std::fs::rename(agent.join("atif"), agent.join("atif.real")).unwrap();
+            std::os::unix::fs::symlink(agent.join("atif.real"), agent.join("atif")).unwrap();
+        } else {
+            let real = lab.tmp.path().join("agent.real");
+            std::fs::rename(&agent, &real).unwrap();
+            std::os::unix::fs::symlink(&real, &agent).unwrap();
+        }
+        for sub in [
+            detail.clone(),
+            format!("/trajectories/{id}/steps/1/content"),
+        ] {
+            let (code, _) = status(&st, &sub).await;
+            assert!(code == 404 || code == 409, "{swap} {sub}: {code}");
+        }
+    }
+}
+
+// ── audit F5: an exact header allowlist, identifier-shaped values ─────────────────────────────────
+
+#[tokio::test]
+async fn test_relay_headers_are_an_exact_allowlist_with_plain_values() {
+    let lab = content_lab(
+        vec![json!({"role": "user", "content": "hi"})],
+        json!({
+            "user-agent": "opencode/2.0.0 (linux; x64)",
+            "tracestate": "vendor=abc,other=def",
+            "x-nemo-relay-session-id": "relay-1", "x-nemo-relay-subagent-id": "sub-1",
+            "x-nemo-relay-owner-id": "owner-1",
+            "x-nemo-relay-apikey": "k1value", "x-nemo-relay-api_key": "k2value",
+            "x-nemo-relay-bearer": "b1value", "x-nemo-relay-passwd": "p1value",
+            "x-nemo-relay-pat": "pat1value", "x-nemo-relay-jwt": "jwt1value", "x-nemo-relay-pwd": "pwd1value",
+            "x-nemo-relay-anything": "a1value",
+            "x-session-id": "has space <b>",
+            "x-opencode-session-id": "x".repeat(201),
+        }),
+        json!({}),
+    );
+    let st = app(&lab);
+    let c = ok(&st, &format!("/traces/{}/spans/{}/content", uid(1), uid(2))).await;
+    let headers = c["headers"].as_object().unwrap();
+    let mut names: Vec<&str> = headers.keys().map(String::as_str).collect();
+    names.sort_unstable();
+    assert_eq!(
+        names,
+        [
+            "tracestate",
+            "user-agent",
+            "x-nemo-relay-owner-id",
+            "x-nemo-relay-session-id",
+            "x-nemo-relay-subagent-id",
+        ],
+        "{c}"
+    );
+    assert_eq!(headers["user-agent"], "opencode/2.0.0 (linux; x64)");
+    for v in [
+        "k1value",
+        "k2value",
+        "b1value",
+        "p1value",
+        "pat1value",
+        "jwt1value",
+        "pwd1value",
+        "a1value",
+    ] {
+        assert!(!c.to_string().contains(v), "{v}: {c}");
+    }
+}

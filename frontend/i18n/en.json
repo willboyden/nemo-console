@@ -1138,6 +1138,8 @@
   "rt.traj.not_found": "Trajectory not found",
   "rt.traj.not_found_hint": "The file may have been deleted, or the link is wrong.",
   "rt.traj.bad_id": "That is not a trajectory id",
+  "rt.traj.changed": "The trajectory file changed",
+  "rt.traj.changed_hint": "This file was rewritten or replaced after the index read it, so the console will not show it as it is now. The index reads it again within a few seconds: try again shortly.",
   "rt.traj.none_for_trace": "No trajectory for this trace",
   "rt.traj.none_for_trace_hint": "No trajectory file points at this trace.",
   "rt.traj.open_trace": "Open trace",

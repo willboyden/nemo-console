@@ -740,6 +740,57 @@ pub fn derive(ing: &Ingest, lb: &Labels) -> Derived {
     d
 }
 
+/// Keep at most `target` marks: the oldest go first, marks that belong to no indexed span before those that do (a
+/// capture can hold any number of marks; the spans' own limit does not bound them). Returns how many were dropped.
+pub fn evict_marks(ing: &mut Ingest, target: usize) -> usize {
+    let n = ing.store.marks.len();
+    if n <= target {
+        return 0;
+    }
+    let mut order: Vec<(bool, i64, usize)> = ing
+        .store
+        .marks
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            let parented = !m.parent.is_none() && ing.span_by_id.contains_key(&m.parent);
+            (parented, m.ts_us, i)
+        })
+        .collect();
+    order.sort_unstable();
+    let drop = n - target;
+    let mut gone = vec![false; n];
+    for &(_, _, i) in order.iter().take(drop) {
+        if let Some(g) = gone.get_mut(i) {
+            *g = true;
+        }
+    }
+    let old_marks = std::mem::take(&mut ing.store.marks);
+    let old_fields = std::mem::take(&mut ing.store.mark_fields);
+    let old_meas = std::mem::take(&mut ing.store.meas);
+    for (i, m) in old_marks.iter().enumerate() {
+        if gone.get(i).copied().unwrap_or(true) {
+            continue;
+        }
+        let mut m = *m;
+        let (fa, ma) = (m.fields as usize, m.meas as usize);
+        m.fields = u32::try_from(ing.store.mark_fields.len()).unwrap_or(NO_ROW);
+        for k in fa..fa + usize::from(m.nfields) {
+            if let Some(f) = old_fields.get(k) {
+                ing.store.mark_fields.push(*f);
+            }
+        }
+        m.meas = u32::try_from(ing.store.meas.len()).unwrap_or(NO_ROW);
+        for k in ma..ma + usize::from(m.nmeas) {
+            if let Some(x) = old_meas.get(k) {
+                ing.store.meas.push(*x);
+            }
+        }
+        ing.store.marks.push(m);
+    }
+    drop
+}
+
 /// Drop the oldest traces until at most `target` live spans are left. Returns how many spans went.
 pub fn evict(ing: &mut Ingest, target: usize) -> usize {
     let g = group(&ing.store.spans, &ing.span_by_id);

@@ -377,3 +377,54 @@ pub fn traj_doc(id: &str, text: &str) -> Value {
         "final_metrics": {"total_prompt_tokens": 10, "total_completion_tokens": 2},
     })
 }
+
+/// A gzip member of `n` copies of `byte` with no newline, compressed about 160:1 (fixed codes: one literal, then
+/// back-references of 258 bytes at distance 1), whose trailer claims `isize` bytes (a lie when it is not `n`).
+pub fn gzip_bomb(byte: u8, n: u64, isize: u32) -> Vec<u8> {
+    struct Bits {
+        out: Vec<u8>,
+        acc: u64,
+        n: u32,
+    }
+    impl Bits {
+        fn put(&mut self, v: u32, n: u32) {
+            self.acc |= u64::from(v) << self.n;
+            self.n += n;
+            while self.n >= 8 {
+                self.out.push((self.acc & 0xff) as u8);
+                self.acc >>= 8;
+                self.n -= 8;
+            }
+        }
+        /// A Huffman code, most significant bit first.
+        fn code(&mut self, code: u32, len: u32) {
+            self.put(code.reverse_bits() >> (32 - len), len);
+        }
+    }
+    let mut b = Bits {
+        out: vec![0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 0xff],
+        acc: 0,
+        n: 0,
+    };
+    b.put(1, 1); // last block
+    b.put(1, 2); // fixed codes
+    assert!(byte < 144);
+    b.code(0x30 + u32::from(byte), 8);
+    let mut left = n.saturating_sub(1);
+    while left >= 258 {
+        b.code(0xc5, 8); // length 258 (symbol 285)
+        b.code(0, 5); // distance 1
+        left -= 258;
+    }
+    for _ in 0..left {
+        b.code(0x30 + u32::from(byte), 8);
+    }
+    b.code(0, 7); // end of block
+    if b.n > 0 {
+        b.put(0, 8 - b.n);
+    }
+    // a CRC that does not matter: the scan stops long before the trailer
+    b.out.extend_from_slice(&0u32.to_le_bytes());
+    b.out.extend_from_slice(&isize.to_le_bytes());
+    b.out
+}

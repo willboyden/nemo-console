@@ -15,8 +15,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use super::event::{Parsed, parse_line};
-use super::ids::NO_TS;
-use super::reader::{Line, LineReader, Opened, hash128, open_in, read_at};
+use super::ids::{NO_TS, OddIds};
+use super::reader::{Line, LineReader, Opened, hash128, is_stopped, open_in, read_at};
 use super::rows::{Ingest, Loc, NO_ROW};
 use crate::adapters::relay::{MAX_SCAN_ENTRIES, atof_rotation};
 use crate::services::gzip::{GzCheckpoint, GzReader};
@@ -27,6 +27,10 @@ pub const HEAD: usize = 4096;
 const ANCHOR: usize = 256;
 /// The live file is read at least this far back even when the scan budget is used up.
 const LIVE_FLOOR: u64 = 64 * 1024 * 1024;
+/// Marks kept per span of `relay_trace_max_spans` (marks are not spans, but they cost memory like them).
+pub const MARKS_PER_SPAN: usize = 4;
+/// How far past the scan budget one line may be read before the file is stopped.
+const BUDGET_SLACK: u64 = 1024 * 1024;
 /// How often a long read hands a partial result to the publisher.
 const PROGRESS_EVERY: Duration = Duration::from_secs(2);
 
@@ -213,8 +217,11 @@ pub struct Scan {
     /// Something was left out: the budget ran out, or the span limit dropped traces.
     pub truncated: bool,
     pub budget_skipped: u64,
+    /// Files read only in part because the scan budget ran out (a rotation from its tail, a `.gz` stopped early).
+    pub budget_cut: u64,
     pub cap_skipped: u64,
     pub evicted_spans: u64,
+    pub evicted_marks: u64,
     pub file_errors: u64,
     last_progress: Instant,
 }
@@ -231,7 +238,19 @@ impl Scan {
     #[must_use]
     pub fn new(limits: Limits) -> Scan {
         Scan {
-            ing: Ingest::new(limits.max_spans.saturating_mul(4).saturating_add(100_000)),
+            // the label and id tables grow with what was seen and are not emptied by eviction: both are bounded in
+            // proportion to the span limit, in entries and in bytes
+            ing: Ingest::with_caps(
+                limits.max_spans.saturating_mul(4).saturating_add(100_000),
+                limits.max_spans.saturating_mul(64).saturating_add(8 << 20),
+                OddIds::with_caps(
+                    limits
+                        .max_spans
+                        .saturating_mul(MARKS_PER_SPAN + 1)
+                        .saturating_add(10_000),
+                    limits.max_spans.saturating_mul(128).saturating_add(8 << 20),
+                ),
+            ),
             limits,
             lineages: Vec::new(),
             seen: HashMap::new(),
@@ -239,8 +258,10 @@ impl Scan {
             budget_left: limits.scan_bytes,
             truncated: false,
             budget_skipped: 0,
+            budget_cut: 0,
             cap_skipped: 0,
             evicted_spans: 0,
+            evicted_marks: 0,
             file_errors: 0,
             last_progress: Instant::now(),
         }
@@ -532,6 +553,7 @@ impl Scan {
                 self.budget_left = self.budget_left.saturating_sub(size - start);
                 if start > 0 {
                     self.truncated = true;
+                    self.budget_cut += 1;
                 }
                 match self.new_lineage(&head, start) {
                     Some(l) => l,
@@ -630,11 +652,16 @@ impl Scan {
             let Some(lin) = self.lineages.get(l as usize).cloned() else {
                 return (Self::plain_row(f, size, FState::Error), NO_ROW);
             };
+            if lin.stopped_by_budget {
+                // the budget ended this content once: it is not read again (it stays `partial`)
+                return (self.row_of(f, size, l, lr.get_ref().compressed_bytes()), l);
+            }
             if lin.at_eof && isize_tail == Some(lin.consumed & 0xffff_ffff) {
                 // the compressed copy of a rotation that was read to its end: nothing to index, but its content
                 // reads need seek points into THIS file (once per file)
                 if lin.gz_points.as_ref().is_none_or(|p| p.key != key) {
-                    Self::drain(&mut lr, cancel);
+                    // never past the content that was read (the trailer that led here is the file's own claim)
+                    Self::drain(&mut lr, lin.consumed, cancel);
                     if !cancel.load(Ordering::Relaxed) {
                         self.keep_points(l, key, &mut lr);
                     }
@@ -659,7 +686,23 @@ impl Scan {
                     || (anchor.len() == lin.anchor_len as usize
                         && hash128(&anchor) == lin.anchor_hash));
             if same {
-                let end = self.consume(&mut lr, l, None, cancel, progress, row_index, &scanned);
+                // what is new in it counts against the scan budget like any other content
+                let before = lin.consumed;
+                let allow = self.budget_left;
+                let end = self.consume(
+                    &mut lr,
+                    l,
+                    Some(allow),
+                    cancel,
+                    progress,
+                    row_index,
+                    &scanned,
+                );
+                let used = self
+                    .lineages
+                    .get(l as usize)
+                    .map_or(0, |x| x.consumed.saturating_sub(before));
+                self.budget_left = self.budget_left.saturating_sub(used);
                 self.finish_gz(l, end.as_ref().map_err(std::io::Error::kind));
                 self.keep_points(l, key, &mut lr);
                 return (self.row_of(f, size, l, lr.get_ref().compressed_bytes()), l);
@@ -679,8 +722,9 @@ impl Scan {
         let Some(allow) = self.allowance(f) else {
             return (Self::plain_row(f, size, FState::Skipped), NO_ROW);
         };
-        // a rotation of several gigabytes cannot be read from its end, so it is taken whole or not at all; the trailer
-        // says how large it is (when the content is under 4 GiB, which a larger value than the file size confirms)
+        // a rotation of several gigabytes cannot be read from its end, so one the trailer says is larger than the
+        // budget is left out instead of read from its oldest part. The trailer is the file's own claim, so it is a
+        // hint only: whatever is read is counted as it is decompressed and stops at the budget (`consume`)
         if f.rot > 0
             && let Some(est) = isize_tail.filter(|e| *e >= size)
             && est > allow
@@ -709,11 +753,13 @@ impl Scan {
     }
 
     /// Decompress the rest of a stream without reading lines (only its seek points are wanted).
-    fn drain(lr: &mut LineReader<GzReader<std::fs::File>>, cancel: &AtomicBool) {
+    fn drain(lr: &mut LineReader<GzReader<std::fs::File>>, upto: u64, cancel: &AtomicBool) {
         const STEP: u64 = 8 * 1024 * 1024;
-        while !cancel.load(Ordering::Relaxed) {
-            match lr.skip_bytes(STEP, |_, _| {}) {
-                Ok(n) if n == STEP => {}
+        let mut left = upto;
+        while left > 0 && !cancel.load(Ordering::Relaxed) {
+            let step = left.min(STEP);
+            match lr.skip_bytes(step, |_, _| {}) {
+                Ok(n) if n == step => left -= n,
                 _ => break,
             }
         }
@@ -751,6 +797,7 @@ impl Scan {
                 l.at_eof = false;
                 l.stopped_by_budget = true;
                 self.truncated = true;
+                self.budget_cut += 1;
             }
             // a rotation that is still being compressed ends early: keep what was read, look again when it grows
             Ok(End::Cancelled) | Err(std::io::ErrorKind::UnexpectedEof) => l.at_eof = false,
@@ -788,13 +835,16 @@ impl Scan {
                 result = Ok(End::Cancelled);
                 break;
             }
+            // the budget counts the bytes of content read (decompressed, for a .gz), checked at every line
+            if byte_limit.is_some_and(|max| consumed - began >= max) {
+                result = Ok(End::Budget);
+                break;
+            }
             if lines.is_multiple_of(512) {
-                if byte_limit.is_some_and(|max| consumed - began >= max) {
-                    result = Ok(End::Budget);
-                    break;
-                }
+                let marks_cap = self.limits.max_spans.saturating_mul(MARKS_PER_SPAN);
                 let over = self.ing.store.spans.len()
-                    > self.limits.max_spans + self.limits.max_spans / 4 + 1024;
+                    > self.limits.max_spans + self.limits.max_spans / 4 + 1024
+                    || self.ing.store.marks.len() > marks_cap + marks_cap / 4;
                 if over || self.last_progress.elapsed() >= PROGRESS_EVERY {
                     self.note(lineage, events, skipped, first_us, last_us, consumed, None);
                     (events, skipped) = (0, 0);
@@ -814,8 +864,21 @@ impl Scan {
                     self.last_progress = Instant::now();
                 }
             }
-            let line = match lr.next_line() {
+            // inside one long line too: stop at the budget (plus a little) or when the pass is cancelled
+            let stop = |at: u64| {
+                cancel.load(Ordering::Relaxed)
+                    || byte_limit.is_some_and(|max| at - began > max.saturating_add(BUDGET_SLACK))
+            };
+            let line = match lr.next_line_until(&stop) {
                 Ok(l) => l,
+                Err(e) if is_stopped(&e) => {
+                    result = Ok(if cancel.load(Ordering::Relaxed) {
+                        End::Cancelled
+                    } else {
+                        End::Budget
+                    });
+                    break;
+                }
                 Err(e) => {
                     result = Err(e);
                     break;
@@ -916,6 +979,20 @@ impl Scan {
     /// (so the next few passes do not have to do this again). `mid_file`: called from inside a long read, where a
     /// quarter over the limit is tolerated before anything is dropped.
     pub fn evict_if_over(&mut self, mid_file: bool) {
+        // marks: at most MARKS_PER_SPAN per span of the limit, the oldest dropped first
+        let mark_cap = self.limits.max_spans.saturating_mul(MARKS_PER_SPAN);
+        let mark_limit = if mid_file {
+            mark_cap + mark_cap / 4
+        } else {
+            mark_cap
+        };
+        if self.ing.store.marks.len() > mark_limit {
+            let dropped = super::derive::evict_marks(&mut self.ing, mark_cap - mark_cap / 10);
+            self.evicted_marks += dropped as u64;
+            if dropped > 0 {
+                self.truncated = true;
+            }
+        }
         let live = self.ing.store.spans.iter().filter(|s| s.live()).count();
         let limit = if mid_file {
             self.limits.max_spans + self.limits.max_spans / 4

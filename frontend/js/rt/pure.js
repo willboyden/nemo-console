@@ -39,6 +39,15 @@ export function contentProblem(e) {
   return { kind: 'bad', title: t('common.error'), text: describeError(e) };
 }
 
+/** The empty-box title and text for a failed trajectory-detail request: 404 not found, 409 the file changed since it
+ *  was indexed (the index catches up within a few seconds), 422 a malformed id. Null for anything else (an error box). */
+export function trajectoryProblem(e) {
+  if (e?.status === 404) return { title: t('rt.traj.not_found'), text: t('rt.traj.not_found_hint') };
+  if (e?.status === 409) return { title: t('rt.traj.changed'), text: t('rt.traj.changed_hint') };
+  if (e?.status === 422) return { title: t('rt.traj.bad_id'), text: describeError(e) };
+  return null;
+}
+
 /** Pretty-print a tool argument when it is JSON; any other text is returned as it is. */
 export function prettyArgs(text) {
   if (typeof text !== 'string' || !/^\s*[{[]/.test(text)) return text ?? '';

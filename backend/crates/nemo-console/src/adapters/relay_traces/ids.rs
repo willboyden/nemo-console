@@ -115,17 +115,40 @@ impl Id {
     }
 }
 
-/// Ids that are not plain UUIDs, kept as text.
-#[derive(Clone, Default)]
+/// Ids that are not plain UUIDs, kept as text. Bounded in number and in bytes: past either, new ones are refused
+/// (their events are counted as skipped) and counted in `dropped`.
+#[derive(Clone)]
 pub struct OddIds {
     strs: ChunkVec<Arc<str>>,
     map: HashMap<Arc<str>, u32>,
+    cap: usize,
+    bytes: usize,
+    bytes_cap: usize,
+    pub dropped: u64,
 }
 
-/// More distinct non-UUID ids than this are not kept (their events are counted as skipped).
+/// More distinct non-UUID ids than this are never kept (the index sets a lower, proportional cap).
 const MAX_ODD_IDS: usize = 4_000_000;
 
+impl Default for OddIds {
+    fn default() -> Self {
+        OddIds::with_caps(MAX_ODD_IDS, usize::MAX)
+    }
+}
+
 impl OddIds {
+    #[must_use]
+    pub fn with_caps(cap: usize, bytes_cap: usize) -> Self {
+        OddIds {
+            strs: ChunkVec::default(),
+            map: HashMap::new(),
+            cap: cap.min(MAX_ODD_IDS),
+            bytes: 0,
+            bytes_cap,
+            dropped: 0,
+        }
+    }
+
     /// The id of `s`, creating a table entry when needed. `None`: not identifier-shaped, or the table is full.
     pub fn parse(&mut self, s: &str) -> Option<Id> {
         if let Some(v) = parse_uuid(s)
@@ -139,10 +162,12 @@ impl OddIds {
         if let Some(&i) = self.map.get(s) {
             return Some(Id::odd(i));
         }
-        if self.strs.len() >= MAX_ODD_IDS {
+        if self.strs.len() >= self.cap || self.bytes.saturating_add(s.len()) > self.bytes_cap {
+            self.dropped += 1;
             return None;
         }
         let i = u32::try_from(self.strs.len()).ok()?;
+        self.bytes += s.len();
         let a: Arc<str> = Arc::from(s);
         self.strs.push(Arc::clone(&a));
         self.map.insert(a, i);
@@ -221,18 +246,33 @@ pub struct Syms {
     strs: ChunkVec<Arc<str>>,
     map: HashMap<Arc<str>, u32>,
     cap: usize,
+    bytes: usize,
+    bytes_cap: usize,
     pub dropped: u64,
 }
 
 impl Syms {
     #[must_use]
     pub fn new(cap: usize) -> Self {
+        Syms::with_bytes(cap, usize::MAX)
+    }
+
+    /// A table of at most `cap` strings holding at most `bytes_cap` bytes of text.
+    #[must_use]
+    pub fn with_bytes(cap: usize, bytes_cap: usize) -> Self {
         Syms {
             strs: ChunkVec::default(),
             map: HashMap::new(),
             cap,
+            bytes: 0,
+            bytes_cap,
             dropped: 0,
         }
+    }
+
+    /// Room for one more string of `len` bytes.
+    fn room(&self, len: usize) -> bool {
+        self.strs.len() < self.cap && self.bytes.saturating_add(len) <= self.bytes_cap
     }
 
     /// Intern an identifier-shaped string; anything else (and `None`) is [`Sym::NONE`].
@@ -246,10 +286,11 @@ impl Syms {
         let Ok(i) = u32::try_from(self.strs.len()) else {
             return Sym::NONE;
         };
-        if self.strs.len() >= self.cap || i == u32::MAX {
+        if !self.room(s.len()) || i == u32::MAX {
             self.dropped += 1;
             return Sym::NONE;
         }
+        self.bytes += s.len();
         let a: Arc<str> = Arc::from(s);
         self.strs.push(Arc::clone(&a));
         self.map.insert(a, i);
@@ -267,10 +308,11 @@ impl Syms {
         let Ok(i) = u32::try_from(self.strs.len()) else {
             return Sym::NONE;
         };
-        if self.strs.len() >= self.cap || i == u32::MAX {
+        if !self.room(s.len()) || i == u32::MAX {
             self.dropped += 1;
             return Sym::NONE;
         }
+        self.bytes += s.len();
         let a: Arc<str> = Arc::from(s);
         self.strs.push(Arc::clone(&a));
         self.map.insert(a, i);
@@ -354,8 +396,18 @@ pub fn ms_between(start_us: i64, end_us: i64) -> Option<f64> {
         None
     } else {
         #[allow(clippy::cast_precision_loss)]
-        Some((end_us - start_us) as f64 / 1e3)
+        Some(end_us.saturating_sub(start_us) as f64 / 1e3)
     }
+}
+
+/// The latest moment a capture may name: 10000-01-01T00:00:00Z. With the earliest (the epoch) it bounds every
+/// timestamp the index keeps, so differences and sums of them cannot overflow (audit F8).
+pub const MAX_TS_US: i64 = 253_402_300_800_000_000;
+
+/// A timestamp the index accepts: between the epoch and [`MAX_TS_US`]; anything else is no timestamp.
+#[must_use]
+pub fn ts_in_range(us: i64) -> Option<i64> {
+    (0..=MAX_TS_US).contains(&us).then_some(us)
 }
 
 fn two(b: &[u8], i: usize) -> Option<i64> {
@@ -599,5 +651,31 @@ mod tests {
         assert_eq!(t.get(a), Some("alpha"));
         assert_eq!(t.get(Sym::NONE), None);
         assert_eq!(t.find("beta"), Some(b));
+    }
+
+    #[test]
+    fn id_and_label_tables_are_bounded_in_entries_and_bytes() {
+        let mut odd = OddIds::with_caps(3, usize::MAX);
+        for k in 0..10 {
+            let _ = odd.parse(&format!("span-{k}"));
+        }
+        assert_eq!(odd.dropped, 7);
+        assert!(odd.parse("span-0").is_some(), "known ids still resolve");
+        let mut odd = OddIds::with_caps(1000, 100);
+        let long = "x".repeat(60);
+        assert!(odd.parse(&long).is_some());
+        assert!(odd.parse(&"y".repeat(60)).is_none(), "over the byte cap");
+        assert_eq!(odd.dropped, 1);
+        // UUIDs never take a slot
+        assert!(odd.parse("01a0f1e0-0000-7000-8000-000000000001").is_some());
+
+        let mut s = Syms::with_bytes(1000, 4096);
+        assert!(s.intern_joined(&"a,".repeat(1000)).is_some());
+        assert!(
+            s.intern_joined(&"b,".repeat(1500)).is_none(),
+            "over the byte cap"
+        );
+        assert!(s.intern(Some("short")).is_some());
+        assert_eq!(s.dropped, 1);
     }
 }

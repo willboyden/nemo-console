@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 
 use serde::de::{self, Deserialize, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
 
-use super::ids::{is_ident, number_us, parse_rfc3339_us};
+use super::ids::{is_ident, number_us, parse_rfc3339_us, ts_in_range};
 
 pub(super) fn drain_seq<'de, A: SeqAccess<'de>>(mut a: A) -> Result<(), A::Error> {
     while a.next_element::<IgnoredAny>()?.is_some() {}
@@ -419,21 +419,21 @@ impl<'de> Deserialize<'de> for Stamp {
             }
             fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
                 Ok(Stamp(if v.len() <= 64 {
-                    parse_rfc3339_us(v)
+                    parse_rfc3339_us(v).and_then(ts_in_range)
                 } else {
                     None
                 }))
             }
             #[allow(clippy::cast_precision_loss)]
             fn visit_i64<E: de::Error>(self, v: i64) -> Result<Self::Value, E> {
-                Ok(Stamp(number_us(v as f64)))
+                Ok(Stamp(number_us(v as f64).and_then(ts_in_range)))
             }
             #[allow(clippy::cast_precision_loss)]
             fn visit_u64<E: de::Error>(self, v: u64) -> Result<Self::Value, E> {
-                Ok(Stamp(number_us(v as f64)))
+                Ok(Stamp(number_us(v as f64).and_then(ts_in_range)))
             }
             fn visit_f64<E: de::Error>(self, v: f64) -> Result<Self::Value, E> {
-                Ok(Stamp(number_us(v)))
+                Ok(Stamp(number_us(v).and_then(ts_in_range)))
             }
             skip_kinds!(bool, unit, seq, map);
         }

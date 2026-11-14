@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '../js/api.js';
 import { setMessages } from '../js/i18n.js';
-import { normalizeFacet, buildProgress, coverage, contentProblem, prettyArgs, describeLevel, traceEndpoints } from '../js/rt/pure.js';
+import { normalizeFacet, buildProgress, coverage, contentProblem, trajectoryProblem, prettyArgs, describeLevel, traceEndpoints } from '../js/rt/pure.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const en = JSON.parse(fs.readFileSync(path.join(root, 'i18n/en.json'), 'utf8'));
@@ -104,6 +104,17 @@ test('a failed content request is explained in plain words, by status and code',
   assert.equal(contentProblem(e(503, 'unavailable')).kind, 'bad');
   assert.match(contentProblem(e(0, 'network')).text, /Cannot reach/);
   assert.equal(contentProblem(null).kind, 'bad');
+});
+
+test('trajectoryProblem: 409 says the file changed, not that the id is bad', () => {
+  const e = (status, code) => ({ status, code, message: 'x' });
+  assert.match(trajectoryProblem(e(409, 'content_unavailable')).title, /changed/);
+  assert.match(trajectoryProblem(e(409, 'content_unavailable')).text, /few seconds/);
+  assert.doesNotMatch(trajectoryProblem(e(409, 'content_unavailable')).title, /not a trajectory id/);
+  assert.match(trajectoryProblem(e(404, 'not_found')).title, /not found/);
+  assert.match(trajectoryProblem(e(422, 'invalid_request')).title, /not a trajectory id/);
+  assert.equal(trajectoryProblem(e(503, 'unavailable')), null);
+  assert.equal(trajectoryProblem(null), null);
 });
 
 test('tool arguments are pretty-printed only when they are JSON', () => {

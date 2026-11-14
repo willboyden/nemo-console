@@ -360,12 +360,12 @@ impl TraceIndex {
                 ),
             ));
         }
-        if scan.budget_skipped > 0 {
+        if scan.budget_skipped + scan.budget_cut > 0 {
             problems.push((
                 "relay.traces.scan_budget",
                 format!(
-                    "The scan budget ({} bytes, relay_trace_scan_bytes) was used up: {} older file(s) were not read.",
-                    scan.limits.scan_bytes, scan.budget_skipped
+                    "The scan budget ({} bytes, relay_trace_scan_bytes) was used up: {} older file(s) were not read, {} read only in part.",
+                    scan.limits.scan_bytes, scan.budget_skipped, scan.budget_cut
                 ),
             ));
         }
@@ -375,6 +375,17 @@ impl TraceIndex {
                 format!(
                     "The span limit ({}, relay_trace_max_spans) was reached: the oldest traces were dropped ({} spans, {} older file(s) not read).",
                     scan.limits.max_spans, scan.evicted_spans, scan.cap_skipped
+                ),
+            ));
+        }
+        if scan.evicted_marks > 0 {
+            problems.push((
+                "relay.traces.mark_limit",
+                format!(
+                    "The mark limit ({} = {} per span of relay_trace_max_spans) was reached: the oldest marks were dropped ({}), marks that belong to no span first.",
+                    scan.limits.max_spans.saturating_mul(scan::MARKS_PER_SPAN),
+                    scan::MARKS_PER_SPAN,
+                    scan.evicted_marks
                 ),
             ));
         }
@@ -395,6 +406,15 @@ impl TraceIndex {
                     traj.too_large + traj.unreadable,
                     traj.too_large,
                     traj.unreadable
+                ),
+            ));
+        }
+        if scan.ing.ids.dropped > 0 {
+            problems.push((
+                "relay.traces.ids_dropped",
+                format!(
+                    "{} event(s) with an id that is not a UUID were ignored: the table of such ids is full (it grows with relay_trace_max_spans).",
+                    scan.ing.ids.dropped
                 ),
             ));
         }
@@ -424,7 +444,8 @@ impl TraceIndex {
                 files: scan.files.clone(),
                 events: c.events,
                 chunk_marks: c.chunk_marks,
-                truncated: scan.truncated,
+                // labels or ids left out are data left out too
+                truncated: scan.truncated || scan.ing.syms.dropped > 0 || scan.ing.ids.dropped > 0,
                 limits: scan.limits,
                 content: self.cfg.content_word(),
                 problems,
@@ -448,7 +469,7 @@ impl TraceIndex {
         (
             scan.ing.counters.events,
             scan.ing.counters.duplicates,
-            scan.evicted_spans,
+            scan.evicted_spans + scan.evicted_marks,
             Arc::as_ptr(traj) as usize,
             h.finish(),
         )
@@ -686,8 +707,11 @@ impl TraceIndex {
                         }
                     };
                     let dir = dirs.dir_of(&t.source).ok_or_else(|| unknown("trajectory"))?;
-                    // the file went away or changed into something else since it was indexed: it is not there
-                    let (steps, truncated) = atif::steps(&dir, t, max).map_err(|_| unknown("trajectory"))?;
+                    // the file went away or changed since it was indexed: 409, like content
+                    let (steps, truncated) = atif::steps(&dir, t, max).map_err(|e| match e {
+                        atif::ReadError::NoSuchStep => unknown("trajectory"),
+                        atif::ReadError::Unavailable => content_unavailable("file"),
+                    })?;
                     Ok(json!({
                         "trajectory": query::trajectory_summary(&snap.core, t),
                         "steps": steps,

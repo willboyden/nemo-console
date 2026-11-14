@@ -230,8 +230,12 @@ pub struct Tokens {
     pub total: Option<i64>,
 }
 
+/// The most tokens one count may say. Far beyond any real call, and small enough that summing every count of the
+/// largest index (5 million spans, several counts each) cannot overflow (audit F8).
+pub const MAX_COUNT: i64 = 100_000_000_000;
+
 fn nn(v: Int) -> Option<i64> {
-    v.0.filter(|n| *n >= 0)
+    v.0.filter(|n| *n >= 0).map(|n| n.min(MAX_COUNT))
 }
 
 impl Usage {
@@ -256,7 +260,10 @@ impl Usage {
         let (input, output) = if self.input_tokens.0.is_some() || self.output_tokens.0.is_some() {
             // Anthropic: input_tokens counts only what was neither read from nor written to the cache
             (
-                nn(self.input_tokens).map(|i| i + cached.unwrap_or(0) + cache_write.unwrap_or(0)),
+                nn(self.input_tokens).map(|i| {
+                    i.saturating_add(cached.unwrap_or(0))
+                        .saturating_add(cache_write.unwrap_or(0))
+                }),
                 nn(self.output_tokens),
             )
         } else {
@@ -264,7 +271,8 @@ impl Usage {
             (
                 nn(self.prompt_tokens).map(|p| {
                     if parts_left_out {
-                        p + cached.unwrap_or(0) + cache_write.unwrap_or(0)
+                        p.saturating_add(cached.unwrap_or(0))
+                            .saturating_add(cache_write.unwrap_or(0))
                     } else {
                         p
                     }
@@ -273,7 +281,7 @@ impl Usage {
             )
         };
         let total = match (input, output) {
-            (Some(i), Some(o)) => Some(i + o),
+            (Some(i), Some(o)) => Some(i.saturating_add(o)),
             _ => nn(self.total_tokens),
         };
         Tokens {

@@ -352,7 +352,7 @@ pub fn sessions(snap: &Snapshot, q: &SessionQuery, now_us: i64) -> Value {
         }
         SessionSort::Traces => by_key(&mut rows, q.desc, |s| Some(s.trace_n)),
         SessionSort::Tokens => by_key(&mut rows, q.desc, |s| {
-            (s.input >= 0 || s.output >= 0).then(|| s.input.max(0) + s.output.max(0))
+            (s.input >= 0 || s.output >= 0).then(|| s.input.max(0).saturating_add(s.output.max(0)))
         }),
     }
     let total = rows.len();

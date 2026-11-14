@@ -284,7 +284,9 @@ pub struct TrajDirs {
 }
 
 impl TrajDirs {
-    /// The directory of a source name: `gateway`, or an agent directory under the Hermes root.
+    /// The directory of a source name: `gateway`, or an agent directory under the Hermes root. Checked when it is
+    /// asked for (a request), not only when it was listed: `<agent>` and its `atif` must still be real directories,
+    /// not symlinks, or there is no directory (the files are not read through a link that was put there since).
     #[must_use]
     pub fn dir_of(&self, source: &str) -> Option<PathBuf> {
         if source == GATEWAY {
@@ -293,7 +295,11 @@ impl TrajDirs {
         if !agent_name_ok(source) {
             return None;
         }
-        Some(self.hermes.as_ref()?.join(source).join("atif"))
+        let agent = self.hermes.as_ref()?.join(source);
+        let atif = agent.join("atif");
+        let real_dir =
+            |p: &Path| std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_dir());
+        (real_dir(&agent) && real_dir(&atif)).then_some(atif)
     }
 }
 
@@ -667,6 +673,11 @@ fn walk_steps(
     if opened.size > max_bytes {
         return Err(ReadError::Unavailable);
     }
+    // the file the index summarised, not one written or moved there since (same device, inode, size and time)
+    if (opened.dev, opened.ino, opened.size, opened.mtime_ns) != (t.dev, t.ino, t.bytes, t.mtime_ns)
+    {
+        return Err(ReadError::Unavailable);
+    }
     let mut de =
         serde_json::Deserializer::from_reader(BufReader::with_capacity(256 * 1024, opened.file));
     match DocSeed(each).deserialize(&mut de) {
@@ -705,8 +716,14 @@ fn node_ident(n: Option<&Node>) -> Value {
 fn node_ts(n: Option<&Node>) -> Value {
     #[allow(clippy::cast_precision_loss)]
     let us = match n {
-        Some(Node::Str(t)) if t.chars <= 64 => super::ids::parse_rfc3339_us(&t.text),
-        Some(Node::Num(t)) => t.parse::<f64>().ok().and_then(super::ids::number_us),
+        Some(Node::Str(t)) if t.chars <= 64 => {
+            super::ids::parse_rfc3339_us(&t.text).and_then(super::ids::ts_in_range)
+        }
+        Some(Node::Num(t)) => t
+            .parse::<f64>()
+            .ok()
+            .and_then(super::ids::number_us)
+            .and_then(super::ids::ts_in_range),
         _ => None,
     };
     #[allow(clippy::cast_precision_loss)]

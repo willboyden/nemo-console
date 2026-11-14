@@ -697,3 +697,177 @@ async fn dump_fixture_views_when_asked() {
         .unwrap();
     }
 }
+
+// ── audit F2: the scan budget holds for gzip rotations ───────────────────────────────────────────
+
+#[tokio::test]
+async fn test_the_scan_budget_stops_a_gzip_bomb_with_a_lying_trailer() {
+    let mut cfg = config();
+    cfg.limits.scan_bytes = 1024 * 1024;
+    let lab = Lab::empty(cfg);
+    lab.write("relay-events.jsonl", &small_trace(100, 0.0));
+    // 512 MiB of one byte, no newline, about 3.3 MB on disk; the trailer says 0 bytes
+    let bomb = relay_traces_support::gzip_bomb(b'a', 512 * 1024 * 1024, 0);
+    let on_disk = bomb.len() as u64;
+    std::fs::write(lab.atof.join("relay-events.jsonl.1.gz"), &bomb).unwrap();
+    let t0 = std::time::Instant::now();
+    lab.refresh();
+    let first = t0.elapsed();
+    let idx = lab.index_state();
+    let row = file_row(&idx, "relay-events.jsonl.1.gz");
+    assert_eq!(row["state"], "partial", "{row}");
+    // what was decompressed stayed near the budget: the compressed bytes read are a small part of the file
+    let scanned = row["scanned_bytes"].as_u64().unwrap();
+    assert!(scanned < on_disk / 10, "{scanned} of {on_disk}");
+    assert_eq!(idx["truncated"], true);
+    assert!(has_problem(&idx, "relay.traces.scan_budget"), "{idx}");
+    assert_eq!(idx["events"], 4, "the live file is indexed: {idx}");
+    // a second pass does not go on with it
+    lab.refresh();
+    let idx2 = lab.index_state();
+    let row2 = file_row(&idx2, "relay-events.jsonl.1.gz");
+    assert_eq!(row2["state"], "partial");
+    assert!(
+        row2["scanned_bytes"].as_u64().unwrap() < on_disk / 10,
+        "{row2}"
+    );
+    assert!(first < std::time::Duration::from_secs(20), "{first:?}");
+}
+
+// ── audit F3: marks are bounded like spans ───────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_ten_times_the_mark_cap_stays_within_the_cap() {
+    let mut cfg = config();
+    cfg.limits.max_spans = 1000;
+    let cap = 4 * 1000;
+    let lab = Lab::empty(cfg);
+    let mut lines = Vec::new();
+    // 40,000 marks without a parent, oldest first
+    for i in 0..(10 * cap as u64) {
+        #[allow(clippy::cast_precision_loss)]
+        lines.push(relay_traces_support::mark(
+            "custom.note",
+            1_000_000 + i,
+            None,
+            i as f64 * 0.01,
+            json!({"phase": "x"}),
+        ));
+    }
+    // then the newest trace, with marks of its own
+    lines.extend(small_trace(100, 1000.0));
+    for i in 0..10_u64 {
+        #[allow(clippy::cast_precision_loss)]
+        lines.push(relay_traces_support::mark(
+            "custom.note",
+            5_000_000 + i,
+            Some(100),
+            1000.1 + i as f64 * 0.001,
+            json!({"phase": "y"}),
+        ));
+    }
+    lab.write("relay-events.jsonl", &lines);
+    lab.refresh();
+    let idx = lab.index_state();
+    let marks = idx["marks"].as_u64().unwrap();
+    assert!(marks <= cap as u64, "{marks} marks kept, cap {cap}");
+    assert!(marks >= (cap as u64) / 2, "{marks}");
+    assert_eq!(idx["truncated"], true, "{idx}");
+    assert!(has_problem(&idx, "relay.traces.mark_limit"), "{idx}");
+    // the newest trace keeps its marks
+    let d = ok(&app(&lab), &format!("/traces/{}", uid(100))).await;
+    assert_eq!(d["marks"].as_array().unwrap().len(), 10, "{d}");
+    // the store itself, not only the derived view, is bounded
+    let snap = lab.a.traces.snapshot();
+    assert!(snap.core.store.marks.len() <= cap);
+    assert!(snap.core.store.mark_fields.len() <= cap * 4);
+}
+
+// ── audit F8: crafted numbers never overflow ─────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_extreme_timestamps_and_token_counts_do_not_panic() {
+    let lab = Lab::empty(config());
+    let big = i64::MAX - 10;
+    let usage = json!({"prompt_tokens": big, "completion_tokens": big, "total_tokens": big,
+                       "input_tokens": big, "output_tokens": big, "cache_read_input_tokens": big,
+                       "cache_creation_input_tokens": big, "prompt_tokens_details": {"cached_tokens": big}});
+    let mut lines = vec![scope("start", "agent", "a", 1, None, 0.0, json!({}))];
+    let [start, end] = llm_pair(
+        2,
+        Some(1),
+        1.0,
+        2.0,
+        json!({}),
+        json!({"model": "m", "messages": [{"role": "user", "content": "x"}], "max_tokens": big}),
+        json!({"choices": [{"finish_reason": "stop", "message": {"content": "y"}}], "usage": usage}),
+    );
+    lines.push(start);
+    // chunk marks at the two ends of time, then an end far in the future
+    for (i, ts) in [
+        json!(1.0e300),
+        json!("0001-01-01T00:00:00Z"),
+        json!(1),
+        json!(9.2e18),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut m: Value = serde_json::from_str(&relay_traces_support::mark(
+            "llm.chunk",
+            50 + i as u64,
+            Some(2),
+            1.5,
+            json!({"chunk_index": i}),
+        ))
+        .unwrap();
+        m["timestamp"] = ts;
+        lines.push(m.to_string());
+    }
+    // the end keeps a plain timestamp: its token counts must be indexed
+    lines.push(end);
+    // a second trace whose start is at the year 1 and whose end is far in the future
+    let mut s3: Value =
+        serde_json::from_str(&scope("start", "agent", "b", 3, None, 0.0, json!({}))).unwrap();
+    s3["timestamp"] = json!("0001-01-01T00:00:00+00:00");
+    let mut e3: Value =
+        serde_json::from_str(&scope("end", "agent", "b", 3, None, 0.0, json!({}))).unwrap();
+    e3["timestamp"] = json!(9.2e18);
+    lines.push(s3.to_string());
+    lines.push(e3.to_string());
+    lines.push(scope("end", "agent", "a", 1, None, 3.0, json!({})));
+    lab.write("relay-events.jsonl", &lines);
+    lab.refresh();
+    let st = app(&lab);
+    for sub in [
+        "/traces/index".to_owned(),
+        "/traces?window=all&sort=tokens".to_owned(),
+        "/traces?window=all&sort=duration".to_owned(),
+        format!("/traces/{}", uid(1)),
+        "/sessions?window=all&sort=tokens".to_owned(),
+        "/analytics?window=all&buckets=240".to_owned(),
+        "/analytics".to_owned(),
+        format!("/traces/{}/spans/{}/content", uid(1), uid(2)),
+    ] {
+        let r = get(&st, &format!("{API}{sub}")).await;
+        assert_eq!(r.status, 200, "{sub}: {}", r.text());
+    }
+    // the huge counts were indexed (saturated, not wrapped) and the out-of-range times were not
+    let d = ok(&st, &format!("/traces/{}", uid(1))).await;
+    let llm = &d["spans"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["id"] == json!(uid(2)))
+        .unwrap()["llm"];
+    assert!(llm["input_tokens"].as_i64().unwrap() > 0, "{llm}");
+    assert!(llm["total_tokens"].as_i64().unwrap() > 0, "{llm}");
+    let t = ok(&st, "/traces?window=all").await;
+    for item in t["items"].as_array().unwrap() {
+        for k in ["start_ts", "end_ts"] {
+            if let Some(x) = item[k].as_f64() {
+                assert!((0.0..=253_402_300_800.0).contains(&x), "{k} {x}");
+            }
+        }
+    }
+}

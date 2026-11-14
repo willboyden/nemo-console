@@ -263,13 +263,15 @@ impl LlmRec {
             self.chunk_base_us = ts_us;
             self.chunk_run_min_us = ts_us;
         } else if ts_us >= self.chunk_prev_us {
-            self.chunk_max_gap_us = self.chunk_max_gap_us.max(ts_us - self.chunk_prev_us);
+            self.chunk_max_gap_us = self
+                .chunk_max_gap_us
+                .max(ts_us.saturating_sub(self.chunk_prev_us));
         } else {
             // an older run begins: settle the bridge of the run before, then remember where this newer run began
             if self.chunk_bridge_us != NO_TS {
                 self.chunk_max_gap_us = self
                     .chunk_max_gap_us
-                    .max(self.chunk_bridge_us - self.chunk_prev_us);
+                    .max(self.chunk_bridge_us.saturating_sub(self.chunk_prev_us));
             }
             self.chunk_bridge_us = self.chunk_run_min_us;
             self.chunk_run_min_us = ts_us;
@@ -292,7 +294,7 @@ impl LlmRec {
                     self.chunk_stride = self.chunk_stride.saturating_mul(2);
                 }
                 if self.chunks.is_multiple_of(self.chunk_stride) {
-                    let ms = (ts_us - self.chunk_base_us) / 1000;
+                    let ms = ts_us.saturating_sub(self.chunk_base_us) / 1000;
                     block[usize::from(self.chunk_len)] =
                         i32::try_from(ms.clamp(i64::from(i32::MIN), i64::from(i32::MAX)))
                             .unwrap_or(0);
@@ -486,7 +488,13 @@ pub fn is_mcp_name(name: &str) -> bool {
 impl Ingest {
     #[must_use]
     pub fn new(sym_cap: usize) -> Ingest {
-        let mut syms = Syms::new(sym_cap.max(64));
+        Ingest::with_caps(sym_cap, usize::MAX, OddIds::default())
+    }
+
+    /// An ingest whose label table holds at most `sym_cap` strings and `sym_bytes` bytes, with the given id table.
+    #[must_use]
+    pub fn with_caps(sym_cap: usize, sym_bytes: usize, ids: OddIds) -> Ingest {
+        let mut syms = Syms::with_bytes(sym_cap.max(64), sym_bytes.max(4096));
         let known = Known {
             llm: syms.intern(Some("llm")),
             tool: syms.intern(Some("tool")),
@@ -499,7 +507,7 @@ impl Ingest {
         Ingest {
             store: Store::default(),
             syms,
-            ids: OddIds::default(),
+            ids,
             span_by_id: HashMap::new(),
             counters: Counters::default(),
             known,

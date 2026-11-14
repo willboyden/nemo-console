@@ -543,6 +543,18 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
   `adapters/relay.rs` gains the `trace_explorer` / `start_background` / `stop_background` implementations and helpers
   (`scrub_count`, `ident_ok`, `atof_rotation`), and makes its file-opening helpers `pub(crate)`; its existing routes
   behave as before.
+- **D-35 The Relay secret scrubber's `key = "value"` rule is linear (security audit of the trace explorer, F1 and R1).**
+  The Python reference's third `SECRET_PATTERNS` entry, `(?im)^(\s*KEY\s*=\s*)(["'])(?!\[REDACTED)[^"'\n]+\2`, needs a
+  back-reference and a look-ahead; the port ran it on fancy-regex, which gives up past its backtrack limit (about a
+  thousand blank lines before an unclosed quote), where the Rust `scrub()` then copied the rest of the text unredacted.
+  `adapters/relay.rs` now runs it on the `regex` crate (linear, no limit): the back-reference becomes one alternative
+  per quote and the look-ahead a check in the replacement (a value already starting with `[REDACTED` is left as it is,
+  which is what the original's failed match leaves). The blanks around `=` stay D-32's same-line `[^\S\r\n]*`. On every
+  input both can finish the output is the same, checked against the old pattern as an oracle
+  (`tests/relay_relay_scrub.rs`, 400 generated texts); Python's `re` has no backtrack limit and redacts correctly, so
+  the two now agree on the pathological inputs too. No fail-closed backstop remains in `scrub()` (nothing in it can give
+  up). The trace explorer's content goes through the same `scrub_count()` and then its own credential-pair pass
+  (`adapters/relay_traces/secrets.rs`).
 - **Test-only (workstream B):** in the DCGM `post_apply` restart test the fake upstream answers 503 instead of refusing the
   connection.
 - **Moot since A-7 (the private copies are deleted):** workstream B's "alias expansion over 1,000,000 nodes raises

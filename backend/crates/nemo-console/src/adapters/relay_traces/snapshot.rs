@@ -234,7 +234,10 @@ impl Core {
         if l.output <= 0 || l.ttfc_us < 0 || s.start_us == NO_TS || s.end_us == NO_TS {
             return None;
         }
-        let gen_us = s.end_us - s.start_us - l.ttfc_us;
+        let gen_us = s
+            .end_us
+            .saturating_sub(s.start_us)
+            .saturating_sub(l.ttfc_us);
         if gen_us <= 0 {
             return None;
         }
@@ -251,7 +254,7 @@ impl Core {
         let n = usize::from(l.chunk_len).min(CHUNK_SLOTS);
         let mut at: Vec<i64> = block[..n]
             .iter()
-            .map(|ms| l.chunk_base_us + i64::from(*ms) * 1000)
+            .map(|ms| l.chunk_base_us.saturating_add(i64::from(*ms) * 1000))
             .collect();
         at.sort_unstable();
         let zero = if s.start_us == NO_TS {
@@ -261,7 +264,7 @@ impl Core {
         };
         #[allow(clippy::cast_precision_loss)]
         at.iter()
-            .map(|t| f_json(Some((t - zero) as f64 / 1e3)))
+            .map(|t| f_json(Some(t.saturating_sub(zero) as f64 / 1e3)))
             .collect()
     }
 
