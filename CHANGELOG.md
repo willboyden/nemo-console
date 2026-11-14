@@ -3,6 +3,13 @@
 Format: [Keep a Changelog](https://keepachangelog.com/). Versions follow SemVer. Claims use the labels
 implemented / verified-live / unverified defined in the README.
 
+## [Unreleased]
+
+### Security
+
+- **rusqlite 0.41.0** (was 0.40.2) brings the bundled SQLite of `libsqlite3-sys` 0.39.1, which fixes CVE-2026-119375
+  (RUSTSEC-2026-0459). Both versions pass the 14-day crate-age cooldown on their own; no code change was needed.
+
 ## [0.10.0] - 2026-11-05
 
 ### Added
