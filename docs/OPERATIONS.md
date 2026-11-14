@@ -9,11 +9,17 @@ document that were run on 2026-09-24 are marked "(run)"; everything else was rea
 Requirements: Linux, `rustup` (the exact Rust toolchain is pinned in `backend/rust-toolchain.toml` and installed on
 the first build; the crates come from `backend/Cargo.lock`), and on `PATH` (or in
 `NEMO_CONSOLE_EXTRA_BIN_DIRS`, default `~/.local/bin`) whichever of `docker`, `systemctl`, `nemo-relay` the
-systems you manage need. Node 22 is needed only for the frontend tests.
+systems you manage need. Node 22 is needed only for the frontend tests. The config editor's live checks are the
+backend's validators compiled to WebAssembly (ADR-0022), built by `make wasm` (part of `make build` / `make release`):
+they need the toolchain's `wasm32-unknown-unknown` target (`cd backend && rustup target add wasm32-unknown-unknown` if
+rustup did not add it from `rust-toolchain.toml`) and the `wasm-bindgen` CLI at exactly the crate's version
+(`cargo install --locked wasm-bindgen-cli@0.2.129`, from crates.io). `make setup` checks both. Without them, build and
+start the binary directly (`cd backend && cargo build --locked --release`); the editor then says its live checks are
+unavailable and the server still validates every apply.
 
 ```bash
 git clone <this repository> nemo-console && cd nemo-console
-make setup        # cd backend && cargo build --locked; enables the git hooks
+make setup        # cd backend && cargo build --locked; npm ci (Prettier); enables the git hooks; checks the wasm tools
 make all          # rustfmt, clippy, cargo test, cargo-deny, cargo-audit, crate-age, node --test, browser e2e
 ```
 
@@ -112,7 +118,7 @@ were started from (their compose labels, checked to lie inside the configured co
 ## 3. Run
 
 ```bash
-make run                                  # release build, then foreground on http://127.0.0.1:8793
+make run                                  # release build (+ make wasm), then foreground on http://127.0.0.1:8793
 # or, once built (make release):
 backend/target/release/nemo-console
 ```

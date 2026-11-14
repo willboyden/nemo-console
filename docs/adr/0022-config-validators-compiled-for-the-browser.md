@@ -32,15 +32,17 @@ Rust.
    contract version (`backend/PORTING.md` addendum A-10). No framework, no `web-sys` / `js-sys`, `wasm-bindgen`
    pinned to exactly 0.2.129 (already in `Cargo.lock`, past the 14-day cooldown).
 3. **The editor takes its verdicts from the module** (`frontend/js/cfg-wasm.js`, loaded when a Config tab opens):
-   syntax from the real loaders, the schema findings and the save-path refusals with the server's exact texts.
+   syntax from the loader the server runs (PyYAML `safe_load` with its constructors, tomllib), worded as the file's
+   server validator words it, the schema findings and the save-path refusals with the server's exact texts.
    JavaScript keeps only what has no server rule (line endings, look-alike and trailing spaces, duplicate and
    boolean-looking keys) and the Form's field descriptions, whose numbers come from `schema_constants`.
 4. **Form edits are read back (stage 2).** After each Form edit, `roundtrip` loads the text before and after with
    the real loaders; the edit is written only when the value reads back as typed and nothing else changed. Plain
    YAML values are typed by PyYAML's own resolver (`yaml_plain_type`).
-5. **No fallback copy.** When the module cannot load or traps (a Rust panic aborts), the editor shows "live checks
-   unavailable", the YAML Form view waits, Form edits are refused with a pointer to the Text view, and a fresh
-   instance is started. The server's validator still runs on Check and before every Apply.
+5. **No fallback copy.** While the module first loads the editor says so ("loading live checks"). When it cannot
+   load or traps (a Rust panic aborts), the editor shows "live checks unavailable", the YAML Form view waits, Form
+   edits are refused with a pointer to the Text view, and a fresh instance is started (and, if that one traps too,
+   again on the next edit). The server's validator still runs on Check and before every Apply.
 6. **One build step**, `make wasm`: `cargo build --target wasm32-unknown-unknown --profile release-wasm`, then the
    `wasm-bindgen` CLI (`--target web`), into `frontend/js/wasm/`, which is generated and never committed. It
    refuses a CLI of another version than the crate, a build-machine path in the module or its glue (the build
@@ -59,7 +61,8 @@ the static allowlist (the module is served from `js/` as `application/wasm`), ze
 - One copy of each rule. The browser's verdict is the backend's: `frontend/tests/cfg-wasm.test.mjs` runs the
   shared vectors (`backend/crates/nemo-console-core/tests/vectors/check.json`, also checked natively) through the
   built module and needs exactly the native answers, and `frontend/e2e/config-editor.mjs` compares the module with
-  the server's validate route diagnostic by diagnostic (severity, line, text, and the 422 text for a secret).
+  the server's validate route diagnostic by diagnostic (severity, line, text, the 422 text for a secret, a 500 as a
+  named exception) on six files, one of them without a schema.
 - The browser now checks YAML the Form's layout parser cannot model (anchors, aliases, tags, several documents)
   with the real loader, so live syntax and secret checks work for every TOML and YAML file.
 - The Form writer's bug class from 0.9.0 is checked on every edit instead of once, offline.

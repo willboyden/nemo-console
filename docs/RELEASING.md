@@ -20,12 +20,17 @@ Run every gate from a fresh clone of the commit you will tag, outside the workin
 
 ```bash
 git clone --no-local <checkout> /tmp/nc-release && cd /tmp/nc-release
-make setup                 # cargo build --locked, npm ci (the pinned Prettier), enables .githooks
+make setup                 # cargo build --locked, npm ci (the pinned Prettier), enables .githooks, checks the wasm tools
 make all                   # rustfmt, Prettier check, clippy -D warnings, cargo test, cargo-deny, cargo-audit, crate-age, frontend tests, e2e
 make parity                # the differential harness against the last Python backend (see section 4)
 node parity/check-test-map.mjs --no-pending && node parity/check-routes.mjs
 node parity/xstate.mjs && node parity/startup.mjs && node parity/launcher.mjs
 ```
+
+`make setup` stops when the toolchain lacks the `wasm32-unknown-unknown` target or the `wasm-bindgen` CLI is not
+exactly the crate's version (ADR-0022); it prints the fix (`rustup target add wasm32-unknown-unknown`, `cargo install
+--locked wasm-bindgen-cli@0.2.129`). `make all` builds the module (`make wasm`, inside `frontend-test` and `e2e`) and
+fails above its 1,500,000-byte budget.
 
 `cargo deny`, `cargo audit` and `crate-age.py` read crates.io and the RustSec advisory database, and `make setup`
 installs the pinned Prettier from the npm registry (`npm ci`); nothing else uses the network. CI

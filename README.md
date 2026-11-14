@@ -101,14 +101,18 @@ Prerequisites: Linux, a Rust toolchain manager (`rustup`; the exact toolchain is
 `backend/rust-toolchain.toml` and installed on first build), Docker (rootless
 works and is what the author used), the three systems deployed the way the adapters expect (see
 [Deployment assumptions](#deployment-assumptions)), Node 22 and a Chrome or Chromium only if you run the frontend tests
-and the browser end-to-end suite. The config editor's live checks need the `wasm-bindgen` CLI at exactly the version
-`backend/Cargo.toml` pins (`cargo install --locked wasm-bindgen-cli@0.2.129`): `make build`, `make release` (so also
-`make run` and `make install-desktop`) and the test targets run `make wasm` first and stop when the CLI is missing or of
-another version. A console started without `frontend/js/wasm/` still works; its editor says the live checks are
-unavailable and the server's validator still checks every apply.
+and the browser end-to-end suite. The config editor's live checks (ADR-0022) also need the toolchain's
+`wasm32-unknown-unknown` target (`rustup` installs it from `backend/rust-toolchain.toml`; otherwise
+`cd backend && rustup target add wasm32-unknown-unknown`) and the `wasm-bindgen` CLI at exactly the version
+`backend/Cargo.toml` pins (`cargo install --locked wasm-bindgen-cli@0.2.129`); `make setup` checks both and prints the
+command that fixes each. `make build`, `make release` (so also `make run` and `make install-desktop`), `make
+frontend-test` and `make e2e` run `make wasm` first and stop when either is missing (`make test`, the Rust tests, does
+not need them). A console without `frontend/js/wasm/` still works: its editor says the live checks are unavailable and
+the server's validator still checks every apply. To build and run it without the module, skip the Makefile:
+`cd backend && cargo build --locked --release && ./target/release/nemo-console`.
 
 ```bash
-make setup          # cargo build --locked (backend/), npm ci (the pinned Prettier), enable the git hooks
+make setup          # cargo build --locked (backend/), npm ci (the pinned Prettier), enable the git hooks, check the wasm tools
 make run            # release build, then serves API + UI on http://127.0.0.1:8793
 make all            # rustfmt + Prettier check + clippy + cargo test + cargo-deny + cargo-audit + crate-age + node --test + browser e2e
 make install-desktop  # optional (Linux): "Nemo Console" in your app menu; see docs/OPERATIONS.md section 3
@@ -239,11 +243,11 @@ docs/           ARCHITECTURE.md, adr/, THREAT-MODEL.md, OPERATIONS.md, FEATURE-M
 
 | Target | Does |
 |---|---|
-| `make setup` | `cargo build --locked`, `npm ci` in frontend/ (Prettier, the only devDependency), enable the git hooks (`make hooks`) |
+| `make setup` | `cargo build --locked`, `npm ci` in frontend/ (Prettier, the only devDependency), enable the git hooks (`make hooks`), then `make wasm-prereqs` (the wasm32 target and the exact `wasm-bindgen` CLI, with the command that fixes each) |
 | `make run` | release build, then serve on 127.0.0.1:8793 (`make release` builds `backend/target/release/nemo-console`) |
 | `make test` / `lint` / `typecheck` | `cargo test`, `cargo fmt --check`, `cargo clippy -D warnings` (natively and, for the two crates the browser runs, for `wasm32-unknown-unknown`) |
 | `make deny` / `audit` / `crate-age` | cargo-deny, cargo-audit, the 14-day dependency cooldown (security fixes excepted) |
-| `make wasm` | the config validators (`backend/crates/nemo-console-wasm`) compiled to WebAssembly into `frontend/js/wasm/` (generated, never committed): checks the `wasm-bindgen` CLI version, refuses a build-machine path inside and a module over 1,500,000 bytes (ADR-0022) |
+| `make wasm` | the config validators (`backend/crates/nemo-console-wasm`) compiled to WebAssembly into `frontend/js/wasm/` (generated, never committed): checks the `wasm-bindgen` CLI version, refuses a build-machine path inside and a module over 1,500,000 bytes (ADR-0022; `make build` / `make release` only warn about the size) |
 | `make frontend-test` | `node --test` on the pure-logic modules (runs `make wasm` first: the live-check tests load the module) |
 | `make fmt` / `fmt-check` | Prettier 3.9.10 (pinned in `frontend/package-lock.json`) formats / checks the code and JSON (js, mjs, cjs, ts, tsx, css, html, json); Markdown, YAML, test fixtures, goldens and the parity harness's recorded data are left as written (`.prettierignore`). Run `make fmt` before committing; CI fails on an unformatted file |
 | `make e2e` | builds, then every page and tab in headless Chrome against the real backend; records a pass for the pre-push hook |

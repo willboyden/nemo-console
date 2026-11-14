@@ -881,10 +881,20 @@ version. The API contract v1 is unchanged: no route, no new field in any respons
 
 | Export | Answer |
 |---|---|
-| `check(system, file_id, format, text)` | `{api, schema, server_adds, syntax, diagnostics}`: `schema` is the label id of the file's schema (`aiperf_profiles`, `modelopt_recipes`, `evaluator_suites`, `switchyard_routes`, `relay_routes`) or null; `server_adds` what only the server runs on top (Switchyard's dry run; the evaluator wrapper and its prefetch check); `syntax` is `ok` / `error` (the real loader) or `n/a` (not TOML or YAML); each diagnostic is `{severity, line, message, source}` with `source` one of `content` (NUL byte), `secret` (`find_secret`, the text the save path's 422 carries), `syntax`, `schema`. A validator exception is one `schema` error naming the Python class |
+| `check(system, file_id, format, text)` | `{api, schema, server_adds, syntax, diagnostics}`: `schema` is the label id of the file's schema (`aiperf_profiles`, `modelopt_recipes`, `evaluator_suites`, `switchyard_routes`, `relay_routes`) or null; `server_adds` what only the server runs on top (Switchyard's dry run; the evaluator wrapper and its prefetch check); `syntax` is `ok` / `error` from the loader the server's validators run (`tomllib.loads`; PyYAML `safe_load`, constructors included, so `2026-02-30`, `!!int x`, `!!python/object:...` and an unhashable key fail as they fail on the server) or `n/a` (not TOML or YAML); each diagnostic is `{severity, line, message, source}` with `source` one of `content` (NUL byte), `secret` (`find_secret`, the text the save path's 422 carries), `syntax`, `schema`. A validator exception is one `schema` error naming the Python class |
 | `schema_constants()` | `{api, aiperf: {INT_KEYS, ENDPOINT_TYPES, MAX_PROFILES}, modelopt: {METHODS, RECIPE_KEYS, MAX_RECIPES}, evaluator: {SUPPORTED, REFUSED, SUITE_KEYS, RUN_KEYS, MAX_SUITES, MAX_BENCHES, MAX_PROBLEMS, MAX_WORK}}`, read from the validators' own constants |
 | `yaml_plain_type(raw)` | `{api, type, text}`: how PyYAML 6 types a plain scalar (`null`, `bool`, `int`, `float`, `date`, `string`, `special` for `=`, `<<` and tags); `text` is Python's print of a bool/int/float, null when the constructor refuses what the resolver accepted |
 | `roundtrip(format, before, after, path, expected)` | `{api, ok, problem, got}`: `path` a JSON array of keys and list indexes, `expected` `{type, value}` (`string` with null value = any text, `int`, `float`, `number`, `bool`, `date`). `ok` only when `after` loads, the value at `path` reads back as `expected`, and putting that value into `before`'s document gives `after`'s document (nothing else changed) |
+
+Syntax texts for files without a schema follow the server's validator of that file: guardrails `*.yml` / `*.yaml`
+`YAML syntax: <first line of the error>` with its line; flare and openshell `TOML syntax error: ...` / `YAML syntax
+error: ...` (300 characters, no line); relay's plugins / config files `TOML syntax error: <error>` (no line). An
+exception those validators do not catch (`ValueError` for an impossible date, `KeyError` for `!!bool maybe`,
+`RecursionError`) makes the server answer 500; the browser shows one error, "the backend's validator stops with
+<class>: <text>". Differences that remain: for dcgm, dynamo, datadesigner, skillevaluator and gym files the server runs a
+tool or further checks, so the browser's generic `TOML syntax: <error>` / `YAML syntax: <problem>` is the loader's
+verdict only, not the server's wording; the e2e mirror covers aiperf, modelopt, evaluator, switchyard, relay routes and
+flare's compose file.
 
 Rules: the verdicts are advisory (ADR-0019 section 3); every Apply re-validates on the server. A Rust panic aborts
 (profile `release-wasm`, `panic = "abort"`), the page sees a trap, says "live checks unavailable" and instantiates a
