@@ -293,6 +293,14 @@ spare port against the real captures of one workstation (Relay 0.9.2: 7 ATOF fil
 | Switchyard decisions and models tab | Implemented | verified live for the per-model and empty-decision states (no stage-router decisions were counted that day); decision flow against the mock | Two-column flow (source -> target): the decision counters carry no route. |
 | Dynamo windowed latency, breakdown, load, capacity, Events tab | Implemented | Events tab verified live in its "Dynamo is off" state; the rest against fixtures and the mock (Dynamo was off) | Windowed quantiles from histogram deltas. |
 
+## Charts, wave 3 (addendum 9.15)
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| Run summary / requests / profile routes | Implemented | verified live for Data Designer (profile of a real run: viewer gets no values, admin gets the top values; records stay 403 for a viewer) and SkillEvaluator (summary of a real run: 13 validators, 9 rubric checks); AIPerf against fixtures; fakes `tests/runviz_wave3.rs` incl. a planted-marker test that no text leaks | Rust-only (D-40). |
+| Event data additions (Evaluator CI/cost fields, Gym rewards) | Implemented | fakes; parity pinned (D-41) | New keys only. |
+| AIPerf, Evaluator, Gym, Model Optimizer, SkillEvaluator, Data Designer run-detail cards | Implemented | verified live for Data Designer (timeline, profile) and SkillEvaluator (validator heatmap); the others only against the mock (no runs on the workstation that day) | Missing values are an en dash, never 0. |
+
 ## Not planned for v1
 
 Editing Relay `plugins.toml` / `config.toml`; multi-user or per-user audit identity beyond the key
