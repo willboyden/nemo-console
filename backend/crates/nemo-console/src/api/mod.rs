@@ -16,7 +16,7 @@ pub mod admin;
 pub mod bodies;
 pub mod configure;
 pub mod observe;
-pub mod pyjson;
+pub use nemo_console_core::api::pyjson; // in nemo-console-core since ADR-0022
 pub mod static_files;
 pub mod traces;
 
@@ -48,7 +48,10 @@ pub const API: &str = "/api/v1";
 pub const OPEN_PATHS: [&str; 1] = ["/api/v1/health"];
 pub const CSRF_HEADER: &str = "x-console";
 pub const AUDIT_BODY_CAP: usize = 64 * 1024;
-pub const CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+/// `script-src` allows the page's own scripts and WebAssembly compilation of its own module (`'wasm-unsafe-eval'`,
+/// ADR-0022: the config editor runs the backend's validators in the browser). No inline script, no `eval`, no other
+/// origin. A documented parity deviation (PORTING.md D-44): the Python reference sends `script-src 'self'`.
+pub const CSP: &str = "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 pub const SECURITY_HEADERS: [(&str, &str); 7] = [
     ("content-security-policy", CSP),
     ("x-content-type-options", "nosniff"),

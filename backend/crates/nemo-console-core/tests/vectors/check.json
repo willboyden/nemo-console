@@ -1,0 +1,2581 @@
+{
+  "about": "Shared test vectors for nemo-console-core::check (ADR-0022). The same inputs run natively (crates/nemo-console-core/tests/vectors.rs) and through the WebAssembly build in Node (frontend/tests/cfg-wasm.test.mjs); both must produce `expect` exactly. `build` concatenates [text, repeat] pairs. Regenerate the expectations natively with NEMO_CORE_UPDATE_VECTORS=1 cargo test -p nemo-console-core --test vectors, then review the diff.",
+  "cases": [
+    {
+      "name": "secret/inner-quote",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "version: 1\ntoken: abc\"defghijk\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 2,
+            "message": "refusing content that contains a literal value for 'token' (reference an env-var NAME instead)",
+            "source": "secret"
+          }
+        ]
+      }
+    },
+    {
+      "name": "secret/quoted-value",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "api_key: \"abcdefghijkl\"\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 1,
+            "message": "refusing content that contains a literal value for 'api_key' (reference an env-var NAME instead)",
+            "source": "secret"
+          }
+        ]
+      }
+    },
+    {
+      "name": "secret/env-name",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "api_key: OPENAI_API_KEY\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "secret/env-ref",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "token: ${HF_TOKEN}\napi_key: os.environ/KEY_NAME\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "secret/short-value",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "password: short\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "secret/bearer",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "headers:\n  Authorization: Bearer abcdefgh12345\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 2,
+            "message": "refusing content that contains a 'Bearer <token>' literal",
+            "source": "secret"
+          }
+        ]
+      }
+    },
+    {
+      "name": "secret/bearer-newline",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "auth_style: bearer\nnext: x\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "secret/prefix-lookbehind",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "a: xsk-NOTAREALKEY\nb: _sk-NOTAREALKEY\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 2,
+            "message": "refusing content that contains a token with a well-known secret prefix (sk-, hf_, ghp_, ...)",
+            "source": "secret"
+          }
+        ]
+      }
+    },
+    {
+      "name": "secret/prefix",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "key: sk-NOTAREALKEY\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 1,
+            "message": "refusing content that contains a token with a well-known secret prefix (sk-, hf_, ghp_, ...)",
+            "source": "secret"
+          }
+        ]
+      }
+    },
+    {
+      "name": "secret/prefix-hf",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "h: hf_NOTAREALTOKEN\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 1,
+            "message": "refusing content that contains a token with a well-known secret prefix (sk-, hf_, ghp_, ...)",
+            "source": "secret"
+          }
+        ]
+      }
+    },
+    {
+      "name": "secret/jwt",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "t: eyJabcdefghij.eyJabcdefghij.sig\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 1,
+            "message": "refusing content that contains a JWT",
+            "source": "secret"
+          }
+        ]
+      }
+    },
+    {
+      "name": "secret/private-key",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "-----BEGIN EXAMPLE PRIVATE KEY-----\nnot-a-real-key\n-----END EXAMPLE PRIVATE KEY-----\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 1,
+            "message": "refusing content that contains a private key block",
+            "source": "secret"
+          }
+        ]
+      }
+    },
+    {
+      "name": "secret/json-one-line",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "[\"HF_TOKEN=\", \"X=1\"]\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "secret/lookahead-quote",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "secret='abc'd,efghij'\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "secret/unicode-fold",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "ſecret: abcdefghijkl\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 1,
+            "message": "refusing content that contains a literal value for 'ſecret' (reference an env-var NAME instead)",
+            "source": "secret"
+          }
+        ]
+      }
+    },
+    {
+      "name": "secret/unicode-key",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "töken_token: abcdefghijkl\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 1,
+            "message": "refusing content that contains a literal value for 'töken_token' (reference an env-var NAME instead)",
+            "source": "secret"
+          }
+        ]
+      }
+    },
+    {
+      "name": "secret/kelvin",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "toKen: abcdefghijkl\ntoKen: abcdefghijkl\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 1,
+            "message": "refusing content that contains a literal value for 'toKen' (reference an env-var NAME instead)",
+            "source": "secret"
+          }
+        ]
+      }
+    },
+    {
+      "name": "secret/nul",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "a: 1\nb: x\u0000y\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 2,
+            "message": "content contains a NUL byte",
+            "source": "content"
+          }
+        ]
+      }
+    },
+    {
+      "name": "secret/crlf",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "text": "api_key: abcdefghijkl\r\nb: 1\r\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 1,
+            "message": "refusing content that contains a literal value for 'api_key' (reference an env-var NAME instead)",
+            "source": "secret"
+          }
+        ]
+      }
+    },
+    {
+      "name": "aiperf/base",
+      "fn": "check",
+      "args": [
+        "aiperf",
+        "profiles",
+        "yaml"
+      ],
+      "text": "# AIPerf load presets (mock copy of clients/aiperf/profiles.yaml)\n# Schema: profiles.<name> -> model, endpoint_type (chat|completions), streaming, concurrency 1..64,\n# requests 1..2000, isl 1..32768, osl 1..4096, warmup_requests, timeout_s, seed.\nversion: 1\nprofiles:\n  chat-short:\n    description: 200 short chats at concurrency 8 - the everyday load\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 8        # requests kept in flight\n    requests: 200\n    isl: 256\n    osl: 128\n    warmup_requests: 2\n  chat-long:\n    description: long prompts, 60 requests at concurrency 4\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 4\n    requests: 60\n    isl: 8192\n    osl: 256\n    timeout_s: 300\n  lightning-burst:\n    description: a burst of 400 small requests at concurrency 16 on Lightning\n    model: nemotron-lightning\n    endpoint_type: chat\n    streaming: true\n    concurrency: 16\n    requests: 400\n    isl: 512\n    osl: 64\n",
+      "expect": {
+        "api": 1,
+        "schema": "aiperf_profiles",
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "aiperf/out-of-range",
+      "fn": "check",
+      "args": [
+        "aiperf",
+        "profiles",
+        "yaml"
+      ],
+      "text": "# AIPerf load presets (mock copy of clients/aiperf/profiles.yaml)\n# Schema: profiles.<name> -> model, endpoint_type (chat|completions), streaming, concurrency 1..64,\n# requests 1..2000, isl 1..32768, osl 1..4096, warmup_requests, timeout_s, seed.\nversion: 1\nprofiles:\n  chat-short:\n    description: 200 short chats at concurrency 8 - the everyday load\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 100        # requests kept in flight\n    requests: 200\n    isl: 256\n    osl: 128\n    warmup_requests: 2\n  chat-long:\n    description: long prompts, 60 requests at concurrency 4\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 4\n    requests: 60\n    isl: 8192\n    osl: 256\n    timeout_s: 300\n  lightning-burst:\n    description: a burst of 400 small requests at concurrency 16 on Lightning\n    model: nemotron-lightning\n    endpoint_type: chat\n    streaming: true\n    concurrency: 16\n    requests: 400\n    isl: 512\n    osl: 64\n",
+      "expect": {
+        "api": 1,
+        "schema": "aiperf_profiles",
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 11,
+            "message": "chat-short: 'concurrency' must be an integer from 1 to 64",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "aiperf/wrong-type",
+      "fn": "check",
+      "args": [
+        "aiperf",
+        "profiles",
+        "yaml"
+      ],
+      "text": "# AIPerf load presets (mock copy of clients/aiperf/profiles.yaml)\n# Schema: profiles.<name> -> model, endpoint_type (chat|completions), streaming, concurrency 1..64,\n# requests 1..2000, isl 1..32768, osl 1..4096, warmup_requests, timeout_s, seed.\nversion: 1\nprofiles:\n  chat-short:\n    description: 200 short chats at concurrency 8 - the everyday load\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 8        # requests kept in flight\n    requests: \"200\"\n    isl: 256\n    osl: 128\n    warmup_requests: 2\n  chat-long:\n    description: long prompts, 60 requests at concurrency 4\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 4\n    requests: 60\n    isl: 8192\n    osl: 256\n    timeout_s: 300\n  lightning-burst:\n    description: a burst of 400 small requests at concurrency 16 on Lightning\n    model: nemotron-lightning\n    endpoint_type: chat\n    streaming: true\n    concurrency: 16\n    requests: 400\n    isl: 512\n    osl: 64\n",
+      "expect": {
+        "api": 1,
+        "schema": "aiperf_profiles",
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 12,
+            "message": "chat-short: 'requests' must be an integer from 1 to 2000",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "aiperf/unknown-key",
+      "fn": "check",
+      "args": [
+        "aiperf",
+        "profiles",
+        "yaml"
+      ],
+      "text": "# AIPerf load presets (mock copy of clients/aiperf/profiles.yaml)\n# Schema: profiles.<name> -> model, endpoint_type (chat|completions), streaming, concurrency 1..64,\n# requests 1..2000, isl 1..32768, osl 1..4096, warmup_requests, timeout_s, seed.\nversion: 1\nprofiles:\n  chat-short:\n    description: 200 short chats at concurrency 8 - the everyday load\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 8        # requests kept in flight\n    requests: 200\n    isll: 256\n    osl: 128\n    warmup_requests: 2\n  chat-long:\n    description: long prompts, 60 requests at concurrency 4\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 4\n    requests: 60\n    isl: 8192\n    osl: 256\n    timeout_s: 300\n  lightning-burst:\n    description: a burst of 400 small requests at concurrency 16 on Lightning\n    model: nemotron-lightning\n    endpoint_type: chat\n    streaming: true\n    concurrency: 16\n    requests: 400\n    isl: 512\n    osl: 64\n",
+      "expect": {
+        "api": 1,
+        "schema": "aiperf_profiles",
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 13,
+            "message": "chat-short: unknown key 'isll' (did you mean 'isl'?)",
+            "source": "schema"
+          },
+          {
+            "severity": "error",
+            "line": 6,
+            "message": "chat-short: 'isl' is required",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "aiperf/bad-name",
+      "fn": "check",
+      "args": [
+        "aiperf",
+        "profiles",
+        "yaml"
+      ],
+      "text": "# AIPerf load presets (mock copy of clients/aiperf/profiles.yaml)\n# Schema: profiles.<name> -> model, endpoint_type (chat|completions), streaming, concurrency 1..64,\n# requests 1..2000, isl 1..32768, osl 1..4096, warmup_requests, timeout_s, seed.\nversion: 1\nprofiles:\n  Chat_Short:\n    description: 200 short chats at concurrency 8 - the everyday load\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 8        # requests kept in flight\n    requests: 200\n    isl: 256\n    osl: 128\n    warmup_requests: 2\n  chat-long:\n    description: long prompts, 60 requests at concurrency 4\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 4\n    requests: 60\n    isl: 8192\n    osl: 256\n    timeout_s: 300\n  lightning-burst:\n    description: a burst of 400 small requests at concurrency 16 on Lightning\n    model: nemotron-lightning\n    endpoint_type: chat\n    streaming: true\n    concurrency: 16\n    requests: 400\n    isl: 512\n    osl: 64\n",
+      "expect": {
+        "api": 1,
+        "schema": "aiperf_profiles",
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 6,
+            "message": "preset name 'Chat_Short' must match [a-z0-9][a-z0-9-]{0,39}",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "aiperf/streaming-off",
+      "fn": "check",
+      "args": [
+        "aiperf",
+        "profiles",
+        "yaml"
+      ],
+      "text": "# AIPerf load presets (mock copy of clients/aiperf/profiles.yaml)\n# Schema: profiles.<name> -> model, endpoint_type (chat|completions), streaming, concurrency 1..64,\n# requests 1..2000, isl 1..32768, osl 1..4096, warmup_requests, timeout_s, seed.\nversion: 1\nprofiles:\n  chat-short:\n    description: 200 short chats at concurrency 8 - the everyday load\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: false\n    concurrency: 8        # requests kept in flight\n    requests: 200\n    isl: 256\n    osl: 128\n    warmup_requests: 2\n  chat-long:\n    description: long prompts, 60 requests at concurrency 4\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 4\n    requests: 60\n    isl: 8192\n    osl: 256\n    timeout_s: 300\n  lightning-burst:\n    description: a burst of 400 small requests at concurrency 16 on Lightning\n    model: nemotron-lightning\n    endpoint_type: chat\n    streaming: true\n    concurrency: 16\n    requests: 400\n    isl: 512\n    osl: 64\n",
+      "expect": {
+        "api": 1,
+        "schema": "aiperf_profiles",
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "warn",
+            "line": 10,
+            "message": "chat-short: streaming is off, so time to first token and inter-token latency are not measured",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "aiperf/yaml-error",
+      "fn": "check",
+      "args": [
+        "aiperf",
+        "profiles",
+        "yaml"
+      ],
+      "text": "# AIPerf load presets (mock copy of clients/aiperf/profiles.yaml)\n# Schema: profiles.<name> -> model, endpoint_type (chat|completions), streaming, concurrency 1..64,\n# requests 1..2000, isl 1..32768, osl 1..4096, warmup_requests, timeout_s, seed.\nversion: 1\nprofiles:\n  chat-short:\n    description: 200 short chats at concurrency 8 - the everyday load\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 8        # requests kept in flight\n    requests: 200\n    isl: [256\n    osl: 128\n    warmup_requests: 2\n  chat-long:\n    description: long prompts, 60 requests at concurrency 4\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 4\n    requests: 60\n    isl: 8192\n    osl: 256\n    timeout_s: 300\n  lightning-burst:\n    description: a burst of 400 small requests at concurrency 16 on Lightning\n    model: nemotron-lightning\n    endpoint_type: chat\n    streaming: true\n    concurrency: 16\n    requests: 400\n    isl: 512\n    osl: 64\n",
+      "expect": {
+        "api": 1,
+        "schema": "aiperf_profiles",
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 14,
+            "message": "YAML syntax: expected ',' or ']', but got ':'",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "aiperf/tab",
+      "fn": "check",
+      "args": [
+        "aiperf",
+        "profiles",
+        "yaml"
+      ],
+      "text": "# AIPerf load presets (mock copy of clients/aiperf/profiles.yaml)\n# Schema: profiles.<name> -> model, endpoint_type (chat|completions), streaming, concurrency 1..64,\n# requests 1..2000, isl 1..32768, osl 1..4096, warmup_requests, timeout_s, seed.\nversion: 1\nprofiles:\n  chat-short:\n    description: 200 short chats at concurrency 8 - the everyday load\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 8        # requests kept in flight\n    requests: 200\n\tisl: 256\n    osl: 128\n    warmup_requests: 2\n  chat-long:\n    description: long prompts, 60 requests at concurrency 4\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 4\n    requests: 60\n    isl: 8192\n    osl: 256\n    timeout_s: 300\n  lightning-burst:\n    description: a burst of 400 small requests at concurrency 16 on Lightning\n    model: nemotron-lightning\n    endpoint_type: chat\n    streaming: true\n    concurrency: 16\n    requests: 400\n    isl: 512\n    osl: 64\n",
+      "expect": {
+        "api": 1,
+        "schema": "aiperf_profiles",
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 13,
+            "message": "YAML syntax: found character '\\t' that cannot start any token",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "aiperf/version-2",
+      "fn": "check",
+      "args": [
+        "aiperf",
+        "profiles",
+        "yaml"
+      ],
+      "text": "# AIPerf load presets (mock copy of clients/aiperf/profiles.yaml)\n# Schema: profiles.<name> -> model, endpoint_type (chat|completions), streaming, concurrency 1..64,\n# requests 1..2000, isl 1..32768, osl 1..4096, warmup_requests, timeout_s, seed.\nversion: 2\nprofiles:\n  chat-short:\n    description: 200 short chats at concurrency 8 - the everyday load\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 8        # requests kept in flight\n    requests: 200\n    isl: 256\n    osl: 128\n    warmup_requests: 2\n  chat-long:\n    description: long prompts, 60 requests at concurrency 4\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 4\n    requests: 60\n    isl: 8192\n    osl: 256\n    timeout_s: 300\n  lightning-burst:\n    description: a burst of 400 small requests at concurrency 16 on Lightning\n    model: nemotron-lightning\n    endpoint_type: chat\n    streaming: true\n    concurrency: 16\n    requests: 400\n    isl: 512\n    osl: 64\n",
+      "expect": {
+        "api": 1,
+        "schema": "aiperf_profiles",
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 4,
+            "message": "'version' must be 1",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "aiperf/exp-text",
+      "fn": "check",
+      "args": [
+        "aiperf",
+        "profiles",
+        "yaml"
+      ],
+      "text": "# AIPerf load presets (mock copy of clients/aiperf/profiles.yaml)\n# Schema: profiles.<name> -> model, endpoint_type (chat|completions), streaming, concurrency 1..64,\n# requests 1..2000, isl 1..32768, osl 1..4096, warmup_requests, timeout_s, seed.\nversion: 1\nprofiles:\n  chat-short:\n    description: 200 short chats at concurrency 8 - the everyday load\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 8        # requests kept in flight\n    requests: 1e3\n    isl: 256\n    osl: 128\n    warmup_requests: 2\n  chat-long:\n    description: long prompts, 60 requests at concurrency 4\n    model: qwen3.8-flash-next\n    endpoint_type: chat\n    streaming: true\n    concurrency: 4\n    requests: 60\n    isl: 8192\n    osl: 256\n    timeout_s: 300\n  lightning-burst:\n    description: a burst of 400 small requests at concurrency 16 on Lightning\n    model: nemotron-lightning\n    endpoint_type: chat\n    streaming: true\n    concurrency: 16\n    requests: 400\n    isl: 512\n    osl: 64\n",
+      "expect": {
+        "api": 1,
+        "schema": "aiperf_profiles",
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 12,
+            "message": "chat-short: 'requests' must be an integer from 1 to 2000",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "modelopt/base",
+      "fn": "check",
+      "args": [
+        "modelopt",
+        "recipes",
+        "yaml"
+      ],
+      "text": "# Model Optimizer compression recipes (mock copy of clients/modelopt/recipes.yaml)\nversion: 1\nrecipes:\n  reap-glm53:\n    description: \"REAP expert pruning (25%) of the GLM-5.3-Flash checkpoint\"\n    method: reap\n    base_model: zai-org/GLM-5.3-Flash\n    sparsity: 0.25\n    output: /runs/reap-glm53\n  quantize-glm53-nvfp4:\n    description: \"NVFP4 quantization of the GLM-5.3-Flash checkpoint\"\n    method: quantize\n    base_model: zai-org/GLM-5.3-Flash\n    preset: NVFP4\n    output: /runs/quantize-glm53-nvfp4\n  minitron-qwen38:\n    description: \"Minitron layer pruning of the Qwen3.8 checkpoint\"\n    method: minitron\n    base_model: Qwen/Qwen3.8-27B\n    config: minitron.yaml\n    output: /runs/minitron-qwen38\n",
+      "expect": {
+        "api": 1,
+        "schema": "modelopt_recipes",
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "modelopt/bad-method",
+      "fn": "check",
+      "args": [
+        "modelopt",
+        "recipes",
+        "yaml"
+      ],
+      "text": "# Model Optimizer compression recipes (mock copy of clients/modelopt/recipes.yaml)\nversion: 1\nrecipes:\n  reap-glm53:\n    description: \"REAP expert pruning (25%) of the GLM-5.3-Flash checkpoint\"\n    method: prune\n    base_model: zai-org/GLM-5.3-Flash\n    sparsity: 0.25\n    output: /runs/reap-glm53\n  quantize-glm53-nvfp4:\n    description: \"NVFP4 quantization of the GLM-5.3-Flash checkpoint\"\n    method: quantize\n    base_model: zai-org/GLM-5.3-Flash\n    preset: NVFP4\n    output: /runs/quantize-glm53-nvfp4\n  minitron-qwen38:\n    description: \"Minitron layer pruning of the Qwen3.8 checkpoint\"\n    method: minitron\n    base_model: Qwen/Qwen3.8-27B\n    config: minitron.yaml\n    output: /runs/minitron-qwen38\n",
+      "expect": {
+        "api": 1,
+        "schema": "modelopt_recipes",
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 6,
+            "message": "reap-glm53: 'method' must be one of reap, quantize, minitron",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "modelopt/sparsity",
+      "fn": "check",
+      "args": [
+        "modelopt",
+        "recipes",
+        "yaml"
+      ],
+      "text": "# Model Optimizer compression recipes (mock copy of clients/modelopt/recipes.yaml)\nversion: 1\nrecipes:\n  reap-glm53:\n    description: \"REAP expert pruning (25%) of the GLM-5.3-Flash checkpoint\"\n    method: reap\n    base_model: zai-org/GLM-5.3-Flash\n    sparsity: 1.5\n    output: /runs/reap-glm53\n  quantize-glm53-nvfp4:\n    description: \"NVFP4 quantization of the GLM-5.3-Flash checkpoint\"\n    method: quantize\n    base_model: zai-org/GLM-5.3-Flash\n    preset: NVFP4\n    output: /runs/quantize-glm53-nvfp4\n  minitron-qwen38:\n    description: \"Minitron layer pruning of the Qwen3.8 checkpoint\"\n    method: minitron\n    base_model: Qwen/Qwen3.8-27B\n    config: minitron.yaml\n    output: /runs/minitron-qwen38\n",
+      "expect": {
+        "api": 1,
+        "schema": "modelopt_recipes",
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 8,
+            "message": "reap-glm53: 'sparsity' must be a number from 0 (inclusive) to 1 (exclusive)",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "modelopt/output",
+      "fn": "check",
+      "args": [
+        "modelopt",
+        "recipes",
+        "yaml"
+      ],
+      "text": "# Model Optimizer compression recipes (mock copy of clients/modelopt/recipes.yaml)\nversion: 1\nrecipes:\n  reap-glm53:\n    description: \"REAP expert pruning (25%) of the GLM-5.3-Flash checkpoint\"\n    method: reap\n    base_model: zai-org/GLM-5.3-Flash\n    sparsity: 0.25\n    output: /tmp/x\n  quantize-glm53-nvfp4:\n    description: \"NVFP4 quantization of the GLM-5.3-Flash checkpoint\"\n    method: quantize\n    base_model: zai-org/GLM-5.3-Flash\n    preset: NVFP4\n    output: /runs/quantize-glm53-nvfp4\n  minitron-qwen38:\n    description: \"Minitron layer pruning of the Qwen3.8 checkpoint\"\n    method: minitron\n    base_model: Qwen/Qwen3.8-27B\n    config: minitron.yaml\n    output: /runs/minitron-qwen38\n",
+      "expect": {
+        "api": 1,
+        "schema": "modelopt_recipes",
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 9,
+            "message": "reap-glm53: 'output' must be a path under /runs (the job's run dir)",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "modelopt/version-true",
+      "fn": "check",
+      "args": [
+        "modelopt",
+        "recipes",
+        "yaml"
+      ],
+      "text": "# Model Optimizer compression recipes (mock copy of clients/modelopt/recipes.yaml)\nversion: true\nrecipes:\n  reap-glm53:\n    description: \"REAP expert pruning (25%) of the GLM-5.3-Flash checkpoint\"\n    method: reap\n    base_model: zai-org/GLM-5.3-Flash\n    sparsity: 0.25\n    output: /runs/reap-glm53\n  quantize-glm53-nvfp4:\n    description: \"NVFP4 quantization of the GLM-5.3-Flash checkpoint\"\n    method: quantize\n    base_model: zai-org/GLM-5.3-Flash\n    preset: NVFP4\n    output: /runs/quantize-glm53-nvfp4\n  minitron-qwen38:\n    description: \"Minitron layer pruning of the Qwen3.8 checkpoint\"\n    method: minitron\n    base_model: Qwen/Qwen3.8-27B\n    config: minitron.yaml\n    output: /runs/minitron-qwen38\n",
+      "expect": {
+        "api": 1,
+        "schema": "modelopt_recipes",
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "evaluator/base",
+      "fn": "check",
+      "args": [
+        "evaluator",
+        "suites.yaml",
+        "yaml"
+      ],
+      "text": "# NeMo Evaluator suites (mock copy of clients/nemo-evaluator/suites.yaml)\n# Every suite names a router model and 1-8 benchmarks; max_problems is required (a bounded, shuffled sample).\nversion: 1\nsuites:\n  smoke:\n    description: 50 GSM8K problems - proves the whole path in seconds\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 50\n        max_tokens: 1024\n  quick:\n    description: GSM8K + MMLU, 200 each\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 200\n      - bench: mmlu\n        max_problems: 200\n  full:\n    description: three benchmarks at 500 problems, twice each\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 500\n        repeats: 2\n      - bench: mmlu\n        max_problems: 500\n      - bench: mmlu_pro\n        max_problems: 500\n        temperature: 0.0\n",
+      "expect": {
+        "api": 1,
+        "schema": "evaluator_suites",
+        "server_adds": [
+          "evaluator-local suites --file",
+          "the prefetched-dataset check"
+        ],
+        "syntax": "ok",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "evaluator/refused",
+      "fn": "check",
+      "args": [
+        "evaluator",
+        "suites.yaml",
+        "yaml"
+      ],
+      "text": "# NeMo Evaluator suites (mock copy of clients/nemo-evaluator/suites.yaml)\n# Every suite names a router model and 1-8 benchmarks; max_problems is required (a bounded, shuffled sample).\nversion: 1\nsuites:\n  smoke:\n    description: 50 GSM8K problems - proves the whole path in seconds\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 50\n        max_tokens: 1024\n  quick:\n    description: GSM8K + MMLU, 200 each\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 200\n      - bench: mmlu\n        max_problems: 200\n  full:\n    description: three benchmarks at 500 problems, twice each\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 500\n        repeats: 2\n      - bench: mmlu\n        max_problems: 500\n      - bench: humaneval\n        max_problems: 500\n        temperature: 0.0\n",
+      "expect": {
+        "api": 1,
+        "schema": "evaluator_suites",
+        "server_adds": [
+          "evaluator-local suites --file",
+          "the prefetched-dataset check"
+        ],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 29,
+            "message": "suite 'full' benchmark #3: 'humaneval' is not supported — needs a Docker sandbox to execute generated code",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "evaluator/unknown-bench",
+      "fn": "check",
+      "args": [
+        "evaluator",
+        "suites.yaml",
+        "yaml"
+      ],
+      "text": "# NeMo Evaluator suites (mock copy of clients/nemo-evaluator/suites.yaml)\n# Every suite names a router model and 1-8 benchmarks; max_problems is required (a bounded, shuffled sample).\nversion: 1\nsuites:\n  smoke:\n    description: 50 GSM8K problems - proves the whole path in seconds\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 50\n        max_tokens: 1024\n  quick:\n    description: GSM8K + MMLU, 200 each\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 200\n      - bench: mmlu\n        max_problems: 200\n  full:\n    description: three benchmarks at 500 problems, twice each\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 500\n        repeats: 2\n      - bench: mmlu\n        max_problems: 500\n      - bench: ifeval\n        max_problems: 500\n        temperature: 0.0\n",
+      "expect": {
+        "api": 1,
+        "schema": "evaluator_suites",
+        "server_adds": [
+          "evaluator-local suites --file",
+          "the prefetched-dataset check"
+        ],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 29,
+            "message": "suite 'full' benchmark #3: unknown benchmark 'ifeval' (supported: drop, gsm8k, math500, mmlu, mmlu_pro, triviaqa)",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "evaluator/too-much-work",
+      "fn": "check",
+      "args": [
+        "evaluator",
+        "suites.yaml",
+        "yaml"
+      ],
+      "text": "# NeMo Evaluator suites (mock copy of clients/nemo-evaluator/suites.yaml)\n# Every suite names a router model and 1-8 benchmarks; max_problems is required (a bounded, shuffled sample).\nversion: 1\nsuites:\n  smoke:\n    description: 50 GSM8K problems - proves the whole path in seconds\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 50\n        max_tokens: 1024\n  quick:\n    description: GSM8K + MMLU, 200 each\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 200\n      - bench: mmlu\n        max_problems: 200\n  full:\n    description: three benchmarks at 500 problems, twice each\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 5000\n        repeats: 8\n      - bench: mmlu\n        max_problems: 500\n      - bench: mmlu_pro\n        max_problems: 500\n        temperature: 0.0\n",
+      "expect": {
+        "api": 1,
+        "schema": "evaluator_suites",
+        "server_adds": [
+          "evaluator-local suites --file",
+          "the prefetched-dataset check"
+        ],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 20,
+            "message": "suite 'full': max_problems x repeats sums to 41000; the limit is 20000",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "evaluator/twice",
+      "fn": "check",
+      "args": [
+        "evaluator",
+        "suites.yaml",
+        "yaml"
+      ],
+      "text": "# NeMo Evaluator suites (mock copy of clients/nemo-evaluator/suites.yaml)\n# Every suite names a router model and 1-8 benchmarks; max_problems is required (a bounded, shuffled sample).\nversion: 1\nsuites:\n  smoke:\n    description: 50 GSM8K problems - proves the whole path in seconds\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 50\n        max_tokens: 1024\n  quick:\n    description: GSM8K + MMLU, 200 each\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 200\n      - bench: mmlu\n        max_problems: 200\n  full:\n    description: three benchmarks at 500 problems, twice each\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 500\n        repeats: 2\n      - bench: mmlu\n        max_problems: 500\n      - bench: gsm8k\n        max_problems: 500\n        temperature: 0.0\n",
+      "expect": {
+        "api": 1,
+        "schema": "evaluator_suites",
+        "server_adds": [
+          "evaluator-local suites --file",
+          "the prefetched-dataset check"
+        ],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 9,
+            "message": "suite 'full' benchmark #3: 'gsm8k' is listed twice in this suite",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "evaluator/temperature",
+      "fn": "check",
+      "args": [
+        "evaluator",
+        "suites.yaml",
+        "yaml"
+      ],
+      "text": "# NeMo Evaluator suites (mock copy of clients/nemo-evaluator/suites.yaml)\n# Every suite names a router model and 1-8 benchmarks; max_problems is required (a bounded, shuffled sample).\nversion: 1\nsuites:\n  smoke:\n    description: 50 GSM8K problems - proves the whole path in seconds\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 50\n        max_tokens: 1024\n  quick:\n    description: GSM8K + MMLU, 200 each\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 200\n      - bench: mmlu\n        max_problems: 200\n  full:\n    description: three benchmarks at 500 problems, twice each\n    model: qwen3.8-flash-next\n    benchmarks:\n      - bench: gsm8k\n        max_problems: 500\n        repeats: 2\n      - bench: mmlu\n        max_problems: 500\n      - bench: mmlu_pro\n        max_problems: 500\n        temperature: 3\n",
+      "expect": {
+        "api": 1,
+        "schema": "evaluator_suites",
+        "server_adds": [
+          "evaluator-local suites --file",
+          "the prefetched-dataset check"
+        ],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 31,
+            "message": "suite 'full' benchmark #3: `temperature` must be a number from 0 to 2",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "switchyard/base",
+      "fn": "check",
+      "args": [
+        "switchyard",
+        "routes",
+        "toml"
+      ],
+      "text": "# NeMo Switchyard routes (mock copy, trimmed from inference/switchyard/routes.toml)\nschema_version = 1\n\n[llm_clients.litellm]\nformat = \"openai_chat\"\nbase_url = \"http://litellm:4000/v1\"\nforward_auth = true\nmax_retries = 2\n\n[targets.lightning]\nid = \"nemotron-lightning\"\nllm_client = \"litellm\"\n\n[targets.qwen-27b-1m]\nid = \"qwen3.8-27b-1m\"\nllm_client = \"litellm\"\n\n[targets.flash-next]\nid = \"qwen3.8-flash-next\"\nllm_client = \"litellm\"\n\n# auto-local's capable tier is the default engine (since 2026-09-26). Own client on purpose: target identity is\n# (model id, llm_client), so a second target on the same id and client would be dropped.\n[llm_clients.litellm_auto]\nformat = \"openai_chat\"\nbase_url = \"http://litellm:4000/v1\"\nforward_auth = true\nmax_retries = 2\n\n[targets.flash-next-auto]\nid = \"qwen3.8-flash-next\"\nllm_client = \"litellm_auto\"\n\n# PRIMARY. Fully local.\n[routes.auto-local]\nid = \"auto-local\"\ntype = \"stage_router\"\ncapable_target = \"flash-next-auto\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\nrecent_turn_window = 3\ncontext_window = 262144\n\n[routes.auto-local.classifier]\ntarget = \"lightning\"\nbase_threshold = 0.5\nmax_output_tokens = 4096\n\n[routes.auto-flashnext]\nid = \"auto-flashnext\"\ntype = \"stage_router\"\ncapable_target = \"flash-next\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\n\n[routes.direct-lightning]\nid = \"direct-lightning\"\ntype = \"passthrough\"\ntarget = \"lightning\"\n\n[routes.direct-27b]\nid = \"direct-27b\"\ntype = \"passthrough\"\ntarget = \"qwen-27b-1m\"\n",
+      "expect": {
+        "api": 1,
+        "schema": "switchyard_routes",
+        "server_adds": [
+          "switchyard-server --dry-run"
+        ],
+        "syntax": "ok",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "switchyard/bad-target",
+      "fn": "check",
+      "args": [
+        "switchyard",
+        "routes",
+        "toml"
+      ],
+      "text": "# NeMo Switchyard routes (mock copy, trimmed from inference/switchyard/routes.toml)\nschema_version = 1\n\n[llm_clients.litellm]\nformat = \"openai_chat\"\nbase_url = \"http://litellm:4000/v1\"\nforward_auth = true\nmax_retries = 2\n\n[targets.lightning]\nid = \"nemotron-lightning\"\nllm_client = \"litellm\"\n\n[targets.qwen-27b-1m]\nid = \"qwen3.8-27b-1m\"\nllm_client = \"litellm\"\n\n[targets.flash-next]\nid = \"qwen3.8-flash-next\"\nllm_client = \"litellm\"\n\n# auto-local's capable tier is the default engine (since 2026-09-26). Own client on purpose: target identity is\n# (model id, llm_client), so a second target on the same id and client would be dropped.\n[llm_clients.litellm_auto]\nformat = \"openai_chat\"\nbase_url = \"http://litellm:4000/v1\"\nforward_auth = true\nmax_retries = 2\n\n[targets.flash-next-auto]\nid = \"qwen3.8-flash-next\"\nllm_client = \"litellm_auto\"\n\n# PRIMARY. Fully local.\n[routes.auto-local]\nid = \"auto-local\"\ntype = \"stage_router\"\ncapable_target = \"nope\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\nrecent_turn_window = 3\ncontext_window = 262144\n\n[routes.auto-local.classifier]\ntarget = \"lightning\"\nbase_threshold = 0.5\nmax_output_tokens = 4096\n\n[routes.auto-flashnext]\nid = \"auto-flashnext\"\ntype = \"stage_router\"\ncapable_target = \"flash-next\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\n\n[routes.direct-lightning]\nid = \"direct-lightning\"\ntype = \"passthrough\"\ntarget = \"lightning\"\n\n[routes.direct-27b]\nid = \"direct-27b\"\ntype = \"passthrough\"\ntarget = \"qwen-27b-1m\"\n",
+      "expect": {
+        "api": 1,
+        "schema": "switchyard_routes",
+        "server_adds": [
+          "switchyard-server --dry-run"
+        ],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "route 'auto-local': capable_target = 'nope' is not a defined [targets.*] entry",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "switchyard/bad-url",
+      "fn": "check",
+      "args": [
+        "switchyard",
+        "routes",
+        "toml"
+      ],
+      "text": "# NeMo Switchyard routes (mock copy, trimmed from inference/switchyard/routes.toml)\nschema_version = 1\n\n[llm_clients.litellm]\nformat = \"openai_chat\"\nbase_url = \"https://api.example.com/v1\"\nforward_auth = true\nmax_retries = 2\n\n[targets.lightning]\nid = \"nemotron-lightning\"\nllm_client = \"litellm\"\n\n[targets.qwen-27b-1m]\nid = \"qwen3.8-27b-1m\"\nllm_client = \"litellm\"\n\n[targets.flash-next]\nid = \"qwen3.8-flash-next\"\nllm_client = \"litellm\"\n\n# auto-local's capable tier is the default engine (since 2026-09-26). Own client on purpose: target identity is\n# (model id, llm_client), so a second target on the same id and client would be dropped.\n[llm_clients.litellm_auto]\nformat = \"openai_chat\"\nbase_url = \"http://litellm:4000/v1\"\nforward_auth = true\nmax_retries = 2\n\n[targets.flash-next-auto]\nid = \"qwen3.8-flash-next\"\nllm_client = \"litellm_auto\"\n\n# PRIMARY. Fully local.\n[routes.auto-local]\nid = \"auto-local\"\ntype = \"stage_router\"\ncapable_target = \"flash-next-auto\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\nrecent_turn_window = 3\ncontext_window = 262144\n\n[routes.auto-local.classifier]\ntarget = \"lightning\"\nbase_threshold = 0.5\nmax_output_tokens = 4096\n\n[routes.auto-flashnext]\nid = \"auto-flashnext\"\ntype = \"stage_router\"\ncapable_target = \"flash-next\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\n\n[routes.direct-lightning]\nid = \"direct-lightning\"\ntype = \"passthrough\"\ntarget = \"lightning\"\n\n[routes.direct-27b]\nid = \"direct-27b\"\ntype = \"passthrough\"\ntarget = \"qwen-27b-1m\"\n",
+      "expect": {
+        "api": 1,
+        "schema": "switchyard_routes",
+        "server_adds": [
+          "switchyard-server --dry-run"
+        ],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "llm_client 'litellm': base_url host 'api.example.com' is neither loopback nor a bare service name (no dots); external hosts need an egress-allowlist change, not a routes.toml edit",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "switchyard/toml-error",
+      "fn": "check",
+      "args": [
+        "switchyard",
+        "routes",
+        "toml"
+      ],
+      "text": "# NeMo Switchyard routes (mock copy, trimmed from inference/switchyard/routes.toml)\nschema_version = 1\n\n[llm_clients.litellm]\nformat = \"openai_chat\"\nbase_url = \"http://litellm:4000/v1\"\nforward_auth = true\nmax_retries = 2\n\n[targets.lightning]\nid = \"nemotron-lightning\"\nllm_client = \"litellm\"\n\n[targets.qwen-27b-1m]\nid = \"qwen3.8-27b-1m\"\nllm_client = \"litellm\"\n\n[targets.flash-next]\nid = \"qwen3.8-flash-next\"\nllm_client = \"litellm\"\n\n# auto-local's capable tier is the default engine (since 2026-09-26). Own client on purpose: target identity is\n# (model id, llm_client), so a second target on the same id and client would be dropped.\n[llm_clients.litellm_auto]\nformat = \"openai_chat\"\nbase_url = \"http://litellm:4000/v1\"\nforward_auth = true\nmax_retries = 2\n\n[targets.flash-next-auto]\nid = \"qwen3.8-flash-next\"\nllm_client = \"litellm_auto\"\n\n# PRIMARY. Fully local.\n[routesauto-local]\nid = \"auto-local\"\ntype = \"stage_router\"\ncapable_target = \"flash-next-auto\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\nrecent_turn_window = 3\ncontext_window = 262144\n\n[routes.auto-local.classifier]\ntarget = \"lightning\"\nbase_threshold = 0.5\nmax_output_tokens = 4096\n\n[routes.auto-flashnext]\nid = \"auto-flashnext\"\ntype = \"stage_router\"\ncapable_target = \"flash-next\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\n\n[routes.direct-lightning]\nid = \"direct-lightning\"\ntype = \"passthrough\"\ntarget = \"lightning\"\n\n[routes.direct-27b]\nid = \"direct-27b\"\ntype = \"passthrough\"\ntarget = \"qwen-27b-1m\"\n",
+      "expect": {
+        "api": 1,
+        "schema": "switchyard_routes",
+        "server_adds": [
+          "switchyard-server --dry-run"
+        ],
+        "syntax": "ok",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "switchyard/dup-key",
+      "fn": "check",
+      "args": [
+        "switchyard",
+        "routes",
+        "toml"
+      ],
+      "text": "# NeMo Switchyard routes (mock copy, trimmed from inference/switchyard/routes.toml)\nschema_version = 1\n\n[llm_clients.litellm]\nformat = \"openai_chat\"\nbase_url = \"http://litellm:4000/v1\"\nforward_auth = true\nmax_retries = 2\n\n[targets.lightning]\nid = \"nemotron-lightning\"\nllm_client = \"litellm\"\n\n[targets.qwen-27b-1m]\nid = \"qwen3.8-27b-1m\"\nllm_client = \"litellm\"\n\n[targets.flash-next]\nid = \"qwen3.8-flash-next\"\nllm_client = \"litellm\"\n\n# auto-local's capable tier is the default engine (since 2026-09-26). Own client on purpose: target identity is\n# (model id, llm_client), so a second target on the same id and client would be dropped.\n[llm_clients.litellm_auto]\nformat = \"openai_chat\"\nbase_url = \"http://litellm:4000/v1\"\nforward_auth = true\nmax_retries = 2\n\n[targets.flash-next-auto]\nid = \"qwen3.8-flash-next\"\nllm_client = \"litellm_auto\"\n\n# PRIMARY. Fully local.\n[routes.auto-local]\nid = \"auto-local\"\ntype = \"stage_router\"\ncapable_target = \"flash-next-auto\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\nrecent_turn_window = 3\ncontext_window = 262144\n\n[routes.auto-local.classifier]\ntarget = \"lightning\"\nbase_threshold = 0.5\nmax_output_tokens = 4096\n\n[routes.auto-flashnext]\nid = \"auto-flashnext\"\ntype = \"stage_router\"\ncapable_target = \"flash-next\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\n\n[routes.direct-lightning]\nid = \"direct-lightning\"\ntype = \"passthrough\"\ntarget = \"lightning\"\n\n[routes.direct-27b]\nid = \"direct-27b\"\ntype = \"passthrough\"\ntarget = \"qwen-27b-1m\"\n\n[targets.x]\nid = 1\nid = 2\n",
+      "expect": {
+        "api": 1,
+        "schema": "switchyard_routes",
+        "server_adds": [
+          "switchyard-server --dry-run"
+        ],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 70,
+            "message": "TOML syntax: Cannot overwrite a value (at line 70, column 7)",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "relay/base",
+      "fn": "check",
+      "args": [
+        "relay",
+        "routes",
+        "toml"
+      ],
+      "text": "# Switchyard deployment for the NeMo Relay NATIVE PLUGIN (mock copy)\n# Validate with the plugin, not switchyard-server: the schemas differ.\nschema_version = 1\n\n[llm_clients.litellm_anthropic]\nformat = \"anthropic_messages\"\nbase_url = \"http://127.0.0.1:4000\"\napi_key_env = \"LITELLM_MASTER_KEY\"\nmax_retries = 2\n\n[targets.lightning]\nid = \"nemotron-lightning\"\nllm_client = \"litellm_anthropic\"\n\n[targets.qwen-27b-1m]\nid = \"qwen3.8-27b-1m\"\nllm_client = \"litellm_anthropic\"\n\n[targets.flash-next]\nid = \"qwen3.8-flash-next\"\nllm_client = \"litellm_anthropic\"\n\n[routes.auto-local]\nid = \"auto-local\"\ntype = \"stage_router\"\ncapable_target = \"flash-next\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\n",
+      "expect": {
+        "api": 1,
+        "schema": "relay_routes",
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "relay/schema-2",
+      "fn": "check",
+      "args": [
+        "relay",
+        "routes",
+        "toml"
+      ],
+      "text": "# Switchyard deployment for the NeMo Relay NATIVE PLUGIN (mock copy)\n# Validate with the plugin, not switchyard-server: the schemas differ.\nschema_version = 2\n\n[llm_clients.litellm_anthropic]\nformat = \"anthropic_messages\"\nbase_url = \"http://127.0.0.1:4000\"\napi_key_env = \"LITELLM_MASTER_KEY\"\nmax_retries = 2\n\n[targets.lightning]\nid = \"nemotron-lightning\"\nllm_client = \"litellm_anthropic\"\n\n[targets.qwen-27b-1m]\nid = \"qwen3.8-27b-1m\"\nllm_client = \"litellm_anthropic\"\n\n[targets.flash-next]\nid = \"qwen3.8-flash-next\"\nllm_client = \"litellm_anthropic\"\n\n[routes.auto-local]\nid = \"auto-local\"\ntype = \"stage_router\"\ncapable_target = \"flash-next\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\n",
+      "expect": {
+        "api": 1,
+        "schema": "relay_routes",
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "schema_version must be 1 (got 2)",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "relay/secret",
+      "fn": "check",
+      "args": [
+        "relay",
+        "routes",
+        "toml"
+      ],
+      "text": "# Switchyard deployment for the NeMo Relay NATIVE PLUGIN (mock copy)\n# Validate with the plugin, not switchyard-server: the schemas differ.\nschema_version = 1\n\n[llm_clients.litellm_anthropic]\nformat = \"anthropic_messages\"\nbase_url = \"http://127.0.0.1:4000\"\napi_key_env = \"LITELLM_MASTER_KEY\"\nmax_retries = 2\n\n[targets.lightning]\nid = \"nemotron-lightning\"\nllm_client = \"litellm_anthropic\"\n\n[targets.qwen-27b-1m]\nid = \"qwen3.8-27b-1m\"\nllm_client = \"litellm_anthropic\"\n\n[targets.flash-next]\nid = \"qwen3.8-flash-next\"\nllm_client = \"litellm_anthropic\"\n\n[routes.auto-local]\nid = \"auto-local\"\ntype = \"stage_router\"\ncapable_target = \"flash-next\"\nefficient_target = \"lightning\"\npicker = \"efficient_first\"\nconfidence_threshold = 0.5\n\napi_key = \"sk-NOT-A-REAL-KEY-dummy\"\n",
+      "expect": {
+        "api": 1,
+        "schema": "relay_routes",
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 31,
+            "message": "refusing content that contains a token with a well-known secret prefix (sk-, hf_, ghp_, ...)",
+            "source": "secret"
+          },
+          {
+            "severity": "warn",
+            "line": 23,
+            "message": "routes.auto-local: unknown field 'api_key'; the plugin rejects unknown fields",
+            "source": "schema"
+          },
+          {
+            "severity": "error",
+            "line": null,
+            "message": "content looks like it contains a literal secret; use api_key_env = \"ENV_NAME\"",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "depth/toml-arrays-496",
+      "fn": "check",
+      "args": [
+        "relay",
+        "plugins",
+        "toml"
+      ],
+      "build": [
+        [
+          "a = ",
+          1
+        ],
+        [
+          "[",
+          496
+        ],
+        [
+          "]",
+          496
+        ],
+        [
+          "\n",
+          1
+        ]
+      ],
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "depth/toml-arrays-497",
+      "fn": "check",
+      "args": [
+        "relay",
+        "plugins",
+        "toml"
+      ],
+      "build": [
+        [
+          "a = ",
+          1
+        ],
+        [
+          "[",
+          497
+        ],
+        [
+          "]",
+          497
+        ],
+        [
+          "\n",
+          1
+        ]
+      ],
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "TOML syntax error: maximum recursion depth exceeded",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "depth/toml-inline-330",
+      "fn": "check",
+      "args": [
+        "relay",
+        "plugins",
+        "toml"
+      ],
+      "build": [
+        [
+          "a = ",
+          1
+        ],
+        [
+          "{b = ",
+          330
+        ],
+        [
+          "1",
+          1
+        ],
+        [
+          "}",
+          330
+        ],
+        [
+          "\n",
+          1
+        ]
+      ],
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "depth/toml-inline-331",
+      "fn": "check",
+      "args": [
+        "relay",
+        "plugins",
+        "toml"
+      ],
+      "build": [
+        [
+          "a = ",
+          1
+        ],
+        [
+          "{b = ",
+          331
+        ],
+        [
+          "1",
+          1
+        ],
+        [
+          "}",
+          331
+        ],
+        [
+          "\n",
+          1
+        ]
+      ],
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "TOML syntax error: maximum recursion depth exceeded",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "depth/toml-mixed-198",
+      "fn": "check",
+      "args": [
+        "relay",
+        "plugins",
+        "toml"
+      ],
+      "build": [
+        [
+          "a = ",
+          1
+        ],
+        [
+          "[{b = ",
+          198
+        ],
+        [
+          "1",
+          1
+        ],
+        [
+          "}]",
+          198
+        ],
+        [
+          "\n",
+          1
+        ]
+      ],
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "depth/toml-mixed-199",
+      "fn": "check",
+      "args": [
+        "relay",
+        "plugins",
+        "toml"
+      ],
+      "build": [
+        [
+          "a = ",
+          1
+        ],
+        [
+          "[{b = ",
+          199
+        ],
+        [
+          "1",
+          1
+        ],
+        [
+          "}]",
+          199
+        ],
+        [
+          "\n",
+          1
+        ]
+      ],
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "TOML syntax error: maximum recursion depth exceeded",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "depth/yaml-flow-490",
+      "fn": "check",
+      "args": [
+        "guardrails",
+        "x",
+        "yaml"
+      ],
+      "build": [
+        [
+          "[",
+          490
+        ],
+        [
+          "]",
+          490
+        ],
+        [
+          "\n",
+          1
+        ]
+      ],
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "depth/yaml-flow-491",
+      "fn": "check",
+      "args": [
+        "guardrails",
+        "x",
+        "yaml"
+      ],
+      "build": [
+        [
+          "[",
+          491
+        ],
+        [
+          "]",
+          491
+        ],
+        [
+          "\n",
+          1
+        ]
+      ],
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "the backend's validator stops with RecursionError: maximum recursion depth exceeded",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "depth/yaml-eval-489",
+      "fn": "check",
+      "args": [
+        "evaluator",
+        "suites.yaml",
+        "yaml"
+      ],
+      "build": [
+        [
+          "[",
+          489
+        ],
+        [
+          "]",
+          489
+        ],
+        [
+          "\n",
+          1
+        ]
+      ],
+      "expect": {
+        "api": 1,
+        "schema": "evaluator_suites",
+        "server_adds": [
+          "evaluator-local suites --file",
+          "the prefetched-dataset check"
+        ],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "top level must be a mapping with `version` and `suites`",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "depth/yaml-eval-490",
+      "fn": "check",
+      "args": [
+        "evaluator",
+        "suites.yaml",
+        "yaml"
+      ],
+      "build": [
+        [
+          "[",
+          490
+        ],
+        [
+          "]",
+          490
+        ],
+        [
+          "\n",
+          1
+        ]
+      ],
+      "expect": {
+        "api": 1,
+        "schema": "evaluator_suites",
+        "server_adds": [
+          "evaluator-local suites --file",
+          "the prefetched-dataset check"
+        ],
+        "syntax": "ok",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "top level must be a mapping with `version` and `suites`",
+            "source": "schema"
+          }
+        ]
+      }
+    },
+    {
+      "name": "depth/yaml-eval-491",
+      "fn": "check",
+      "args": [
+        "evaluator",
+        "suites.yaml",
+        "yaml"
+      ],
+      "build": [
+        [
+          "[",
+          491
+        ],
+        [
+          "]",
+          491
+        ],
+        [
+          "\n",
+          1
+        ]
+      ],
+      "expect": {
+        "api": 1,
+        "schema": "evaluator_suites",
+        "server_adds": [
+          "evaluator-local suites --file",
+          "the prefetched-dataset check"
+        ],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "the backend's validator stops with RecursionError: maximum recursion depth exceeded",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bigint/toml-4300",
+      "fn": "check",
+      "args": [
+        "relay",
+        "plugins",
+        "toml"
+      ],
+      "build": [
+        [
+          "a = ",
+          1
+        ],
+        [
+          "9",
+          4300
+        ],
+        [
+          "\n",
+          1
+        ]
+      ],
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "ok",
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "bigint/toml-4301",
+      "fn": "check",
+      "args": [
+        "relay",
+        "plugins",
+        "toml"
+      ],
+      "build": [
+        [
+          "a = ",
+          1
+        ],
+        [
+          "9",
+          4301
+        ],
+        [
+          "\n",
+          1
+        ]
+      ],
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "TOML syntax error: Exceeds the limit (4300 digits) for integer string conversion: value has 4301 digits; use sys.set_int_max_str_digits() to increase the limit",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "long/secret-chunks",
+      "fn": "check",
+      "args": [
+        "dcgm",
+        "counters",
+        "text"
+      ],
+      "build": [
+        [
+          "word ",
+          1000
+        ],
+        [
+          "api_key = abcdefghijklmn\n",
+          1
+        ]
+      ],
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "n/a",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 1,
+            "message": "refusing content that contains a literal value for 'api_key' (reference an env-var NAME instead)",
+            "source": "secret"
+          }
+        ]
+      }
+    },
+    {
+      "name": "plain/yes",
+      "fn": "yaml_plain_type",
+      "args": [
+        "yes"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "bool",
+        "text": "True"
+      }
+    },
+    {
+      "name": "plain/No",
+      "fn": "yaml_plain_type",
+      "args": [
+        "No"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "bool",
+        "text": "False"
+      }
+    },
+    {
+      "name": "plain/ON",
+      "fn": "yaml_plain_type",
+      "args": [
+        "ON"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "bool",
+        "text": "True"
+      }
+    },
+    {
+      "name": "plain/true",
+      "fn": "yaml_plain_type",
+      "args": [
+        "true"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "bool",
+        "text": "True"
+      }
+    },
+    {
+      "name": "plain/~",
+      "fn": "yaml_plain_type",
+      "args": [
+        "~"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "null",
+        "text": ""
+      }
+    },
+    {
+      "name": "plain/null",
+      "fn": "yaml_plain_type",
+      "args": [
+        "null"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "null",
+        "text": ""
+      }
+    },
+    {
+      "name": "plain/empty",
+      "fn": "yaml_plain_type",
+      "args": [
+        ""
+      ],
+      "expect": {
+        "api": 1,
+        "type": "null",
+        "text": ""
+      }
+    },
+    {
+      "name": "plain/0",
+      "fn": "yaml_plain_type",
+      "args": [
+        "0"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "int",
+        "text": "0"
+      }
+    },
+    {
+      "name": "plain/0755",
+      "fn": "yaml_plain_type",
+      "args": [
+        "0755"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "int",
+        "text": "493"
+      }
+    },
+    {
+      "name": "plain/0o17",
+      "fn": "yaml_plain_type",
+      "args": [
+        "0o17"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "string",
+        "text": "0o17"
+      }
+    },
+    {
+      "name": "plain/0x1F",
+      "fn": "yaml_plain_type",
+      "args": [
+        "0x1F"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "int",
+        "text": "31"
+      }
+    },
+    {
+      "name": "plain/0b101",
+      "fn": "yaml_plain_type",
+      "args": [
+        "0b101"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "int",
+        "text": "5"
+      }
+    },
+    {
+      "name": "plain/1_000",
+      "fn": "yaml_plain_type",
+      "args": [
+        "1_000"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "int",
+        "text": "1000"
+      }
+    },
+    {
+      "name": "plain/+12",
+      "fn": "yaml_plain_type",
+      "args": [
+        "+12"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "int",
+        "text": "12"
+      }
+    },
+    {
+      "name": "plain/-0",
+      "fn": "yaml_plain_type",
+      "args": [
+        "-0"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "int",
+        "text": "0"
+      }
+    },
+    {
+      "name": "plain/1:30",
+      "fn": "yaml_plain_type",
+      "args": [
+        "1:30"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "int",
+        "text": "90"
+      }
+    },
+    {
+      "name": "plain/190:20:30",
+      "fn": "yaml_plain_type",
+      "args": [
+        "190:20:30"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "int",
+        "text": "685230"
+      }
+    },
+    {
+      "name": "plain/1.5",
+      "fn": "yaml_plain_type",
+      "args": [
+        "1.5"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "float",
+        "text": "1.5"
+      }
+    },
+    {
+      "name": "plain/1e3",
+      "fn": "yaml_plain_type",
+      "args": [
+        "1e3"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "string",
+        "text": "1e3"
+      }
+    },
+    {
+      "name": "plain/1.0e+3",
+      "fn": "yaml_plain_type",
+      "args": [
+        "1.0e+3"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "float",
+        "text": "1000.0"
+      }
+    },
+    {
+      "name": "plain/-.inf",
+      "fn": "yaml_plain_type",
+      "args": [
+        "-.inf"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "float",
+        "text": "-inf"
+      }
+    },
+    {
+      "name": "plain/.NaN",
+      "fn": "yaml_plain_type",
+      "args": [
+        ".NaN"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "float",
+        "text": "nan"
+      }
+    },
+    {
+      "name": "plain/1:30.5",
+      "fn": "yaml_plain_type",
+      "args": [
+        "1:30.5"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "float",
+        "text": "90.5"
+      }
+    },
+    {
+      "name": "plain/2026-11-04",
+      "fn": "yaml_plain_type",
+      "args": [
+        "2026-11-04"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "date",
+        "text": "2026-11-04"
+      }
+    },
+    {
+      "name": "plain/2026-1-4 1:02:03",
+      "fn": "yaml_plain_type",
+      "args": [
+        "2026-1-4 1:02:03"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "date",
+        "text": "2026-1-4 1:02:03"
+      }
+    },
+    {
+      "name": "plain/2026-02-30",
+      "fn": "yaml_plain_type",
+      "args": [
+        "2026-02-30"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "date",
+        "text": "2026-02-30"
+      }
+    },
+    {
+      "name": "plain/=",
+      "fn": "yaml_plain_type",
+      "args": [
+        "="
+      ],
+      "expect": {
+        "api": 1,
+        "type": "special",
+        "text": "="
+      }
+    },
+    {
+      "name": "plain/<<",
+      "fn": "yaml_plain_type",
+      "args": [
+        "<<"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "special",
+        "text": "<<"
+      }
+    },
+    {
+      "name": "plain/0x_",
+      "fn": "yaml_plain_type",
+      "args": [
+        "0x_"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "int",
+        "text": null
+      }
+    },
+    {
+      "name": "plain/abc",
+      "fn": "yaml_plain_type",
+      "args": [
+        "abc"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "string",
+        "text": "abc"
+      }
+    },
+    {
+      "name": "plain/3.",
+      "fn": "yaml_plain_type",
+      "args": [
+        "3."
+      ],
+      "expect": {
+        "api": 1,
+        "type": "float",
+        "text": "3.0"
+      }
+    },
+    {
+      "name": "plain/-.5",
+      "fn": "yaml_plain_type",
+      "args": [
+        "-.5"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "string",
+        "text": "-.5"
+      }
+    },
+    {
+      "name": "plain/12e-3",
+      "fn": "yaml_plain_type",
+      "args": [
+        "12e-3"
+      ],
+      "expect": {
+        "api": 1,
+        "type": "string",
+        "text": "12e-3"
+      }
+    },
+    {
+      "name": "constants",
+      "fn": "schema_constants",
+      "args": [],
+      "expect": {
+        "api": 1,
+        "aiperf": {
+          "INT_KEYS": [
+            [
+              "concurrency",
+              1,
+              64,
+              true
+            ],
+            [
+              "requests",
+              1,
+              2000,
+              true
+            ],
+            [
+              "isl",
+              1,
+              32768,
+              true
+            ],
+            [
+              "osl",
+              1,
+              4096,
+              true
+            ],
+            [
+              "warmup_requests",
+              0,
+              100,
+              false
+            ],
+            [
+              "timeout_s",
+              1,
+              600,
+              false
+            ],
+            [
+              "seed",
+              0,
+              2147483647,
+              false
+            ]
+          ],
+          "ENDPOINT_TYPES": [
+            "chat",
+            "completions"
+          ],
+          "MAX_PROFILES": 32
+        },
+        "modelopt": {
+          "METHODS": [
+            "reap",
+            "quantize",
+            "minitron"
+          ],
+          "RECIPE_KEYS": [
+            "method",
+            "base_model",
+            "output",
+            "description",
+            "preset",
+            "sparsity",
+            "config"
+          ],
+          "MAX_RECIPES": 64
+        },
+        "evaluator": {
+          "SUPPORTED": [
+            "drop",
+            "gsm8k",
+            "math500",
+            "mmlu",
+            "mmlu_pro",
+            "triviaqa"
+          ],
+          "REFUSED": {
+            "humaneval": "needs a Docker sandbox to execute generated code",
+            "pinchbench": "needs a Docker sandbox",
+            "terminal-bench-hard": "needs a Docker sandbox",
+            "terminal-bench-hard-aa-split": "needs a Docker sandbox",
+            "terminal-bench-v1": "needs a Docker sandbox",
+            "nmp_harbor": "needs a Docker sandbox",
+            "simpleqa": "needs an LLM judge",
+            "healthbench": "needs an LLM judge",
+            "xstest": "needs an LLM judge and downloads its CSV from github.com at run time",
+            "gpqa": "the dataset is gated on Hugging Face (needs an access token)",
+            "mgsm": "its dataset loader runs remote code (trust_remote_code)"
+          },
+          "SUITE_KEYS": [
+            "description",
+            "model",
+            "benchmarks"
+          ],
+          "RUN_KEYS": [
+            "bench",
+            "max_problems",
+            "max_tokens",
+            "temperature",
+            "repeats"
+          ],
+          "MAX_SUITES": 20,
+          "MAX_BENCHES": 8,
+          "MAX_PROBLEMS": 5000,
+          "MAX_WORK": 20000
+        }
+      }
+    },
+    {
+      "name": "roundtrip/yaml-int",
+      "fn": "roundtrip",
+      "args": [
+        "yaml",
+        "a: 1\nb: x\n",
+        "a: 2\nb: x\n",
+        "[\"a\"]",
+        "{\"type\": \"int\", \"value\": \"2\"}"
+      ],
+      "expect": {
+        "api": 1,
+        "ok": true,
+        "problem": null,
+        "got": "the whole number 2"
+      }
+    },
+    {
+      "name": "roundtrip/yaml-yes",
+      "fn": "roundtrip",
+      "args": [
+        "yaml",
+        "a: 1\nb: x\n",
+        "a: 1\nb: yes\n",
+        "[\"b\"]",
+        "{\"type\": \"string\", \"value\": \"yes\"}"
+      ],
+      "expect": {
+        "api": 1,
+        "ok": false,
+        "problem": "it reads back as true, not as typed",
+        "got": "true"
+      }
+    },
+    {
+      "name": "roundtrip/yaml-other",
+      "fn": "roundtrip",
+      "args": [
+        "yaml",
+        "a: 1\nb: x\n",
+        "a: 3\nb: y\n",
+        "[\"a\"]",
+        "{\"type\": \"int\", \"value\": \"3\"}"
+      ],
+      "expect": {
+        "api": 1,
+        "ok": false,
+        "problem": "another value of the file changed too",
+        "got": "the whole number 3"
+      }
+    },
+    {
+      "name": "roundtrip/yaml-dup",
+      "fn": "roundtrip",
+      "args": [
+        "yaml",
+        "a: 1\na: 2\n",
+        "a: 5\na: 2\n",
+        "[\"a\"]",
+        "{\"type\": \"int\", \"value\": \"5\"}"
+      ],
+      "expect": {
+        "api": 1,
+        "ok": false,
+        "problem": "it reads back as the whole number 2, not as typed",
+        "got": "the whole number 2"
+      }
+    },
+    {
+      "name": "roundtrip/yaml-date-bad",
+      "fn": "roundtrip",
+      "args": [
+        "yaml",
+        "d: 2026-01-01\n",
+        "d: 2026-02-30\n",
+        "[\"d\"]",
+        "{\"type\": \"date\", \"value\": \"2026-02-30\"}"
+      ],
+      "expect": {
+        "api": 1,
+        "ok": false,
+        "problem": "the file would no longer load (YAML: day is out of range for month)",
+        "got": null
+      }
+    },
+    {
+      "name": "roundtrip/yaml-list",
+      "fn": "roundtrip",
+      "args": [
+        "yaml",
+        "l:\n  - 1\n  - 2\n",
+        "l:\n  - 1\n  - 3\n",
+        "[\"l\", 1]",
+        "{\"type\": \"int\", \"value\": \"3\"}"
+      ],
+      "expect": {
+        "api": 1,
+        "ok": true,
+        "problem": null,
+        "got": "the whole number 3"
+      }
+    },
+    {
+      "name": "roundtrip/yaml-float",
+      "fn": "roundtrip",
+      "args": [
+        "yaml",
+        "f: 0.5\n",
+        "f: 1500.0\n",
+        "[\"f\"]",
+        "{\"type\": \"float\", \"value\": \"1.5e3\"}"
+      ],
+      "expect": {
+        "api": 1,
+        "ok": true,
+        "problem": null,
+        "got": "the number 1500.0"
+      }
+    },
+    {
+      "name": "roundtrip/toml-number",
+      "fn": "roundtrip",
+      "args": [
+        "toml",
+        "[x]\nn = 1\n",
+        "[x]\nn = 1.5\n",
+        "[\"x\", \"n\"]",
+        "{\"type\": \"number\", \"value\": \"1.5\"}"
+      ],
+      "expect": {
+        "api": 1,
+        "ok": true,
+        "problem": null,
+        "got": "the number 1.5"
+      }
+    },
+    {
+      "name": "roundtrip/toml-broken",
+      "fn": "roundtrip",
+      "args": [
+        "toml",
+        "n = 1\n",
+        "n = \n",
+        "[\"n\"]",
+        "{\"type\": \"int\", \"value\": \"1\"}"
+      ],
+      "expect": {
+        "api": 1,
+        "ok": false,
+        "problem": "the file would no longer load (TOML syntax: Invalid value (at line 1, column 5))",
+        "got": null
+      }
+    },
+    {
+      "name": "roundtrip/toml-string",
+      "fn": "roundtrip",
+      "args": [
+        "toml",
+        "s = \"a\"\n",
+        "s = \"b\\\"c\"\n",
+        "[\"s\"]",
+        "{\"type\": \"string\", \"value\": \"b\\\"c\"}"
+      ],
+      "expect": {
+        "api": 1,
+        "ok": true,
+        "problem": null,
+        "got": "the text 'b\"c'"
+      }
+    },
+    {
+      "name": "roundtrip/toml-aot",
+      "fn": "roundtrip",
+      "args": [
+        "toml",
+        "[[t]]\nn = 1\n[[t]]\nn = 2\n",
+        "[[t]]\nn = 1\n[[t]]\nn = 9\n",
+        "[\"t\", 1, \"n\"]",
+        "{\"type\": \"int\", \"value\": \"9\"}"
+      ],
+      "expect": {
+        "api": 1,
+        "ok": true,
+        "problem": null,
+        "got": "the whole number 9"
+      }
+    },
+    {
+      "name": "roundtrip/bad-path",
+      "fn": "roundtrip",
+      "args": [
+        "yaml",
+        "a: 1\n",
+        "a: 2\n",
+        "[\"zz\"]",
+        "{\"type\": \"int\", \"value\": \"2\"}"
+      ],
+      "expect": {
+        "api": 1,
+        "ok": false,
+        "problem": "the edited value is not where the Form wrote it",
+        "got": null
+      }
+    },
+    {
+      "name": "roundtrip/yaml-untouched-nan",
+      "fn": "roundtrip",
+      "args": [
+        "yaml",
+        "a: 1\nb: .nan\n",
+        "a: 2\nb: .nan\n",
+        "[\"a\"]",
+        "{\"type\":\"int\",\"value\":\"2\"}"
+      ],
+      "expect": {
+        "api": 1,
+        "ok": true,
+        "problem": null,
+        "got": "the whole number 2"
+      }
+    },
+    {
+      "name": "roundtrip/toml-untouched-nan",
+      "fn": "roundtrip",
+      "args": [
+        "toml",
+        "a = 1\nb = nan\n",
+        "a = 2\nb = nan\n",
+        "[\"a\"]",
+        "{\"type\":\"int\",\"value\":\"2\"}"
+      ],
+      "expect": {
+        "api": 1,
+        "ok": true,
+        "problem": null,
+        "got": "the whole number 2"
+      }
+    },
+    {
+      "name": "constructor/guardrails-impossible-date",
+      "fn": "check",
+      "args": [
+        "guardrails",
+        "lab-input-output--config.yml",
+        "yaml"
+      ],
+      "text": "models: []\na: 2026-02-30\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "the backend's validator stops with ValueError: day is out of range for month",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "constructor/guardrails-int-tag",
+      "fn": "check",
+      "args": [
+        "guardrails",
+        "lab-input-output--config.yml",
+        "yaml"
+      ],
+      "text": "models: []\na: !!int x\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "the backend's validator stops with ValueError: invalid literal for int() with base 10: 'x'",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "constructor/guardrails-python-tag",
+      "fn": "check",
+      "args": [
+        "guardrails",
+        "lab-input-output--config.yml",
+        "yaml"
+      ],
+      "text": "models: []\na: !!python/object:os.system x\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 2,
+            "message": "YAML syntax: could not determine a constructor for the tag 'tag:yaml.org,2002:python/object:os.system'",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "constructor/guardrails-unhashable-key",
+      "fn": "check",
+      "args": [
+        "guardrails",
+        "lab-input-output--config.yml",
+        "yaml"
+      ],
+      "text": "models: []\n? [a, b]\n: 1\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 2,
+            "message": "YAML syntax: while constructing a mapping",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "syntax/guardrails-yaml",
+      "fn": "check",
+      "args": [
+        "guardrails",
+        "lab-input-output--config.yml",
+        "yaml"
+      ],
+      "text": "models: [\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": 2,
+            "message": "YAML syntax: while parsing a flow node",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "syntax/flare-yaml",
+      "fn": "check",
+      "args": [
+        "flare",
+        "compose",
+        "yaml"
+      ],
+      "text": "services: [\n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "YAML syntax error: while parsing a flow node\nexpected the node content, but found '<stream end>'\n  in \"<unicode string>\", line 2, column 1:\n    \n    ^",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "syntax/openshell-toml",
+      "fn": "check",
+      "args": [
+        "openshell",
+        "gateway",
+        "toml"
+      ],
+      "text": "a = \n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "TOML syntax error: Invalid value (at line 1, column 5)",
+            "source": "syntax"
+          }
+        ]
+      }
+    },
+    {
+      "name": "syntax/relay-plugins-toml",
+      "fn": "check",
+      "args": [
+        "relay",
+        "plugins",
+        "toml"
+      ],
+      "text": "a = \n",
+      "expect": {
+        "api": 1,
+        "schema": null,
+        "server_adds": [],
+        "syntax": "error",
+        "diagnostics": [
+          {
+            "severity": "error",
+            "line": null,
+            "message": "TOML syntax error: Invalid value (at line 1, column 5)",
+            "source": "syntax"
+          }
+        ]
+      }
+    }
+  ]
+}

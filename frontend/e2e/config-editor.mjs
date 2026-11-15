@@ -3,25 +3,30 @@
 // run.mjs (closed upstream ports, empty PATH, throwaway HOME), but with a repo root that holds four config files
 // (the dev mock copies: AIPerf profiles, Model Optimizer recipes, Evaluator suites, Switchyard routes):
 //
-//  1. Mirror: the browser's live checks (js/cfg-checks.js) must agree with the backend's validator about whether a
-//     draft has errors, on seeded random mutations of each file (values swapped for out-of-range numbers, wrong
-//     types, unknown names; keys renamed; lines deleted or duplicated). The browser rules copy the backend's; this
-//     fails the gate when one side changes without the other. For Switchyard the dry-run needs docker (not on the
-//     hermetic PATH), so only its semantic diagnostics are compared.
-//  2. Browser: the AIPerf Config tab in headless Chrome: the Form view renders, a value out of range is flagged on
-//     its field and in Edit checks, a value of the wrong type is refused (never written), the Text view marks the
-//     line, the server check runs, and an unsaved draft survives leaving the page and coming back.
+//  1. Same verdicts: since ADR-0022 the browser's live checks ARE the backend's validators (compiled to WebAssembly,
+//     js/wasm/ from `make wasm`), so on seeded random mutations of each file (values swapped for out-of-range numbers,
+//     wrong types, unknown names; keys renamed; lines deleted or duplicated) the WebAssembly answer, run here in Node,
+//     must equal the server's validate route exactly: every diagnostic's severity, line and text, and a refused
+//     secret with the server's own 422 message. The vectors (tests/cfg-wasm.test.mjs) prove the build matches the
+//     native code; this proves the server route composes it the same way. For Switchyard the dry-run needs docker
+//     (not on the hermetic PATH), so its "could not run" line is left out.
+//  2. Browser: the AIPerf Config tab in headless Chrome: the WebAssembly checks load under the real CSP (no CSP
+//     violation, no console error), the Form view renders, a value out of range is flagged on its field and in Edit
+//     checks, a value of the wrong type is refused (never written), the Text view marks the line, the server check
+//     runs, `token: abc"defghijk` is flagged with the server's own refusal text, a Form edit that would not read back
+//     as typed (a date PyYAML cannot build) is refused and never written, and an unsaved draft survives leaving the
+//     page and coming back.
 //
 //   cd frontend && node e2e/config-editor.mjs     (needs the built backend and a Chrome, like run.mjs)
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { startBackend, startChrome, Cdp } from './run.mjs';
 import { SEVEN_FILES } from '../dev/mock-seven.mjs';
-import { SWITCHYARD_ROUTES } from '../dev/mock-data.mjs';
-import { checkConfig } from '../js/cfg-checks.js';
+import { SWITCHYARD_ROUTES, RELAY_ROUTES } from '../dev/mock-data.mjs';
 import { parseConfig } from '../js/cfg-parse.js';
 import { spliceValue, flattenFields } from '../js/cfg-edit.js';
+import { loadWasm, wasmCheck } from '../js/cfg-wasm.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const MUTATIONS = Number(process.env.E2E_MIRROR_N || 150);
@@ -30,6 +35,9 @@ const FILES = [
   { system: 'modelopt', file: 'recipes', format: 'yaml', rel: 'clients/modelopt/recipes.yaml', text: SEVEN_FILES['modelopt/recipes'] },
   { system: 'evaluator', file: 'suites.yaml', format: 'yaml', rel: 'clients/nemo-evaluator/suites.yaml', text: SEVEN_FILES['evaluator/suites.yaml'] },
   { system: 'switchyard', file: 'routes', format: 'toml', rel: 'inference/switchyard/routes.toml', text: SWITCHYARD_ROUTES },
+  { system: 'relay', file: 'routes', format: 'toml', rel: 'clients/nemo-relay/routes.toml', text: RELAY_ROUTES },
+  // a file with no schema: only the loader decides (Flare's validator is PyYAML safe_load, constructors included)
+  { system: 'flare', file: 'compose', format: 'yaml', rel: 'inference/flare/docker-compose.yml', text: SEVEN_FILES['flare/compose'] },
 ];
 const YAML_VALUES = [
   '0',
@@ -78,6 +86,9 @@ const YAML_VALUES = [
   '"quoted"',
   'Bad-Name',
   'yes',
+  '2026-02-30', // the resolver says date, the constructor refuses it: the server answers 500
+  '!!int x',
+  '!!python/object:os.system x',
 ];
 const TOML_VALUES = [
   '"lightning"',
@@ -100,6 +111,7 @@ const TOML_VALUES = [
 ];
 // Diagnostics that come from a CLI the hermetic run cannot start (no docker on PATH), not from the file.
 const NOT_THE_FILE = /could not run the authoritative dry-run|not found on PATH/;
+const SECRET_LINE = 'token: abc"defghijk';
 
 function mutate(f, rnd) {
   let text = f.text;
@@ -141,38 +153,42 @@ async function mirror(backend) {
       return seed / 2147483648;
     };
     let agree = 0;
+    const seen = { 422: 0, 500: 0, syntax: 0 }; // what the corpus exercised, printed with the count
     for (let m = 0; m < MUTATIONS; m++) {
       const text = m === 0 ? f.text : mutate(f, rnd);
-      const r = await fetch(`${backend.base}/api/v1/systems/${f.system}/config/${f.file}/validate`, { method: 'POST', headers: H, body: JSON.stringify({ content: text }) });
-      if (!r.ok) {
+      // every third mutation also carries a secret the save path refuses (the server answers 422 before validating)
+      const draft = m % 3 === 2 ? `${text}\n# ${SECRET_LINE}\n` : text;
+      const r = await fetch(`${backend.base}/api/v1/systems/${f.system}/config/${f.file}/validate`, { method: 'POST', headers: H, body: JSON.stringify({ content: draft }) });
+      const w = wasmCheck(f.system, f.file, f.format, draft);
+      if (!w) {
+        failures.push(`${f.system}: the WebAssembly checks are not loaded`);
+        break;
+      }
+      const mine = (src) => w.diagnostics.filter((d) => src.includes(d.source));
+      let server, browser;
+      if (w.syntax === 'error') seen.syntax++;
+      if (r.status === 422 || r.status === 500) seen[r.status]++;
+      if (r.status === 422) {
+        const e = (await r.json()).error;
+        server = [`${e.code}: ${e.message}`];
+        browser = mine(['secret', 'content']).map((d) => `${d.source === 'secret' ? 'secret_in_content' : 'invalid_content'}: ${d.message}`);
+      } else if (r.ok) {
+        const v = await r.json();
+        server = v.diagnostics.filter((d) => !NOT_THE_FILE.test(d.message)).map((d) => `${d.severity}:${d.line ?? '-'}:${d.message}`);
+        browser = [...mine(['secret', 'content']).map(() => 'refused'), ...mine(['schema', 'syntax']).map((d) => `${d.severity}:${d.line ?? '-'}:${d.message}`)];
+      } else if (r.status === 500) {
+        // an exception the server's validator does not catch (a ValueError for 2026-02-30): the browser names it
+        await r.text();
+        server = ['500 internal_error'];
+        browser = mine(['schema', 'syntax']).map((d) => (/^the backend's validator stops with /.test(d.message) ? '500 internal_error' : `${d.severity}:${d.line ?? '-'}:${d.message}`));
+      } else {
         failures.push(`${f.system}: validate answered ${r.status}`);
         break;
       }
-      const v = await r.json();
-      const server = v.diagnostics.filter((d) => d.severity === 'error' && !NOT_THE_FILE.test(d.message));
-      const serverErr = server.length > 0 || (!v.ok && f.system !== 'switchyard');
-      const browser = checkConfig({ system: f.system, file: f.file, format: f.format, text }).diagnostics.filter((d) => d.severity === 'error');
-      if (serverErr === browser.length > 0) agree++;
-      else if (failures.length < 12)
-        failures.push(
-          `${f.system} mutation ${m}: server ${
-            serverErr
-              ? `errors (${server
-                  .map((d) => d.message)
-                  .join('; ')
-                  .slice(0, 160)})`
-              : 'passes'
-          }, browser ${
-            browser.length
-              ? `errors (${browser
-                  .map((d) => d.message)
-                  .join('; ')
-                  .slice(0, 160)})`
-              : 'passes'
-          }`,
-        );
+      if (JSON.stringify(server) === JSON.stringify(browser)) agree++;
+      else if (failures.length < 12) failures.push(`${f.system} mutation ${m}: server ${JSON.stringify(server).slice(0, 300)} browser ${JSON.stringify(browser).slice(0, 300)}`);
     }
-    counts.push(`${f.system} ${agree}/${MUTATIONS}`);
+    counts.push(`${f.system} ${agree}/${MUTATIONS} (${seen.syntax} not loading, ${seen[500]} answered 500, ${seen[422]} refused 422)`);
   }
   return { failures, summary: counts.join(', ') };
 }
@@ -185,11 +201,13 @@ async function browser(backend, profile) {
     const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' });
     const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
     const s = (m, p) => cdp.send(m, p, sessionId);
-    await Promise.all([s('Page.enable'), s('Runtime.enable')]);
+    await Promise.all([s('Page.enable'), s('Runtime.enable'), s('Log.enable')]);
     let signedIn = false;
     cdp.on((m) => {
       if (m.sessionId !== sessionId || !signedIn) return;
       if (m.method === 'Runtime.exceptionThrown') failures.push(`uncaught exception: ${m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text}`);
+      // a CSP violation (e.g. WebAssembly compilation refused) arrives as a browser log entry, not a console call
+      if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error' && m.params.entry.source !== 'network') failures.push(`browser log: ${m.params.entry.text.slice(0, 200)}`);
       if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error')
         failures.push(
           `console.error: ${m.params.args
@@ -228,6 +246,7 @@ async function browser(backend, profile) {
       return failures;
     }
     expect(await ev(`document.querySelector('[data-view=form]').getAttribute('aria-pressed') === 'true'`), 'Form is not the default view for a YAML file');
+    expect(await ev(`document.querySelector('.chk-summary').dataset.live === 'ok'`), 'the WebAssembly live checks did not load in Chrome');
     expect(
       await ev(`/syntax OK/.test(document.querySelector('.chk-summary').innerText) && /no problems/.test(document.querySelector('.chk-summary').innerText)`),
       'the unchanged file does not report "syntax OK, no problems"',
@@ -261,6 +280,38 @@ async function browser(backend, profile) {
     expect(await ev(`[...document.querySelectorAll('.code-gutter .gl.err')].length >= 1`), 'the Text view gutter does not mark the line');
     await ev(`[...document.querySelectorAll('.cfg-toolbar button')].find((b) => b.textContent === 'Check').click(); true`);
     await until(`/Validation failed/.test(document.querySelector('.chk-server').innerText)`, 'the server check to fail on concurrency 100');
+    // The secret the old JS copy let through: the editor flags it with the server's own refusal text.
+    // setDraft: replace the Text view's draft with an expression of `a.value`; every literal goes in as JSON
+    const setDraft = (expr) => ev(`(() => { const a = document.querySelector('textarea.code-edit'); a.value = ${expr}; a.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+    const lit = (s) => JSON.stringify(s);
+    await setDraft(`a.value + ${lit(`${SECRET_LINE}\n`)}`);
+    const draft = await ev(`document.querySelector('textarea.code-edit').value`);
+    const refused = await fetch(`${backend.base}/api/v1/systems/aiperf/config/profiles/validate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${backend.key}`, 'X-Console': '1', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: draft }),
+    });
+    const said = refused.status === 422 ? (await refused.json()).error.message : `(server answered ${refused.status})`;
+    expect(refused.status === 422, `the server did not refuse the secret line (${refused.status})`);
+    await until(`document.querySelector('.chk-list').innerText.includes(${JSON.stringify(said)})`, `the editor to flag the secret with the server's text "${said}"`);
+    await setDraft(`a.value.replace(${lit(`${SECRET_LINE}\n`)}, '')`);
+    // A Form edit the real loader would not read back as typed: PyYAML resolves 2026-02-30 as a date and then cannot
+    // build it. The edit is refused with the reason, and the draft keeps the old value.
+    await setDraft(`a.value.replace(${lit('  chat-short:\n')}, ${lit('  chat-short:\n    started: 2026-01-01\n')})`);
+    await sleep(300);
+    await ev(`document.querySelector('[data-view=form]').click(); true`);
+    const started = JSON.stringify(JSON.stringify(['profiles', 'chat-short', 'started']));
+    if (await until(`document.querySelector('.ff[data-path=' + JSON.stringify(${started}) + '] input')`, 'the Form field of the new date value')) {
+      await ev(
+        `(() => { const i = document.querySelector('.ff[data-path=' + JSON.stringify(${started}) + '] input'); i.value = '2026-02-30'; i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`,
+      );
+      await until(
+        `(() => { const r = document.querySelector('.ff[data-path=' + JSON.stringify(${started}) + ']'); return r.classList.contains('bad-input') && /would not read it back as typed/.test(r.innerText) && /day is out of range/.test(r.innerText); })()`,
+        'the Form to refuse a date PyYAML cannot read back, with the reason',
+      );
+      await ev(`document.querySelector('[data-view=text]').click(); true`);
+      await until(`/started: 2026-01-01/.test(document.querySelector('textarea.code-edit').value)`, 'the refused date to stay out of the draft');
+    }
     await ev(`location.hash = '#/overview'; true`);
     await sleep(800); // in-app navigation: the editor is disposed
     await ev(`location.hash = '#/aiperf?tab=config'; true`);
@@ -282,6 +333,8 @@ export async function main() {
     failures = [],
     summary = '';
   try {
+    const wasm = await loadWasm({ bytes: readFileSync(new URL('../js/wasm/nemo_console_wasm_bg.wasm', import.meta.url)) });
+    if (wasm.state !== 'ready') throw new Error(`the WebAssembly checks did not load (run \`make wasm\`): ${wasm.error}`);
     backend = await startBackend(tmp);
     const m = await mirror(backend);
     summary = m.summary;
@@ -303,7 +356,9 @@ export async function main() {
     if (backend) console.error(`backend log tail:\n${backend.log().slice(-1200)}`);
     return 1;
   }
-  console.log(`e2e config editor: browser checks agree with the backend validators (${summary}); Form, Text, checks, info pop-ups and draft restore work in Chrome`);
+  console.log(
+    `e2e config editor: the WebAssembly checks give the server's exact answers (${summary}); in Chrome they load under the CSP, flag the secret with the server's text, refuse a Form edit that would not read back, and Form, Text, info pop-ups and draft restore work`,
+  );
   return 0;
 }
 

@@ -111,13 +111,8 @@ impl Health {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Severity {
-    Info,
-    Warn,
-    Error,
-}
+/// Defined in `nemo-console-core` (ADR-0022: the browser runs the same validators); same JSON, contract v1.
+pub use nemo_console_core::diagnostics::{Diagnostic, Severity};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -276,13 +271,6 @@ pub struct ConfigFile {
     pub content: String,
     pub sha256: String,
     pub mtime: f64,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Diagnostic {
-    pub severity: Severity,
-    pub message: String,
-    pub line: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

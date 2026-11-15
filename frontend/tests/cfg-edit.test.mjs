@@ -3,7 +3,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseConfig, entryOf } from '../js/cfg-parse.js';
-import { encodeValue, spliceValue, spliceBlock, displayValue, flattenFields, yamlPlainSafe, pathKey } from '../js/cfg-edit.js';
+import { encodeValue, spliceValue, spliceBlock, displayValue, flattenFields, yamlPlainSafe, pathKey, verifyEdit } from '../js/cfg-edit.js';
+import { wasmReady } from './wasm-ready.mjs';
+
+await wasmReady();
 
 const nodeAt = (fmt, text, path) => path.reduce((n, k) => (typeof k === 'number' ? n.items[k] : entryOf(n, k).node), parseConfig(fmt, text).root);
 /** Edit one value and read the file back with the same parser: the new value, and every other value untouched. */
@@ -96,4 +99,20 @@ test('0.9.0 audit: values PyYAML would read differently are escaped, refused or 
   assert.match(edit('yaml', 'a: 0.5\n', ['a'], '-.').error, /not a number/); // a half-typed number is not -0.
   assert.match(edit('yaml', 'p: |\n  x\nz: 1\n', ['p'], '  indented\nnot').error, /first line/);
   assert.equal(edit('yaml', 'p: |\n  x\nz: 1\n', ['p'], '\nfirst\n  second').node.value, '\nfirst\n  second\n');
+});
+
+test('verifyEdit: the real loaders read the edit back (ADR-0022 stage 2)', () => {
+  const v = (fmt, text, path, input, spec) => {
+    const n = nodeAt(fmt, text, path);
+    const enc = encodeValue(fmt, n, input, spec);
+    const out = enc.block !== undefined ? spliceBlock(text, n, enc.block) : spliceValue(text, n, enc.raw);
+    return verifyEdit(fmt, text, out, path, n, input, spec, enc);
+  };
+  assert.deepEqual(v('yaml', 'a: 1\nb: x\n', ['a'], '7'), { ok: true });
+  assert.deepEqual(v('yaml', 'a: 1\nb: x\n', ['b'], 'yes'), { ok: true }); // written quoted, read back as text
+  assert.deepEqual(v('toml', '[t]\nn = 1.5\n', ['t', 'n'], '2'), { ok: true }); // a float field keeps its type: 2.0
+  assert.deepEqual(v('yaml', 'f: 0.5\n', ['f'], '-.5'), { ok: true }); // written -0.5
+  // a date PyYAML's resolver accepts but its constructor refuses: refused, never written
+  const bad = v('yaml', 'd: 2026-01-01\n', ['d'], '2026-02-30');
+  assert.match(bad.error, /would not read it back as typed: the file would no longer load \(YAML: day is out of range for month\)/);
 });

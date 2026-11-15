@@ -1,8 +1,12 @@
-// cfg-parse.js: TOML 1.0 and the block-YAML subset. Expected values are what tomllib and PyYAML 6 load (checked by
-// hand against both when these cases were written; e2e/config-editor.mjs compares with the backend on every gate run).
+// cfg-parse.js: TOML 1.0 and the block-YAML subset that lay out the Form view. Expected values are what tomllib and
+// PyYAML 6 load; plain YAML values are typed by PyYAML's own resolver, run as WebAssembly (ADR-0022).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseConfig, parseToml, parseYaml, yamlPlainType, entryOf } from '../js/cfg-parse.js';
+import { parseConfig, parseToml, parseYaml, yamlPlainType, entryOf, NO_TYPING } from '../js/cfg-parse.js';
+import { _test, wasmState } from '../js/cfg-wasm.js';
+import { wasmReady } from './wasm-ready.mjs';
+
+await wasmReady();
 
 const val = (n) => (n.kind === 'map' ? Object.fromEntries(n.entries.map((e) => [e.key, val(e.node)])) : n.kind === 'seq' ? n.items.map(val) : n.value);
 const ok = (fmt, text) => {
@@ -109,6 +113,16 @@ test('YAML: plain scalars are typed the way PyYAML (YAML 1.1) types them', () =>
   assert.equal(T('.inf').value, Infinity);
   assert.equal(T('2026-11-04').type, 'date');
   assert.equal(T('v1.2').type, 'string');
+  assert.equal(T('=').type, 'special'); // PyYAML's value tag: the safe loader refuses it
+  assert.equal(T('-.5').type, 'string'); // no digit before the dot after a sign: text to PyYAML
+});
+
+test('YAML: without the WebAssembly resolver plain values cannot be typed, so the YAML Form stays off', async () => {
+  _test.breakInstance();
+  assert.equal(yamlPlainType('yes'), null);
+  assert.equal(parseYaml('a: 1\n').unsupported, NO_TYPING);
+  for (let i = 0; i < 50 && wasmState().state !== 'ready'; i++) await new Promise((r) => setTimeout(r, 20));
+  assert.equal(yamlPlainType('yes').type, 'bool');
 });
 
 test('YAML: warnings for duplicate keys (the last one wins) and for keys PyYAML reads as booleans', () => {

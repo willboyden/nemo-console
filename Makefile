@@ -1,8 +1,11 @@
 # Nemo Console developer tasks. Nothing here touches Docker or systemd; the only network use is cargo fetching crates,
 # the crate-age gate asking crates.io and `make setup` installing the pinned Prettier (npm ci, frontend/package-lock.json).
 # Backend: Rust (backend/, a Cargo workspace; the toolchain is pinned in backend/rust-toolchain.toml and rustup
-# installs it on first use). Frontend: plain ES modules, no build, zero runtime npm dependencies (Prettier, the only
-# devDependency, formats the code; nothing from npm is served or built into the binary).
+# installs it on first use). Frontend: plain ES modules, zero runtime npm dependencies (Prettier, the only
+# devDependency, formats the code; nothing from npm is served or built into the binary). One build step since
+# ADR-0022: `make wasm` compiles the backend's config validators (backend/crates/nemo-console-wasm) to WebAssembly
+# for the config editor, into frontend/js/wasm/ (generated, never committed). It needs the wasm32-unknown-unknown
+# target (rust-toolchain.toml installs it) and wasm-bindgen-cli at exactly the version backend/Cargo.toml pins.
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 BACKEND  := backend
@@ -10,27 +13,87 @@ FRONTEND := frontend
 CARGO    := cargo
 BIN      := $(BACKEND)/target/release/nemo-console
 PRETTIER := $(FRONTEND)/node_modules/.bin/prettier
+CARGO_HOME ?= $(HOME)/.cargo
+WASM_BINDGEN ?= wasm-bindgen
+# The size budget of the generated module (bytes, uncompressed). `make wasm` (and so frontend-test, the e2e gate and
+# CI) fails above it; `make build` / `make release` (and so run, install-desktop) only warn, so a module that grew
+# never keeps the console from building (ADR-0022).
+WASM_BUDGET := 1500000
+WASM_OVER_BUDGET := fail
+build release: WASM_OVER_BUDGET := warn
 
-.PHONY: help setup hooks build release run test lint typecheck deny audit crate-age frontend-test fmt fmt-check \
-        prettier-installed e2e parity all \
+# The WebAssembly module carries no path of the build machine (it is served to the browser): panic locations name
+# source files, so the rest of $(HOME) becomes ~, the cargo home /cargo, this checkout /build (rustc uses the LAST
+# matching prefix, so the longer ones come later). Cargo's trim-paths is not stable on the pinned toolchain.
+REMAP := --remap-path-prefix=$(HOME)=~ --remap-path-prefix=$(CARGO_HOME)=/cargo --remap-path-prefix=$(CURDIR)=/build
+
+.PHONY: help setup hooks build release run test lint typecheck typecheck-wasm deny audit crate-age frontend-test \
+        fmt fmt-check prettier-installed e2e parity wasm wasm-prereqs all \
         install-desktop uninstall-desktop
 
 help:  ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*## /\t/'
 
-setup:  ## build the backend (debug) from Cargo.lock; install the pinned Prettier (npm ci); enable the git hooks
+setup:  ## build the backend (debug) from Cargo.lock; install the pinned Prettier (npm ci); enable the git hooks; check the wasm tools
 	cd $(BACKEND) && $(CARGO) build --locked
 	cd $(FRONTEND) && npm ci --ignore-scripts --no-audit --no-fund
 	if git rev-parse --git-dir >/dev/null 2>&1; then $(MAKE) --no-print-directory hooks; fi
+	@$(MAKE) --no-print-directory wasm-prereqs
 
 hooks:  ## use the versioned git hooks in .githooks (pre-push refuses code without a recorded e2e pass)
 	git config core.hooksPath .githooks
 
-build:  ## debug build of the backend (what the e2e suite runs)
+build: wasm  ## debug build of the backend (what the e2e suite runs), plus the browser validators (`wasm`; over budget only warns)
 	cd $(BACKEND) && $(CARGO) build --locked
 
-release:  ## optimised build: backend/target/release/nemo-console (what `run`, install-desktop and the service use)
+release: wasm  ## optimised build: backend/target/release/nemo-console (what `run`, install-desktop and the service use), plus `wasm`
 	cd $(BACKEND) && $(CARGO) build --locked --release
+
+# What `make wasm` needs besides the pinned toolchain: the wasm32 target of that toolchain and the wasm-bindgen CLI at
+# exactly the crate's version (backend/Cargo.toml), or the generated glue does not fit the module. `make setup` runs it.
+wasm-prereqs:  ## check the wasm32 target and the wasm-bindgen CLI version; prints the command that fixes each
+	@want=$$(sed -n 's/^wasm-bindgen = "=\([0-9.]*\)".*/\1/p' $(BACKEND)/Cargo.toml); \
+	have=$$($(WASM_BINDGEN) --version 2>/dev/null | awk '{print $$2}') || have=; \
+	if [ -z "$$want" ] || [ "$$want" != "$$have" ]; then \
+	  echo "wasm: wasm-bindgen CLI '$${have:-missing}' must be exactly $$want: cargo install --locked wasm-bindgen-cli@$$want" >&2; \
+	  exit 1; \
+	fi; \
+	if command -v rustup >/dev/null 2>&1 && ! (cd $(BACKEND) && rustup target list --installed 2>/dev/null) | grep -qx wasm32-unknown-unknown; then \
+	  echo "wasm: the wasm32-unknown-unknown target is missing from the pinned toolchain: cd $(BACKEND) && rustup target add wasm32-unknown-unknown" >&2; \
+	  exit 1; \
+	fi
+
+# The config editor's live checks: the backend's own validators (nemo-console-core) compiled to WebAssembly. The
+# output goes to a staging directory first and replaces frontend/js/wasm/ only after it passed the build-path check
+# and the size budget. The module is read from cargo's own target directory (`cargo metadata`), so CARGO_TARGET_DIR
+# and a .cargo/config target-dir are honoured.
+wasm: wasm-prereqs  ## build the browser validators into frontend/js/wasm/ (generated; needs wasm-bindgen-cli, see README)
+	@cd $(BACKEND) && RUSTFLAGS="$(strip $(RUSTFLAGS) $(REMAP))" $(CARGO) build --locked -p nemo-console-wasm --lib \
+	  --target wasm32-unknown-unknown --profile release-wasm
+	@tdir=$$(cd $(BACKEND) && $(CARGO) metadata --format-version 1 --no-deps --offline \
+	  | python3 -I -c 'import json, sys; print(json.load(sys.stdin)["target_directory"])'); \
+	src="$$tdir/wasm32-unknown-unknown/release-wasm/nemo_console_wasm.wasm"; \
+	test -f "$$src" || { echo "wasm: $$src was not built" >&2; exit 1; }; \
+	rm -rf frontend/js/wasm.staging; \
+	$(WASM_BINDGEN) --target web --no-typescript --out-dir frontend/js/wasm.staging "$$src"; \
+	for f in frontend/js/wasm.staging/*; do \
+	  for p in "$(CURDIR)/" "$(HOME)/" "$(CARGO_HOME)/"; do \
+	    if grep -aqF "$$p" "$$f"; then echo "wasm: $$f contains the build path $$p" >&2; rm -rf frontend/js/wasm.staging; exit 1; fi; \
+	  done; \
+	done; \
+	size=$$(wc -c < frontend/js/wasm.staging/nemo_console_wasm_bg.wasm); \
+	gz=$$(gzip -9c frontend/js/wasm.staging/nemo_console_wasm_bg.wasm | wc -c); \
+	note="budget $(WASM_BUDGET)"; \
+	if [ "$$size" -gt $(WASM_BUDGET) ]; then \
+	  if [ "$(WASM_OVER_BUDGET)" = fail ]; then \
+	    echo "wasm: $$size bytes is over the $(WASM_BUDGET)-byte budget" >&2; rm -rf frontend/js/wasm.staging; exit 1; \
+	  fi; \
+	  echo "wasm: WARNING $$size bytes is over the $(WASM_BUDGET)-byte budget (make wasm, the tests and CI fail on it)" >&2; \
+	  note="OVER the $(WASM_BUDGET)-byte budget"; \
+	fi; \
+	rm -rf frontend/js/wasm; \
+	mv frontend/js/wasm.staging frontend/js/wasm; \
+	echo "wasm: frontend/js/wasm/nemo_console_wasm_bg.wasm $$size bytes ($$gz gzip -9), $$note, no build path inside"
 
 run: release  ## serve API + UI on 127.0.0.1:8793 (foreground)
 	$(BIN)
@@ -41,8 +104,11 @@ test:  ## backend tests (offline: fakes for every CLI and upstream; live smoke t
 lint:  ## rustfmt check
 	cd $(BACKEND) && $(CARGO) fmt --all --check
 
-typecheck:  ## clippy, warnings are errors (the workspace lints in backend/Cargo.toml)
+typecheck: typecheck-wasm  ## clippy, warnings are errors (the workspace lints in backend/Cargo.toml), native and wasm32
 	cd $(BACKEND) && $(CARGO) clippy --locked --workspace --all-targets -- -D warnings
+
+typecheck-wasm:  ## clippy on the two crates the browser build compiles, for wasm32-unknown-unknown
+	cd $(BACKEND) && $(CARGO) clippy --locked -p nemo-console-core -p nemo-console-wasm --target wasm32-unknown-unknown -- -D warnings
 
 deny:  ## licenses, bans, sources and advisories (cargo-deny, backend/deny.toml)
 	cd $(BACKEND) && $(CARGO) deny check
@@ -53,7 +119,7 @@ audit:  ## RustSec advisories for Cargo.lock (cargo-audit)
 crate-age:  ## dependency cooldown: every locked crate at least 14 days old, security fixes excepted
 	python3 -I $(BACKEND)/tools/crate-age.py
 
-frontend-test:  ## node --test on the pure-logic modules (no npm install needed)
+frontend-test: wasm  ## node --test on the pure-logic modules (no npm install; the live-check tests load the wasm)
 	cd $(FRONTEND) && node --test tests/*.test.mjs
 
 # Prettier formats code and JSON only (js, mjs, cjs, ts, tsx, css, html, json); Markdown, YAML, fixtures, goldens and

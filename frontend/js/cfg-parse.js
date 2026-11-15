@@ -7,10 +7,13 @@
 // Nodes:  scalar {kind:'scalar', type: string|int|float|bool|null|date, value, raw, start, end, line, style}
 //         map    {kind:'map', entries: [{key, line, node}], line, inline}
 //         seq    {kind:'seq', items: [node], line, inline}
-// The first syntax error stops the parse (as the real parsers do). The server's validator stays the authority: these
-// checks are early warnings. YAML features the subset does not model (anchors, aliases, tags, complex keys, several
-// documents, multi-line flow or quoted values) set `unsupported` instead of raising an error, so a valid file is
-// never reported as broken here.
+// The first syntax error stops the parse (as the real parsers do). These parsers only lay out the Form view: the
+// syntax verdict the editor shows comes from the real loaders (cfg-wasm.js), and the server stays the authority.
+// Plain YAML values are typed by PyYAML's own resolver through cfg-wasm.js; without it the YAML parse is unsupported.
+// YAML features the subset does not model (anchors, aliases, tags, complex keys, several documents, multi-line flow
+// or quoted values) set `unsupported` instead of raising an error, so a valid file is never reported as broken here.
+
+import { wasmPlainType } from './cfg-wasm.js';
 
 class SyntaxErr extends Error {
   constructor(pos, message) {
@@ -435,48 +438,32 @@ export function parseToml(text) {
 
 // ------------------------------------------------------------------------------------------------------------ YAML
 
-// PyYAML's (YAML 1.1) implicit types for plain scalars: what `yes`, `0755`, `1e3` and `2026-11-04` really load as.
-const Y_NULL = /^(?:~|null|Null|NULL|)$/;
-const Y_BOOL = /^(?:yes|Yes|YES|no|No|NO|true|True|TRUE|false|False|FALSE|on|On|ON|off|Off|OFF)$/;
-const Y_INT = /^(?:[-+]?0b[0-1_]+|[-+]?0[0-7_]+|[-+]?(?:0|[1-9][0-9_]*)|[-+]?0x[0-9a-fA-F_]+|[-+]?[1-9][0-9_]*(?::[0-5]?[0-9])+)$/;
-const Y_FLOAT = /^(?:[-+]?(?:[0-9][0-9_]*)\.[0-9_]*(?:[eE][-+][0-9]+)?|\.[0-9_]+(?:[eE][-+][0-9]+)?|[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\.[0-9_]*|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$/;
-const Y_DATE = /^(?:[0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:[Tt]|[ \t]+)[0-9]{1,2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]*)?(?:[ \t]*(?:Z|[-+][0-9]{1,2}(?::[0-9]{2})?))?)$/;
+// PyYAML's (YAML 1.1) implicit types for plain scalars (what `yes`, `0755`, `1e3` and `2026-11-04` really load as)
+// come from the backend's own resolver, compiled to WebAssembly (cfg-wasm.js, ADR-0022); there is no JS copy.
+/** Live checks are not loaded (or trapped): the YAML Form cannot type plain values, so it stays off. */
+export const NO_TYPING = 'live checks unavailable (the WebAssembly module did not load), so plain YAML values cannot be typed';
 
-/** How PyYAML types a plain (unquoted) scalar. */
+/** How PyYAML types a plain (unquoted) scalar: { type, value }, or null while the WebAssembly checks are unavailable. */
 export function yamlPlainType(s) {
-  if (Y_NULL.test(s)) return { type: 'null', value: null };
-  if (Y_BOOL.test(s)) return { type: 'bool', value: /^(?:yes|true|on)$/i.test(s) };
-  if (Y_INT.test(s)) {
-    const t = s.replace(/_/g, ''),
-      sign = t.startsWith('-') ? -1 : 1,
-      u = t.replace(/^[-+]/, '');
-    let v;
-    if (u.includes(':')) v = u.split(':').reduce((a, d) => a * 60 + Number(d), 0);
-    else if (u.startsWith('0x')) v = parseInt(u.slice(2), 16);
-    else if (u.startsWith('0b')) v = parseInt(u.slice(2), 2);
-    else if (u.length > 1 && u.startsWith('0')) v = parseInt(u, 8);
-    else v = Number(u);
-    return { type: 'int', value: sign * v };
+  const r = wasmPlainType(s);
+  if (!r) return null;
+  const x = r.text;
+  switch (r.type) {
+    case 'null':
+      return { type: 'null', value: null };
+    case 'bool':
+      return { type: 'bool', value: x === 'True' };
+    case 'int':
+      return { type: 'int', value: x == null ? NaN : Number(x) };
+    case 'float':
+      return { type: 'float', value: x === 'inf' ? Infinity : x === '-inf' ? -Infinity : x === 'nan' || x == null ? NaN : Number(x) };
+    case 'date':
+      return { type: 'date', value: s };
+    case 'string':
+      return { type: 'string', value: s };
+    default:
+      return { type: 'special', value: s }; // `=` and `<<`: tags the safe loader refuses
   }
-  if (Y_FLOAT.test(s)) {
-    const t = s.replace(/_/g, '').toLowerCase();
-    const v = t.includes('inf')
-      ? t.startsWith('-')
-        ? -Infinity
-        : Infinity
-      : t.includes('nan')
-        ? NaN
-        : t.includes(':')
-          ? (t.startsWith('-') ? -1 : 1) *
-            t
-              .replace(/^[-+]/, '')
-              .split(':')
-              .reduce((a, d) => a * 60 + Number(d), 0)
-          : Number(t);
-    return { type: 'float', value: v };
-  }
-  if (Y_DATE.test(s)) return { type: 'date', value: s };
-  return { type: 'string', value: s };
 }
 
 const Y_ESC = {
@@ -648,6 +635,8 @@ export function parseYaml(text) {
     if (PLAIN_BAD_START.test(raw)) fail(s, `a value cannot start with '${raw[0]}' unless it is quoted`);
     if (!flow && /:(?:[ \t]|$)/.test(raw)) fail(s + raw.search(/:(?:[ \t]|$)/), "a second ': ' on the line (quote the value if it contains ': ')");
     const t = yamlPlainType(raw);
+    if (!t) throw new Unsupported(NO_TYPING);
+    if (t.type === 'special') throw new Unsupported(`a plain '${raw}' value (PyYAML refuses it; quote it)`);
     return { node: mkScalar(t.type, t.value, text, s, pe, lineAt(s), 'plain'), end: pe };
   }
   function flow(s, e) {
@@ -774,12 +763,13 @@ export function parseYaml(text) {
         if (key === '<<') throw new Unsupported('merge keys (<<)');
         if (!key) fail(s, "a key is missing before ':'");
         if (PLAIN_BAD_START.test(key)) fail(s, `a key cannot start with '${key[0]}' unless it is quoted`);
-        const kt = yamlPlainType(key).type;
-        if (kt === 'bool' || kt === 'null')
+        const kt = yamlPlainType(key);
+        if (!kt) throw new Unsupported(NO_TYPING);
+        if (kt.type === 'bool' || kt.type === 'null')
           warnings.push({
             line: lineAt(s),
             col: s - starts[lineAt(s) - 1] + 1,
-            message: `the key '${key}' is read as ${kt === 'bool' ? `the boolean ${yamlPlainType(key).value ? 'True' : 'False'}` : 'null'} by PyYAML, not as text (quote it: "${key}")`,
+            message: `the key '${key}' is read as ${kt.type === 'bool' ? `the boolean ${kt.value ? 'True' : 'False'}` : 'null'} by PyYAML, not as text (quote it: "${key}")`,
           });
         return { key, valueStart: j + 1 };
       }

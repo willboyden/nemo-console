@@ -15,6 +15,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { DEMOS } from './demos.mjs';
+import { loadWasm } from '../js/cfg-wasm.js';
 import {
   SEVEN,
   MOCKED,
@@ -43,6 +44,10 @@ import { fleetAnswer, FLEET_WINDOWS, FLEET_UNITS, switchyardWave2Points, dynamoW
 import { SWITCHYARD_ROUTES, RELAY_ROUTES, RELAY_PLUGINS, RELAY_CONFIG, DYNAMO_CATALOG, DD_SCRIPTS, DD_SCRIPT, DD_COLS, ddRows, DD_RUNS, DD_PREVIEW_FILES, DD_CREATE_FILES } from './mock-data.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// The config validators as WebAssembly (`make wasm`, ADR-0022): the mock's validate route and the page use the same
+// module. Without it the mock still runs; the schema files then validate as an error that says to run `make wasm`.
+const WASM_BIN = path.join(ROOT, 'js', 'wasm', 'nemo_console_wasm_bg.wasm');
+if (fs.existsSync(WASM_BIN)) await loadWasm({ bytes: fs.readFileSync(WASM_BIN) });
 const args = process.argv.slice(2);
 const argv = (n, d) => {
   const i = args.indexOf(`--${n}`);
@@ -182,7 +187,8 @@ const specs = {
 };
 
 // ---------------------------------------------------------------- helpers
-const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'";
+// script-src allows WebAssembly compilation ('wasm-unsafe-eval', ADR-0022) and nothing else beyond 'self'
+const CSP = "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'";
 const SEC = {
   'Content-Security-Policy': CSP,
   'X-Content-Type-Options': 'nosniff',
@@ -197,6 +203,7 @@ const MIME = {
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json',
   '.svg': 'image/svg+xml',
+  '.wasm': 'application/wasm',
 };
 const json = (res, code, obj, extra = {}) => {
   res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...SEC, ...extra });

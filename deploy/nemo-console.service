@@ -1,7 +1,8 @@
 # OPT-IN TEMPLATE. Nothing installs this for you. Not exercised under systemd yet (generated
 # 2026-09-24, unverified): start it by hand once and check `journalctl --user -u nemo-console`.
 #
-# Install:  make release   (builds backend/target/release/nemo-console)
+# Install:  make release   (builds backend/target/release/nemo-console and the config editor's WebAssembly checks;
+#                           needs the wasm32-unknown-unknown target and wasm-bindgen-cli 0.2.129: `make wasm-prereqs`)
 #           mkdir -p ~/.config/systemd/user && cp deploy/nemo-console.service ~/.config/systemd/user/
 #           1. edit the two paths below to your checkout (the directory holding backend/)
 #           2. optional credential for the playground: put `LITELLM_API_KEY=...` in the EnvironmentFile

@@ -47,7 +47,19 @@ export const RULES = [
   },
   { id: 'http-cached', kind: 'http', why: 'upstream requests behind a TTL cache (see CACHED_HTTP) likewise: compared over the whole run, not per case' },
   { id: 'http-query', kind: 'http', why: 'an upstream query string is compared decoded (key/value pairs): `~` vs `%7E` or `+` vs `%20` is HTTP-client encoding, not behaviour' },
+  {
+    id: 'csp-wasm',
+    kind: 'header',
+    why: "deviation D-44 (ADR-0022): the Rust backend's script-src also allows WebAssembly compilation; exactly the token ` 'wasm-unsafe-eval'` after `script-src 'self'` is removed from the Rust side's content-security-policy, nothing else, and never on the Python side",
+  },
 ];
+
+/** csp-wasm (D-44): the one documented CSP difference, removed from the Rust side only. */
+export const CSP_WASM = "script-src 'self' 'wasm-unsafe-eval';";
+export function cspForCompare(kind, value) {
+  if (kind !== 'rust' || typeof value !== 'string') return value;
+  return value.split(CSP_WASM).join("script-src 'self';");
+}
 
 // TTL-cached read-only probes in the Python adapters (the TTL is wall-clock based, so whether the call happens inside
 // a given case depends on timing). Each entry: [regex over the argv joined by spaces, where cached + TTL].

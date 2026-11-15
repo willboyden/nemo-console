@@ -2,7 +2,7 @@
 # Run from rust/: cargo deny check. Changing an allow-list here is a supply-chain decision: say why in the commit.
 
 [graph]
-targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 all-features = true
 
 [output]

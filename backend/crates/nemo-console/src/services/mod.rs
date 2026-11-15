@@ -16,13 +16,7 @@ pub mod missing;
 pub mod params;
 pub mod playground;
 pub mod plumbing;
-pub mod pyfmt;
-pub mod pyobj;
-pub mod pystr;
-pub mod pytoml;
-pub mod pyutil;
 pub mod pyvalidate;
-pub mod pyyaml;
 pub mod routing;
 pub mod runner;
 pub mod settings;
@@ -32,3 +26,6 @@ pub mod store;
 pub mod support;
 pub mod telemetry;
 pub mod topology;
+
+// The pure modules live in nemo-console-core since ADR-0022 (the browser runs them as WebAssembly); same paths here.
+pub use nemo_console_core::services::{pyfmt, pyobj, pystr, pytoml, pyutil, pyyaml};

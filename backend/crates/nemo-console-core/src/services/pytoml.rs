@@ -479,6 +479,7 @@ const SHALLOW_OPENERS: usize = 32;
 /// Lead (PORTING.md A-6): nesting up to [`NESTING_FRAME_BUDGET`] needs up to ~4 MiB of stack in a debug build, more
 /// than a tokio worker thread has (2 MiB), so a document that could nest deeper than [`SHALLOW_OPENERS`] levels is
 /// parsed on a scoped thread with this much stack (virtual: only the pages a deep document touches are used).
+#[cfg(not(target_arch = "wasm32"))]
 const PARSE_STACK_BYTES: usize = 16 * 1024 * 1024;
 
 /// `tomllib.loads(s)`.
@@ -487,6 +488,12 @@ pub fn loads(s: &str) -> Result<Table, TomlDecodeError> {
     if s.bytes().filter(|b| matches!(b, b'[' | b'{')).count() <= SHALLOW_OPENERS {
         return loads_here(s);
     }
+    loads_deep(s)
+}
+
+/// A document that could nest deeper than [`SHALLOW_OPENERS`]: parsed on a scoped thread with a big stack.
+#[cfg(not(target_arch = "wasm32"))]
+fn loads_deep(s: &str) -> Result<Table, TomlDecodeError> {
     std::thread::scope(|scope| {
         match std::thread::Builder::new()
             .name("pytoml".to_owned())
@@ -499,6 +506,16 @@ pub fn loads(s: &str) -> Result<Table, TomlDecodeError> {
             ))),
         }
     })
+}
+
+/// wasm32-unknown-unknown has no threads (a spawn would fail and turn every real routes.toml into a false "cannot
+/// start the TOML parser thread" error), so the document is parsed in place. The depth is bounded exactly as on the
+/// native build, by [`NESTING_FRAME_BUDGET`] (Python's recursion limit), not by the stack: the WebAssembly module is
+/// linked with a stack that holds that budget (crates/nemo-console-wasm/build.rs), and the shared test vectors at the
+/// budget's edge (crates/nemo-console-core/tests/vectors) give the same answer natively and in the browser build.
+#[cfg(target_arch = "wasm32")]
+fn loads_deep(s: &str) -> Result<Table, TomlDecodeError> {
+    loads_here(s)
 }
 
 fn loads_here(s: &str) -> Result<Table, TomlDecodeError> {

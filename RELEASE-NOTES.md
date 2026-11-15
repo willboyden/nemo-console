@@ -18,4 +18,7 @@ An NVIDIA Flare page, for both GPU families the lab runs: sm120 and sm121.
   GPUs. The start paths follow upstream's documentation.
 
 Upgrade: `git pull`, `make release`, then `backend/target/release/nemo-console stop` and `... open` (or `make run`).
+Upgrading past 0.10.0 (Unreleased, ADR-0022): `make release` also builds the config editor's WebAssembly checks, so
+install their tools once first: `cd backend && rustup target add wasm32-unknown-unknown` and
+`cargo install --locked wasm-bindgen-cli@0.2.129` (`make wasm-prereqs` checks both).
 Then link the launcher once: `ln -s <lab>/inference/flare/flare.sh ~/.local/bin/flare-local`.

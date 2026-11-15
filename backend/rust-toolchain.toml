@@ -3,4 +3,6 @@
 [toolchain]
 channel = "1.99.1"
 components = ["rustfmt", "clippy"]
+# the config editor's validators are also built for the browser (`make wasm`, ADR-0022)
+targets = ["wasm32-unknown-unknown"]
 profile = "minimal"

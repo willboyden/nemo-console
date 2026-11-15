@@ -1,0 +1,25 @@
+[package]
+name = "nemo-console-core"
+description = "Nemo Console's pure validators: the tomllib and PyYAML ports, the config-file schemas and the secret scan, shared by the backend and the browser (WebAssembly, ADR-0022)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# Pure on purpose: no async runtime, no file system, no clock, no process or network crate. Everything here also
+# compiles to wasm32-unknown-unknown (crates/nemo-console-wasm); `make wasm` and CI's clippy --target wasm32 keep it so.
+[dependencies]
+base64.workspace = true
+fancy-regex.workspace = true
+hex.workspace = true
+indexmap.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

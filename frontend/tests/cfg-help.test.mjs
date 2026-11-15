@@ -8,6 +8,9 @@ import { flattenFields } from '../js/cfg-edit.js';
 import { globMatch, catalogsFor, matchScore, lookupHelp, flagFor, envFor } from '../js/cfg-help.js';
 import { SWITCHYARD_ROUTES, RELAY_ROUTES, RELAY_PLUGINS, RELAY_CONFIG, DYNAMO_CATALOG } from '../dev/mock-data.mjs';
 import { SEVEN_FILES, SEVEN_SPECS } from '../dev/mock-seven.mjs';
+import { wasmReady } from './wasm-ready.mjs';
+
+await wasmReady(); // schemaFor's numbers and PyYAML's typing of plain values come from the WebAssembly validators (ADR-0022)
 
 const doc = JSON.parse(readFileSync(new URL('../i18n/fields.en.json', import.meta.url), 'utf8'));
 

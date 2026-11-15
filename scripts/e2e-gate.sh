@@ -26,8 +26,11 @@ case "${1:-}" in
   run)
     # A Chrome that is not on PATH can be named once per checkout: git config nemo-console.chrome /path/to/chrome
     if [ -z "${CHROME_BIN:-}" ] && chrome=$(git config --get nemo-console.chrome); then export CHROME_BIN="$chrome"; fi
-    # the suite runs backend/target/debug/nemo-console: build it from the working tree first
+    # the suite runs backend/target/debug/nemo-console: build it from the working tree first, and the config editor's
+    # WebAssembly checks from the same tree (`make wasm`: a stale frontend/js/wasm/ would test old validators; it is
+    # derived from backend/, which the recorded tree ids cover)
     (cd backend && cargo build --locked --quiet) || { echo "e2e-gate: cargo build failed" >&2; exit 1; }
+    make --no-print-directory wasm >/dev/null || { echo "e2e-gate: make wasm failed (see 'make wasm')" >&2; exit 1; }
     node frontend/e2e/run.mjs || exit 1
     node frontend/e2e/config-editor.mjs || exit 1
     # The suite tested the working tree, so a pass only counts for a commit when backend/ and frontend/ match it.

@@ -9,7 +9,7 @@ import { t } from '../i18n.js';
 import { parseConfig, entryOf } from '../cfg-parse.js';
 import { lookupHelp, flagFor, envFor } from '../cfg-help.js';
 import { richRuns } from '../help.js';
-import { encodeValue, spliceValue, spliceBlock, displayValue, flattenFields, pathKey } from '../cfg-edit.js';
+import { encodeValue, spliceValue, spliceBlock, displayValue, flattenFields, pathKey, verifyEdit } from '../cfg-edit.js';
 import { specAt, describeSpec, choicesFor } from '../cfg-checks.js';
 import { btn, emptyBox, sevBadge } from './ui.js';
 
@@ -285,17 +285,24 @@ export function configForm(o) {
     if (!f) return;
     const enc = encodeValue(o.format, f.node, input, f.spec);
     f.local.textContent = '';
-    if (enc.error) {
-      f.local.append(icon('warn', 14), ' ', t('form.not_written', { why: enc.error }));
+    const refuse = (why) => {
+      f.local.append(icon('warn', 14), ' ', t('form.not_written', { why }));
       (inputEl || f.ctl).setAttribute?.('aria-invalid', 'true');
       f.row.classList.add('bad-input');
-      return;
-    }
-    (inputEl || f.ctl).removeAttribute?.('aria-invalid');
-    f.row.classList.remove('bad-input');
+    };
+    if (enc.error) return refuse(enc.error);
     const text = o.getText();
     const next = enc.block !== undefined ? spliceBlock(text, f.node, enc.block) : spliceValue(text, f.node, enc.raw);
-    if (next === text) return;
+    if (next === text) {
+      (inputEl || f.ctl).removeAttribute?.('aria-invalid');
+      f.row.classList.remove('bad-input');
+      return;
+    }
+    // Stage 2 of ADR-0022: the real loaders read the edited text back before it is written
+    const v = verifyEdit(o.format, text, next, f.path, f.node, input, f.spec, enc);
+    if (v.error) return refuse(v.error);
+    (inputEl || f.ctl).removeAttribute?.('aria-invalid');
+    f.row.classList.remove('bad-input');
     o.setText(next);
     if (!remap(next)) build();
     else markChanged();

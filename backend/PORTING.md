@@ -856,6 +856,12 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
   now runs on the blocking pool. Parity: only the OpenAPI document differs: the `/api/v1/audit` entry gains a
   `description` and the four parameters (`parameters/2..5`), pinned with their exact values in the four
   `global.openapi.*` entries. Tests: `tests/viz_wave4.rs`.
+- **D-44 `script-src` allows WebAssembly compilation (ADR-0022).** The config editor runs the backend's own
+  validators in the browser (`crates/nemo-console-wasm`, built by `make wasm`), so the Rust backend's CSP is
+  `script-src 'self' 'wasm-unsafe-eval'` where the Python reference sends `script-src 'self'`. Every response carries
+  the header, so instead of an allow-diff per case the harness removes exactly that one token from the Rust side's
+  `content-security-policy` before comparing (rule `csp-wasm` in `parity/corpus/normalise.mjs`); any other CSP
+  difference, and the token on the Python side, still fail the gate. No route, body or other header changes.
 - **Test-only (workstream B):** in the DCGM `post_apply` restart test the fake upstream answers 503 instead of refusing the
   connection.
 - **Moot since A-7 (the private copies are deleted):** workstream B's "alias expansion over 1,000,000 nodes raises
@@ -1202,3 +1208,40 @@ run (at 3a47eaf) found the D-30 race and a clippy lint in a new test; both are f
 A-9 fix was also checked the other way: with the fix reverted, its test fails (route guard, header timeout,
 connection cap, truncated body, body timeout, poller containment, poison recovery, latin-1 header, regex fail-closed,
 URL cross-check, O_NOFOLLOW, static containment, `copy2`, AIPerf cap, private writes).
+
+### A-10 (2026-11-14) The config validators in the browser: the WASM contract (ADR-0022)
+
+The pure part of the backend lives in `crates/nemo-console-core` (no async runtime, file system, clock, process or
+network access): the tomllib and PyYAML ports, `api::pyjson`, the save path's secret scan (`services::common`), the
+config-file schemas of AIPerf, Model Optimizer, Evaluator, Switchyard and Relay (`schemas::*`, moved out of the
+adapters unchanged; the adapters re-export them) and `check`, which composes them for the browser.
+`crates/nemo-console-wasm` exports four functions with `wasm-bindgen` (exactly 0.2.129; the CLI must match, `make
+wasm` checks). Strings in, one JSON document out; every answer carries `api` (now `1`) and the page refuses another
+version. The API contract v1 is unchanged: no route, no new field in any response.
+
+| Export | Answer |
+|---|---|
+| `check(system, file_id, format, text)` | `{api, schema, server_adds, syntax, diagnostics}`: `schema` is the label id of the file's schema (`aiperf_profiles`, `modelopt_recipes`, `evaluator_suites`, `switchyard_routes`, `relay_routes`) or null; `server_adds` what only the server runs on top (Switchyard's dry run; the evaluator wrapper and its prefetch check); `syntax` is `ok` / `error` from the loader the server's validators run (`tomllib.loads`; PyYAML `safe_load`, constructors included, so `2026-02-30`, `!!int x`, `!!python/object:...` and an unhashable key fail as they fail on the server) or `n/a` (not TOML or YAML); each diagnostic is `{severity, line, message, source}` with `source` one of `content` (NUL byte), `secret` (`find_secret`, the text the save path's 422 carries), `syntax`, `schema`. A validator exception is one `schema` error naming the Python class |
+| `schema_constants()` | `{api, aiperf: {INT_KEYS, ENDPOINT_TYPES, MAX_PROFILES}, modelopt: {METHODS, RECIPE_KEYS, MAX_RECIPES}, evaluator: {SUPPORTED, REFUSED, SUITE_KEYS, RUN_KEYS, MAX_SUITES, MAX_BENCHES, MAX_PROBLEMS, MAX_WORK}}`, read from the validators' own constants |
+| `yaml_plain_type(raw)` | `{api, type, text}`: how PyYAML 6 types a plain scalar (`null`, `bool`, `int`, `float`, `date`, `string`, `special` for `=`, `<<` and tags); `text` is Python's print of a bool/int/float, null when the constructor refuses what the resolver accepted |
+| `roundtrip(format, before, after, path, expected)` | `{api, ok, problem, got}`: `path` a JSON array of keys and list indexes, `expected` `{type, value}` (`string` with null value = any text, `int`, `float`, `number`, `bool`, `date`). `ok` only when `after` loads, the value at `path` reads back as `expected`, and putting that value into `before`'s document gives `after`'s document (nothing else changed) |
+
+Syntax texts for files without a schema follow the server's validator of that file: guardrails `*.yml` / `*.yaml`
+`YAML syntax: <first line of the error>` with its line; flare and openshell `TOML syntax error: ...` / `YAML syntax
+error: ...` (300 characters, no line); relay's plugins / config files `TOML syntax error: <error>` (no line). An
+exception those validators do not catch (`ValueError` for an impossible date, `KeyError` for `!!bool maybe`,
+`RecursionError`) makes the server answer 500; the browser shows one error, "the backend's validator stops with
+<class>: <text>". Differences that remain: for dcgm, dynamo, datadesigner, skillevaluator and gym files the server runs a
+tool or further checks, so the browser's generic `TOML syntax: <error>` / `YAML syntax: <problem>` is the loader's
+verdict only, not the server's wording; the e2e mirror covers aiperf, modelopt, evaluator, switchyard, relay routes and
+flare's compose file.
+
+Rules: the verdicts are advisory (ADR-0019 section 3); every Apply re-validates on the server. A Rust panic aborts
+(profile `release-wasm`, `panic = "abort"`), the page sees a trap, says "live checks unavailable" and instantiates a
+fresh module; there is no JavaScript copy of the rules to fall back to. wasm32 has no threads, so `pytoml::loads`
+parses a deep document in place and the module is linked with an 8 MiB stack (`crates/nemo-console-wasm/build.rs`);
+the nesting budget is the same as natively (vectors at 496 and 497 arrays). The shared vectors
+(`crates/nemo-console-core/tests/vectors/check.json`) run natively (`tests/vectors.rs`) and through the built module
+in Node (`frontend/tests/cfg-wasm.test.mjs`); both must give the recorded answers exactly. The e2e suite compares the
+module with the server's validate route on seeded mutations, diagnostic by diagnostic. Size budget 1,500,000 bytes
+(`make wasm` fails above it); no build-machine path in the module or its glue (`make wasm` checks). CSP: D-44.

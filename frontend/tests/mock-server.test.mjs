@@ -26,12 +26,13 @@ const get = (p, o) => fetch(`${base}/api/v1${p}`, o);
 const post = (p, body, h = H, method = 'POST') => fetch(`${base}/api/v1${p}`, { method, headers: h, body: JSON.stringify(body) });
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
-test('security headers on API and static responses; strict CSP with no unsafe-inline', async () => {
+test('security headers on API and static responses; strict CSP: no unsafe-inline or unsafe-eval, only wasm-unsafe-eval', async () => {
   for (const u of [`${base}/api/v1/health`, `${base}/index.html`, `${base}/nope`]) {
     const r = await fetch(u);
     const csp = r.headers.get('content-security-policy');
-    assert.match(csp, /default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'/);
-    assert.ok(!/unsafe/.test(csp));
+    assert.equal(csp, "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'");
+    // the one 'unsafe' token allowed is WebAssembly compilation (ADR-0022); never script eval or inline code
+    assert.deepEqual(csp.match(/'[a-z-]*unsafe[a-z-]*'/g), ["'wasm-unsafe-eval'"]);
     assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
     assert.equal(r.headers.get('referrer-policy'), 'no-referrer');
     assert.equal(r.headers.get('x-frame-options'), 'DENY');

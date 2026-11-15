@@ -1,6 +1,6 @@
 // Config file editor. Two views of one draft: Form (a typed control per value, for TOML and YAML) and Text (a
-// line-numbered editor). Live edit checks run on every change (cfg-checks.js: syntax, the file's schema where the
-// console knows it, Switchyard cross-references, secrets the backend would refuse) and mark the lines and fields they
+// line-numbered editor). Live edit checks run on every change (cfg-checks.js: the backend's own loaders, schemas and
+// secret scan compiled to WebAssembly, ADR-0022; or a visible "live checks unavailable") and mark the lines and fields they
 // concern; the server's validator (Check, Ctrl+S, and always before Apply) stays the authority. Then the existing
 // safe write path: diff vs the file on disk, confirm (states apply_effect), Apply with base_sha256, 409 -> reload +
 // re-diff, the auto-rolled-back outcome, revision history + rollback. Read-only files show why_readonly.
@@ -11,6 +11,7 @@ import { diffLines, diffStats, toUnified, hunkHeader, toSideBySide } from '../di
 import { shortSha, fmtDate } from '../format.js';
 import { isAdmin } from '../app-context.js';
 import { checkConfig, countBy, sortDiagnostics } from '../cfg-checks.js';
+import { loadWasm, onWasmState } from '../cfg-wasm.js';
 import { badge, btn, adminBtn, card, kv, errorBox, skeleton, emptyBox, sevBadge, select } from './ui.js';
 import { confirmEffect } from './dialog.js';
 import { toast, toastError } from './toast.js';
@@ -142,7 +143,7 @@ const saveView = (v) => {
   }
 };
 const STRUCTURED = new Set(['toml', 'yaml']);
-const SOURCE_KEY = { syntax: 'chk.src_syntax', schema: 'chk.src_schema', secret: 'chk.src_secret', lint: 'chk.src_lint', server: 'chk.src_server' };
+const SOURCE_KEY = { syntax: 'chk.src_syntax', schema: 'chk.src_schema', secret: 'chk.src_secret', content: 'chk.src_lint', lint: 'chk.src_lint', live: 'chk.src_live', server: 'chk.src_server' };
 
 export function configEditor(scope, systemId) {
   guardUnload();
@@ -199,6 +200,17 @@ export function configEditor(scope, systemId) {
     return { cat, params: cat?.flags ? help.params : null, file: st.file?.spec, admin: isAdmin(), loading: help.loading, failed: help.failed };
   };
   root.append(pickerHost, bodyHost);
+  // The live checks are the backend's validators as WebAssembly, loaded once when a Config tab first opens. When the
+  // module arrives (or traps and comes back) the checks run again and a YAML Form view that waited for it is built.
+  loadWasm();
+  scope.own(
+    onWasmState(() => {
+      if (!scope.alive || !st.ui) return;
+      runChecks();
+      // the Form waited for the module (YAML values are typed by it): show it now unless the person chose Text
+      if (st.ui.form && savedView() !== 'text' && !st.checks?.parse.unsupported) st.ui.setView('form');
+    }),
+  );
 
   const key = (id = st.file?.spec.id) => `${systemId}/${id}`;
   const dirty = () => !!st.file && st.draft !== st.file.content;
@@ -513,11 +525,12 @@ export function configEditor(scope, systemId) {
   }
   scope.own(() => clearTimeout(timer));
   const serverFresh = () => !!st.validation && st.validatedText === st.draft;
-  const merged = () =>
-    sortDiagnostics([
-      ...(st.checks?.diagnostics || []),
-      ...(serverFresh() ? st.validation.diagnostics.map((d) => ({ severity: d.severity, line: d.line ?? null, message: d.message, source: 'server' })) : []),
-    ]);
+  // The live checks run the server's own validators, so a fresh server answer repeats them: each finding is listed once.
+  const merged = () => {
+    const server = serverFresh() ? st.validation.diagnostics.map((d) => ({ severity: d.severity, line: d.line ?? null, message: d.message, source: 'server' })) : [];
+    const said = new Set(server.map((d) => `${d.line}\u0000${d.message}`));
+    return sortDiagnostics([...(st.checks?.diagnostics || []).filter((d) => !said.has(`${d.line}\u0000${d.message}`)), ...server]);
+  };
   function runChecks() {
     const sp = st.file.spec;
     st.checks = checkConfig({ system: systemId, file: sp.id, format: sp.format, text: st.draft });
@@ -531,27 +544,38 @@ export function configEditor(scope, systemId) {
       sp = st.file.spec,
       c = st.checks,
       n = countBy(all);
-    const parse = c.parse;
-    const syntax = !structured()
-      ? badge(t('chk.plain_text'), 'muted')
-      : parse.unsupported
-        ? badge(t('chk.syntax_partial'), 'muted', t('chk.syntax_partial_hint', { what: parse.unsupported }))
-        : parse.root
-          ? badge(t('chk.syntax_ok'), 'ok')
-          : badge(t('chk.syntax_bad'), 'bad');
+    const live = c.live === 'ok';
+    const loading = c.live === 'loading';
+    const syntax = loading
+      ? badge(t('chk.live_loading'), 'muted', t('chk.live_loading_hint'))
+      : !live
+        ? badge(t('chk.live_unavailable'), 'warn', t('chk.live_unavailable_hint'))
+        : !structured()
+          ? badge(t('chk.plain_text'), 'muted')
+          : c.syntax === 'ok'
+            ? badge(t('chk.syntax_ok'), 'ok')
+            : badge(t('chk.syntax_bad'), 'bad');
     const summary = h(
       'div',
-      { class: 'row gap wrap chk-summary' },
+      { class: 'row gap wrap chk-summary', dataset: { live: c.live } },
       syntax,
       n.error ? badge(t('chk.n_errors', { count: n.error }), 'bad') : null,
       n.warn ? badge(t('chk.n_warnings', { count: n.warn }), 'warn') : null,
-      !n.error && !n.warn ? badge(t('chk.clean'), 'ok') : null,
+      live && !n.error && !n.warn ? badge(t('chk.clean'), 'ok') : null,
     );
     const about = h(
       'p',
       { class: 'hint' },
-      c.schema ? t(parse.root ? 'chk.schema_known' : 'chk.schema_paused', { name: t(`chk.schema_${c.schema.id}`) }) : structured() ? t('chk.schema_none') : t('chk.text_only'),
-      parse.unsupported ? ` ${t('chk.syntax_partial_hint', { what: parse.unsupported })}` : '',
+      loading
+        ? t('chk.live_loading_hint')
+        : !live
+          ? t('chk.live_unavailable_hint')
+          : c.schema
+            ? t(c.syntax !== 'error' ? 'chk.schema_known' : 'chk.schema_paused', { name: t(`chk.schema_${c.schema.id}`) })
+            : structured()
+              ? t('chk.schema_none')
+              : t('chk.text_only'),
+      live && c.serverAdds.length ? ` ${t('chk.server_adds', { what: c.serverAdds.join(', ') })}` : '',
     );
     const items = all.slice(0, 60);
     const list = items.length

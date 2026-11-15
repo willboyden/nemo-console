@@ -1110,6 +1110,7 @@ dependencies = [
  "hyper-util",
  "indexmap",
  "md-5",
+ "nemo-console-core",
  "nix",
  "percent-encoding",
  "proptest",
@@ -1134,6 +1135,29 @@ dependencies = [
  "url",
  "uuid",
  "wiremock",
+]
+
+[[package]]
+name = "nemo-console-core"
+version = "0.10.0"
+dependencies = [
+ "base64 0.23.1",
+ "fancy-regex",
+ "hex",
+ "indexmap",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+]
+
+[[package]]
+name = "nemo-console-wasm"
+version = "0.10.0"
+dependencies = [
+ "nemo-console-core",
+ "wasm-bindgen",
 ]
 
 [[package]]

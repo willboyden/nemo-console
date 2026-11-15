@@ -37,6 +37,7 @@ hyper.workspace = true
 hyper-util.workspace = true
 indexmap.workspace = true
 md-5.workspace = true
+nemo-console-core.workspace = true
 nix.workspace = true
 percent-encoding.workspace = true
 regex.workspace = true

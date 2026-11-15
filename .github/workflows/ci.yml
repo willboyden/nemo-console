@@ -36,6 +36,8 @@ jobs:
         run: cargo fmt --all --check
       - name: Clippy (warnings are errors)
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: Clippy for the browser build (nemo-console-core and nemo-console-wasm on wasm32, ADR-0022)
+        run: cargo clippy --locked -p nemo-console-core -p nemo-console-wasm --target wasm32-unknown-unknown -- -D warnings
       - name: Tests (offline fakes; live smoke tests run only with NEMO_LIVE=1)
         run: cargo test --locked --workspace
       - name: Install cargo-deny and cargo-audit (exact versions, from crates.io)
@@ -49,7 +51,7 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     defaults:
       run:
         shell: bash
@@ -66,13 +68,20 @@ jobs:
       - name: Format (Prettier check on the code and JSON; .prettierignore lists what is left as written)
         working-directory: .
         run: make fmt-check
-      - name: Tests (node --test; they need no dependencies)
+      - name: Browser validators (make wasm; wasm-bindgen-cli at the exact version of the crate, from crates.io)
+        working-directory: .
+        run: |
+          (cd backend && rustup toolchain install)   # no argument: the toolchain (and wasm32 target) of rust-toolchain.toml
+          cargo install --locked wasm-bindgen-cli@0.2.129
+          make wasm
+      - name: Tests (node --test; the live-check tests load frontend/js/wasm/ and fail without it, never skip)
         run: npm test
 
   e2e:
     # Every page and tab in a real headless Chrome against the real backend (frontend/e2e/run.mjs), hermetic: every
     # upstream URL closed, an empty PATH. Unit tests cannot see a view that fails to load in the browser; this job can.
-    # Then frontend/e2e/config-editor.mjs: the browser's live config checks must agree with the backend's validators.
+    # Then frontend/e2e/config-editor.mjs: the browser's live config checks (the backend's validators compiled to
+    # WebAssembly, ADR-0022) must give the server's exact answers, and load in Chrome under the real CSP.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -90,6 +99,10 @@ jobs:
         run: |
           rustup toolchain install   # no argument: the toolchain of rust-toolchain.toml
           cargo build --locked
+      - name: Browser validators (make wasm; wasm-bindgen-cli at the exact version of the crate, from crates.io)
+        run: |
+          cargo install --locked wasm-bindgen-cli@0.2.129
+          make wasm
       - name: Browser end-to-end (google-chrome from the runner image)
         run: node frontend/e2e/run.mjs
       - name: Config editor (browser checks vs the backend validators, then the editor in Chrome)

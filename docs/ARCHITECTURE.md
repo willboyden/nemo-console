@@ -109,7 +109,7 @@ Prefix is the adapter's; the core stores whatever it returns (bounded label card
 
 * Bind `127.0.0.1` only. `Host` allowlist (421), same-origin-or-absent `Origin` on unsafe methods (403), `X-Console: 1` on non-GET, no CORS.
 * Bearer key (generated first start, stored hashed, 0600 `fchmod`) required off-loopback; roles admin/viewer; role dependency on **every** router + a test that enumerates OpenAPI routes.
-* Headers on ALL responses (incl. errors/static): strict CSP (`default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'`), `nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `Permissions-Policy`, `Cache-Control: no-store` on `/api`. No Swagger/ReDoc. Static allowlist only.
+* Headers on ALL responses (incl. errors/static): strict CSP (`default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'`), `nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, `Permissions-Policy`, `Cache-Control: no-store` on `/api`. No Swagger/ReDoc. Static allowlist only.
 * argv lists only; identifiers validated with `fullmatch`; container ops label/name-verified via `inspect` before stop/rm/logs; fixed literals for every docker flag.
 * Config writes: allowlisted absolute paths fixed at startup, not symlinks, size cap 256 KiB, refuse content that looks like a secret (`sk-…`, `Bearer …`, `api_key = "<literal>"`; env-var NAMES are fine).
 * Secrets by env-var NAME; never returned, logged, audited or put in argv. `[set, N chars]` only.

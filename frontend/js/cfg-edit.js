@@ -2,10 +2,15 @@
 // style, then splice it over the old value's span. Everything else in the file (comments, blank lines, key order,
 // other values) stays byte for byte. Pure logic, no DOM, so tests import it.
 //
-//   encodeValue(format, node, input, spec) -> { raw } | { error }
+//   encodeValue(format, node, input, spec) -> { raw } | { block } | { error }
 //   spliceValue(text, node, raw) -> new text
+//   verifyEdit(format, before, after, path, node, input, spec, enc) -> { ok } | { error }   (the real loaders decide)
 //   flattenFields(root) -> [{ path, key, node, depth }]  (every scalar, in document order)
+//
+// The quoting rules below pick a spelling; whether it really reads back as typed is decided by verifyEdit, which loads
+// the text before and after the edit with the backend's tomllib/PyYAML ports (cfg-wasm.js, ADR-0022).
 import { yamlPlainType } from './cfg-parse.js';
+import { wasmRoundtrip } from './cfg-wasm.js';
 
 const TOML_INT = /^[+-]?(?:0|[1-9](?:_?\d)*)$/;
 const TOML_FLOAT = /^[+-]?(?:0|[1-9](?:_?\d)*)(?:\.\d(?:_?\d)*)?(?:[eE][+-]?\d(?:_?\d)*)?$|^[+-]?(?:inf|nan)$/;
@@ -35,7 +40,7 @@ export function yamlPlainSafe(v) {
     v !== '=' &&
     v !== '<<' &&
     v === v.trim() &&
-    yamlPlainType(v).type === 'string' &&
+    yamlPlainType(v)?.type === 'string' &&
     !/^(?:[,[\]{}#&*!|>'"%@`]|[-?:](?:\s|$))/.test(v) &&
     !/:(?:\s|$)|\s#|[\t\n\r]|[\u0000-\u001f\u007f\u0085\u2028\u2029\ufeff]/.test(v) &&
     !/^(?:---|\.\.\.)(?:\s|$)/.test(v)
@@ -117,10 +122,33 @@ export function encodeValue(format, node, input, spec = null) {
     return { error: 'true or false' };
   }
   if (type === 'date') {
-    if (format === 'toml' ? TOML_DATE.test(v) : yamlPlainType(v).type === 'date') return { raw: v };
+    if (format === 'toml' ? TOML_DATE.test(v) : yamlPlainType(v)?.type === 'date') return { raw: v };
     return { error: 'a date like 2026-11-04' };
   }
   return { error: 'this value cannot be edited here; use the Text view' };
+}
+
+/** What the person meant, for verifyEdit: the type the field is written as and the value they typed. */
+export function expectedOf(node, input, spec, enc) {
+  if (typeof input === 'boolean') return { type: 'bool', value: input };
+  const s = String(input);
+  const type = node.type === 'null' ? (spec?.t === 'int' ? 'int' : spec?.t === 'num' ? 'float' : spec?.t === 'bool' ? 'bool' : 'string') : node.type;
+  if (type === 'string') return { type: 'string', value: enc.block !== undefined ? null : s }; // a block keeps its own line breaks
+  if (type === 'bool') return { type: 'bool', value: /^true$/i.test(s.trim()) };
+  if (type === 'date') return { type: 'date', value: s.trim() };
+  if (isNumSpec(spec)) return { type: 'number', value: s.trim() };
+  return { type, value: s.trim() };
+}
+
+/**
+ * Load the draft before and after an edit with the real loaders: the edited value must read back as typed and nothing
+ * else may change. { ok: true } or { error } (one sentence). While the WebAssembly checks are unavailable nothing can
+ * be verified, so the edit is refused (use the Text view).
+ */
+export function verifyEdit(format, before, after, path, node, input, spec, enc) {
+  const r = wasmRoundtrip(format, before, after, path, expectedOf(node, input, spec, enc));
+  if (!r) return { error: 'live checks are unavailable, so this edit cannot be verified; use the Text view' };
+  return r.ok ? { ok: true } : { error: `the file would not read it back as typed: ${r.problem}` };
 }
 
 /** Splice a new raw value over node's span (an empty YAML value gets the separating space it needs). */
