@@ -10,6 +10,7 @@ import { finite } from '../series-math.js';
  * Returns an <svg>, or null when no row has a positive part.
  */
 export function stackedRows({ rows, width = 560, ariaLabel, valueFmt, labelW = 56, rowH = 30, tail = 96 }) {
+  const maxChars = Math.max(4, Math.floor((labelW - 10) / 6.2));
   const sum = (r) => r.parts.reduce((a, p) => a + (finite(p.value) && p.value > 0 ? p.value : 0), 0);
   const max = Math.max(0, ...rows.map(sum));
   if (!(max > 0)) return null;
@@ -18,7 +19,8 @@ export function stackedRows({ rows, width = 560, ariaLabel, valueFmt, labelW = 5
   rows.forEach((r, i) => {
     const y = 4 + i * rowH;
     let x = labelW;
-    nodes.push(svg('text', { class: 'tick', x: labelW - 8, y: y + rowH / 2 + 3, 'text-anchor': 'end' }, r.label));
+    // a label longer than its column is cut with an ellipsis (the whole text is the tooltip)
+    nodes.push(titled(svg('text', { class: 'tick', x: labelW - 8, y: y + rowH / 2 + 3, 'text-anchor': 'end' }, r.label.length > maxChars ? `${r.label.slice(0, maxChars - 1)}…` : r.label), r.label));
     for (const p of r.parts) {
       if (!finite(p.value) || p.value <= 0) continue;
       const w = Math.max(1.5, (p.value / max) * plotW);

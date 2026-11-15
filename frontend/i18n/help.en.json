@@ -536,6 +536,11 @@
         "q": "How do I compare two runs?",
         "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
         "tab": "history"
+      },
+      {
+        "q": "What do the charts under the run history show?",
+        "a": "A heatmap of each validator's status and worst finding severity over the latest Tier 1 runs, the rubric scores and quality dimensions of the selected run, and the Tier 3 skill lift as a with-and-without dumbbell per agent and metric. The charts show numbers only, never finding or criterion text. A skill can influence its own Tier 3 score, so read a high lift as evidence, not proof.",
+        "tab": "history"
       }
     ]
   },
@@ -599,6 +604,11 @@
         "q": "How do I compare two runs?",
         "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
         "tab": "history"
+      },
+      {
+        "q": "What does the column profile show?",
+        "a": "Select a run on the Runs tab: the type mix of each column, how many values are missing, how many differ, and the spread of text lengths and numbers. These figures are the same for everyone. The most frequent values of a column are model-written content, so only an admin sees them. A run timeline above the list shows how long each run took and how many records it wrote against how many were requested.",
+        "tab": "runs"
       }
     ]
   },
@@ -798,6 +808,11 @@
         "q": "What does Show max do on the charts?",
         "a": "It draws the highest value in each time bucket as a thin line and a band above the average, so a short spike the average hides stays visible. It needs a window of an hour or longer; the 15-minute view already shows every sample. Counters drawn as rates have no max.",
         "tab": "status"
+      },
+      {
+        "q": "What do the charts under the run history show?",
+        "a": "Select a run on the History tab (Shift+click a second one to overlay it): you get the percentile curves of time to first token, inter-token latency and request latency, the HTTP phases of a request, and, for run A, every request laid out by worker with its error codes. A scatter of throughput against latency covers all the runs shown. Every number includes the router hop, because AIPerf calls the router, not the engine.",
+        "tab": "history"
       }
     ]
   },
@@ -913,6 +928,11 @@
         "q": "How do I compare two runs?",
         "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
         "tab": "history"
+      },
+      {
+        "q": "What do the charts under the run history show?",
+        "a": "Scores with 95% confidence intervals for run A (and B if you pick one), a model by benchmark matrix of the newest score for each pair, cost (tokens or time) against score, and failure rates. A run recorded before these figures existed shows a bar without a whisker and is left out of the cost chart; a missing figure is never drawn as zero.",
+        "tab": "history"
       }
     ]
   },
@@ -974,6 +994,11 @@
         "q": "What does Show max do on the charts?",
         "a": "It draws the highest value in each time bucket as a thin line and a band above the average, so a short spike the average hides stays visible. It needs a window of an hour or longer; the 15-minute view already shows every sample. Counters drawn as rates have no max.",
         "tab": "status"
+      },
+      {
+        "q": "What do the charts under the run history show?",
+        "a": "How long a running job has run against what a finished job of the same method takes (a job that runs much longer than that is flagged), a timeline of job durations coloured by method with the verdict as an outline, glyph and word, and the base model size against the output size with the ratio.",
+        "tab": "history"
       }
     ]
   },
@@ -1035,6 +1060,11 @@
         "q": "What does Show max do on the charts?",
         "a": "It draws the highest value in each time bucket as a thin line and a band above the average, so a short spike the average hides stays visible. It needs a window of an hour or longer; the 15-minute view already shows every sample. Counters drawn as rates have no max.",
         "tab": "status"
+      },
+      {
+        "q": "What do the charts under the run history show?",
+        "a": "The reward of every task in the selected run (and in a second run, overlaid), how many rollouts of each run produced a reward, and the mean reward and pass@1 by model across the runs shown. A run that recorded no per-task rewards has no bars.",
+        "tab": "history"
       }
     ]
   },

@@ -4,6 +4,8 @@
 //   * a trend of one chosen number across the runs, one line per group (model, preset ... as the descriptor lists them)
 //   * an A/B compare: two runs side by side, the difference, and a better / worse mark where the number has a direction
 //   * filters from the values seen; the whole selection (run, vs, metric, group, filters) lives in the URL hash
+//   * a run DETAIL under the compare card (addendum 9.15): a page may hang its own cards on the selection with `desc.detail(scope, {hash})`, which returns {el, update(ctx)};
+//     update is called after every render with {rows, view, A, B, numbers, st, pick, hash}, so selecting runs here drives the detail cards (no second picker)
 // A descriptor (js/run-descriptors.js) says which fields and numbers a system has. Every value from an event is shown as text
 // (textContent through h()); a field the event lacks is an en dash, never 0.
 import { h, append } from '../dom.js';
@@ -45,6 +47,8 @@ const verdictChip = (r) => h('span', { class: `rh-verdict ${r.vclass}` }, h('spa
 export function runHistoryPanel(scope, ctx, desc) {
   const hash = createHashState({ path: desc.system, tab: 'history', initial: ctx?.initial !== false });
   const host = h('div', { class: 'stack-v rh', 'aria-busy': 'true' }, skeleton(3));
+  // The page's own cards on the selection (addendum 9.15), built once: they keep their state (an open table, a picker) across renders.
+  const detail = desc.detail ? desc.detail(scope, { hash }) : null;
   let events = null,
     lastRaw = '',
     rs = null;
@@ -95,7 +99,14 @@ export function runHistoryPanel(scope, ctx, desc) {
     const pickB = (id) => (!A ? pickA(id) : id === st.run ? null : patch({ vs: id === st.vs ? null : id }));
     const pick = (id, compare) => (compare ? pickB(id) : pickA(id));
 
-    host.replaceChildren(filtersBar(rows, st, patch, view), timelineCard(view, st, A, B, pick), trendCard(view, st, numbers, patch, pick, A, B), compareCard(rows, A, B, numbers, patch));
+    host.replaceChildren(
+      filtersBar(rows, st, patch, view),
+      timelineCard(view, st, A, B, pick),
+      trendCard(view, st, numbers, patch, pick, A, B),
+      compareCard(rows, A, B, numbers, patch),
+      ...(detail ? [detail.el] : []),
+    );
+    detail?.update({ rows, view, A, B, numbers, st, pick, hash });
     if (focused) host.querySelector(`[data-rh-focus="${CSS.escape(focused)}"]`)?.focus();
   }
 

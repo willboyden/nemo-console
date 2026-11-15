@@ -241,3 +241,39 @@
     width: 12px;
   }
 }
+
+/* Wave 3 cards (rules in components.css; these override them and so come after). */
+@media (max-width: 1100px) {
+  .rv-panels.two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 720px) {
+  .rv-panels,
+  .rv-panels.two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rv-h {
+    font-size: var(--fs);
+  }
+  .rv-controls .seg-control {
+    flex-wrap: wrap;
+  }
+  .rv-controls .seg-control button {
+    flex: 1 1 auto;
+  }
+  .rbar {
+    width: 72px;
+  }
+  .ddv-table th.ddv-name {
+    white-space: normal;
+  }
+  .tablewrap .ddv-table {
+    min-width: 520px;
+  }
+  .cmchart,
+  .hbchart,
+  .dbchart {
+    max-width: 100%;
+  }
+}

@@ -10,10 +10,10 @@ import { finite } from '../series-math.js';
 
 /**
  * @param opts.parts     [{key, name, cls (bf1..bf6)}] the stack order, bottom / left first
- * @param opts.valueFmt  (v) => text for one value;  opts.axisFmt (v) => short y tick text of the time charts
+ * @param opts.valueFmt  (v) => text for one value;  opts.axisFmt (v) => short y tick text of the time charts;  opts.labelMax the widest row label column in px (default 120; a longer label is cut)
  * Returns {el, update({rows: [{id, label, values: {key: number|null}, totalText?, note?}], time: [{label, ts, bucketS, series: [{key, values}]}]}), fail(msg)}.
  */
-export function stackCard(scope, { title, hint, parts, valueFmt, axisFmt, wide = false, rowsTitle, timeTitle, emptyText }) {
+export function stackCard(scope, { title, hint, parts, valueFmt, axisFmt, wide = false, rowsTitle, timeTitle, emptyText, labelMax = 120 }) {
   let data = null;
   const noteHost = h('div');
   const rowsHost = h('div', { class: 'chart-wrap-lg' });
@@ -49,7 +49,9 @@ export function stackCard(scope, { title, hint, parts, valueFmt, axisFmt, wide =
       title,
       latest: rows.map((r) => `${r.label} ${parts.map((p) => `${p.name} ${r.values?.[p.key] == null ? '–' : valueFmt(r.values[p.key])}`).join(', ')}`).join('; ') || t('common.no_data'),
     });
-    const chart = rows.length ? stackedRows({ rows, width, ariaLabel: label, valueFmt, labelW: Math.min(120, Math.max(48, Math.max(...rows.map((r) => r.label.length)) * 6.4 + 12)) }) : null;
+    const chart = rows.length
+      ? stackedRows({ rows, width, ariaLabel: label, valueFmt, labelW: Math.min(labelMax, Math.round(width * 0.42), Math.max(48, Math.max(...rows.map((r) => r.label.length)) * 6.4 + 12)) })
+      : null;
     rowsHost.replaceChildren(chart ?? chartEmpty(emptyText ?? t('series.empty')));
     summary.textContent = chart ? label : '';
     const charts = (data.time || []).map((tc) => {
