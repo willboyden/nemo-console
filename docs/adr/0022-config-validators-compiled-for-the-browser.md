@@ -70,7 +70,7 @@ the static allowlist (the module is served from `js/` as `application/wasm`), ze
   (`backend/rust-toolchain.toml` installs it) and `cargo install --locked wasm-bindgen-cli@0.2.129`. Without
   `make wasm` the page still works and says the live checks are unavailable; the frontend tests that need the
   module fail rather than skip.
-- Size: 1,354,745 bytes (495,098 gzip -9) at the time of writing, loaded once per page over loopback, only when a
+- Size: 1,356,464 bytes (495,515 gzip -9) at the time of writing, loaded once per page over loopback, only when a
   Config tab opens. Byte-identical across clean rebuilds on the same toolchain.
 - `script-src` is one token wider. `'wasm-unsafe-eval'` allows compiling WebAssembly, not evaluating script text;
   the module comes from the console's own origin, takes only the text the page already holds, makes no network

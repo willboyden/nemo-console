@@ -67,7 +67,7 @@ implemented / verified-live / unverified defined in the README.
 - **One build step for the frontend**: `make wasm` (needs the `wasm32-unknown-unknown` target, installed by
   `backend/rust-toolchain.toml`, and `wasm-bindgen-cli` 0.2.129) writes `frontend/js/wasm/`, which is generated and
   never committed. `build`, `release`, `e2e` and `frontend-test` run it; it refuses another CLI version, a
-  build-machine path in the output and a module over 1,500,000 bytes (1,354,745 bytes, 495,098 gzipped today). CI
+  build-machine path in the output and a module over 1,500,000 bytes (1,356,464 bytes, 495,515 gzipped today). CI
   builds it and runs clippy for wasm32 as well.
 
 ### Fixed
