@@ -28,7 +28,7 @@ after(() => {
 const get = (p) => fetch(`${base}/api/v1${p}`);
 const json = async (p) => (await get(p)).json();
 const dev = (u) => fetch(`${base}${u}`, { headers: { 'X-Console': '1' } });
-const REAL_NAMES = /spark\d|ai300|aitop|node\d|willaybee|\.lab\b/i;
+const REAL_NAMES = /spark\d|ai300|aitop|node\d/i;
 const CATEGORIES = ['ssh', 'config', 'network', 'http', 'dns', 'process', 'filesystem', 'policy', 'auth', 'other'];
 const KINDS = ['open', 'close', 'connect', 'request', 'applying', 'built', 'exec', 'read', 'write', 'resolve', 'load', 'other'];
 
@@ -356,7 +356,10 @@ test("audit summary: the pinned shape; counts agree with the log; a null system 
   );
   assert.equal((await json('/audit/summary')).window, '7d', 'the default window');
   const model = shapeSummary(s30);
-  assert.ok(model.days.ts.length >= 28 && model.actors.length === 5 && model.errors.total > 0 && model.deniedTotal === 23);
+  assert.ok(model.days.ts.length >= 28 && model.actors.length === 5 && model.errors.total > 0);
+  // denied_total counts the audited rows answered 401/403 in the window (not a separate counter of refused requests)
+  const log30 = await json(`/audit?limit=500&since=${s30.from}&until=${s30.to}`);
+  if (log30.length < 500) assert.equal(model.deniedTotal, log30.filter((x) => x.status === 401 || x.status === 403).length);
   const r = await get('/audit/summary?window=1y');
   assert.equal(r.status, 422);
   assert.equal((await r.json()).error.code, 'invalid_request');

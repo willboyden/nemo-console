@@ -77,7 +77,7 @@ const state = {
   failNext: null,
   seven: { dcgmFixed: false, guardPlayground: true, dcgmGpus: 2 }, // dev toggles for the 9.8 systems (/__dev/seven)
   wave2: { fleet: 'ok' }, // /__dev/wave2?fleet=ok|prom_down|empty|unsupported: what GET /systems/dcgm/fleet answers (addendum 9.14)
-  wave4: { rails: 'ok', decisions: 'ok', denied: 23 }, // /__dev/wave4?rails=&decisions=&flare=: what the wave-4 routes answer (addendum 9.16); flare is state.seven.flareMode
+  wave4: { rails: 'ok', decisions: 'ok' }, // /__dev/wave4?rails=&decisions=&flare=: what the wave-4 routes answer (addendum 9.16); flare is state.seven.flareMode
   settings: {
     version: '0.1.0-mock',
     urls: { switchyard: 'http://127.0.0.1:4010', relay: 'http://127.0.0.1:4040', dynamo: 'http://127.0.0.1:8020', dynamo_worker_metrics: 'http://127.0.0.1:8081', litellm: 'http://127.0.0.1:4000' },
@@ -1184,7 +1184,7 @@ async function api(req, res, url) {
           .map((x) => `'${x}'`)
           .join(', ')}`,
       );
-    return json(res, 200, auditSummary(state.audit, w, now(), state.wave4.denied));
+    return json(res, 200, auditSummary(state.audit, w, now()));
   }
   if (p === '/audit') {
     // the log filters of 9.16: since / until (epoch seconds), actor, status ok|error, system, limit (at most 500)

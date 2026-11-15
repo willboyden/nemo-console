@@ -382,8 +382,9 @@ export function auditSeeds(now) {
 
 export const SUMMARY_WINDOWS = { '24h': DAY, '7d': 7 * DAY, '30d': 30 * DAY };
 const dayOf = (ts) => new Date(ts * 1000).toISOString().slice(0, 10);
-/** `GET /audit/summary?window=`: aggregate counts over the rows (no parameters, no paths). `denied` is the console's own counter of refused requests. */
-export function auditSummary(rows, window, now, denied = 23) {
+/** `GET /audit/summary?window=`: aggregate counts over the rows (no parameters, no paths). `denied_total` counts the audited rows answered 401/403 in
+ * the window, as the backend does (requests refused before a handler are not audit rows, so they are not in it). */
+export function auditSummary(rows, window, now) {
   // addendum 9.16 (pinned): {window, from, to, bucket_s, by_day, by_actor, errors, denied_total, truncated}; a null system is the console's own calls (settings)
   const span = SUMMARY_WINDOWS[window];
   const since = now - span;
@@ -419,7 +420,7 @@ export function auditSummary(rows, window, now, denied = 23) {
       .sort((a, b) => b.count - a.count || (a.actor < b.actor ? -1 : 1))
       .slice(0, 200),
     errors: [...errs].map(([ts_bucket, count]) => ({ ts_bucket, count })).sort((a, b) => a.ts_bucket - b.ts_bucket),
-    denied_total: denied,
+    denied_total: inWin.filter((r) => r.status === 401 || r.status === 403).length,
     truncated: actor.size > 200,
   };
 }

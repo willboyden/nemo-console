@@ -107,3 +107,12 @@ test('formatting: short ids, durations, stamps, token segments, shares, null-las
   assert.ok(isRoutingMark({ name: 'x', data: { decision: 'escalate' } }));
   assert.ok(!isRoutingMark({ name: 'llm.start', data: {} }));
 });
+
+test('date formatters never throw on an out-of-range timestamp (a planted 1e300 shows a dash)', async () => {
+  const { fmtDay, fmtHM } = await import('../js/viz/scale.js');
+  const { fmtStamp } = await import('../js/viz/fmt.js');
+  const { fmtDate, fmtTime } = await import('../js/format.js');
+  for (const f of [fmtDay, fmtHM, fmtStamp]) assert.equal(f(1e300), '–');
+  for (const f of [fmtDate, fmtTime]) assert.equal(f(1e300), '–');
+  assert.notEqual(fmtStamp(1794700000), '–');
+});

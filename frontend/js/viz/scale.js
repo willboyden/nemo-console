@@ -77,8 +77,8 @@ export function offsetTicks(fromMs, toMs, target = 6) {
 const CLOCK_STEPS_S = [60, 300, 900, 1800, 3600, 10800, 21600, 43200, 86400, 172800, 604800, 2592000];
 const p2 = (n) => String(n).padStart(2, '0');
 /** UTC calendar day `MM-DD` and clock `HH:MM` of an epoch-second timestamp. */
-export const fmtDay = (s) => (isNum(s) ? new Date(s * 1000).toISOString().slice(5, 10) : '–');
-export const fmtHM = (s) => (isNum(s) ? new Date(s * 1000).toISOString().slice(11, 16) : '–');
+export const fmtDay = (s) => (isNum(s) && Math.abs(s) <= 8.64e12 ? new Date(s * 1000).toISOString().slice(5, 10) : '–');
+export const fmtHM = (s) => (isNum(s) && Math.abs(s) <= 8.64e12 ? new Date(s * 1000).toISOString().slice(11, 16) : '–');
 /** Epoch-second ticks over [t0,t1] aligned to UTC: at most `target`, labelled HH:MM, or MM-DD from a day up. */
 export function clockTicks(t0, t1, target = 6) {
   if (!isNum(t0) || !isNum(t1) || t1 <= t0) return isNum(t0) ? [{ v: t0, label: fmtHM(t0), major: true }] : [];
