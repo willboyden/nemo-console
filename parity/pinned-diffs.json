@@ -77,8 +77,8 @@
     },
     {
       "case": "global.openapi.admin",
-      "deviation": "D-34, D-36, D-38",
-      "why": "D-34, D-36 and D-38: the document lists the eleven Relay trace explorer routes, the series route and the DCGM fleet route, which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned)",
+      "deviation": "D-34, D-36, D-38, D-40",
+      "why": "D-34, D-36, D-38 and D-40: the document lists the eleven Relay trace explorer routes, the series route, the DCGM fleet route and the three per-run visualisation routes, which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned)",
       "diffs": [
         {
           "path": "body/paths/~1api~1v1~1systems~1{system_id}~1analytics",
@@ -94,6 +94,18 @@
         },
         {
           "path": "body/paths/~1api~1v1~1systems~1{system_id}~1metrics~1series",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1profile",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1requests",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1summary",
           "a": "(absent)"
         },
         {
@@ -136,8 +148,8 @@
     },
     {
       "case": "global.openapi.viewer",
-      "deviation": "D-34, D-36, D-38",
-      "why": "D-34, D-36 and D-38: the document lists the eleven Relay trace explorer routes, the series route and the DCGM fleet route, which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned)",
+      "deviation": "D-34, D-36, D-38, D-40",
+      "why": "D-34, D-36, D-38 and D-40: the document lists the eleven Relay trace explorer routes, the series route, the DCGM fleet route and the three per-run visualisation routes, which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned)",
       "diffs": [
         {
           "path": "body/paths/~1api~1v1~1systems~1{system_id}~1analytics",
@@ -153,6 +165,18 @@
         },
         {
           "path": "body/paths/~1api~1v1~1systems~1{system_id}~1metrics~1series",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1profile",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1requests",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1summary",
           "a": "(absent)"
         },
         {
@@ -195,8 +219,8 @@
     },
     {
       "case": "global.openapi.admin.after",
-      "deviation": "D-34, D-36, D-38",
-      "why": "D-34, D-36 and D-38: the document lists the eleven Relay trace explorer routes, the series route and the DCGM fleet route, which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned)",
+      "deviation": "D-34, D-36, D-38, D-40",
+      "why": "D-34, D-36, D-38 and D-40: the document lists the eleven Relay trace explorer routes, the series route, the DCGM fleet route and the three per-run visualisation routes, which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned)",
       "diffs": [
         {
           "path": "body/paths/~1api~1v1~1systems~1{system_id}~1analytics",
@@ -212,6 +236,18 @@
         },
         {
           "path": "body/paths/~1api~1v1~1systems~1{system_id}~1metrics~1series",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1profile",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1requests",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1summary",
           "a": "(absent)"
         },
         {
@@ -254,8 +290,8 @@
     },
     {
       "case": "global.openapi.viewer.after",
-      "deviation": "D-34, D-36, D-38",
-      "why": "D-34, D-36 and D-38: the document lists the eleven Relay trace explorer routes, the series route and the DCGM fleet route, which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned)",
+      "deviation": "D-34, D-36, D-38, D-40",
+      "why": "D-34, D-36, D-38 and D-40: the document lists the eleven Relay trace explorer routes, the series route, the DCGM fleet route and the three per-run visualisation routes, which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned)",
       "diffs": [
         {
           "path": "body/paths/~1api~1v1~1systems~1{system_id}~1analytics",
@@ -271,6 +307,18 @@
         },
         {
           "path": "body/paths/~1api~1v1~1systems~1{system_id}~1metrics~1series",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1profile",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1requests",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1summary",
           "a": "(absent)"
         },
         {
@@ -947,6 +995,38 @@
           "path": "body/points/65",
           "a": "(absent)",
           "b": "{\"key\":\"dcgm.remapped_rows\",\"labels\":{\"gpu\":\"0\",\"kind\":\"uncorrectable\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        }
+      ]
+    },
+    {
+      "case": "reread.evaluator.events",
+      "deviation": "D-41",
+      "why": "Wider event data (addendum 9.15): an evaluator.run benchmark also carries the confidence interval, tokens, elapsed time and failure rate that run.json already holds; nothing else differs",
+      "diffs": [
+        {
+          "path": "body/0/data/benchmarks/0/ci_high",
+          "a": "(absent)",
+          "b": "1"
+        },
+        {
+          "path": "body/0/data/benchmarks/0/ci_low",
+          "a": "(absent)",
+          "b": "1"
+        },
+        {
+          "path": "body/0/data/benchmarks/0/elapsed_s",
+          "a": "(absent)",
+          "b": "0.0"
+        },
+        {
+          "path": "body/0/data/benchmarks/0/failure_rate",
+          "a": "(absent)",
+          "b": "0"
+        },
+        {
+          "path": "body/0/data/benchmarks/0/tokens",
+          "a": "(absent)",
+          "b": "2875"
         }
       ]
     }

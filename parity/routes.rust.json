@@ -193,6 +193,13 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/systems/{system_id}/runs/{run_id}/profile",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-40"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/systems/{system_id}/runs/{run_id}/records",
       "auth": "admin",
       "body": false,
@@ -200,6 +207,20 @@
         "python": "viewer",
         "deviation": "D-37"
       }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/runs/{run_id}/requests",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-40"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/runs/{run_id}/summary",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-40"
     },
     {
       "method": "GET",

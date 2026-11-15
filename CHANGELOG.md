@@ -7,6 +7,15 @@ implemented / verified-live / unverified defined in the README.
 
 ### Added
 
+- **Charts, wave 3** (addendum 9.15), as run details driven by the run history. **AIPerf:** p1..p99 curves of TTFT,
+  ITL and latency with an A/B overlay, the HTTP phases, a per-request histogram, worker swim lanes and error codes, and
+  throughput against latency over runs (new numbers-only routes `/runs/{id}/summary` and `/runs/{id}/requests`).
+  **NeMo Evaluator:** scores with confidence intervals, a model x benchmark heatmap, cost against score and failure
+  rates. **NeMo Gym:** the per-task reward distribution and trends by model. **Model Optimizer:** a job timeline, base
+  vs output size and the age of a running job. **SkillEvaluator:** a validator x run heatmap, rubric bars and the
+  Tier 3 lift per agent and metric (no finding or model text). **Data Designer:** a run timeline and a column profile
+  (`/runs/{id}/profile`): types, missing share, distinct values and text lengths for everyone; numeric ranges and the
+  most frequent values (real cell values) for admins only.
 - **Charts, wave 2** (addendum 9.14). **GPU telemetry:** a Fleet tab with a heatmap of every GPU of every DCGM host
   Prometheus scrapes (utilisation, temperature, power or memory over 1 h, 24 h or 7 d; gaps drawn as gaps), from a new
   route that builds its queries from a fixed table; on Status, an "is it really busy?" card per GPU (utilisation next

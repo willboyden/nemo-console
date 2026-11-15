@@ -23,6 +23,7 @@ use serde_json::{Map, Value, json};
 use crate::adapters::base::{
     AdapterContext, AdapterError, AdapterRef, CommandResult, EventStream, RunOpts, SystemAdapter,
 };
+use crate::adapters::runviz;
 use crate::config::Settings;
 use crate::domain::models::{
     ActionResult, ActionSpec, ApplyResult, Component, ConfigFile, ConfigFileSpec, Danger,
@@ -979,6 +980,17 @@ impl Inner {
         wsb::load_json_dict(p)
     }
 
+    /// The run directory of a per-run visualisation route (addendum 9.15): the run id must pass `RUN_ID_RE`
+    /// (422 otherwise); nothing else from the request reaches the path.
+    fn viz_run_dir(&self, run_id: &str) -> Result<PathBuf, AdapterError> {
+        if !is(&RUN_ID_RE, run_id) {
+            return Err(AdapterError::Invalid(
+                "run_id must look like 20260101T000000-000-<preset>".to_owned(),
+            ));
+        }
+        Ok(self.runs_dir().join(run_id))
+    }
+
     // ── report ──────────────────────────────────────────────────────────────────────────────
     fn report_text(&self, run_id: &str) -> (bool, String) {
         let run_dir = if run_id.is_empty() {
@@ -1871,6 +1883,43 @@ impl SystemAdapter for AiPerfAdapter {
             return Err(AdapterError::UnknownId(action_id.to_owned()));
         }
         self.start_profile(params, t0).await
+    }
+
+    async fn run_summary(&self, run_id: &str) -> Result<Value, AdapterError> {
+        let run_dir = self.inner.viz_run_dir(run_id)?;
+        let live = self.inner.live_run_id();
+        let run_id = run_id.to_owned();
+        runviz::blocking(move || {
+            let (dir, meta) = runviz::load_meta(&run_dir, live.as_deref())
+                .ok_or_else(|| AdapterError::UnknownId(run_id.clone()))?;
+            // at most runviz::DOC_MAX_BYTES (1 MiB) parsed here, not MAX_JSON_BYTES: a larger summary reads as absent
+            let profile = dir
+                .sub("artifacts")
+                .and_then(|a| a.json_object(SUMMARY_FILE));
+            Ok(runviz::aiperf_summary(
+                &run_id,
+                &meta,
+                profile.as_ref(),
+                &VERDICTS,
+            ))
+        })
+        .await
+    }
+
+    async fn run_requests(&self, run_id: &str) -> Result<Value, AdapterError> {
+        let run_dir = self.inner.viz_run_dir(run_id)?;
+        let live = self.inner.live_run_id();
+        let run_id = run_id.to_owned();
+        runviz::blocking(move || {
+            let (dir, _) = runviz::load_meta(&run_dir, live.as_deref())
+                .ok_or_else(|| AdapterError::UnknownId(run_id.clone()))?;
+            let (bytes, cut) = dir
+                .sub("artifacts")
+                .and_then(|a| a.read_capped(RECORDS_FILE, MAX_EXPORT_BYTES))
+                .unwrap_or_default();
+            Ok(runviz::aiperf_requests(&run_id, &bytes, cut))
+        })
+        .await
     }
 }
 

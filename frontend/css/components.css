@@ -3813,3 +3813,496 @@ i.tl-key.bad {
 h4.sc-sub {
   margin-top: var(--s2);
 }
+
+/* Wave 3 visualizations (addendum 9.15): the run detail cards of AIPerf, Evaluator, Gym, Model Optimizer and SkillEvaluator under the run history, and the Data
+   Designer column profile and run timeline (js/runviz/*.js, js/charts/bar-charts.js, curve-chart.js, swim-chart.js, cell-matrix.js, range-bar.js). Marks are told
+   apart by shape, glyph, outline or text as well as colour; widths and positions go through SVG attributes or the CSSOM (no style attributes). */
+.rv-detail {
+  min-width: 0;
+}
+.rv-h {
+  margin: var(--s3) 0 0;
+  font-size: var(--fs-lg);
+}
+.rv-card .card-body {
+  gap: var(--s3);
+}
+.rv-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--s4);
+  min-width: 0;
+}
+.rv-panels.two {
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+}
+.rv-panel {
+  min-width: 0;
+}
+.rv-panel > h4.sc-sub {
+  margin: 0 0 var(--s1);
+}
+.rv-controls {
+  align-items: center;
+}
+.rv-facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s1);
+  overflow-wrap: anywhere;
+}
+.rv-fail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+}
+.rv-fail .note {
+  margin: 0;
+}
+.rv-hop {
+  margin: 0;
+}
+.rv-grid {
+  align-items: start;
+}
+
+/* horizontal bars with whiskers */
+.hbchart .hb-bar {
+  stroke: none;
+}
+.hbchart .hb-bar.hb-pick,
+.hbchart .hb-label.hb-pick {
+  cursor: pointer;
+}
+.hbchart .hb-bar.hb-ok {
+  fill: var(--ok);
+}
+.hbchart .hb-bar.hb-bad {
+  fill: var(--bad);
+}
+.hbchart .hb-bar.hb-warn {
+  fill: var(--warn);
+}
+.hbchart .hb-bar.hb-info {
+  fill: var(--info);
+}
+.hbchart .hb-bar.hb-muted {
+  fill: var(--text-3);
+  fill-opacity: 0.55;
+}
+.hbchart .hb-bar.hb-b {
+  fill-opacity: 0.45;
+  stroke: var(--text-2);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+.hbchart .hb-bar.hb-running {
+  fill-opacity: 0.4;
+  stroke: var(--text-2);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+}
+.hbchart .hb-bar.hb-v-ok {
+  stroke: var(--ok);
+  stroke-width: 2;
+}
+.hbchart .hb-bar.hb-v-bad {
+  stroke: var(--bad);
+  stroke-width: 2.5;
+}
+.hbchart .hb-bar.hb-v-warn {
+  stroke: var(--warn);
+  stroke-width: 2;
+  stroke-dasharray: 3 2;
+}
+.hbchart .hb-bar.hb-v-info {
+  stroke: var(--info);
+  stroke-width: 2;
+  stroke-dasharray: 5 3;
+}
+.hbchart .hb-bar.hb-v-muted {
+  stroke: var(--text-3);
+  stroke-width: 1.5;
+}
+.hbchart .hb-bar:hover {
+  filter: brightness(1.2);
+}
+.hbchart .hb-whisker {
+  stroke: var(--text);
+  stroke-width: 1.6;
+}
+.hbchart .hb-base {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+.hbchart .tick.val {
+  fill: var(--text);
+}
+.hbchart .muted-val {
+  fill: var(--text-3);
+}
+.hbchart .hb-label.is-a .hb-name,
+.hbchart .hb-label.is-b .hb-name {
+  fill: var(--text);
+  font-weight: 700;
+}
+.hbchart .hb-tag {
+  fill: var(--accent);
+  font: 700 11px var(--font);
+}
+.hbchart .hb-label.hb-pick:hover .hb-name,
+.hbchart .hb-label.hb-pick:focus-visible .hb-name {
+  fill: var(--focus);
+  text-decoration: underline;
+}
+.hbchart .hb-label {
+  outline: none;
+}
+i.sw.hb-muted-sw {
+  background: var(--text-3);
+  opacity: 0.6;
+}
+i.sw.hb-b-sw {
+  opacity: 0.55;
+  border: 1.5px dashed var(--text-2);
+}
+i.sw-whisker {
+  display: inline-block;
+  width: 22px;
+  height: 0;
+  border-top: 2px solid var(--text);
+  position: relative;
+}
+i.sw.sw-v {
+  border: 2px solid transparent;
+}
+i.sw.hb-v-ok {
+  border: 2px solid var(--ok);
+}
+i.sw.hb-v-bad {
+  border: 2px solid var(--bad);
+}
+i.sw.hb-v-warn {
+  border: 2px dashed var(--warn);
+}
+i.sw.hb-v-info {
+  border: 2px dashed var(--info);
+}
+i.sw.hb-v-muted {
+  border: 2px solid var(--text-3);
+}
+
+/* the dumbbell: without the skill (hollow circle) and with it (filled diamond) */
+.dbchart .db-head {
+  fill: var(--surface-2);
+  stroke: var(--border);
+}
+.dbchart .db-head-text {
+  fill: var(--text);
+  font: 600 12px var(--font);
+}
+.dbchart .db-line {
+  stroke: var(--text-3);
+  stroke-width: 2.5;
+}
+.dbchart .db-up .db-line {
+  stroke: var(--ok);
+}
+.dbchart .db-down .db-line {
+  stroke: var(--bad);
+}
+.dbchart .db-without {
+  fill: var(--surface);
+  stroke: var(--text-2);
+  stroke-width: 2;
+}
+.dbchart .db-with {
+  fill: var(--text-2);
+  stroke: var(--surface);
+  stroke-width: 1;
+}
+.dbchart .db-up .db-with {
+  fill: var(--ok);
+}
+.dbchart .db-down .db-with {
+  fill: var(--bad);
+}
+.dbchart .db-delta {
+  fill: var(--text-2);
+  font-weight: 600;
+}
+.dbchart .db-up .db-delta {
+  fill: var(--ok);
+}
+.dbchart .db-down .db-delta {
+  fill: var(--bad);
+}
+.dbchart .db-row:hover .db-line {
+  stroke-width: 4;
+}
+i.db-key {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+}
+i.db-key.without {
+  border: 2px solid var(--text-2);
+  border-radius: 50%;
+  background: var(--surface);
+}
+i.db-key.with {
+  background: var(--text-2);
+  transform: rotate(45deg) scale(0.75);
+}
+.skv-influence {
+  margin: 0;
+}
+
+/* grouped columns (the reward distribution) */
+.colchart .cc-col.cc-b {
+  fill-opacity: 0.5;
+  stroke: var(--text-2);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2;
+}
+.colchart .cc-col.cc-zero {
+  stroke: none;
+}
+.colchart .cc-col:hover {
+  filter: brightness(1.2);
+}
+
+/* request swim lanes */
+.swimchart .tl-lane {
+  fill: var(--surface-2);
+  stroke: var(--border);
+}
+.swimchart .sw-bar.sw-ok {
+  fill: var(--c1);
+  fill-opacity: 0.72;
+  stroke: var(--surface-2);
+  stroke-width: 0.6;
+}
+.swimchart .sw-bar.sw-err {
+  fill: var(--bad);
+  stroke: var(--text);
+  stroke-width: 0.9;
+}
+.swimchart .sw-bar:hover {
+  fill-opacity: 1;
+}
+i.sw.sw-ok {
+  background: var(--c1);
+  opacity: 0.72;
+}
+i.sw.sw-err {
+  background: var(--bad);
+  border: 1px solid var(--text);
+}
+
+/* a matrix of labelled cells (validators x runs, model x benchmark) */
+.cmchart .cm-head {
+  fill: var(--text-2);
+}
+.cmchart .cm-head.is-a,
+.cmchart .cm-head.is-b {
+  fill: var(--accent);
+  font-weight: 700;
+}
+.cmchart .cm-head.cm-pick {
+  cursor: pointer;
+}
+.cmchart .cm-head.cm-pick:hover,
+.cmchart .cm-head.cm-pick:focus-visible {
+  fill: var(--focus);
+  text-decoration: underline;
+  outline: none;
+}
+.cmchart .cm-row {
+  fill: var(--text-2);
+}
+.cmchart rect.cm-ok {
+  fill: var(--ok-soft);
+  stroke: var(--ok);
+}
+.cmchart rect.cm-warn {
+  fill: var(--warn-soft);
+  stroke: var(--warn);
+}
+.cmchart rect.cm-bad {
+  fill: var(--bad-soft);
+  stroke: var(--bad);
+}
+.cmchart rect.cm-muted {
+  fill: var(--surface-2);
+  stroke: var(--border-strong);
+}
+.cmchart .cm-text {
+  fill: var(--text);
+  font: 600 11px var(--font);
+  pointer-events: none;
+}
+.cmchart .cm-text.cmt-ok {
+  fill: var(--ok);
+}
+.cmchart .cm-text.cmt-warn {
+  fill: var(--warn);
+}
+.cmchart .cm-text.cmt-bad {
+  fill: var(--bad);
+}
+.cmchart .cm-text.cmt-muted {
+  fill: var(--text-3);
+}
+.cmchart .cm-text.lv6,
+.cmchart .cm-text.lv7,
+.cmchart .cm-text.lv8 {
+  fill: var(--accent-fg);
+}
+.cmchart .cm-cell {
+  outline: none;
+}
+.cmchart .cm-cell.cm-pick {
+  cursor: pointer;
+}
+.cmchart .cm-cell.cm-pick:hover rect,
+.cmchart .cm-cell:focus-visible rect {
+  stroke: var(--text);
+  stroke-width: 1.5;
+}
+i.sw.cm-sw {
+  border-radius: 3px;
+}
+i.sw.cm-ok {
+  background: var(--ok-soft);
+  border: 1px solid var(--ok);
+}
+i.sw.cm-warn {
+  background: var(--warn-soft);
+  border: 1px solid var(--warn);
+}
+i.sw.cm-bad {
+  background: var(--bad-soft);
+  border: 1px solid var(--bad);
+}
+i.sw.cm-muted {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+}
+
+/* scatter markers of other shapes than a circle: a legend key, a cross and a ring drawn with a stroke */
+svg.sw-mark {
+  flex: none;
+}
+.sc-ring,
+.sc-cross {
+  fill: none;
+  stroke-width: 2;
+}
+.sc-ring.sc1,
+.sc-cross.sc1 {
+  stroke: var(--c1);
+}
+.sc-ring.sc2,
+.sc-cross.sc2 {
+  stroke: var(--c2);
+}
+.sc-ring.sc3,
+.sc-cross.sc3 {
+  stroke: var(--c3);
+}
+.sc-ring.sc4,
+.sc-cross.sc4 {
+  stroke: var(--c4);
+}
+.sc-ring.sc5,
+.sc-cross.sc5 {
+  stroke: var(--c5);
+}
+.sc-ring.sc6,
+.sc-cross.sc6 {
+  stroke: var(--c6);
+}
+.pointschart g.sc-pt {
+  outline: none;
+}
+.pointschart g.sc-pt.sc-pick:focus-visible .sc-hit,
+.pointschart g.sc-pt.sc-pick:hover .sc-hit {
+  fill: var(--accent);
+  fill-opacity: 0.2;
+  stroke: var(--focus);
+  stroke-width: 1.5;
+}
+
+/* range bars and the column profile table */
+.rbar {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 96px;
+  height: 14px;
+  vertical-align: middle;
+}
+.rbar .rb-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 6px;
+  height: 2px;
+  background: var(--border-strong);
+}
+.rbar .rb-mark {
+  position: absolute;
+  top: 1px;
+  width: 8px;
+  height: 12px;
+  margin-left: -4px;
+  box-sizing: border-box;
+}
+.rbar .rb-end {
+  width: 2px;
+  margin-left: -1px;
+  height: 12px;
+  background: var(--text-3);
+}
+.rbar .rb-p50 {
+  top: 3px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 1px solid var(--surface);
+}
+.rbar .rb-p95 {
+  top: 3px;
+  height: 8px;
+  transform: rotate(45deg) scale(0.9);
+  background: var(--surface);
+  border: 2px solid var(--accent);
+}
+.ddv-range {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+.ddv-table th.ddv-name {
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ddv-table td.ddv-null .sy-cell {
+  min-width: 110px;
+}
+.ddv-profile > .card {
+  margin-bottom: 0;
+}
+
+.ddv-pick {
+  max-width: 320px;
+}
+.ddv-pick select {
+  width: 100%;
+}

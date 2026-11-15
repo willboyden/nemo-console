@@ -15,6 +15,7 @@ use serde_json::{Map, Value, json};
 use crate::adapters::base::{
     AdapterContext, AdapterError, AdapterRef, CommandResult, EventStream, SystemAdapter,
 };
+use crate::adapters::runviz;
 use crate::config::Settings;
 use crate::domain::models::{
     ActionResult, ActionSpec, ApplyResult, Component, ConfigFile, ConfigFileSpec, Danger, Endpoint,
@@ -1817,6 +1818,30 @@ impl SystemAdapter for SkillEvaluatorAdapter {
             ));
         }
         Ok(done.call(ok, &rows.join("\n"), vec![]))
+    }
+
+    async fn run_summary(&self, run_id: &str) -> Result<Value, AdapterError> {
+        if !RUN_ID_RE.is_match(run_id) {
+            return Err(AdapterError::Invalid(
+                "run_id must look like 20260101T000000-000-<skill>".to_owned(),
+            ));
+        }
+        let run_dir = self.inner.runs_dir().join(run_id);
+        let live = self.inner.live.run_id();
+        let run_id = run_id.to_owned();
+        runviz::blocking(move || {
+            let (dir, meta) = runviz::load_meta(&run_dir, live.as_deref())
+                .ok_or_else(|| AdapterError::UnknownId(run_id.clone()))?;
+            // at most runviz::DOC_MAX_BYTES (1 MiB) parsed here, not MAX_RESULT_BYTES: a larger file reads as absent
+            let tier1 = dir.json_object("skillevaluator-tier1.json");
+            Ok(runviz::se_summary(
+                &run_id,
+                &meta,
+                tier1.as_ref(),
+                &VERDICTS,
+            ))
+        })
+        .await
     }
 }
 

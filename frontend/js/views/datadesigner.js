@@ -11,6 +11,9 @@ import { badge, btn, card, kv, stat, errorBox, emptyBox, skeleton } from '../com
 import { systemPage } from '../components/system-page.js';
 import { runHistoryPanel } from '../components/run-history.js';
 import { DATADESIGNER } from '../run-descriptors.js';
+import { shapeRuns } from '../runs.js';
+import { profileCard, ddTimelineCard } from '../runviz/dd-profile.js';
+import { latestPerRun } from '../dd-profile-model.js';
 import { componentsTable, endpointsList } from '../components/status-panel.js';
 import { eventsPanel, pushEvent } from '../components/events-panel.js';
 import { actionsPanel } from '../components/actions-panel.js';
@@ -263,10 +266,13 @@ function filesCard(scope, runId) {
 function runsTab(scope) {
   const host = h('div', { class: 'stack-v' });
   const liveHost = h('div', { class: 'stack-v', 'aria-live': 'polite' }),
+    timelineHost = h('div'),
     listHost = h('div'),
     detailHost = h('div', { class: 'stack-v' });
   let events = [],
-    selected = null;
+    selected = null,
+    timelineScope = null,
+    detailScope = null;
   const runs = () => runsFromEvents(events);
   const runById = (id) => runs().find((r) => r.id === id) || null;
 
@@ -287,8 +293,18 @@ function runsTab(scope) {
       );
   }
 
+  // The run timeline (addendum 9.15): duration by script with the verdict, records requested vs written; a click on a bar or a label selects the run.
+  function renderTimeline() {
+    timelineScope?.dispose();
+    timelineScope = scope.child();
+    const rows = shapeRuns(latestPerRun(events), DATADESIGNER);
+    clear(timelineHost);
+    if (rows.length) timelineHost.append(ddTimelineCard(timelineScope, rows, { selected, onPick: (id) => select(id, true) }));
+  }
+
   function renderList() {
     renderLive();
+    renderTimeline();
     clear(listHost);
     const rs = runs();
     if (!rs.length) {
@@ -331,6 +347,8 @@ function runsTab(scope) {
   }
 
   function renderDetail() {
+    detailScope?.dispose();
+    detailScope = null;
     clear(detailHost);
     const r = selected && runById(selected);
     if (!r) return;
@@ -350,13 +368,15 @@ function runsTab(scope) {
     if (r.error) meta.append(kv(t('dd.col_error'), h('span', { class: 'wrap-anywhere' }, r.error)));
     detailHost.append(card(t('dd.detail_title', { id: r.id }), h('div', { class: 'stack-v' }, meta, h('p', { class: 'hint' }, t('dd.detail_hint')))));
     if (r.mode === 'preview' || r.mode === 'create') {
-      detailHost.append(recordsCard(scope, r.id), filesCard(scope, r.id));
+      // The column profile (addendum 9.15): aggregates for everyone, the top values for an admin only (js/runviz/dd-profile.js).
+      detailScope = scope.child();
+      detailHost.append(profileCard(detailScope, r.id), recordsCard(scope, r.id), filesCard(scope, r.id));
       announce(t('dd.detail_open', { id: r.id }));
     }
   }
 
-  function select(id) {
-    selected = selected === id ? null : id;
+  function select(id, keep = false) {
+    selected = selected === id && !keep ? null : id;
     renderList();
     renderDetail();
   }
@@ -382,7 +402,7 @@ function runsTab(scope) {
   });
   load();
   scope.every(20000, renderLive);
-  return h('div', { class: 'stack-v' }, liveHost, card(t('dd.runs_list'), listHost), detailHost);
+  return h('div', { class: 'stack-v' }, liveHost, timelineHost, card(t('dd.runs_list'), listHost), detailHost);
 }
 
 class NcDataDesigner extends NcView {

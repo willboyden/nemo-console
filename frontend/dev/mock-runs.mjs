@@ -27,6 +27,15 @@ const times = (now, n, days, newestAgo = 1500) => {
   return out.sort((a, b) => b - a);
 };
 const E = (system, ts, kind, summary, data) => ({ ts, system, kind, summary, data });
+// Wave 3 (addendum 9.15) keys come from a hash of the run id, NOT from the seeded generator above, so every figure that existed before stays what it was.
+const hash32 = (s) => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+};
+const unit = (s) => (hash32(String(s)) % 100003) / 100003;
+/** A run id without the time stamp it starts with (`20261112T091512-104-smoke` -> `104-smoke`): the stamp moves with the clock, the rest does not, so the seed stays put. */
+const stable = (id) => String(id).replace(/^\d{8}T\d{6}-/, '');
 
 // ---- aiperf: preset x model, ttft / itl / throughput drift slowly, a few failures
 function aiperf(now) {
@@ -34,10 +43,11 @@ function aiperf(now) {
     'chat-short': { c: 8, requests: 200, isl: 256, osl: 128, k: 1 },
     'chat-long': { c: 4, requests: 60, isl: 8192, osl: 256, k: 4.5 },
     'lightning-burst': { c: 16, requests: 400, isl: 128, osl: 64, k: 0.7 },
+    soak: { c: 32, requests: 6000, isl: 512, osl: 128, k: 2.2 }, // more rows than the requests route returns (5000): its answer is sampled and says so
   };
   const models = { 'qwen3.8-flash-next': { ttft: 190, itl: 17, tps: 1850 }, 'glm-5.3-flash-fp4-local': { ttft: 270, itl: 24, tps: 1420 }, 'nemotron-lightning': { ttft: 95, itl: 9, tps: 2650 } };
   return times(now, 26, 16).map((ts, i) => {
-    const preset = i % 7 === 3 ? 'chat-long' : i % 3 === 0 ? 'lightning-burst' : 'chat-short';
+    const preset = i === 20 ? 'soak' : i % 7 === 3 ? 'chat-long' : i % 3 === 0 ? 'lightning-burst' : 'chat-short';
     const model = preset === 'lightning-burst' ? 'nemotron-lightning' : i % 2 ? 'glm-5.3-flash-fp4-local' : 'qwen3.8-flash-next';
     const p = presets[preset],
       m = models[model];
@@ -96,13 +106,24 @@ function evaluator(now) {
     const verdict = fail ? 'failed' : interrupted ? 'interrupted' : 'succeeded';
     const benchmarks =
       verdict === 'succeeded'
-        ? suites[suite].map((b) => ({
-            bench: b,
-            status: 'succeeded',
-            metric: 'accuracy',
-            score: r3(Math.min(0.99, jit(base[model][b], 0.04))),
-            samples: suite === 'smoke' ? 50 : suite === 'quick' ? 200 : 500,
-          }))
+        ? suites[suite].map((b) => {
+            const score = r3(Math.min(0.99, jit(base[model][b], 0.04)));
+            const samples = suite === 'smoke' ? 50 : suite === 'quick' ? 200 : 500;
+            const half = 1.96 * Math.sqrt((score * (1 - score)) / samples); // the 95% interval of a proportion over `samples` samples
+            const id = `${i}|${model}|${b}`;
+            // addendum 9.15: ci_low, ci_high, tokens, elapsed_s, failure_rate are always present on a benchmark, null when the run did not record them (an older run).
+            const row = { bench: b, status: 'succeeded', metric: 'accuracy', score, ci_low: null, ci_high: null, samples, tokens: null, elapsed_s: null, failure_rate: null };
+            if (i < 15) {
+              row.ci_low = r3(Math.max(0, score - half));
+              row.ci_high = r3(Math.min(1, score + half));
+              row.tokens = Math.round(
+                samples * (b === 'gsm8k' ? 420 : b === 'mmlu' ? 160 : 700) * (0.85 + unit(id) * 0.3) * (model === 'glm-5.3-flash-fp4-local' ? 1.9 : model === 'nemotron-lightning' ? 0.7 : 1),
+              );
+              row.elapsed_s = r1(samples * (model === 'glm-5.3-flash-fp4-local' ? 2.4 : model === 'nemotron-lightning' ? 0.5 : 1.1) * (0.8 + unit(`${id}|t`) * 0.4));
+              row.failure_rate = r3((model === 'nemotron-lightning' ? 0.035 : 0.006) * (0.4 + unit(`${id}|f`) * 1.6));
+            }
+            return row;
+          })
         : [];
     const data = {
       run_id: runId(ts, suite),
@@ -126,11 +147,21 @@ function gym(now) {
     const fail = i === 4 || i === 12,
       interrupted = i === 9;
     const verdict = i === 0 ? 'running' : fail ? 'failed' : interrupted ? 'interrupted' : 'succeeded'; // the newest is still going
-    const data = { run_id: runId(ts, 'smoke'), model, limit, verdict, duration_ms: verdict === 'succeeded' ? Math.round(jit(limit * 29000, 0.2)) : fail ? 8000 : null };
+    // addendum 9.15: `rewards` is null when none were recorded (a run that failed, was interrupted or is still running)
+    const data = { run_id: runId(ts, 'smoke'), model, limit, verdict, duration_ms: verdict === 'succeeded' ? Math.round(jit(limit * 29000, 0.2)) : fail ? 8000 : null, rewards: null };
     if (verdict === 'succeeded') {
       const reward = Math.min(1, Math.max(0, jit(models[model], 0.12)));
-      const rewarded = Math.round(reward * limit);
-      Object.assign(data, { rollouts: limit, rewarded, mean_reward: r3(rewarded / limit), pass_at_1: r3(rewarded / limit) });
+      const full = Math.round(reward * limit); // rollouts that earned the full reward
+      // addendum 9.15: `rewards` = the per-task rewards (at most 20 numbers); `rewarded` = rollouts that produced a reward (a rollout that crashed has none); pass@1 = full-reward share of ALL rollouts.
+      const dropped = hash32(stable(data.run_id)) % 5 === 2 ? 1 : 0;
+      const rewards = [...Array(full).fill(1), ...Array(Math.max(0, limit - full - dropped)).fill(0)];
+      if (hash32(`${stable(data.run_id)}|p`) % 4 === 1 && rewards.includes(0)) rewards[rewards.indexOf(0)] = 0.5; // a partial-credit task
+      // task order, not sorted by reward: a shuffle that depends only on the run id
+      const order = rewards
+        .map((r, k) => ({ r, u: unit(`${stable(data.run_id)}|${k}`) }))
+        .sort((a, b) => a.u - b.u)
+        .map((x) => x.r);
+      Object.assign(data, { rollouts: limit, rewarded: order.length, mean_reward: r3(order.reduce((a, b) => a + b, 0) / Math.max(1, order.length)), pass_at_1: r3(full / limit), rewards: order });
     }
     const summary = [
       model,
@@ -156,7 +187,8 @@ function modelopt(now) {
     const recipe = Object.keys(recipes)[i % 3];
     const r = recipes[recipe];
     const fail = i === 3 || i === 10;
-    const verdict = fail ? 'failed' : i === 7 ? 'interrupted' : 'succeeded';
+    // the newest job is still running (addendum 9.15: its age is compared with what a finished job of the same method takes)
+    const verdict = i === 0 ? 'running' : fail ? 'failed' : i === 7 ? 'interrupted' : 'succeeded';
     const data = {
       job_id: runId(ts, recipe),
       recipe,

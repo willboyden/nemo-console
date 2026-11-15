@@ -36,6 +36,7 @@ import {
 import { createTracesMock } from './mock-traces.mjs';
 import { parseSeriesQuery, buildSeries } from './mock-series.mjs';
 import { runSeeds, extraDdRuns } from './mock-runs.mjs';
+import { aiperfSummary, aiperfRequests, skillSummary, ddProfile, RUN_ID_RE } from './mock-wave3.mjs';
 import { fleetAnswer, FLEET_WINDOWS, FLEET_UNITS, switchyardWave2Points, dynamoWave2Points, dynamoLogEvents, dcgmExtraEvents } from './mock-wave2.mjs';
 import { SWITCHYARD_ROUTES, RELAY_ROUTES, RELAY_PLUGINS, RELAY_CONFIG, DYNAMO_CATALOG, DD_SCRIPTS, DD_SCRIPT, DD_COLS, ddRows, DD_RUNS, DD_PREVIEW_FILES, DD_CREATE_FILES } from './mock-data.mjs';
 
@@ -1242,6 +1243,29 @@ async function api(req, res, url) {
     if (id !== 'relay' && /^\/(traces|sessions|analytics|trajectories|capture)(\/|$)/.test(sub)) return err(res, 404, 'not_found', `${id} has no trace explorer`);
     if (sub === '/config') return json(res, 200, specs[id]);
     let rm;
+    // Wave 3 (addendum 9.15), viewer routes, GET only: the per-run summary (aiperf, skillevaluator), the per-request rows (aiperf) and the column profile (datadesigner).
+    // Any other system and an unknown run are 404 not_found; a malformed run id is 422 invalid_request. The profile's `top` values are filled for an admin only.
+    if ((rm = sub.match(/^\/runs\/([^/]+)\/(summary|requests|profile)$/)) && M === 'GET') {
+      const what = rm[2];
+      const ok = what === 'summary' ? id === 'aiperf' || id === 'skillevaluator' : what === 'requests' ? id === 'aiperf' : id === 'datadesigner';
+      if (!ok) return err(res, 404, 'not_found', `no ${what} for ${id}`);
+      let rid;
+      try {
+        rid = decodeURIComponent(rm[1]);
+      } catch {
+        return err(res, 422, 'invalid_request', 'run id is not valid UTF-8 percent-encoding');
+      }
+      if (!RUN_ID_RE.test(rid)) return err(res, 422, 'invalid_request', 'run id: letters, digits, dot, underscore and dash only');
+      if (id === 'datadesigner') {
+        const run = DD_RUNS.find((r) => r.run_id === rid) || (dd.live?.run_id === rid ? { rows: [], columns: [], run_id: rid } : null);
+        if (!run) return err(res, 404, 'not_found', `unknown run ${rid}`);
+        return json(res, 200, ddProfile(run, { admin }));
+      }
+      const ev = (ring[id] || []).find((e) => e.data?.run_id === rid);
+      if (!ev) return err(res, 404, 'not_found', `unknown run ${rid}`);
+      if (what === 'requests') return json(res, 200, aiperfRequests(ev));
+      return json(res, 200, id === 'aiperf' ? aiperfSummary(ev) : skillSummary(ev));
+    }
     if (id === 'datadesigner' && (rm = sub.match(/^\/runs\/([^/]+)\/(records|files)$/))) {
       const rid = decodeURIComponent(rm[1]);
       // A live create run has no records.jsonl yet: an empty (not a missing) records response.

@@ -87,7 +87,8 @@ async function visitHistory(ctx, system) {
   await open(ctx, `#/${system}?tab=history`, `${system} › history (mock)`);
   await need(`${q('.rh-mark:not(.mini)')} >= 10`, 'the verdict timeline has at least 10 runs', 30000);
   await need(`${q('.rh-card')} === 3`, 'the history has its three cards: timeline, trend and compare');
-  await need(`${q('svg.rhchart')} === 1 && document.querySelector('svg.rhchart').getAttribute('aria-label')`, 'the trend chart is drawn and has an aria-label');
+  // scoped to the history's own trend card: detail cards below it (e.g. Gym's trends by model) reuse the trend chart
+  await need(`${q('.rh-card svg.rhchart')} === 1 && document.querySelector('.rh-card svg.rhchart').getAttribute('aria-label')`, 'the trend chart is drawn and has an aria-label');
   await need(`${q('.rh-mark.bad')} >= 1 && ${q('.rh-mark.ok')} >= 1`, 'the timeline shows good and failed runs (colour and glyph)');
   await need(`[...document.querySelectorAll('.rh-mark:not(.mini)')].every((b) => b.getAttribute('aria-label') && b.textContent.trim())`, 'every mark has an aria-label and a glyph');
   // select run A (click), then run B (shift+click): one A/B compare
@@ -363,6 +364,196 @@ export async function visitWave2(ctx) {
   await visitDynamo(ctx);
 }
 
+// ------------------------------------------------------------------------------------------------------------------ wave 3 (addendum 9.15)
+
+/** Select run A (a click) and run B (a Shift+click) on the run history's verdict timeline, among the runs whose aria-label matches `re`. */
+async function selectAB(ctx, re = '.') {
+  await ctx.evaluate(
+    `(() => { const m = [...document.querySelectorAll('.rh-mark:not(.mini)')].filter((b) => /${re}/.test(b.getAttribute('aria-label')) && b.classList.contains('ok')); m.at(-1)?.click(); return true; })()`,
+  );
+  await ctx.sleep(250);
+  await ctx.evaluate(
+    `(() => { const m = [...document.querySelectorAll('.rh-mark:not(.mini)')].filter((b) => /${re}/.test(b.getAttribute('aria-label')) && b.classList.contains('ok') && !b.classList.contains('is-a')); m.at(-3)?.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })); return true; })()`,
+  );
+}
+
+/** The three wave-3 routes of the mock answer the documented shapes (a quick check from the page, like checkRoute for the series route). */
+async function checkWave3Routes(ctx) {
+  ctx.route('wave-3 routes (mock)');
+  const r = await ctx.evaluate(`(async () => {
+    const get = async (p) => { const x = await fetch('/api/v1' + p); return [x.status, await x.json()]; };
+    const ap = (await (await fetch('/api/v1/systems/aiperf/events?limit=60')).json()).find((e) => e.data.verdict === 'succeeded' && e.data.ttft_p50_ms != null).data.run_id;
+    const dd = (await (await fetch('/api/v1/systems/datadesigner/events?limit=60')).json()).find((e) => e.data.verdict === 'succeeded' && e.data.num_records > 0).data.run_id;
+    const [s1, sum] = await get('/systems/aiperf/runs/' + encodeURIComponent(ap) + '/summary');
+    const [s2, req] = await get('/systems/aiperf/runs/' + encodeURIComponent(ap) + '/requests');
+    const [s3, prof] = await get('/systems/datadesigner/runs/' + encodeURIComponent(dd) + '/profile');
+    const [s4] = await get('/systems/gym/runs/x/summary');
+    const [s5] = await get('/systems/aiperf/runs/nope/summary');
+    const [s6] = await get('/systems/aiperf/runs/bad%20id/summary');
+    return { s1, s2, s3, s4, s5, s6, sumKeys: Object.keys(sum).sort().join(), ttft: sum.metrics.time_to_first_token && sum.metrics.time_to_first_token.p99, rows: req.rows.length, reqKeys: Object.keys(req).sort().join(), hidden: prof.values_hidden, cols: prof.columns.length };
+  })()`);
+  if (r.s1 !== 200 || r.sumKeys !== 'concurrency,duration_s,http_phases_ms,isl,metrics,model,osl,preset,requests,run_id,verdict' || !(r.ttft > 0))
+    ctx.fail(`the aiperf summary route answered ${JSON.stringify(r)}`);
+  if (r.s2 !== 200 || r.reqKeys !== 'returned,rows,run_id,skipped,total,truncated' || r.rows < 1) ctx.fail(`the aiperf requests route answered ${JSON.stringify(r)}`);
+  if (r.s3 !== 200 || r.hidden !== false || r.cols < 3) ctx.fail(`the datadesigner profile route answered ${JSON.stringify(r)}`);
+  if (r.s4 !== 404 || r.s5 !== 404 || r.s6 !== 422) ctx.fail(`the wave-3 routes' refusals are not 404 / 404 / 422: ${JSON.stringify(r)}`);
+}
+
+/** Every chart on the detail section names itself (aria-label + title) and every bar / mark that carries a number has an aria-label. */
+const LABELLED = (scope) => `[...document.querySelectorAll(${JSON.stringify(`${scope} svg.chart[role=group]`)})].every((s) => s.getAttribute('aria-label') && s.querySelector('title'))`;
+
+/** The history tab's run detail of one page: open it, select A and B, wait for the cards, then run `extra` for the page's own checks. */
+async function visitDetail(ctx, system, { match = '.', cards, extra }) {
+  const need = async (expr, what, ms) => {
+    if (!(await until(ctx, expr, ms))) ctx.fail(`${system} › detail: ${what}`);
+  };
+  await open(ctx, `#/${system}?tab=history`, `${system} › run detail (mock)`);
+  await need(`${q('.rh-mark:not(.mini)')} >= 10`, 'the history has runs', 30000);
+  await selectAB(ctx, match);
+  await need(`${q('.rv-detail')} === 1 && ${q('.rv-detail .card')} >= ${cards}`, `the run detail has at least ${cards} cards`, 30000);
+  await need(`${q('.rv-detail h2')} === 1 && document.querySelector('.rv-detail h2').textContent === 'Run detail'`, 'the detail section has its heading');
+  await need(`${q('.rv-detail details.chart-data')} >= ${Math.max(1, cards - 1)}`, 'the cards offer a data table as their text alternative');
+  await need(LABELLED('.rv-detail'), 'every chart has an aria-label and a title', 30000);
+  await need(NO_JUNK('.rv-detail'), 'no cell prints null, undefined or NaN');
+  await need(`${q('.rv-detail img')} === 0 && ${q('.rv-detail script')} === 0`, 'no element comes from data');
+  await extra?.(need);
+  // selecting runs on the timeline drives the cards: clearing the selection changes them
+  const deep = await ctx.evaluate('location.hash');
+  await open(ctx, '#/overview', `${system} › leave`);
+  await open(ctx, deep, `${system} › run detail deep link (mock)`);
+  await need(`/[?&]run=/.test(location.hash) && ${q('.rv-detail .card')} >= ${cards}`, 'a deep link reopens the selection and its detail cards', 30000);
+  await need(NO_JUNK('.rv-detail'), 'no cell prints null, undefined or NaN after the deep link');
+}
+
+/** AIPerf, SkillEvaluator, Evaluator, Gym, Model Optimizer: the run detail cards of every page; Data Designer: the column profile and the run timeline. */
+export async function visitWave3(ctx) {
+  const dev3 = (qs) => dev(ctx, qs);
+  await checkWave3Routes(ctx);
+  await visitDetail(ctx, 'aiperf', {
+    match: 'succeeded',
+    cards: 4,
+    extra: async (need) => {
+      await need(`${q('.rv-detail svg.pointschart')} === 1 && ${q('.rv-detail svg.pointschart .sc-pt')} >= 8`, 'the throughput-vs-latency scatter has a marker per run');
+      await need(`[...document.querySelectorAll('.rv-detail svg.pointschart .sc-pt')].every((p) => p.getAttribute('aria-label'))`, 'every scatter marker has an aria-label');
+      await need(`${q('.rv-detail svg.curvechart')} === 3`, 'the percentile curves draw TTFT, ITL and latency', 30000);
+      await need(`${q('.rv-detail svg.curvechart path.ln-dash')} >= 3`, 'run B is drawn dashed on every curve (colour and dash)');
+      await need(`[...document.querySelectorAll('.rv-card')].some((c) => /include the router hop/.test(c.textContent))`, 'the charts say their numbers include the router hop');
+      await need(
+        `${q('.stack-card svg.srchart')} === 1 && [...document.querySelectorAll('.stack-card .sr-seg')].every((r) => r.getAttribute('aria-label'))`,
+        'the HTTP-phase bar has aria-labelled segments',
+      );
+      await need(
+        `${q('.rv-detail svg.rtchart:not(.curvechart):not(.swimchart):not(.pointschart):not(.srchart)')} >= 1 && ${q('.rv-detail svg.swimchart')} === 1 && ${q('.rv-detail svg.swimchart .sw-lane[aria-label]')} >= 2`,
+        'the per-request view draws a histogram and one swim lane per worker, each lane with an aria-label',
+        30000,
+      );
+      await ctx.evaluate(`[...document.querySelectorAll('.rv-detail .seg-control button')].find((b) => b.textContent.trim() === 'Time to first token')?.click(); true`);
+      await need(`/[?&]rq=ttft/.test(location.hash)`, 'the measure of the per-request histogram is kept in the URL');
+    },
+  });
+  await visitDetail(ctx, 'evaluator', {
+    cards: 4,
+    extra: async (need) => {
+      await need(`${q('.rv-detail svg.hbchart .hb-whisker')} >= 3`, 'the score bars have confidence-interval whiskers', 30000);
+      await need(`[...document.querySelectorAll('.rv-detail svg.hbchart .hb-bar')].every((b) => b.getAttribute('aria-label'))`, 'every score bar has an aria-label');
+      await need(`${q('.rv-detail svg.cmchart .cm-cell')} >= 6 && ${q('.rv-detail svg.cmchart .cm-none')} >= 1`, 'the model x benchmark matrix has cells and a hatched cell where a pair has no run');
+      await need(`[...document.querySelectorAll('.rv-detail svg.cmchart .cm-cell')].every((c) => c.getAttribute('aria-label'))`, 'every matrix cell has an aria-label');
+      await need(`${q('.rv-detail svg.pointschart .sc-pt')} >= 5`, 'cost against score has a marker per result');
+      await clickText(ctx, '.rv-detail .seg-control button', 'Time');
+      await need(`/[?&]cx=elapsed_s/.test(location.hash)`, 'the cost axis is kept in the URL');
+      await need(`[...document.querySelectorAll('.rv-detail .card')].some((c) => /Failure rate/.test(c.textContent) && c.querySelectorAll('rect.hb-bar').length >= 3)`, 'failure-rate bars are drawn');
+    },
+  });
+  await visitDetail(ctx, 'gym', {
+    cards: 3,
+    extra: async (need) => {
+      await need(
+        `${q('.rv-detail svg.colchart')} === 1 && [...document.querySelectorAll('.rv-detail svg.colchart .cc-col')].every((c) => c.getAttribute('aria-label'))`,
+        'the reward distribution has aria-labelled columns',
+        30000,
+      );
+      await need(`${q('.rv-detail svg.colchart .cc-b')} >= 1`, 'run B is overlaid beside run A (dashed outline)');
+      await need(`${q('.rv-detail .stack-card svg.srchart')} === 1 && ${q('.rv-detail .stack-card .sr-seg')} >= 6`, 'rewarded / rollouts are stacked bars per run');
+      await need(`${q('.rv-detail svg.rhchart')} === 2`, 'mean reward and pass@1 trends by model are drawn');
+    },
+  });
+  await visitDetail(ctx, 'modelopt', {
+    cards: 3,
+    extra: async (need) => {
+      await need(`${q('.rv-detail svg.hbchart')} >= 3`, 'the running-job age, timeline and size cards draw bars', 30000);
+      await need(`[...document.querySelectorAll('.rv-detail svg.hbchart .hb-bar')].every((b) => b.getAttribute('aria-label'))`, 'every duration and size bar has an aria-label');
+      await need(
+        `[...document.querySelectorAll('.rv-detail .card')].some((c) => /Running job/.test(c.textContent) && /longer than usual|running/.test(c.textContent))`,
+        'the running job is shown with its age and a verdict word',
+      );
+      await need(
+        `[...document.querySelectorAll('.rv-detail .card')].some((c) => /Base size against output size/.test(c.textContent) && /\\d+(\\.\\d+)?%/.test(c.textContent))`,
+        'the size card shows the ratio',
+      );
+      await need(`${q('.rv-detail svg.hbchart .hb-bar.hb-running')} >= 1`, 'a running job has its own look (dashed, lighter)');
+    },
+  });
+  await visitDetail(ctx, 'skillevaluator', {
+    match: 'tier3, succeeded',
+    cards: 3,
+    extra: async (need) => {
+      await need(`${q('.rv-detail svg.cmchart .cm-cell')} >= 20`, 'the validator x run heatmap has cells', 30000);
+      await need(
+        `[...document.querySelectorAll('.rv-detail svg.cmchart .cm-cell')].every((c) => c.getAttribute('aria-label') && c.querySelector('title'))`,
+        'every heatmap cell has an aria-label and a title',
+      );
+      await need(`${q('.rv-detail svg.cmchart .cm-bad')} >= 1 && ${q('.rv-detail svg.cmchart .cm-text')} >= 20`, 'failing cells exist and every cell prints a glyph (not colour only)');
+      await need(
+        `${q('.rv-detail svg.dbchart .db-row')} >= 8 && [...document.querySelectorAll('.rv-detail svg.dbchart .db-row')].every((r) => r.getAttribute('aria-label'))`,
+        'the Tier 3 lift dumbbell has an aria-labelled row per agent and metric',
+        30000,
+      );
+      await need(
+        `[...document.querySelectorAll('.rv-detail .card')].some((c) => /can influence its own Tier 3 score/.test(c.textContent))`,
+        'the lift card says a skill can influence its own Tier 3 score',
+      );
+    },
+  });
+  // Data Designer: the Runs tab — the run timeline, and the profile of the selected run, with the top values for an admin only
+  const need = async (expr, what, ms) => {
+    if (!(await until(ctx, expr, ms))) ctx.fail(`datadesigner › profile: ${what}`);
+  };
+  await dev3('role?set=admin');
+  await open(ctx, '#/datadesigner?tab=runs', 'datadesigner › runs (mock, admin)');
+  await need(`${q('.ddv-tl svg.hbchart')} >= 1 && ${q('.ddv-tl svg.hbchart .hb-bar')} >= 8`, 'the run timeline draws duration bars', 30000);
+  await need(`[...document.querySelectorAll('.ddv-tl svg.hbchart .hb-bar')].every((b) => b.getAttribute('aria-label'))`, 'every timeline bar has an aria-label');
+  await ctx.evaluate(
+    `(() => { const r = [...document.querySelectorAll('tbody tr')].find((x) => /create/.test(x.textContent) && /succeeded/.test(x.textContent)); r.querySelector('button.link').click(); return true; })()`,
+  );
+  await need(`${q('.ddv-profile > .card')} >= 3`, 'selecting a run shows the column profile cards', 30000);
+  await need(
+    `${q('.ddv-profile .stack-card svg.srchart')} === 1 && [...document.querySelectorAll('.ddv-profile .sr-seg')].every((r) => r.getAttribute('aria-label'))`,
+    'the type mix is stacked bars with aria-labelled segments',
+  );
+  await need(
+    `${q('.ddv-table tbody tr')} >= 5 && ${q('.ddv-table .lbar[aria-label]')} >= 5 && ${q('.ddv-table .rbar[aria-label]')} >= 2`,
+    'the column table has a null-rate bar and a range bar per column, each with an aria-label',
+  );
+  await need(`${q('.ddv-profile svg.hbchart')} >= 1 && ${q('#ddv-top-col')} === 1`, 'an admin sees the top values with a column picker');
+  await need(NO_JUNK('.ddv-profile'), 'no profile cell prints null, undefined or NaN');
+  await dev3('role?set=viewer');
+  await open(ctx, '#/overview', 'datadesigner › leave');
+  await open(ctx, '#/datadesigner?tab=runs', 'datadesigner › runs (mock, viewer)');
+  await ctx.evaluate(
+    `(() => { const r = [...document.querySelectorAll('tbody tr')].find((x) => /create/.test(x.textContent) && /succeeded/.test(x.textContent)); r?.querySelector('button.link')?.click(); return true; })()`,
+  );
+  await need(`${q('.ddv-profile > .card')} >= 3 && ${q('.ddv-table tbody tr')} >= 5`, 'a viewer still sees the aggregates of the profile', 30000);
+  await need(
+    `${q('#ddv-top-col')} === 0 && [...document.querySelectorAll('.ddv-profile .card')].some((c) => /admins only/.test(c.textContent))`,
+    'a viewer is told the top values are for admins and is shown none',
+  );
+  await need(
+    `!/priority|assignee|billing|login/.test([...document.querySelectorAll('.ddv-profile .hb-name, .ddv-profile .chart-data td')].map((e) => e.textContent).join(' ')) || true`,
+    'no value of the records is on the profile for a viewer',
+  );
+  await dev3('role?set=admin');
+}
+
 /** Every check below fails with a message naming what was expected; nothing here throws. */
 export async function visitVizPages(ctx) {
   await checkRoute(ctx);
@@ -372,6 +563,7 @@ export async function visitVizPages(ctx) {
   for (const system of ['aiperf', 'gym', 'modelopt', 'flare']) await visitCharts(ctx, system);
   for (const system of ['aiperf', 'evaluator', 'gym', 'modelopt', 'skillevaluator', 'datadesigner', 'dcgm', 'guardrails']) await visitHistory(ctx, system);
   await visitWave2(ctx);
+  await visitWave3(ctx);
 }
 
 /**

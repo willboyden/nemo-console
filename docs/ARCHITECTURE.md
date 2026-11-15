@@ -779,3 +779,77 @@ one new route, new tabs/cards); no existing key, route or shape changes. Builds 
   `dyn.capacity` is the largest across models; `dyn.spec_accept_pos` is since the worker started; Switchyard picks
   `/v1/stats` first and `/metrics` per key. New keys are appended after the existing ones, and idle series are evicted after 30 minutes, so churn cannot fill
   the per-system 256-series cap for good.
+
+**9.15 (2026-11-14): visualizations, wave 3 — AIPerf, NeMo Evaluator, NeMo Gym, Model Optimizer, SkillEvaluator, Data
+Designer.** Additive (three per-run routes, wider event data, new cards); no existing route or shape changes except
+the event `data` additions below (new keys only).
+
+* **Route `GET /api/v1/systems/{id}/runs/{run_id}/summary`** (viewer; numbers and identifiers only; Rust-only, parity
+  deviation D-40). Systems: `aiperf`, `skillevaluator`; every other system 404 `not_found`; unknown run 404; run id
+  validated as the adapters already validate run ids; files read with the existing hardened reader (no symlinks, size
+  caps, I-7).
+  * `aiperf`: `{run_id, preset, model, verdict, concurrency, requests, isl, osl, duration_s, metrics: {<name>: {unit,
+    avg, min, max, std, p1, p5, p10, p25, p50, p75, p90, p95, p99}}, http_phases_ms: {dns, connecting, sending,
+    waiting, receiving} | null}` from `profile_export_aiperf.json` (every numeric metric it has, at most 100; absent
+    statistics are null; strings other than units and names dropped).
+  * `skillevaluator`: `{run_id, skill, tiers, verdict, tier1: {validators: [{name, passed, status, findings: {critical,
+    high, medium, low, info}}], rubric: [{id, importance, score, pass, judge_pass}], dimensions: {<name>: number}} |
+    null, tier3: {agents: [{name, model, skill_lift, with_skill, without_skill, metrics: [{name, with_skill,
+    without_skill, delta}]}]} | null}`. No finding message, rubric criterion text, notes, conclusions or
+    recommendations (they are skill- or model-influenced text; E-5/E-6).
+* **Route `GET /api/v1/systems/aiperf/runs/{run_id}/requests`** (viewer; Rust-only, D-40): one row per request from
+  `profile_export.jsonl`, numbers only: `{run_id, total, returned, truncated, rows: [{i, start_ms, end_ms, latency_ms,
+  ttft_ms, itl_avg_ms, input_tokens, output_tokens, worker, error_code}]}` (`start_ms` relative to the first request;
+  `worker` a small integer index assigned by first appearance; `error_code` an integer or null; no request,
+  conversation or worker ids, no error text). At most 5000 rows (evenly sampled when there are more), file size cap as
+  for the records reader.
+* **Route `GET /api/v1/systems/datadesigner/runs/{run_id}/profile`** (viewer; Rust-only, D-40): per-column aggregates
+  of `records.jsonl`: `{run_id, rows, columns: [{name, types: {string, number, bool, null, object, array}, non_null,
+  distinct, distinct_capped, length: {min, p50, p95, max} | null, numeric: {min, p50, p95, max} | null, top: [{value,
+  count}] | null}]}`. `top` (the 10 most frequent values of a column with at most 50 distinct values, each value cut
+  to 64 characters) is filled ONLY for an admin; for a viewer it is null and the answer says `values_hidden: true` —
+  the values are model-written content (9.13). `numeric` (min, p50, p95, max: nearest-rank, so real cell values) is
+  admin-only too, null for a viewer; `length` is shown to both. Column names are shown to both but must be identifiers
+  (`[A-Za-z_][A-Za-z0-9_]{0,63}`); any other column is dropped and `truncated` is set. At most 200 columns and 2000
+  rows; the read is capped in bytes and per line (the records file on disk is not itself byte-capped), and any cap that
+  stops the read sets `truncated`. Amended 2026-11-14 after the pre-merge audit (viewers get lengths, counts and
+  shapes, never cell values; an oversized run.json or Tier 1 file — over 1 MiB, far above the few KB seen in
+  practice — reads as absent).
+* **Event `data` additions** (new keys only; parity D-41 pins the exact added keys): `evaluator.run` benchmarks gain
+  `ci_low`, `ci_high`, `tokens`, `elapsed_s`, `failure_rate`; `gym.smoke` gains `rewards` (the per-task rewards array,
+  at most 20 numbers).
+* **Frontend** (shared toolkit; textContent only; CSP unchanged; viewers never see a value the API withholds):
+  * **AIPerf:** in the run history, a run detail: percentile curves (p1..p99) of TTFT, ITL and latency for the selected
+    run and, when two are selected, both overlaid (A/B); an HTTP-phase stacked bar; a per-request view (latency
+    histogram, a request timeline as swim lanes by worker, error codes as bars); a throughput-vs-latency scatter over
+    runs (one point per run, colour by concurrency). Every chart says the numbers include the router hop.
+  * **Evaluator:** scores with confidence-interval bars per benchmark (A/B), a model x benchmark heatmap (latest score
+    per pair), cost vs score (tokens or time vs score) and failure-rate bars.
+  * **Gym:** the per-task reward distribution of a run (strip or histogram, A/B overlay), rewarded / rollouts stacked
+    bars per run, mean reward and pass@1 trends by model.
+  * **Model Optimizer:** job timeline (duration bars coloured by verdict and method), base vs output size per job
+    (ratio label), age of a running job (a stuck job stands out).
+  * **SkillEvaluator:** a validator x run (or x skill) heatmap of status and finding severity, rubric bars (score and
+    pass), the Tier 3 lift as a dumbbell per agent and per metric (with vs without the skill), labelled "a skill can
+    influence its own Tier 3 score".
+  * **Data Designer:** a column profile on the Runs tab for the selected run: type mix, null rate, distinct count,
+    length distribution, numeric range, and for admins the top values; plus a run timeline (duration by script,
+    verdict colours, requested vs produced records).
+  * Mock server: realistic answers for the three routes and the new event keys; the browser suite visits every new
+    card.
+* Pinned details (2026-11-14, from the build): a bad run id is 422 `invalid_request` on the three new routes (the
+  older `/records` and `/files` keep their 404); the profile always carries `values_hidden` and a `truncated` flag
+  (rows over 2000, columns over 200, or column names that fail the check), `types.null` counts explicit nulls and
+  missing keys, `distinct` is counted up to 1000 per column (`distinct_capped`), lengths are measured as `/records`
+  shows values (at most 2048 characters), at most 64 MiB of `records.jsonl` is read, and top values are not even
+  collected for a viewer; request rows give `error_code` 0 for a failed request with no usable code (null = success),
+  number workers by first appearance over the whole file (at most 1024), and convert ns/us/ms/s (any other unit is
+  null); the AIPerf summary drops `count`/`sum`, takes each HTTP phase's average, and answers `metrics: {}` for a run
+  without a profile file. After the pre-merge audit (2026-11-14): at most 2 of these reads run at once on the
+  blocking pool; every JSON document (run.json, the AIPerf summary, the Tier 1 file) is parsed only if it is at most
+  1 MiB and 100,000 values (else it reads as absent: `metrics: {}` / `tier1: null`); a request line over 256 KiB or
+  100,000 values is not parsed and is counted in a new `skipped` key (and sets `truncated`), every line counts toward
+  the 200,000-line cap; a profile line over 1 MiB is skipped and sets `truncated`; the profile answer gains
+  `columns_dropped` (columns that are not identifiers or come after the 200th); hard links are refused and every file
+  is opened relative to the run directory (`openat`, `O_NOFOLLOW`). Peak memory per request measured at 5-37 MiB
+  (`tests/runviz_memory.rs`).

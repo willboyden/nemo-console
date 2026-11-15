@@ -358,3 +358,39 @@ pub async fn run_files(req: Req) -> Result<Response<Body>, ApiError> {
         Err(e) => Err(run_error(&e)),
     }
 }
+
+/// The answer of a per-run visualisation route (addendum 9.15): 404 for a system without the route, 404 "unknown
+/// run", 422 `invalid_request` for a run id the adapter's run-id check refuses.
+fn viz_answer(r: Result<Value, AdapterError>) -> Result<Response<Body>, ApiError> {
+    match r {
+        Ok(v) => Ok(json_response(200, &v)),
+        Err(AdapterError::Invalid(m)) => Err(ApiError::new(422, "invalid_request", m)),
+        Err(e) => Err(run_error(&e)),
+    }
+}
+
+/// `GET /systems/{id}/runs/{run_id}/summary` (addendum 9.15, Rust-only, PORTING.md D-40): numbers and identifiers of
+/// one stored AIPerf or SkillEvaluator run. Every other system answers 404.
+pub async fn run_summary(req: Req) -> Result<Response<Body>, ApiError> {
+    let a = dep_adapter(&req)?;
+    dep_viewer(&req)?;
+    viz_answer(a.run_summary(req.param("run_id")).await)
+}
+
+/// `GET /systems/aiperf/runs/{run_id}/requests` (addendum 9.15, D-40): per-request numbers of one stored AIPerf run
+/// (at most 5000 rows, evenly sampled; no request, conversation or worker id, no error text).
+pub async fn run_requests(req: Req) -> Result<Response<Body>, ApiError> {
+    let a = dep_adapter(&req)?;
+    dep_viewer(&req)?;
+    viz_answer(a.run_requests(req.param("run_id")).await)
+}
+
+/// `GET /systems/datadesigner/runs/{run_id}/profile` (addendum 9.15, D-40): per-column aggregates of one stored Data
+/// Designer run. The top values are model-written content (addendum 9.13): only an admin gets them; a viewer's
+/// answer has `top: null` everywhere and `values_hidden: true`.
+pub async fn run_profile(req: Req) -> Result<Response<Body>, ApiError> {
+    let a = dep_adapter(&req)?;
+    dep_viewer(&req)?;
+    let admin = req.principal.role == crate::services::auth::PrincipalRole::Admin;
+    viz_answer(a.run_profile(req.param("run_id"), admin).await)
+}

@@ -22,6 +22,7 @@ use crate::adapters::base::{
     AdapterContext, AdapterError, AdapterRef, CommandResult, EventStream, SystemAdapter,
 };
 use crate::adapters::evaluator::{cli_tail, write_private};
+use crate::adapters::runviz;
 use crate::config::Settings;
 use crate::domain::models::{
     ActionResult, ActionSpec, ApplyResult, Component, ConfigFile, ConfigFileSpec, Danger,
@@ -1806,6 +1807,39 @@ impl SystemAdapter for DataDesignerAdapter {
         out.insert("run_id".into(), Value::from(run_id));
         out.insert("files".into(), Value::Array(files));
         Ok(Value::Object(out))
+    }
+
+    async fn run_profile(&self, run_id: &str, with_values: bool) -> Result<Value, AdapterError> {
+        if !RUN_ID_RE.is_match(run_id) {
+            return Err(AdapterError::Invalid(
+                "run_id must look like 20260101T000000-000-<script>".to_owned(),
+            ));
+        }
+        let run_dir = self.inner.runs_dir().join(run_id);
+        let live = self.inner.live.run_id();
+        let run_id = run_id.to_owned();
+        runviz::blocking(move || {
+            let (dir, _) = runviz::load_meta(&run_dir, live.as_deref())
+                .ok_or_else(|| AdapterError::UnknownId(run_id.clone()))?;
+            // the records the console exported for this run (at most MAX_PREVIEW_RECORDS lines are written there);
+            // lines over runviz::PROFILE_LINE_MAX (1 MiB) are skipped here, not parsed
+            let mut lines = runviz::Lines::open(
+                &dir,
+                "records.jsonl",
+                runviz::PROFILE_MAX_BYTES,
+                runviz::PROFILE_LINE_MAX,
+            )
+            .ok();
+            Ok(runviz::dd_profile(
+                &run_id,
+                lines.as_mut(),
+                MAX_PREVIEW_RECORDS,
+                CELL_CAP,
+                with_values,
+                cap_value,
+            ))
+        })
+        .await
     }
 }
 

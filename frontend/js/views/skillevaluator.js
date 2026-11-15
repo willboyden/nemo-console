@@ -10,6 +10,7 @@ import { eventsPanel } from '../components/events-panel.js';
 import { actionsPanel } from '../components/actions-panel.js';
 import { runHistoryPanel } from '../components/run-history.js';
 import { SKILLEVAL } from '../run-descriptors.js';
+import { skillevalDetail } from '../runviz/skilleval-detail.js';
 
 const score = (x) => (x == null ? '–' : Number(x).toFixed(1));
 const lift = (x) => (x == null ? '–' : `${x >= 0 ? '+' : ''}${Number(x).toFixed(3)}`);
@@ -59,7 +60,7 @@ class NcSkillEvaluator extends NcView {
       active: this.query?.tab,
       tabDefs: [
         { id: 'status', label: t('tab.status'), render: (scope, ctx) => statusTab(scope, ctx) },
-        { id: 'history', label: t('tab.history'), render: (scope, ctx) => runHistoryPanel(scope, ctx, SKILLEVAL) },
+        { id: 'history', label: t('tab.history'), render: (scope, ctx) => runHistoryPanel(scope, ctx, { ...SKILLEVAL, detail: skillevalDetail }) },
         { id: 'evaluate', label: t('tab.evaluate'), render: (scope) => actionsPanel(scope, 'skillevaluator') },
       ],
     });

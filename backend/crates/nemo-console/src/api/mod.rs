@@ -101,6 +101,9 @@ pub enum H {
     EventsStream,
     RunRecords,
     RunFiles,
+    RunSummary,
+    RunRequests,
+    RunProfile,
     TraceIndex,
     Traces,
     Trace,
@@ -219,6 +222,29 @@ pub static ROUTES: &[RouteDef] = &[
         Viewer,
         false,
         RunFiles
+    ),
+    // per-run visualisation answers (addendum 9.15; added after the port, PORTING.md D-40); the summary serves
+    // AIPerf and SkillEvaluator, the requests AIPerf, the profile Data Designer; other systems answer 404
+    r!(
+        GET,
+        "/systems/{system_id}/runs/{run_id}/summary",
+        Viewer,
+        false,
+        RunSummary
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/runs/{run_id}/requests",
+        Viewer,
+        false,
+        RunRequests
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/runs/{run_id}/profile",
+        Viewer,
+        false,
+        RunProfile
     ),
     // observe: the Relay trace explorer (addendum 9.12; added after the port, PORTING.md D-34). The literal
     // `/traces/index` comes before `/traces/{trace_id}` so that "index" is never read as an id.
@@ -1099,6 +1125,9 @@ async fn run_handler(h: H, req: Req) -> Result<Response<Body>, ApiError> {
         H::EventsStream => observe::events_stream(req).await,
         H::RunRecords => observe::run_records(req).await,
         H::RunFiles => observe::run_files(req).await,
+        H::RunSummary => observe::run_summary(req).await,
+        H::RunRequests => observe::run_requests(req).await,
+        H::RunProfile => observe::run_profile(req).await,
         H::TraceIndex => traces::index(req).await,
         H::Traces => traces::traces(req).await,
         H::Trace => traces::trace(req).await,

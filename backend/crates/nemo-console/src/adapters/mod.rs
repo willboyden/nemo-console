@@ -24,6 +24,8 @@ pub mod modelopt;
 pub mod flare;
 // after the port: the Relay trace explorer (addendum 9.12); not a system, a part of the Relay adapter
 pub mod relay_traces;
+// after the port: per-run visualisation answers (addendum 9.15) shared by AIPerf, SkillEvaluator and Data Designer
+pub mod runviz;
 
 use crate::adapters::base::{AdapterContext, AdapterError, AdapterRef};
 use crate::config::Settings;
