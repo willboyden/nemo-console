@@ -96,7 +96,7 @@
     ]
   },
   "audit": {
-    "lead": "The Audit log is the append-only record of every change made through the console: when, which key, which system, which action or file, the parameters (redacted) and the HTTP status. Chat text and file bodies are never stored. Only admins can read it.",
+    "lead": "The Audit log is the append-only record of every change made through the console: when, which key, which system, which action or file, the parameters (redacted) and the HTTP status. Chat text and file bodies are never stored. Only admins can read it. The Summary tab adds the picture over time: actions per day by system, who acted on what, and the errors.",
     "steps": [
       {
         "title": "Sign in with an admin key",
@@ -104,8 +104,13 @@
         "cmd": "nemo-console mint-key admin"
       },
       {
-        "title": "Pick a system",
-        "body": "The Log tab shows the newest 200 calls. The filter narrows them to one system; Refresh reloads.",
+        "title": "Read the summary",
+        "body": "The Summary tab counts the audited actions of the last 24 hours, 7 days or 30 days: stacked bars per day by system, a matrix of actor by system (click a cell to open the log for that actor and system) and an error timeline. The counts are aggregates only: no parameters and no paths.",
+        "tab": "summary"
+      },
+      {
+        "title": "Filter the log",
+        "body": "The Log tab shows the newest 200 calls. Narrow them by time range (a preset, or your own UTC from and to), by actor (the key's alias), by status (succeeded or error) and by system. The filters live in the address, so a filtered log can be shared; Clear filters starts again, Refresh reloads.",
         "tab": "log"
       },
       {

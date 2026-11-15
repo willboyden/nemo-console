@@ -67,7 +67,9 @@ async function visitCharts(ctx, system, { picker = false } = {}) {
   await ctx.evaluate(`document.querySelector('#main .check input').click(); true`);
   await need(`location.hash.includes('max=1')`, 'ticking Show max writes it into the URL');
   await need(`${q('svg.tschart path.ts-band')} >= 1`, 'with Show max on, a gauge chart draws its band', 20000);
-  const rate = system === 'flare' ? await ctx.evaluate(`[...document.querySelectorAll('.series-card .card-head span')].some((e) => /per (second|minute)/.test(e.textContent))`) : true;
+  // Flare's counters moved into the per-target rate cards (wave 4): their headings name the rate
+  const rate =
+    system === 'flare' ? await ctx.evaluate(`[...document.querySelectorAll('.series-card .card-head span, #main h3, #main h4')].some((e) => /per (second|minute)/.test(e.textContent))`) : true;
   if (!rate) ctx.fail('a counter (a key ending in _total) is not drawn as a rate: no "per second" / "per minute" caption');
   // a deep link restores the choices
   const deep = await ctx.evaluate('location.hash');
@@ -554,6 +556,262 @@ export async function visitWave3(ctx) {
   await dev3('role?set=admin');
 }
 
+// ------------------------------------------------------------------------------------------------------------------ wave 4 (addendum 9.16)
+
+/** Open a page afresh: leave it first, because a hash the page already has (the page mirrors its own state into it) does not remount the view. */
+const fresh = async (ctx, hash, name) => {
+  await open(ctx, '#/settings', `${name} › leave`);
+  await open(ctx, hash, name);
+};
+
+/** Scroll every Overview tile near the viewport, so the lazily loaded sparklines are asked for (a tile fetches its trend when it comes into view). */
+const scrollTiles = (ctx) =>
+  ctx.evaluate(`(async () => { for (const t of document.querySelectorAll('.tile')) { t.scrollIntoView({ block: 'center' }); await new Promise((r) => setTimeout(r, 120)); } return true; })()`);
+
+/** Guardrails: the rail pipeline of each config and the availability strip on Status; the probe matrix and the latency strip under the run history. */
+async function visitGuardrails(ctx) {
+  const need = async (expr, what, ms) => {
+    if (!(await until(ctx, expr, ms))) ctx.fail(what);
+  };
+  await dev(ctx, 'wave4?rails=ok');
+  await open(ctx, '#/guardrails?tab=status', 'guardrails › rails and availability (mock)');
+  await need(`${q('.gr-config')} === 3 && ${q('ol.gr-pipe')} === 3`, 'the rail pipeline draws one diagram per served config (a full, an input-only and a bare one)', 30000);
+  await need(`[...document.querySelectorAll('.gr-config')].every((c) => c.getAttribute('aria-label') && c.querySelector('ol.gr-pipe[aria-label]'))`, 'every config and its pipeline has an aria-label');
+  await need(`${q('.gr-stage.input')} === 3 && ${q('.gr-stage.model')} === 3 && ${q('.gr-stage.output')} === 3`, 'each pipeline has an input stage, the main model and an output stage');
+  await need(`${q('.gr-stage.none')} >= 3 && [...document.querySelectorAll('.gr-stage.none')].every((e) => /No rail here/.test(e.textContent))`, 'a stage with no rail says so (dashed box and words)');
+  await need(`${q('.gr-flows')} >= 3 && ${q('.gr-flows li')} >= 6`, 'the flows are an ordered list of names');
+  await need(`/Streaming/.test(document.querySelector('.gr-facts').textContent) && /chunk size 200/.test(document.body.textContent)`, 'the streaming settings are shown');
+  await need(
+    `${q('svg.stripchart')} === 1 && document.querySelector('svg.stripchart').getAttribute('aria-label') && ${q('svg.stripchart .st-cell')} >= 30`,
+    'the availability strip is drawn with an aria-label and a cell per slot',
+    30000,
+  );
+  await need(`${q('.strip-legend li')} === 4`, 'the strip has its four-key legend');
+  // the 24 h window shows the outage (and the console's own sampling holes as "no data")
+  await setSelect(ctx, 'select[aria-label="Time window"]', '24h');
+  await need(
+    `${q('svg.stripchart rect.st-down')} + ${q('svg.stripchart rect.st-part')} >= 1 && ${q('svg.stripchart rect.st-none')} >= 1`,
+    'the 24 h strip shows a period it was down (or partly) and a stretch with no data',
+    30000,
+  );
+  await need(`/down period|had a dip/.test(document.querySelector('.gr-up-summary').textContent)`, 'the strip says in words that there was a down period');
+  // the not-supported and failed states are words, not an empty page
+  await dev(ctx, 'wave4?rails=unsupported');
+  await fresh(ctx, '#/guardrails?tab=status', 'guardrails › rails route missing (mock)');
+  await need(`/no rails route/i.test(document.querySelector('.gr-rails').textContent) && ${q('.gr-config')} === 0`, 'a backend without the rails route is explained');
+  await dev(ctx, 'wave4?rails=problem');
+  await fresh(ctx, '#/guardrails?tab=status', 'guardrails › rails problems (mock)');
+  await need(`${q('.gr-rails .note.warn')} >= 2 && ${q('.gr-config')} === 4`, 'rail problems are listed in words and a broken config is still drawn', 30000);
+  await dev(ctx, 'wave4?rails=ok');
+  // History: the probe matrix over the check runs, with a slip, and a latency strip
+  await open(ctx, '#/guardrails?tab=history', 'guardrails › probe matrix (mock)');
+  await need(`${q('.rv-detail svg.cmchart')} === 2`, 'the history draws the probe matrix and the latency strip', 30000);
+  await need(`${q('.rv-detail svg.cmchart')} && document.querySelector('.rv-detail svg.cmchart').getAttribute('aria-label')`, 'the matrix has an aria-label');
+  await need(
+    `[...document.querySelectorAll('.rv-detail svg.cmchart .cm-text')].some((e) => e.textContent.includes('✓')) && [...document.querySelectorAll('.rv-detail svg.cmchart .cm-text')].some((e) => e.textContent.includes('✕'))`,
+    'a cell that matches shows a check mark and one that does not a cross (not colour alone)',
+  );
+  await need(
+    `${q('.rv-detail svg.cmchart .cm-cell')} >= 60 && [...document.querySelectorAll('.rv-detail svg.cmchart .cm-cell')].every((c) => c.getAttribute('aria-label'))`,
+    'every cell has an aria-label',
+  );
+  await need(`[...document.querySelectorAll('.rv-detail svg.cmchart .cm-cell')].some((c) => /not as expected/i.test(c.getAttribute('aria-label')))`, 'an unexpected answer says so in its aria-label');
+  await need(`${q('.rv-detail svg.cmchart .cm-none')} >= 1`, 'a probe a run did not reach is a hatched cell, not a pass');
+  await need(`${q('.rv-detail .rv-facts-line .badge')} >= 2`, 'the counts of clean runs and slips are in words');
+  await ctx.evaluate(`document.querySelector('.rv-detail svg.cmchart .cm-head.cm-pick').dispatchEvent(new MouseEvent('click', { bubbles: true })); true`);
+  await need(`/[?&]run=/.test(location.hash) && ${q('.rh-mark.is-a')} === 1`, 'a click on a column header selects that run in the history above and writes run= into the URL');
+}
+
+/** OpenShell: lifecycle lanes, the phase area and the policy decisions of one sandbox (read-only). */
+async function visitOpenShell(ctx) {
+  const need = async (expr, what, ms) => {
+    if (!(await until(ctx, expr, ms))) ctx.fail(what);
+  };
+  await dev(ctx, 'wave4?decisions=ok');
+  await open(ctx, '#/openshell', 'openshell › sandboxes over time (mock)');
+  await need(`${q('svg.lcchart g.lc-lane')} >= 3`, 'the lifecycle chart draws a lane per sandbox', 30000);
+  await need(`[...document.querySelectorAll('svg.lcchart g.lc-lane')].every((l) => l.getAttribute('aria-label'))`, 'every lane has an aria-label');
+  await need(`${q('svg.lcchart rect.lc-ready')} >= 2 && ${q('svg.lcchart path.lc-arrow')} >= 2`, 'ready phases are drawn and a sandbox that still exists ends in an arrowhead');
+  await need(`${q('.os-lifecycle i.sw.lc-sw')} === 5`, 'the lifecycle legend names the five phases');
+  await need(
+    `${q('svg.areachart')} === 1 && ${q('svg.areachart path.ar-fill')} >= 2 && document.querySelector('svg.areachart').getAttribute('aria-label')`,
+    'the phase counts are a stacked area with an aria-label',
+    30000,
+  );
+  await need(
+    `${q('.areachart rect.ar-hit')} >= 20 && [...document.querySelectorAll('.areachart rect.ar-hit')].every((r) => r.querySelector('title'))`,
+    'every time slot of the area has a title with the values',
+  );
+  await need(`${q('svg.dcchart g.dc-lane')} >= 3 && ${q('svg.dcchart rect.dc-allowed')} >= 5`, 'the decision timeline draws a lane per category with allowed bars', 30000);
+  await need(`${q('svg.dcchart rect.dc-denied')} >= 1 && ${q('svg.dcchart .dc-cross')} >= 1`, 'denied decisions are hatched and carry a cross (not colour alone)');
+  await need(`${q('.os-denied table tbody tr')} >= 3 && /example\\.test/.test(document.querySelector('.os-denied').textContent)`, 'the denied targets are listed with their counts');
+  await need(`[...document.querySelectorAll('svg.dcchart g.dc-lane')].every((l) => l.getAttribute('aria-label'))`, 'every decision lane has an aria-label');
+  // the read-only promise: nothing in these cards changes a policy or a sandbox
+  await need(`![...document.querySelectorAll('.os-viz button')].some((b) => /delete|apply|allow|policy/i.test(b.textContent))`, 'the new cards have no control that changes a sandbox or a policy');
+  // the chosen sandbox is in the URL, and a deleted one cannot be chosen
+  await need(`/[?&]sandbox=/.test(location.hash)`, 'the sandbox whose decisions are shown is kept in the URL');
+  await setSelect(ctx, '#os-sandbox', 'lab-shell-01');
+  await need(
+    `/sandbox=lab-shell-01/.test(location.hash) && document.querySelector('#os-sandbox').value === 'lab-shell-01' && /decisions between/.test(document.querySelector('.os-dec-totals').textContent)`,
+    'choosing another sandbox loads its decisions and writes it into the URL',
+    30000,
+  );
+  await ctx.evaluate(
+    `[...document.querySelectorAll('svg.lcchart g.lc-lane.lc-pick')].find((l) => /no log to read/.test(l.getAttribute('aria-label')))?.dispatchEvent(new MouseEvent('click', { bubbles: true })); true`,
+  );
+  await need(`/was deleted: its log is gone/.test(document.querySelector('.os-viz').textContent)`, 'a click on a deleted sandbox says there is no log to read');
+  // a sparse log (often only the SSH open) is a list, not a timeline of one mark
+  await dev(ctx, 'wave4?decisions=sparse');
+  await fresh(ctx, '#/openshell', 'openshell › sparse log (mock)');
+  await need(
+    `${q('.os-decisions svg.dcchart')} === 0 && ${q('.os-decisions table tbody tr')} === 1 && /holds only 1 decisions/.test(document.querySelector('.os-decisions').textContent)`,
+    'a log with one decision is a list with a note, not a chart',
+    30000,
+  );
+  await dev(ctx, 'wave4?decisions=fail');
+  await fresh(ctx, '#/openshell', 'openshell › failed log call (mock)');
+  await need(`/could not read this sandbox/.test(document.querySelector('.os-decisions').textContent) && ${q('.os-decisions svg.dcchart')} === 0`, 'a failed log call is explained in words', 30000);
+  await dev(ctx, 'wave4?decisions=ok');
+  // the 24 h window: more lanes, and a deep link keeps the window
+  await setSelect(ctx, 'select[aria-label="Time window"]', '24h');
+  await need(`${q('svg.lcchart g.lc-lane')} > 3 && /window=24h/.test(location.hash)`, 'the 24 h window shows more sandboxes', 30000);
+}
+
+/** Flare: the target grid with every state, the per-target rates, the token mix and the active / pending cards. */
+async function visitFlare(ctx) {
+  const need = async (expr, what, ms) => {
+    if (!(await until(ctx, expr, ms))) ctx.fail(what);
+  };
+  await dev(ctx, 'wave4?flare=default');
+  await open(ctx, '#/flare', 'flare › target grid (mock)');
+  await need(`${q('.fl-target')} === 7 && ${q('.fl-group')} === 2`, 'the target grid has a tile for each of the seven targets in two chip groups', 30000);
+  await need(`${q('.fl-target.st-serving')} === 2 && ${q('.fl-target.st-loading')} === 1 && ${q('.fl-target.st-busy')} === 4`, 'the tiles carry their state (two serving, one loading, four busy)');
+  await need(
+    `[...document.querySelectorAll('.fl-target')].every((t) => t.getAttribute('aria-label') && /✓|◌|!|✕|–|\\?/.test(t.querySelector('.badge').textContent))`,
+    'every tile has an aria-label and a glyph with its state word',
+  );
+  await need(`/Packages/.test(document.querySelector('.fl-target').textContent) && /sm120/.test(document.querySelector('.fl-group').textContent)`, 'a tile shows its chip and packages');
+  await need(`${q('.fl-viz svg.tschart')} >= 2 && ${q('.fl-viz .lines-card')} === 1`, 'the rates card draws tokens and requests per target', 30000);
+  await need(`[...document.querySelectorAll('.fl-viz .lines-card .lc-legend')].every((l) => l.querySelectorAll('li').length >= 2)`, 'each rate chart names its targets in a legend');
+  await need(`/per minute/.test(document.querySelector('.fl-viz .lines-card').textContent)`, 'a slow counter (requests) is drawn per minute, and the card says so');
+  await need(`${q('.fl-viz .stack-card')} === 2 && ${q('.fl-viz .stack-card svg.srchart')} === 2`, 'the token mix and the active / pending cards draw stacked bars', 30000);
+  await need(
+    `[...document.querySelectorAll('.fl-viz .stack-card .sr-seg')].every((r) => r.getAttribute('aria-label')) && ${q('.fl-viz .stack-card .sr-seg')} >= 6`,
+    'every stacked segment has an aria-label',
+  );
+  await need(`${q('.fl-viz .stack-card .sc-chart svg')} >= 3`, 'the stacks over time are drawn per target');
+  await need(`${q('.fl-viz details.chart-data')} >= 3`, 'every chart has a data table as its text alternative');
+  await need(NO_JUNK('.fl-viz'), 'no figure prints null, undefined or NaN');
+  // every state at once
+  await dev(ctx, 'wave4?flare=mixed');
+  await fresh(ctx, '#/flare', 'flare › every state (mock)');
+  await need(
+    `['serving', 'loading', 'busy', 'absent', 'stopped', 'failed', 'unknown'].every((s) => document.querySelectorAll('.fl-target.st-' + s).length === 1)`,
+    'with every state present each shows exactly once',
+    30000,
+  );
+  await dev(ctx, 'wave4?flare=none');
+  await fresh(ctx, '#/flare', 'flare › nothing serves (mock)');
+  await need(
+    `${q('.fl-target.st-serving')} === 0 && /No target is serving/.test(document.querySelector('.fl-viz').textContent)`,
+    'with nothing serving the page says there are no engine counters',
+    30000,
+  );
+  await dev(ctx, 'wave4?flare=default');
+}
+
+/** Overview: a sparkline on every tile, up / down strips where a `*.up` metric exists, the problem counts. */
+async function visitOverview(ctx) {
+  const need = async (expr, what, ms) => {
+    if (!(await until(ctx, expr, ms))) ctx.fail(what);
+  };
+  await open(ctx, '#/overview', 'overview › sparklines (mock)');
+  await need(`${q('.tile')} === 13`, 'the overview has a tile per system', 30000);
+  await scrollTiles(ctx);
+  await need(`${q('.tile .tile-spark svg.spark')} >= 11`, 'tiles with samples draw a one-hour sparkline (loaded as they come into view)', 40000);
+  await need(
+    `[...document.querySelectorAll('.tile .tile-spark svg.spark')].every((s) => s.getAttribute('aria-label') && s.querySelector('title'))`,
+    'every sparkline carries its figures in an aria-label',
+  );
+  await need(
+    `${q('.tile .spark-strip svg.stripchart')} === 4 && [...document.querySelectorAll('.tile .spark-strip svg.stripchart')].every((s) => s.getAttribute('aria-label'))`,
+    'the four systems with an up metric (guardrails, openshell, relay, dynamo) draw an up / down strip',
+  );
+  await need(
+    `${q('.tile .spark-strip-text')} === 4 && [...document.querySelectorAll('.tile .spark-strip-text')].every((e) => /up .*% of the time/.test(e.textContent))`,
+    'each strip says its uptime in words',
+  );
+  await need(`[...document.querySelectorAll('.tile .spark-latest')].every((e) => e.textContent.trim().length > 0)`, 'every sparkline has its newest figure printed');
+  // the problem counts across systems
+  await need(
+    `${q('.ovw-problem-totals .badge')} === 3 && /error/.test(document.querySelector('.ovw-problem-totals').textContent) && /warning/.test(document.querySelector('.ovw-problem-totals').textContent)`,
+    'the problem counts by severity are in words with glyphs',
+  );
+  await need(`${q('.stack-card svg.srchart')} >= 1 && ${q('.stack-card .sr-seg')} >= 5`, 'a stacked bar per system with a problem');
+  // the tiles are kept (not rebuilt) on the 5 s refresh: the sparkline survives it
+  const before = await ctx.evaluate(`document.querySelectorAll('.tile .tile-spark svg.spark').length`);
+  await ctx.sleep(6500);
+  const after = await ctx.evaluate(`document.querySelectorAll('.tile .tile-spark svg.spark').length`);
+  if (after < before) ctx.fail(`the overview refresh threw sparklines away (${before} before, ${after} after)`);
+  await need(NO_JUNK('#main .tile'), 'no tile prints null, undefined or NaN');
+}
+
+/** Audit: the Summary tab (actions per day, actor x system, errors) and the Log tab's filters in the URL. */
+async function visitAudit(ctx) {
+  const need = async (expr, what, ms) => {
+    if (!(await until(ctx, expr, ms))) ctx.fail(what);
+  };
+  await open(ctx, '#/audit?tab=summary', 'audit › summary (mock)');
+  await need(`${q('.stats .stat')} === 5 && ${q('svg.cmchart')} === 1`, 'the summary has its five counts and the actor x system matrix', 30000);
+  await need(`${q('.stack-card svg.srchart')} >= 2 && ${q('.stack-card .sc-chart svg')} >= 2`, 'actions per day and the error timeline are stacked charts', 30000);
+  await need(`[...document.querySelectorAll('.stack-card .sr-seg')].every((r) => r.getAttribute('aria-label'))`, 'every stacked segment has an aria-label');
+  await need(`${q('svg.cmchart .cm-cell')} >= 20 && [...document.querySelectorAll('svg.cmchart .cm-cell')].every((c) => c.getAttribute('aria-label'))`, 'every matrix cell has an aria-label');
+  await need(`/[?&]window=/.test(location.hash) === false`, 'the default window keeps the URL clean');
+  await clickText(ctx, '.seg-control button', '30d');
+  await need(`/window=30d/.test(location.hash) && /Last 30 days/.test(document.querySelector('.stats .stat-sub').textContent)`, 'choosing 30 days is kept in the URL and the counts follow it', 30000);
+  await need(`${q('.stack-card .sc-chart svg')} >= 1 && ${q('.stack-card details.chart-data')} >= 2`, 'the charts have data tables as their text alternative');
+  // a cell opens the log for that actor and system
+  await ctx.evaluate(`document.querySelector('svg.cmchart g.cm-cell.cm-pick').dispatchEvent(new MouseEvent('click', { bubbles: true })); true`);
+  await need(`/tab=log/.test(location.hash) && /actor=/.test(location.hash) && /range=30d/.test(location.hash)`, 'a matrix cell opens the log filtered by its actor, system and range', 30000);
+  await need(`${q('.audit-filters')} === 1 && ${q('.tablewrap tbody tr')} >= 1`, 'the filtered log lists calls');
+  await need(
+    `(() => { const a = new URLSearchParams(location.hash.split('?')[1]).get('actor'); return [...document.querySelectorAll('.tablewrap tbody tr')].every((r) => r.children[1].textContent.trim() === a); })()`,
+    'every row of the filtered log is the chosen actor',
+  );
+  // status, system and range filters live in the URL
+  await setSelect(ctx, 'select[aria-label="Status"]', 'error');
+  await need(
+    `/status=error/.test(location.hash) && [...document.querySelectorAll('.tablewrap tbody tr .badge')].every((b) => b.classList.contains('bad'))`,
+    'the status filter keeps only calls that ended in an error',
+    30000,
+  );
+  await ctx.evaluate(`[...document.querySelectorAll('.audit-filters button')].find((b) => /Clear filters/.test(b.textContent))?.click(); true`);
+  await need(`!/(actor|status|system|range)=/.test(location.hash) && ${q('.tablewrap tbody tr')} >= 20`, 'Clear filters empties the filters and the URL and shows the newest calls again', 30000);
+  await setSelect(ctx, 'select[aria-label="Time range"]', 'custom');
+  await need(`/range=custom/.test(location.hash) && ${q('input[type=datetime-local]')} === 2`, 'a custom range offers a from and a to (UTC)');
+  await setSelect(ctx, 'select[aria-label="Time range"]', '24h');
+  await need(`/range=24h/.test(location.hash) && ${q('.tablewrap tbody tr')} >= 5`, 'a preset range narrows the log and is kept in the URL', 30000);
+  // a deep link restores every filter
+  await setSelect(ctx, 'select[aria-label="Status"]', 'ok');
+  const deep = await ctx.evaluate('location.hash');
+  await open(ctx, '#/overview', 'audit › leave');
+  await open(ctx, deep, 'audit › log deep link (mock)');
+  await need(
+    `document.querySelector('select[aria-label="Time range"]').value === '24h' && document.querySelector('select[aria-label="Status"]').value === 'ok'`,
+    'a deep link restores the range and the status filters',
+    30000,
+  );
+}
+
+/** Wave 4 (addendum 9.16): Guardrails, OpenShell, Flare, Overview and Audit against the mock server. */
+export async function visitWave4(ctx) {
+  await visitGuardrails(ctx);
+  await visitOpenShell(ctx);
+  await visitFlare(ctx);
+  await visitOverview(ctx);
+  await visitAudit(ctx);
+}
+
 /** Every check below fails with a message naming what was expected; nothing here throws. */
 export async function visitVizPages(ctx) {
   await checkRoute(ctx);
@@ -564,6 +822,7 @@ export async function visitVizPages(ctx) {
   for (const system of ['aiperf', 'evaluator', 'gym', 'modelopt', 'skillevaluator', 'datadesigner', 'dcgm', 'guardrails']) await visitHistory(ctx, system);
   await visitWave2(ctx);
   await visitWave3(ctx);
+  await visitWave4(ctx);
 }
 
 /**

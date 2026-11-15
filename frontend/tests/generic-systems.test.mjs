@@ -52,7 +52,7 @@ test('thirteen system ids; every one has an i18n name, a route (except none miss
     FIVE_IDS,
     SIX_IDS.filter((id) => id !== 'modelopt'),
   );
-  const audit = fs.readFileSync(path.join(root, 'js/views/audit.js'), 'utf8');
+  const audit = fs.readFileSync(path.join(root, 'js/audit/log-tab.js'), 'utf8'); // the Log tab (addendum 9.16 moved the filter out of the view)
   assert.match(audit, /SYSTEM_IDS\.map/, 'the audit filter is built from the twelve-id list, not a hardcoded subset');
 });
 test('routes: unique paths and tags, every module file exists and defines its tag, nav + group labels resolve', () => {

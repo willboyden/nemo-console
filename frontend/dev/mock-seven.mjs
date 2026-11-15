@@ -3,6 +3,7 @@
 // screenshotted against contract-shaped data (domain/models.py). None of it is a fact about the real systems, and
 // the real adapters are being written separately (metric keys beyond the documented ap.* / ev.score are guesses).
 import { dcgmWave2Points, hostPoints } from './mock-wave2.mjs';
+import { flareComponents, flareCounterPoints, flareServing, FLARE_TARGETS, FLARE_PACKAGES, phaseCountsAt, presentSandboxNames } from './mock-wave4.mjs';
 
 export const SEVEN = ['openshell', 'dcgm', 'aiperf', 'guardrails', 'evaluator', 'modelopt', 'gym', 'flare'];
 // skillevaluator is not new in 9.8; it is mocked here only so the twelve-system overview is complete in dev.
@@ -28,7 +29,7 @@ export function sevenStatus(id, now, flags = {}) {
       system: id,
       health: 'up',
       version: '0.9.4-mock',
-      summary: 'Gateway up on 127.0.0.1:8443; 0 sandboxes; sandbox network is internal',
+      summary: `Gateway up on 127.0.0.1:8443; ${presentSandboxNames().length} sandboxes; sandbox network is internal`,
       endpoints: [{ name: 'gateway', url: 'https://127.0.0.1:8443', role: 'api', auth: 'bearer' }],
       components: [
         { kind: 'process', name: 'openshell CLI', state: 'running', detail: 'openshell 0.9.4-mock' },
@@ -145,20 +146,15 @@ export function sevenStatus(id, now, flags = {}) {
       checked_at,
     };
   if (id === 'flare') {
-    // The shape of the real adapter (flare-local status-json): one component per target, sm120 and sm121.
-    const T = (t, chip, fam, hosts, state, detail) => ({
-      kind: 'container',
-      name: `flare @ ${t}`,
-      state,
-      image: state === 'absent' && t !== 'local' ? null : 'lab/flare:902c88e',
-      detail: `${chip} ${fam} (${hosts}), ${detail}`,
-    });
+    // The shape of the real adapter (flare-local status-json): one component per target, sm120 and sm121 (generic names; js/mock-wave4.mjs holds the states: /__dev/wave4?flare=default|mixed|none).
+    const mode = flags.flareMode || 'default';
+    const serving = flareServing(mode);
     return {
       system: id,
-      health: 'up',
+      health: serving.length ? 'up' : 'down',
       version: '902c88e',
-      summary: 'serving on spark-all (sm121): glm-5.3-flash (mock)',
-      endpoints: [{ name: 'spark-all API', url: 'http://192.0.2.10:8035/v1', role: 'api', auth: 'bearer' }],
+      summary: serving.length ? `serving on ${serving.join(', ')} (mock)` : 'not serving · 2 sm120 target(s), 5 sm121 target(s) (mock)',
+      endpoints: serving.map((t) => ({ name: `${t} API`, url: `http://192.0.2.10:8035/v1`, role: 'api', auth: 'bearer' })),
       components: [
         {
           kind: 'process',
@@ -167,19 +163,7 @@ export function sevenStatus(id, now, flags = {}) {
           image: null,
           detail: 'the lab launcher (inference/flare/flare.sh): checks the GPUs, starts and stops Flare, reaches remote hosts over ssh',
         },
-        T('local', 'sm120', 'gb202', 'local', 'absent', 'modes tp1 tp2 · container absent · image lab/flare:902c88e loaded · 1 package(s) · GPU busy: GPU 0 holds 81611 MiB (> 3072)'),
-        T('gpu-box', 'sm120', 'gb202', 'gpu-box', 'absent', 'modes tp1 · container absent · image not loaded · 1 package(s) · GPU free'),
-        ...['spark-a', 'spark-b', 'spark-c', 'spark-d'].map((h) =>
-          T(h, 'sm121', 'gb10', h, 'absent', 'modes tp1 · container absent · image lab/flare:902c88e loaded · 1 package(s) · GPU busy: 1 CUDA process(es) on the GPU'),
-        ),
-        T(
-          'spark-all',
-          'sm121',
-          'gb10',
-          'spark-a spark-b spark-c spark-d',
-          'running',
-          'modes tp4 · serving glm-5.3-flash, context 524288 · image lab/flare:902c88e loaded · 1 package(s) · GPU busy: 1 CUDA process(es) on the GPU',
-        ),
+        ...flareComponents(mode),
       ],
       problems: [],
       checked_at,
@@ -257,8 +241,11 @@ export function sevenMetrics(id, ts, wob, flags = {}) {
       P('os.network_internal', 1),
       P('os.gateway_uptime_s', 86400 * 2 + 5400, 's'),
       P('os.gateway_restarts', 0),
-      P('os.sandboxes', 0),
-      ...['Provisioning', 'Ready', 'Error', 'Deleting', 'Other'].map((phase) => P('os.sandboxes_by_phase', 0, '1', { phase })),
+      P(
+        'os.sandboxes',
+        Object.values(phaseCountsAt(0)).reduce((a, b) => a + b, 0),
+      ),
+      ...['Provisioning', 'Ready', 'Error', 'Deleting', 'Other'].map((phase) => P('os.sandboxes_by_phase', phaseCountsAt(0)[phase], '1', { phase })),
       P('os.providers', 1),
     ];
   if (id === 'dcgm')
@@ -300,7 +287,7 @@ export function sevenMetrics(id, ts, wob, flags = {}) {
       P('ap.runs_by_verdict', 1, '1', { verdict: 'failed' }),
       P('ap.live_running', 0),
     ];
-  if (id === 'guardrails') return [P('gr.up', 1), P('gr.configs', 1)];
+  if (id === 'guardrails') return [P('gr.up', 1), P('gr.configs', 3)];
   if (id === 'modelopt')
     return [
       P('mo.jobs', 4),
@@ -312,20 +299,8 @@ export function sevenMetrics(id, ts, wob, flags = {}) {
       P('mo.duration_s', 47 * 60, 's'),
     ];
   if (id === 'flare') {
-    const T = { target: 'spark-all' };
-    return [
-      P('flare.targets_serving', 1),
-      ...['local', 'gpu-box', 'spark-a', 'spark-b', 'spark-c', 'spark-d', 'spark-all'].map((target) => P('flare.packages', 1, '1', { target })),
-      P('flare.generated_total', wob(182400, 4000), 'tokens', T),
-      P('flare.prefill_total', 912000, 'tokens', T),
-      P('flare.active_requests', 3, '1', T),
-      P('flare.pending_requests', 0, '1', T),
-      P('flare.requests_completed_total', 412, '1', T),
-      P('flare.requests_failed_total', 1, '1', T),
-      P('flare.cache_reused_total', 240000, 'tokens', T),
-      P('flare.draft_acceptance', 0.71, 'ratio', T),
-      P('flare.max_model_len', 524288, 'tokens', T),
-    ];
+    const mode = flags.flareMode || 'default';
+    return [P('flare.targets_serving', flareServing(mode).length), ...FLARE_TARGETS.map(([target]) => P('flare.packages', FLARE_PACKAGES[target], '1', { target })), ...flareCounterPoints(mode, P)];
   }
   if (id === 'gym')
     return [
@@ -1027,10 +1002,6 @@ export function sevenSeedEvents(now) {
   const E = (system, ago, kind, summary, data = {}) => ({ ts: now - ago, system, kind, summary, data });
   return {
     skillevaluator: [E('skillevaluator', 7200, 'se.run', 'tier1 write-skill-for-weak-models: quality 87.5 (mock)')],
-    openshell: [
-      E('openshell', 3 * 3600, 'openshell.sandbox', 'sandbox dd-preview-3f2a deleted after run', { name: 'dd-preview-3f2a', state: 'deleted' }),
-      E('openshell', 3.2 * 3600, 'openshell.sandbox', 'sandbox dd-preview-3f2a created', { name: 'dd-preview-3f2a', state: 'created' }),
-    ],
     dcgm: [E('dcgm', 1800, 'dcgm.diag', 'diag level 1 on GPU 0: pass', { gpu: 0, level: 1, result: 'pass' }), E('dcgm', 86400, 'dcgm.xid', 'XID 31 on GPU 1 cleared (mock)', { gpu: 1, xid: 31 })],
     aiperf: [
       E('aiperf', 4 * 3600, 'aiperf.run', 'chat-short finished: ttft p95 548 ms, 12.4 req/s', { profile: 'chat-short', verdict: 'succeeded' }),

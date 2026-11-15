@@ -49,6 +49,7 @@ function statsAndCharts(scope, ctx, desc) {
   const windowListeners = new Set();
   const shared = {
     hash,
+    ctx, // the tab context: onStatus(fn) hears the page's polled status (the Flare target grid reads it, addendum 9.16)
     win: () => win,
     onWindow: (f) => {
       windowListeners.add(f);

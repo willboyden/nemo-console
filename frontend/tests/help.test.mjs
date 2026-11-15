@@ -12,7 +12,7 @@ const doc = JSON.parse(fs.readFileSync(path.join(root, 'i18n/help.en.json'), 'ut
 
 // The tab ids each page can show (views/*.js; the generic view builds Config and Playground only when the backend
 // offers them). Every page also gets `start` and `faq` from system-page.js. CONSOLE_PAGES are the console's own.
-const CONSOLE_PAGES = { overview: ['status'], audit: ['log'], settings: ['settings'] };
+const CONSOLE_PAGES = { overview: ['status'], audit: ['summary', 'log'], settings: ['settings'] };
 const HELP_TABS = ['start', 'faq'];
 const TABS = {
   switchyard: ['routing', 'flow', 'config', 'playground', 'actions'],

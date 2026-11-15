@@ -6,6 +6,7 @@
 // All data is canned or simulated. Nothing here is a verified fact about the real systems.
 // Usage: node dev/mock-server.mjs [--port 18796] [--host 127.0.0.1]     env: MOCK_KEY=secret  MOCK_ROLE=viewer  MOCK_DYNAMO=up|loading|down
 //   Series + run history (9.13): GET /systems/{id}/metrics/series and 10-30 run events per run-based system are always on; /__dev/seven?dcgm_gpus=6 gives the DCGM page six GPUs (the series picker needs more than four lines)
+//   Wave 4 (9.16): GET /systems/guardrails/rails, GET /systems/openshell/decisions?sandbox=&limit=, GET /audit/summary?window= and the /audit filters (since, until, actor, status, system); persisted openshell.sandbox events; Flare targets; /__dev/wave4?rails=ok|empty|problem|unsupported&decisions=ok|empty|many|fail|sparse&flare=default|mixed|none
 //   Relay trace explorer (9.12): MOCK_TRACES=ready|building|empty|disabled  MOCK_CAPTURE=full|gen_ai  MOCK_TRACES_STALE=1  (or /__dev/traces?index=&content=admin|off&capture=&truncated=1&stale=1)
 // Dev helpers (not part of the contract): /__dev/scenario /__dev/touch /__dev/role /__dev/fail /__dev/vllm /__shot
 import http from 'node:http';
@@ -34,6 +35,7 @@ import {
   GR_REFUSAL,
 } from './mock-seven.mjs';
 import { createTracesMock } from './mock-traces.mjs';
+import { RAILS_MODES, DECISION_MODES, FLARE_MODES, railsAnswer, openshellEvents, presentSandboxNames, decisionsAnswer, auditSeeds, auditSummary, filterAudit, SUMMARY_WINDOWS } from './mock-wave4.mjs';
 import { parseSeriesQuery, buildSeries } from './mock-series.mjs';
 import { runSeeds, extraDdRuns } from './mock-runs.mjs';
 import { aiperfSummary, aiperfRequests, skillSummary, ddProfile, RUN_ID_RE } from './mock-wave3.mjs';
@@ -75,6 +77,7 @@ const state = {
   failNext: null,
   seven: { dcgmFixed: false, guardPlayground: true, dcgmGpus: 2 }, // dev toggles for the 9.8 systems (/__dev/seven)
   wave2: { fleet: 'ok' }, // /__dev/wave2?fleet=ok|prom_down|empty|unsupported: what GET /systems/dcgm/fleet answers (addendum 9.14)
+  wave4: { rails: 'ok', decisions: 'ok', denied: 23 }, // /__dev/wave4?rails=&decisions=&flare=: what the wave-4 routes answer (addendum 9.16); flare is state.seven.flareMode
   settings: {
     version: '0.1.0-mock',
     urls: { switchyard: 'http://127.0.0.1:4010', relay: 'http://127.0.0.1:4040', dynamo: 'http://127.0.0.1:8020', dynamo_worker_metrics: 'http://127.0.0.1:8081', litellm: 'http://127.0.0.1:4000' },
@@ -218,6 +221,9 @@ const sseWrite = (res, data, event) => {
   if (!res.writableEnded) res.write(`${event ? `event: ${event}\n` : ''}data: ${typeof data === 'string' ? data : JSON.stringify(data)}\n\n`);
 };
 let auditSeq = 0;
+// Thirty days of audited calls behind the live ones (addendum 9.16: the summary and the log filters need history); ids continue after them.
+state.audit.push(...auditSeeds(now()));
+auditSeq = state.audit.length;
 const audit = (system, method, action, params, status, path) => {
   state.audit.unshift({
     id: ++auditSeq,
@@ -235,7 +241,7 @@ const audit = (system, method, action, params, status, path) => {
     params: redact(params),
     status,
   });
-  state.audit.length = Math.min(state.audit.length, 500);
+  state.audit.length = Math.min(state.audit.length, 3000);
 };
 // Content and secret-looking fields never enter the audit log.
 function redact(p) {
@@ -592,6 +598,7 @@ for (const s of EVENTED)
     e.ts -= i * 7;
     ring[s].unshift(e);
   }
+ring.openshell = openshellEvents(now()); // addendum 9.16: the persisted lifecycle events (created / phase / deleted), newest first, in the adapter's data shape
 ring.dynamo = dynamoLogEvents(now()); // addendum 9.14: a longer log with levels and components (newest first) for the Events tab
 // addendum 9.14: a few more XID events (string gpu, like the console emits) for the GPU timeline
 ring.dcgm = [...ring.dcgm, ...dcgmExtraEvents(now())].sort((a, b) => b.ts - a.ts);
@@ -1155,7 +1162,7 @@ async function api(req, res, url) {
   let m;
   if (p === '/health' && M === 'GET')
     return json(res, 200, { status: 'ok', version: '0.1.0-mock', trust: KEY ? 'bearer' : 'loopback-admin', role: state.role, systems: Object.fromEntries(SYSTEMS.map((s) => [s, health(s)])) });
-  if (!admin && p === '/audit') return err(res, 403, 'forbidden', 'the audit log is admin-only');
+  if (!admin && (p === '/audit' || p === '/audit/summary')) return err(res, 403, 'forbidden', 'the audit log is admin-only');
   if (p === '/overview') return json(res, 200, { systems: SYSTEMS.map(status), topology: topology(), ts: now() });
   if (p === '/topology') return json(res, 200, topology());
   if (p === '/systems')
@@ -1165,9 +1172,25 @@ async function api(req, res, url) {
       SYSTEMS.map((id) => ({ id, label: LABEL[id], health: health(id) })),
     );
   if (p === '/routing/summary') return json(res, 200, routingSummary(url.searchParams.get('window') || '1h'));
+  if (p === '/audit/summary') {
+    // GET /audit/summary?window=24h|7d|30d (addendum 9.16, admin): aggregate counts from the audit table, no parameters and no paths
+    const w = url.searchParams.get('window') ?? '7d';
+    if (!(w in SUMMARY_WINDOWS))
+      return err(
+        res,
+        422,
+        'invalid_request',
+        `window must be one of ${Object.keys(SUMMARY_WINDOWS)
+          .map((x) => `'${x}'`)
+          .join(', ')}`,
+      );
+    return json(res, 200, auditSummary(state.audit, w, now(), state.wave4.denied));
+  }
   if (p === '/audit') {
-    const sys = url.searchParams.get('system');
-    return json(res, 200, state.audit.filter((a) => !sys || a.system === sys).slice(0, Number(url.searchParams.get('limit') || 100)));
+    // the log filters of 9.16: since / until (epoch seconds), actor, status ok|error, system, limit (at most 500)
+    const f = filterAudit(state.audit, url.searchParams);
+    if (f.error) return err(res, 422, 'invalid_request', f.error);
+    return json(res, 200, f.rows);
   }
   if (p === '/settings' && M === 'GET') return json(res, 200, state.settings);
   if (p === '/settings' && M === 'PUT') {
@@ -1198,6 +1221,22 @@ async function api(req, res, url) {
       if (q.error) return err(res, 422, 'invalid_request', q.error);
       const m = metrics(id);
       return json(res, 200, buildSeries({ ...q, points: m.available ? m.points : [], now: Math.floor(now()), pollS: state.settings.poll_interval_s }));
+    }
+    if (sub === '/rails' && M === 'GET') {
+      // GET /systems/guardrails/rails (addendum 9.16): the rail pipeline of each served config; any other system 404
+      if (id !== 'guardrails' || state.wave4.rails === 'unsupported') return err(res, 404, 'not_found', 'no such endpoint for this system');
+      return json(res, 200, railsAnswer(state.wave4.rails));
+    }
+    if (sub === '/decisions' && M === 'GET') {
+      // GET /systems/openshell/decisions?sandbox=&limit= (addendum 9.16): the policy decisions in one sandbox's log. The sandbox must be in the current list (else 404); limit 1..2000 (else 422)
+      if (id !== 'openshell') return err(res, 404, 'not_found', 'no such endpoint for this system');
+      const sandbox = url.searchParams.get('sandbox') ?? '';
+      const lim = url.searchParams.get('limit');
+      const limit = lim == null || lim === '' ? 500 : Number(lim);
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(sandbox)) return err(res, 422, 'invalid_request', 'sandbox: a sandbox name is required');
+      if (!Number.isInteger(limit) || limit < 1 || limit > 2000) return err(res, 422, 'invalid_request', 'limit must be an integer from 1 to 2000');
+      if (!presentSandboxNames().includes(sandbox)) return err(res, 404, 'not_found', 'unknown sandbox');
+      return json(res, 200, decisionsAnswer(sandbox, limit, now(), state.wave4.decisions));
     }
     if (sub === '/fleet' && M === 'GET') {
       // GET /systems/dcgm/fleet (addendum 9.14): any other system 404s; an unknown metric or window is 422 invalid_request
@@ -1414,6 +1453,12 @@ function dev(req, res, url) {
   if (p === '/__dev/wave2') {
     if (['ok', 'prom_down', 'empty', 'unsupported'].includes(q.get('fleet'))) state.wave2.fleet = q.get('fleet');
     return json(res, 200, state.wave2);
+  }
+  if (p === '/__dev/wave4') {
+    if (RAILS_MODES.includes(q.get('rails'))) state.wave4.rails = q.get('rails');
+    if (DECISION_MODES.includes(q.get('decisions'))) state.wave4.decisions = q.get('decisions');
+    if (FLARE_MODES.includes(q.get('flare'))) state.seven.flareMode = q.get('flare');
+    return json(res, 200, { ...state.wave4, flare: state.seven.flareMode || 'default' });
   }
   if (p === '/__dev/dd') {
     const do_ = q.get('do');
