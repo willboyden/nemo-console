@@ -7,6 +7,14 @@ implemented / verified-live / unverified defined in the README.
 
 ### Added
 
+- **Charts, wave 4** (addendum 9.16). **NeMo Guardrails:** each config's rail pipeline (input rails, main model, output
+  rails, streaming; flow names only, from `/systems/guardrails/rails`), a probe matrix over check runs (expected vs
+  actual, latency) and an availability strip. **OpenShell:** sandbox lifecycle lanes from lifecycle events that now
+  survive restarts (`<state>/openshell/events.jsonl`, bounded), sandbox counts by phase, and a policy-decision timeline
+  per sandbox (`/systems/openshell/decisions`: category, verdict, kind and target only). **NVIDIA Flare:** a target
+  grid and per-target rates, token mix and queue. **Overview:** a sparkline per system tile and problems by severity.
+  **Audit:** a Summary tab (actions per day by system, an actor x system matrix, errors over time;
+  `/audit/summary`) and time, actor and status filters on the log.
 - **Charts, wave 3** (addendum 9.15), as run details driven by the run history. **AIPerf:** p1..p99 curves of TTFT,
   ITL and latency with an A/B overlay, the HTTP phases, a per-request histogram, worker swim lanes and error codes, and
   throughput against latency over runs (new numbers-only routes `/runs/{id}/summary` and `/runs/{id}/requests`).
