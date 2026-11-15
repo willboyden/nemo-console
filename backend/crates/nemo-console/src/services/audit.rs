@@ -102,28 +102,247 @@ impl AuditLog {
     }
 
     pub fn list(&self, limit: i64, system: Option<&str>) -> Result<Vec<Value>, StoreError> {
-        let limit = limit.clamp(1, 500);
-        self.store.with(|db| {
-            let map = |r: &rusqlite::Row<'_>| -> rusqlite::Result<Value> {
-                let params: String = r.get("params")?;
-                Ok(json!({
-                    "id": r.get::<_, i64>("id")?, "ts": r.get::<_, f64>("ts")?, "actor": r.get::<_, String>("actor")?,
-                    "role": r.get::<_, String>("role")?, "method": r.get::<_, String>("method")?,
-                    "path": r.get::<_, String>("path")?, "system": r.get::<_, Option<String>>("system")?,
-                    "status": r.get::<_, i64>("status")?, "params": load_params(&params),
-                }))
-            };
-            match system.filter(|s| !s.is_empty()) {
-                Some(s) => {
-                    let mut st = db.prepare("SELECT * FROM audit WHERE system=? ORDER BY id DESC LIMIT ?")?;
-                    st.query_map(rusqlite::params![s, limit], map)?.collect()
-                }
-                None => {
-                    let mut st = db.prepare("SELECT * FROM audit ORDER BY id DESC LIMIT ?")?;
-                    st.query_map(rusqlite::params![limit], map)?.collect()
-                }
+        list_filtered(&self.store, limit, system, &AuditFilter::default())
+    }
+}
+
+/// The optional filters of `GET /audit` (addendum 9.16, additive; PORTING.md D-43). `None` = no filter.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AuditFilter {
+    /// `ts >= since` (epoch seconds)
+    pub since: Option<f64>,
+    /// `ts <= until` (epoch seconds)
+    pub until: Option<f64>,
+    /// the actor exactly as stored
+    pub actor: Option<String>,
+    /// `Some(true)`: status < 400 (`ok`); `Some(false)`: status >= 400 (`error`)
+    pub ok: Option<bool>,
+}
+
+/// An actor as the summary shows it and as the `actor` filter accepts it: a key's stored alias (`key:<id>`,
+/// `loopback`).
+#[allow(clippy::expect_used)]
+pub static ACTOR_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\A[A-Za-z0-9][A-Za-z0-9_.:@-]{0,63}\z").expect("static regex"));
+
+/// The audit rows, newest first, with the optional filters. Without filters the query is the one the Python port
+/// ran (so the answer is the same row for row).
+pub fn list_filtered(
+    store: &Store,
+    limit: i64,
+    system: Option<&str>,
+    f: &AuditFilter,
+) -> Result<Vec<Value>, StoreError> {
+    let limit = limit.clamp(1, 500);
+    store.with(|db| {
+        let map = |r: &rusqlite::Row<'_>| -> rusqlite::Result<Value> {
+            let params: String = r.get("params")?;
+            Ok(json!({
+                "id": r.get::<_, i64>("id")?, "ts": r.get::<_, f64>("ts")?, "actor": r.get::<_, String>("actor")?,
+                "role": r.get::<_, String>("role")?, "method": r.get::<_, String>("method")?,
+                "path": r.get::<_, String>("path")?, "system": r.get::<_, Option<String>>("system")?,
+                "status": r.get::<_, i64>("status")?, "params": load_params(&params),
+            }))
+        };
+        let mut wh: Vec<&str> = Vec::new();
+        let mut args: Vec<rusqlite::types::Value> = Vec::new();
+        if let Some(s) = system.filter(|s| !s.is_empty()) {
+            wh.push("system=?");
+            args.push(s.to_owned().into());
+        }
+        if let Some(t) = f.since {
+            wh.push("ts>=?");
+            args.push(t.into());
+        }
+        if let Some(t) = f.until {
+            wh.push("ts<=?");
+            args.push(t.into());
+        }
+        if let Some(a) = &f.actor {
+            wh.push("actor=?");
+            args.push(a.clone().into());
+        }
+        match f.ok {
+            Some(true) => wh.push("status<400"),
+            Some(false) => wh.push("status>=400"),
+            None => {}
+        }
+        args.push(limit.into());
+        let sql = if wh.is_empty() {
+            "SELECT * FROM audit ORDER BY id DESC LIMIT ?".to_owned()
+        } else {
+            format!(
+                "SELECT * FROM audit WHERE {} ORDER BY id DESC LIMIT ?",
+                wh.join(" AND ")
+            )
+        };
+        let mut st = db.prepare(&sql)?;
+        st.query_map(rusqlite::params_from_iter(args), map)?
+            .collect()
+    })
+}
+
+/// The summary windows: name, span (s), error bucket (s).
+pub const SUMMARY_WINDOWS: [(&str, i64, i64); 3] = [
+    ("24h", 86_400, 3_600),
+    ("7d", 7 * 86_400, 6 * 3_600),
+    ("30d", 30 * 86_400, 86_400),
+];
+/// The default summary window.
+pub const SUMMARY_DEFAULT_WINDOW: &str = "7d";
+/// At most this many (actor, system) rows (the busiest; `truncated` when more).
+pub const SUMMARY_MAX_ACTOR_ROWS: usize = 200;
+
+/// A stored system as the summary shows it: a known system id, null for a row without one, `other` for any other
+/// stored value (the path's first segment after `/systems/`, which a request to an unknown system also records).
+fn summary_system(s: Option<String>) -> Value {
+    match s {
+        None => Value::Null,
+        Some(s) => match crate::domain::models::SystemId::parse(&s) {
+            Some(id) => Value::String(id.to_string()),
+            None => Value::String("other".to_owned()),
+        },
+    }
+}
+
+/// `YYYY-MM-DD` (UTC) of a day number since the epoch.
+fn day_name(day: i64) -> String {
+    let t = time::OffsetDateTime::from_unix_timestamp(day.saturating_mul(86_400))
+        .unwrap_or(time::OffsetDateTime::UNIX_EPOCH);
+    format!("{:04}-{:02}-{:02}", t.year(), u8::from(t.month()), t.day())
+}
+
+/// `GET /audit/summary?window=` (addendum 9.16, admin; PORTING.md D-42): counts only, from the audit table; no path,
+/// no params. `window` must be one of [`SUMMARY_WINDOWS`] (the handler checks it).
+pub fn summary(store: &Store, window: &str, now: f64) -> Result<Value, StoreError> {
+    let (span, bucket) = SUMMARY_WINDOWS
+        .iter()
+        .find(|(w, _, _)| *w == window)
+        .map_or((7 * 86_400, 6 * 3_600), |(_, s, b)| (*s, *b));
+    #[allow(clippy::cast_precision_loss)]
+    let from = now - span as f64;
+    // a read-only connection of its own (WAL readers do not wait for the writer), so the aggregation never holds the
+    // store lock the audit writes and the poller go through; the store's connection only when it cannot be opened
+    let flags =
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX;
+    if let Ok(c) = rusqlite::Connection::open_with_flags(&store.path, flags)
+        && c.busy_timeout(std::time::Duration::from_secs(5)).is_ok()
+        && let Ok(v) = summary_on(&c, window, from, now, bucket)
+    {
+        return Ok(v);
+    }
+    store.with(|db| summary_on(db, window, from, now, bucket))
+}
+
+fn summary_on(
+    db: &rusqlite::Connection,
+    window: &str,
+    from: f64,
+    now: f64,
+    bucket: i64,
+) -> rusqlite::Result<Value> {
+    {
+        // actions per (UTC day, system)
+        let mut by_day: BTreeMap<(i64, String), (Value, i64)> = BTreeMap::new();
+        {
+            let mut st = db.prepare(
+                "SELECT CAST(ts / 86400 AS INTEGER) AS d, system, COUNT(*) FROM audit WHERE ts >= ? AND ts <= ? \
+                 GROUP BY d, system",
+            )?;
+            let rows = st.query_map(rusqlite::params![from, now], |r| {
+                Ok((
+                    r.get::<_, Option<i64>>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                    r.get::<_, i64>(2)?,
+                ))
+            })?;
+            for row in rows {
+                let (Some(d), sys, n) = row? else { continue };
+                let sys = summary_system(sys);
+                let key = (d, sys.as_str().map_or_else(String::new, str::to_owned));
+                by_day.entry(key).or_insert((sys, 0)).1 += n;
             }
-        })
+        }
+        // actions per (actor, system): the busiest groups first
+        let mut by_actor: BTreeMap<(String, String), (Value, Value, i64)> = BTreeMap::new();
+        let mut truncated = false;
+        {
+            let mut st = db.prepare(
+                "SELECT actor, system, COUNT(*) AS n FROM audit WHERE ts >= ? AND ts <= ? \
+                 GROUP BY actor, system ORDER BY n DESC, actor, system LIMIT ?",
+            )?;
+            let cap = i64::try_from(SUMMARY_MAX_ACTOR_ROWS * 4).unwrap_or(800);
+            let rows = st.query_map(rusqlite::params![from, now, cap + 1], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                    r.get::<_, i64>(2)?,
+                ))
+            })?;
+            let mut seen = 0i64;
+            for row in rows {
+                let (actor, sys, n) = row?;
+                seen += 1;
+                if seen > cap {
+                    truncated = true;
+                    break;
+                }
+                let actor = if ACTOR_RE.is_match(&actor) {
+                    Value::String(actor)
+                } else {
+                    Value::Null
+                };
+                let sys = summary_system(sys);
+                let key = (
+                    actor.as_str().map_or_else(String::new, str::to_owned),
+                    sys.as_str().map_or_else(String::new, str::to_owned),
+                );
+                by_actor.entry(key).or_insert((actor, sys, 0)).2 += n;
+            }
+        }
+        let mut actors: Vec<(Value, Value, i64)> = by_actor.into_values().collect();
+        actors.sort_by_key(|a| std::cmp::Reverse(a.2));
+        if actors.len() > SUMMARY_MAX_ACTOR_ROWS {
+            actors.truncate(SUMMARY_MAX_ACTOR_ROWS);
+            truncated = true;
+        }
+        // errors (status >= 400) per bucket
+        let mut errors = Vec::new();
+        {
+            let mut st = db.prepare(
+                "SELECT CAST(ts / ? AS INTEGER) AS b, COUNT(*) FROM audit WHERE ts >= ? AND ts <= ? AND status >= 400 \
+                 GROUP BY b ORDER BY b",
+            )?;
+            let rows = st.query_map(rusqlite::params![bucket, from, now], |r| {
+                Ok((r.get::<_, Option<i64>>(0)?, r.get::<_, i64>(1)?))
+            })?;
+            for row in rows {
+                let (Some(b), n) = row? else { continue };
+                errors.push(json!({"ts_bucket": b.saturating_mul(bucket), "count": n}));
+            }
+        }
+        let denied: i64 = db.query_row(
+            "SELECT COUNT(*) FROM audit WHERE ts >= ? AND ts <= ? AND status IN (401, 403)",
+            rusqlite::params![from, now],
+            |r| r.get(0),
+        )?;
+        Ok(json!({
+            "window": window,
+            "from": from,
+            "to": now,
+            "bucket_s": bucket,
+            "by_day": by_day
+                .into_iter()
+                .map(|((d, _), (sys, n))| json!({"day": day_name(d), "system": sys, "count": n}))
+                .collect::<Vec<_>>(),
+            "by_actor": actors
+                .into_iter()
+                .map(|(a, sys, n)| json!({"actor": a, "system": sys, "count": n}))
+                .collect::<Vec<_>>(),
+            "errors": errors,
+            "denied_total": denied,
+            "truncated": truncated,
+        }))
     }
 }
 

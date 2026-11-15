@@ -312,6 +312,9 @@ struct St {
     gw_cache: Option<(Instant, bool)>,
     ring: VecDeque<(u64, SystemEvent)>,
     seq: u64,
+    /// events emitted by the last diff and not written yet (addendum 9.16; at most 2 x MAX_SANDBOXES per diff, so
+    /// the ring's own bound cannot drop one before it is written)
+    fresh: Vec<SystemEvent>,
 }
 
 pub struct OpenShellAdapter {
@@ -321,8 +324,30 @@ pub struct OpenShellAdapter {
     /// the gateway registration the CLI is pinned to (`-g`); never the "active" one
     gateway_name: String,
     timing: Mutex<OpenShellTiming>,
-    st: Mutex<St>,
+    st: Arc<Mutex<St>>,
     snap: tokio::sync::Mutex<Snap>,
+    /// The persisted events (addendum 9.16): whether the file was read back, its line count. ONE writer: every file
+    /// operation runs on the blocking pool under this lock.
+    persist: Arc<Mutex<Persist>>,
+    /// event writes spawned and not finished yet (tests wait for 0)
+    pending: Arc<std::sync::atomic::AtomicUsize>,
+    /// sandbox name -> (when, the parsed decisions) (addendum 9.16); held across the CLI call, so one `openshell
+    /// logs` runs at a time for this route.
+    decisions_cache: tokio::sync::Mutex<HashMap<String, (Instant, Arc<Decisions>)>>,
+}
+
+/// The persisted-events writer's state (addendum 9.16).
+#[derive(Default)]
+struct Persist {
+    loaded: bool,
+    lines: usize,
+}
+
+/// One sandbox's parsed decisions (addendum 9.16).
+struct Decisions {
+    rows: Vec<Value>,
+    truncated: bool,
+    failed: bool,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -365,15 +390,19 @@ impl OpenShellAdapter {
             ),
             gateway_name: "openshell".to_owned(),
             timing: Mutex::new(OpenShellTiming::default()),
-            st: Mutex::new(St {
+            st: Arc::new(Mutex::new(St {
                 version_cache: None,
                 known: IndexMap::new(),
                 baselined: false,
                 gw_cache: None,
                 ring: VecDeque::new(),
                 seq: 0,
-            }),
+                fresh: Vec::new(),
+            })),
             snap: tokio::sync::Mutex::new(Snap::empty("not polled")),
+            persist: Arc::new(Mutex::new(Persist::default())),
+            pending: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            decisions_cache: tokio::sync::Mutex::new(HashMap::new()),
         }
     }
 
@@ -677,7 +706,9 @@ impl OpenShellAdapter {
             error,
         };
         if ok {
+            self.ensure_loaded().await;
             self.track(&snap.rows);
+            self.persist();
         }
         snap.clone()
     }
@@ -757,19 +788,18 @@ impl OpenShellAdapter {
     fn emit(st: &mut St, ts: f64, summary: &str, data: Value) {
         st.seq += 1;
         let seq = st.seq;
-        st.ring.push_back((
-            seq,
-            SystemEvent {
-                ts,
-                system: SystemId::Openshell,
-                kind: EVENT_KIND.to_owned(),
-                summary: pystr::head(&redact(summary), 300).to_owned(),
-                data: match data {
-                    Value::Object(m) => m,
-                    _ => Map::new(),
-                },
+        let ev = SystemEvent {
+            ts,
+            system: SystemId::Openshell,
+            kind: EVENT_KIND.to_owned(),
+            summary: pystr::head(&redact(summary), 300).to_owned(),
+            data: match data {
+                Value::Object(m) => m,
+                _ => Map::new(),
             },
-        ));
+        };
+        st.fresh.push(ev.clone());
+        st.ring.push_back((seq, ev));
         while st.ring.len() > RING {
             st.ring.pop_front();
         }
@@ -837,6 +867,162 @@ impl OpenShellAdapter {
         }
         st.known = current;
         st.baselined = true;
+    }
+
+    // ── persisted events (addendum 9.16) ────────────────────────────────────────────────────
+    fn events_dir(&self) -> PathBuf {
+        self.ctx.state_dir.join("openshell")
+    }
+
+    /// Read `<state>/openshell/events.jsonl` back once (on the blocking pool): the newest [`RING`] events go into the
+    /// ring, and the sandboxes they leave alive become the baseline, so a restart neither repeats "present" for every
+    /// sandbox nor misses one deleted while the console was down.
+    async fn ensure_loaded(&self) {
+        if lock(&self.persist).loaded {
+            return;
+        }
+        let (persist, st, dir) = (
+            Arc::clone(&self.persist),
+            Arc::clone(&self.st),
+            self.events_dir(),
+        );
+        let _ = tokio::task::spawn_blocking(move || {
+            let mut p = lock(&persist);
+            if p.loaded {
+                return;
+            }
+            p.loaded = true;
+            let loaded = super::openshell_viz::load(&dir);
+            p.lines = loaded.lines;
+            if !loaded.events.is_empty() {
+                Self::seed(&mut lock(&st), loaded.events);
+            }
+        })
+        .await;
+    }
+
+    fn seed(st: &mut St, events: Vec<SystemEvent>) {
+        let mut known: IndexMap<String, (String, String)> = IndexMap::new();
+        for ev in &events {
+            let s = |k: &str| {
+                ev.data
+                    .get(k)
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_owned()
+            };
+            let name = s("name");
+            if ev.data.get("action").and_then(Value::as_str) == Some("deleted") {
+                known.shift_remove(&name);
+            } else {
+                known.insert(name, (s("id"), s("phase")));
+            }
+        }
+        while known.len() > MAX_SANDBOXES {
+            known.shift_remove_index(0);
+        }
+        let older: Vec<(u64, SystemEvent)> = st.ring.drain(..).collect();
+        let start = events.len().saturating_sub(RING);
+        for ev in events.into_iter().skip(start) {
+            st.seq += 1;
+            let seq = st.seq;
+            st.ring.push_back((seq, ev));
+        }
+        for (_, ev) in older {
+            st.seq += 1;
+            let seq = st.seq;
+            st.ring.push_back((seq, ev));
+        }
+        while st.ring.len() > RING {
+            st.ring.pop_front();
+        }
+        if !st.baselined {
+            st.known = known;
+            st.baselined = true;
+        }
+    }
+
+    /// Append the events the last diff emitted to the file, on the blocking pool (spawned at once, so a request
+    /// dropped meanwhile still writes; one writer at a time under the persist lock).
+    fn persist(&self) {
+        let events = std::mem::take(&mut lock(&self.st).fresh);
+        if events.is_empty() {
+            return;
+        }
+        let (persist, pending, dir) = (
+            Arc::clone(&self.persist),
+            Arc::clone(&self.pending),
+            self.events_dir(),
+        );
+        pending.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        drop(tokio::task::spawn_blocking(move || {
+            {
+                let mut p = lock(&persist);
+                match super::openshell_viz::append(&dir, &events, p.lines) {
+                    Ok(n) => p.lines = n,
+                    Err(_) => tracing::warn!("could not persist the OpenShell sandbox events"),
+                }
+            }
+            pending.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        }));
+    }
+
+    /// The persisted line count (tests).
+    #[must_use]
+    pub fn persisted_lines(&self) -> usize {
+        lock(&self.persist).lines
+    }
+
+    /// Wait (at most 10 s) until the spawned event writes have finished (tests).
+    pub async fn flush_persisted(&self) {
+        for _ in 0..2000 {
+            if self.pending.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    }
+
+    // ── decisions (addendum 9.16) ───────────────────────────────────────────────────────────
+    /// `openshell logs NAME -n N`: the `sandbox_logs` action's runner path (timeout 30 s, output cap 512,000 bytes).
+    async fn sandbox_log(&self, name: &str, n: usize) -> CommandResult {
+        self.cli(&["logs", name, "-n", &n.to_string()], 30.0, 512_000)
+            .await
+    }
+
+    async fn decisions_of(&self, name: &str) -> Result<Arc<Decisions>, AdapterError> {
+        use super::openshell_viz as viz;
+        let mut cache = self.decisions_cache.lock().await;
+        cache.retain(|_, (t, _)| t.elapsed().as_secs_f64() < viz::DECISIONS_CACHE_S);
+        if let Some((_, d)) = cache.get(name) {
+            return Ok(Arc::clone(d));
+        }
+        let r = self.sandbox_log(name, viz::DECISIONS_LOG_LINES).await;
+        let d = if r.returncode == 0 {
+            let cut = r.stdout.len() >= viz::DECISIONS_MAX_BYTES;
+            let text = combined(&r);
+            let (rows, more) = crate::adapters::runviz::blocking(move || {
+                Ok(viz::decisions(&redact(&strip_ansi(&text))))
+            })
+            .await?;
+            Decisions {
+                rows,
+                truncated: more || cut,
+                failed: false,
+            }
+        } else {
+            Decisions {
+                rows: Vec::new(),
+                truncated: false,
+                failed: true,
+            }
+        };
+        let d = Arc::new(d);
+        if cache.len() >= MAX_SANDBOXES {
+            cache.clear();
+        }
+        cache.insert(name.to_owned(), (Instant::now(), Arc::clone(&d)));
+        Ok(d)
     }
 
     async fn observe(&self) {
@@ -1850,6 +2036,7 @@ impl SystemAdapter for OpenShellAdapter {
 
     async fn recent_events(&self, limit: usize) -> Result<Vec<SystemEvent>, AdapterError> {
         self.observe().await;
+        self.ensure_loaded().await;
         Ok(lock(&self.st)
             .ring
             .iter()
@@ -1859,11 +2046,45 @@ impl SystemAdapter for OpenShellAdapter {
             .collect())
     }
 
+    async fn decisions(&self, sandbox: &str, limit: usize) -> Result<Value, AdapterError> {
+        use super::openshell_viz as viz;
+        if !is(&NAME_RE, sandbox) {
+            return Err(AdapterError::Invalid(
+                "sandbox must be a sandbox name".to_owned(),
+            ));
+        }
+        let limit = limit.clamp(1, viz::DECISIONS_MAX_ROWS);
+        let snap = self.sandboxes(SNAPSHOT_TTL).await;
+        let live = snap.ok
+            && snap
+                .rows
+                .iter()
+                .any(|r| r.get("name").and_then(Value::as_str) == Some(sandbox));
+        if !live {
+            return Err(AdapterError::UnknownId(sandbox.to_owned()));
+        }
+        let d = self.decisions_of(sandbox).await?;
+        let start = d.rows.len().saturating_sub(limit);
+        let mut out = json!({
+            "sandbox": sandbox,
+            "rows": d.rows[start..].to_vec(),
+            "truncated": d.truncated || start > 0,
+        });
+        if d.failed {
+            out["problem"] = json!({
+                "code": "openshell.logs.failed",
+                "message": "the openshell logs command failed for this sandbox",
+            });
+        }
+        Ok(out)
+    }
+
     fn follow_events(self: Arc<Self>, since_ts: Option<f64>) -> EventStream {
         Box::pin(async_stream::stream! {
             // Cursor = ring sequence number. With since_ts, replay buffered events newer than it first; without
             // it, start at "now". Memory is the shared ring plus one integer per consumer.
             self.observe().await;
+            self.ensure_loaded().await;
             let mut cursor = if since_ts.is_none() { lock(&self.st).seq } else { 0 };
             loop {
                 let ring: Vec<(u64, SystemEvent)> = lock(&self.st).ring.iter().cloned().collect();
@@ -2181,7 +2402,7 @@ impl SystemAdapter for OpenShellAdapter {
                     ));
                 };
                 let r = self
-                    .cli(&["logs", &name, "-n", &n.to_string()], 30.0, 512_000)
+                    .sandbox_log(&name, usize::try_from(n).unwrap_or(1))
                     .await;
                 Ok(done(
                     t0,

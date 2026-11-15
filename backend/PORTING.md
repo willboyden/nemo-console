@@ -776,6 +776,72 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
   differs, by exactly the five keys of its one benchmark (`A` absent), pinned in `parity/pinned-diffs.json`; the gym
   change is not visible to the harness (the Python reference has no NeMo Gym adapter: `stub:gym`, D-8). Tests:
   `tests/runviz_wave3.rs` (`evaluator_events_carry_the_benchmark_numbers`, `gym_events_carry_at_most_20_rewards`).
+- **D-42 Three wave-4 routes (addendum 9.16), added after the port; OpenShell events persisted.** All `GET`.
+  * `/api/v1/systems/{system_id}/rails` (viewer; Guardrails only, every other system 404 `not_found` before anything
+    is read, through the adapter port's `rails`, default `NoSuchEndpoint`): `{configs: [{id, main_model, input, output,
+    streaming: {enabled, chunk_size, context_size} | null, retrieval}], problems: [{config, code, count}]}`. Config ids
+    as the adapter lists them (`guardrails_rails::config_ids_in`, which `GuardrailsAdapter::config_ids` now calls), at
+    most 64 (`configs.capped`, config null). Per config `config.yml`, else `config.yaml`, opened relative to an
+    `O_NOFOLLOW` directory descriptor (`runviz::RunDir`: no symlink, no hard link, regular file, at most 256 KiB:
+    `config.too_large`; `config.unreadable`, `config.not_utf8`, `config.yaml_error`, `config.not_a_mapping`). The YAML
+    is COMPOSED (`pyyaml::compose`), never constructed, so an alias points at a shared node (an alias bomb or a large
+    aliased scalar costs nothing) and only the fixed key path is walked: `models[type=main].model` (the first; must
+    pass the adapters' model check, else null and `main_model.dropped`), `rails.{input,output,retrieval}.flows` (string
+    scalars matching `[A-Za-z0-9 _.-]{1,80}`, else dropped and counted in `flows.dropped`; at most 64 per list, the
+    rest `flows.capped`), `rails.output.streaming.{enabled (YAML 1.1 bool), chunk_size, context_size (plain decimal
+    ints 0..10^9, else null)}`, else a top-level boolean `streaming` as `{enabled, null, null}`, else null. Merge keys
+    (`<<`) are not applied. No prompt, instruction, parameter or `.co` text is read into the answer. Runs on the
+    run-visualisation blocking pool (`runviz::blocking`, 2 at a time). A config that cannot be read is still listed
+    with empty lists.
+  * `/api/v1/systems/{system_id}/decisions?sandbox=&limit=` (viewer; OpenShell only, 404 for the others before the
+    query is read): `sandbox` must match the adapter's `NAME_RE` (else 422), `limit` 1..2000, default 500 (pydantic
+    422 texts); a name not in the live list (`sandbox list`, the 2 s snapshot; a failed list counts as "not live") is
+    404 "unknown sandbox". The CLI call is the `sandbox_logs` action's runner path (`sandbox_log`: `openshell -g
+    openshell logs NAME -n 2000`, 30 s, 512,000 bytes; the action itself is unchanged), the text ANSI-stripped and
+    redacted, then parsed on the blocking pool (`openshell_viz::decisions`): a row only from a line
+    `[ts] [src] [OCSF ] [ocsf] CLASS:ACTIVITY [LEVEL] VERDICT [TARGET] ...` whose verdict is `ALLOWED`/`ALLOW`
+    (`allowed`) or `DENIED`/`DENY`/`BLOCKED` (`denied`); `category` from `CATEGORIES` (SSH, CONFIG, NET/NETWORK, HTTP,
+    DNS, PROC/PROCESS, FILE/FS, POLICY, AUTH), `kind` from `KINDS` (OPEN, CLOSE, CONNECT, REQUEST, APPLYING, BUILT,
+    EXEC, READ, WRITE, RESOLVE, LOAD), anything else `other`; `target` = the next token only when it is `host:port` or
+    a path-free identifier of at most 120 characters, else null; only the first 1,024 bytes of a line are looked at;
+    a non-finite time drops the row. Answer `{sandbox, rows: [{ts, category, verdict, kind, target}], truncated}`,
+    rows oldest first, the newest `limit` of at most 2,000 kept; `truncated` when rows were dropped (more than 2,000,
+    more than `limit`, or the CLI output reached its cap). A failed CLI call answers 200 with `rows: []` and `problem:
+    {code: "openshell.logs.failed", message}` (a fixed message; nothing of the CLI's text). Parsed answers are cached
+    10 s per sandbox (at most 200 entries); the cache lock is held across the CLI call, so one `openshell logs` runs
+    at a time for this route.
+  * `/api/v1/audit/summary?window=24h|7d|30d` (ADMIN, default `7d`, 422 otherwise; the handler checks the role too):
+    `{window, from, to, bucket_s, by_day: [{day, system, count}], by_actor: [{actor, system, count}], errors:
+    [{ts_bucket, count}], denied_total, truncated}` over audit rows with `from <= ts <= to` (`to` = now). `day` is a
+    UTC `YYYY-MM-DD`; `system` a known system id, null for a row without one, `other` for any other stored value;
+    `actor` as stored when it matches `[A-Za-z0-9][A-Za-z0-9_.:@-]{0,63}`, else null (merged); at most 200 (actor,
+    system) rows, the busiest first (`truncated`); `errors` = rows with status >= 400 per `bucket_s` (3,600 / 21,600 /
+    86,400 s), only non-empty buckets; `denied_total` = rows with status 401 or 403 (requests refused before a handler
+    are never audit rows: they are only counted by the denial log). No path, no params. Run on the blocking pool on a
+    read-only connection of its own (the store's connection only when that cannot be opened).
+  * OpenShell sandbox events are also written to `<state>/openshell/events.jsonl` (directory 0700, file 0600, opened
+    relative to an `O_NOFOLLOW` directory descriptor, regular single-link file only; `openshell_viz::append` on the
+    blocking pool, one writer under the adapter's persist lock, spawned before the request can be dropped). Only the
+    ring's fields; each event is checked again before it is written (name `NAME_RE`, id `[A-Za-z0-9._:-]{0,64}`,
+    phase `[A-Za-z0-9 _.-]{0,24}`, the four actions) and its summary rebuilt from them. Past 6,000 lines the file is
+    rewritten (exclusive temp file + `renameat`) to the newest 5,000. On the first poll or read after a start the
+    file's tail (at most 8 MiB, lines over 4 KiB skipped, every field checked again, summaries rebuilt) is read back:
+    the newest 200 events seed the ring, and the sandboxes they leave alive become the baseline, so a restart neither
+    repeats `present` for every sandbox nor misses one deleted while the console was down (that deletion is reported at
+    the next poll). The ring, `RING`, `recent_events` and `follow_events` are otherwise unchanged.
+  Parity: like D-36, D-38 and D-40, `tests/core_routes_table.rs` lists the three in `RUST_ONLY` (rows
+  `"rust_only": "D-42"`), the corpus has no case for them, and `assets/openapi.json` gains their entries by hand in the
+  generated style (checked by `tests/viz_wave4.rs::the_openapi_entries_of_the_wave4_routes_match_the_code`); the four
+  `global.openapi.*` pins in `parity/pinned-diffs.json` gain exactly those three paths. The persisted events change no
+  corpus answer (each backend starts with an empty state directory). Tests: `tests/viz_wave4.rs`.
+- **D-43 `GET /audit` gains optional filters (addendum 9.16).** Still admin. `since`, `until` (epoch seconds 0..10^11,
+  inclusive), `actor` (the stored actor, same check as the summary), `status` (`ok` = status < 400, `error` = status
+  >= 400); an empty value means no filter; anything else (non-numbers, `nan`, `inf`, out of range, `since` > `until`,
+  another status word) is 422 `invalid_request`. Without filters the query is unchanged
+  (`SELECT * FROM audit [WHERE system=?] ORDER BY id DESC LIMIT ?`), so every corpus case answers as before; the read
+  now runs on the blocking pool. Parity: only the OpenAPI document differs: the `/api/v1/audit` entry gains a
+  `description` and the four parameters (`parameters/2..5`), pinned with their exact values in the four
+  `global.openapi.*` entries. Tests: `tests/viz_wave4.rs`.
 - **Test-only (workstream B):** in the DCGM `post_apply` restart test the fake upstream answers 503 instead of refusing the
   connection.
 - **Moot since A-7 (the private copies are deleted):** workstream B's "alias expansion over 1,000,000 nodes raises
