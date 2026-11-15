@@ -491,7 +491,7 @@ async fn aiperf_requests_samples_a_large_file_to_5000_rows() {
 async fn aiperf_requests_hostile_lines() {
     let lab = lab();
     let d = seed_aiperf(&lab);
-    let huge = MARK.repeat(100_000); // about 1 MiB
+    let huge = MARK.repeat(10_000); // about 100 KiB, twice per line: under the 256 KiB line cap
     let lines = [
         // a huge worker id gets no index; huge error text is never read
         json!({"metadata": {"request_start_ns": 10, "worker_id": huge}, "error": {"code": 500, "message": huge}})
@@ -506,6 +506,10 @@ async fn aiperf_requests_hostile_lines() {
         json!({"error": {"code": 99_999_999}}).to_string(),
         json!({"error": {"code": "4000000"}}).to_string(),
         json!({"error": {}}).to_string(),
+        // a line over the line cap is not parsed at all: counted as skipped, never a request
+        json!({"metadata": {"request_start_ns": 1, "worker_id": "w"}, "pad": MARK.repeat(30_000)}).to_string(),
+        // so is a short line with more values than a parse may build
+        format!("{{\"metrics\": [{}0]}}", "0,".repeat(runviz::JSON_MAX_NODES)),
     ];
     write(
         &d.join("artifacts/profile_export.jsonl"),
@@ -514,8 +518,10 @@ async fn aiperf_requests_hostile_lines() {
     let doc = lab
         .viewer_json(&format!("/api/v1/systems/aiperf/runs/{AP_RUN}/requests"))
         .await;
-    // the two lines that are not JSON objects are not requests
+    // the two lines that are not JSON objects are not requests; the two over a cap are skipped
     assert_eq!(doc["total"], 6);
+    assert_eq!(doc["skipped"], 2);
+    assert_eq!(doc["truncated"], true);
     let rows = doc["rows"].as_array().unwrap();
     assert_eq!(rows[0]["worker"], Value::Null);
     assert_eq!(rows[0]["error_code"], 500);
@@ -568,7 +574,7 @@ async fn aiperf_requests_without_a_records_file_is_empty() {
         .await;
     assert_eq!(
         doc,
-        json!({"run_id": AP_RUN, "total": 0, "returned": 0, "truncated": false, "rows": []})
+        json!({"run_id": AP_RUN, "total": 0, "returned": 0, "skipped": 0, "truncated": false, "rows": []})
     );
 }
 
@@ -743,7 +749,7 @@ fn dd_records() -> String {
         json!({"category": "Games", "review": format!("{MARK} three"), "stars": 3.5, "ok": true}),
         json!({"category": "Books", "review": null, "stars": 1}),
         json!({"category": "Toys", "stars": "n/a"}),
-        json!({"category": "Games", "review": "", "stars": 2}),
+        json!({"category": "Games", "review": "", "stars": 2, "What the model said": MARK}),
     ]
     .iter()
     .map(Value::to_string)
@@ -772,7 +778,9 @@ async fn dd_profile_viewer_gets_aggregates_without_values() {
         .await;
     assert_eq!(doc["values_hidden"], true);
     assert_eq!(doc["rows"], 6);
-    assert_eq!(doc["truncated"], false);
+    // the sentence-shaped column name is not an identifier: dropped, counted, and the answer says it is thinned
+    assert_eq!(doc["columns_dropped"], 1);
+    assert_eq!(doc["truncated"], true);
     let names: Vec<&str> = doc["columns"]
         .as_array()
         .unwrap()
@@ -796,13 +804,14 @@ async fn dd_profile_viewer_gets_aggregates_without_values() {
         json!({"min": 0.0, "p50": 14.0, "p95": 16.0, "max": 16.0})
     );
     assert_eq!(review["numeric"], Value::Null);
+    // numeric quantiles are cell values (nearest rank): admin-only, like the top values
     let stars = column(&doc, "stars");
     assert_eq!(stars["types"]["number"], 5);
     assert_eq!(stars["types"]["string"], 1);
-    assert_eq!(
-        stars["numeric"],
-        json!({"min": 1.0, "p50": 3.5, "p95": 5.0, "max": 5.0})
-    );
+    assert_eq!(stars["numeric"], Value::Null);
+    for c in doc["columns"].as_array().unwrap() {
+        assert_eq!(c["numeric"], Value::Null);
+    }
     let meta = column(&doc, "meta");
     assert_eq!(meta["types"]["object"], 1);
     assert_eq!(meta["types"]["null"], 5);
@@ -822,6 +831,20 @@ async fn dd_profile_admin_gets_the_top_values() {
     assert_eq!(r.status, 200);
     let doc = r.json();
     assert_eq!(doc["values_hidden"], false);
+    assert_eq!(
+        column(&doc, "stars")["numeric"],
+        json!({"min": 1.0, "p50": 3.5, "p95": 5.0, "max": 5.0})
+    );
+    assert_eq!(column(&doc, "review")["numeric"], Value::Null);
+    // a dropped column stays dropped for an admin too
+    assert_eq!(doc["columns_dropped"], 1);
+    assert!(
+        doc["columns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|c| c["name"] != "What the model said")
+    );
     assert_eq!(
         column(&doc, "category")["top"],
         json!([{"value": "Books", "count": 3}, {"value": "Games", "count": 2}, {"value": "Toys", "count": 1}])
@@ -859,8 +882,9 @@ async fn dd_profile_caps_columns_rows_and_value_sizes() {
     wide.insert(format!("bad\u{1}{MARK}"), json!(1));
     text.push_str(&Value::Object(wide).to_string());
     text.push('\n');
-    // a hostile huge value: measured as the records route shows it (2 KiB cap), the top value cut to 64
-    text.push_str(&json!({"c000": "y".repeat(3_000_000)}).to_string());
+    // a large value (under the 1 MiB line cap): measured as the records route shows it (2 KiB cap), the top value
+    // cut to 64
+    text.push_str(&json!({"c000": "y".repeat(900_000)}).to_string());
     text.push('\n');
     // more than 2000 records: only the first 2000 are read
     for i in 0..2500 {
@@ -881,6 +905,8 @@ async fn dd_profile_caps_columns_rows_and_value_sizes() {
     assert_eq!(doc["rows"], 2000);
     let cols = doc["columns"].as_array().unwrap();
     assert_eq!(cols.len(), runviz::PROFILE_MAX_COLUMNS);
+    // 100 columns past the 200th and the one with a bad name
+    assert_eq!(doc["columns_dropped"], 101);
     assert_eq!(cols[199]["name"], "c199");
     let c0 = column(&doc, "c000");
     assert_eq!(c0["length"]["max"], 2048.0);
@@ -941,8 +967,109 @@ async fn dd_profile_without_records_is_empty() {
         .await;
     assert_eq!(
         doc,
-        json!({"run_id": DD_RUN, "rows": 0, "columns": [], "values_hidden": true, "truncated": false})
+        json!({"run_id": DD_RUN, "rows": 0, "columns": [], "columns_dropped": 0, "values_hidden": true,
+            "truncated": false})
     );
+}
+
+#[tokio::test]
+async fn dd_profile_says_truncated_when_the_byte_cap_stops_it() {
+    // 1000 records of about 100 KB: the 64 MiB read cap ends the profile early, and the answer says so
+    let lab = lab();
+    let mut text = String::new();
+    for i in 0..1000 {
+        text.push_str(&json!({"id": i, "body": "z".repeat(100_000)}).to_string());
+        text.push('\n');
+    }
+    seed_dd(&lab, &text);
+    let doc = lab
+        .viewer_json(&format!(
+            "/api/v1/systems/datadesigner/runs/{DD_RUN}/profile"
+        ))
+        .await;
+    let rows = doc["rows"].as_u64().unwrap();
+    assert!(rows > 600 && rows < 700, "{rows}");
+    assert_eq!(doc["truncated"], true);
+}
+
+#[tokio::test]
+async fn dd_profile_skips_a_line_over_the_line_cap_and_says_so() {
+    // a first line over the 1 MiB line cap is skipped (never held whole), the records after it are profiled
+    let lab = lab();
+    let mut text = json!({"id": 0, "body": "z".repeat(1_100_000)}).to_string();
+    text.push('\n');
+    for i in 1..4 {
+        text.push_str(&json!({"id": i}).to_string());
+        text.push('\n');
+    }
+    seed_dd(&lab, &text);
+    let doc = lab
+        .viewer_json(&format!(
+            "/api/v1/systems/datadesigner/runs/{DD_RUN}/profile"
+        ))
+        .await;
+    assert_eq!(doc["rows"], 3);
+    assert_eq!(doc["truncated"], true);
+    assert_eq!(column(&doc, "id")["non_null"], 3);
+    // the same with nothing after it: rows 0, still truncated
+    seed_dd(&lab, &json!({"body": "z".repeat(1_100_000)}).to_string());
+    let doc = lab
+        .viewer_json(&format!(
+            "/api/v1/systems/datadesigner/runs/{DD_RUN}/profile"
+        ))
+        .await;
+    assert_eq!(doc["rows"], 0);
+    assert_eq!(doc["truncated"], true);
+}
+
+#[tokio::test]
+async fn hardlinked_files_are_not_read() {
+    let lab = lab();
+    let d = seed_aiperf(&lab);
+    seed_dd(&lab, &dd_records());
+    // a hardlink in the run directory to a file elsewhere (nlink 2) is refused like a symlink
+    let outside = lab.state.join("outside.jsonl");
+    std::fs::write(&outside, dd_records()).unwrap();
+    let rec = lab
+        .state
+        .join("datadesigner/runs")
+        .join(DD_RUN)
+        .join("records.jsonl");
+    std::fs::remove_file(&rec).unwrap();
+    std::fs::hard_link(&outside, &rec).unwrap();
+    let doc = lab
+        .viewer_json(&format!(
+            "/api/v1/systems/datadesigner/runs/{DD_RUN}/profile"
+        ))
+        .await;
+    assert_eq!(doc["rows"], 0);
+    let summary = d.join("artifacts/profile_export_aiperf.json");
+    let other = lab.state.join("other.json");
+    std::fs::hard_link(&summary, &other).unwrap();
+    let doc = lab
+        .viewer_json(&format!("/api/v1/systems/aiperf/runs/{AP_RUN}/summary"))
+        .await;
+    assert_eq!(doc["metrics"], json!({}));
+    // run.json itself: a hardlinked one makes the run unknown
+    let meta_link = lab.state.join("meta-link.json");
+    std::fs::hard_link(d.join("run.json"), &meta_link).unwrap();
+    let r = lab
+        .get(
+            &format!("/api/v1/systems/aiperf/runs/{AP_RUN}/requests"),
+            Some(&lab.viewer),
+        )
+        .await;
+    assert_eq!(r.status, 404);
+}
+
+#[test]
+fn json_nodes_bounds_the_values_a_parse_builds() {
+    assert_eq!(runviz::json_nodes(b"0"), 1);
+    assert_eq!(runviz::json_nodes(br#"{"a": [1, 2, {"b": "x,y:[{"}]}"#), 8);
+    let big = format!("[{}0]", "0,".repeat(runviz::JSON_MAX_NODES));
+    assert!(runviz::parse_bounded(big.as_bytes()).is_none());
+    let ok = format!("[{}0]", "0,".repeat(1000));
+    assert!(runviz::parse_bounded(ok.as_bytes()).is_some());
 }
 
 // ── errors, roles, symlinks ─────────────────────────────────────────────────────────────────────

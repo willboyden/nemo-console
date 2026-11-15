@@ -697,12 +697,20 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
   Designer: `\d{8}T\d{6}-\d{3}-[A-Za-z0-9._-]{1,128}`): a refused id is 422 `invalid_request` (unlike `/records`
   and `/files`, which answer 404 for it: the Python reference's behaviour, kept there); a run without a readable
   `run.json` is 404 "unknown run". Nothing from the request but that run id reaches a path. Files are read in
-  `adapters/runviz.rs` on the blocking pool, at most four reads at a time (`MAX_PARALLEL`), each opened with
-  `O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC`, regular files only (a FIFO neither blocks nor is read), size-capped; a run
-  directory or AIPerf `artifacts` directory that is a symlink is not read (`run.json` at most 4 MiB; a run left at
-  `running` reads as `interrupted`, as `load_meta` does). Answers:
+  `adapters/runviz.rs` on the blocking pool, at most two reads at a time (`MAX_PARALLEL`). Files (wave-3 audit F2):
+  the run directory is opened once with `O_DIRECTORY | O_NOFOLLOW` (`RunDir`), the AIPerf `artifacts` directory and
+  every file relative to it with `openat` (`O_NOFOLLOW`; files also `O_NONBLOCK | O_CLOEXEC`), so no symlink below
+  the runs directory is followed and a parent renamed between a check and the open cannot redirect a read; only
+  regular files with exactly one link are read (a FIFO neither blocks nor is read, a hardlink to a file elsewhere is
+  refused), each size-capped. A run left at `running` reads as `interrupted`, as `load_meta` does. Memory (wave-3
+  audit F1: a byte cap alone did not bound the parsed tree; a 16 MiB line `[0,0,...]` peaked at 1.2 GiB): every JSON
+  document these routes parse (`run.json`, the AIPerf summary, the Tier 1 result) is at most 1 MiB (`DOC_MAX_BYTES`;
+  larger reads as absent), and every document or line is counted before parsing (`json_nodes`: one more than its
+  `,` `:` `[` `{` outside strings) and refused past 100,000 values (`JSON_MAX_NODES`, about 10 MiB of tree);
+  `tests/runviz_memory.rs` runs each hostile shape in a fresh process and checks the peak resident set (`VmHWM`):
+  5-37 MiB, the 200 MiB bound asserted. Answers:
   * AIPerf `summary`: `{run_id, preset, model, verdict, concurrency, requests, isl, osl, duration_s, metrics,
-    http_phases_ms}` from `run.json` and `artifacts/profile_export_aiperf.json` (8 MiB, `MAX_JSON_BYTES`): every
+    http_phases_ms}` from `run.json` and `artifacts/profile_export_aiperf.json` (at most 1 MiB here, not `MAX_JSON_BYTES`): every
     top-level object with at least one finite statistic and a name matching `[a-z][a-z0-9_]{0,63}`, in file order, at
     most 100, each `{unit, avg, min, max, std, p1, p5, p10, p25, p50, p75, p90, p95, p99}` (absent or non-finite ->
     null; `count` and `sum` dropped; a unit not matching `[A-Za-z%][A-Za-z0-9/%._ -]{0,31}` -> null). `http_phases_ms`
@@ -711,7 +719,9 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
     `verdict` pass the adapter's checks or are null; the numbers are finite numbers or null. No metric without numbers
     (`input_config`, `run_info`, `error_summary`, ids, times) reaches the answer. Without a profile `metrics` is `{}`.
   * AIPerf `requests`: from `artifacts/profile_export.jsonl` (16 MiB, `MAX_EXPORT_BYTES`; a longer file is cut at the
-    last whole line and the answer says `truncated`), at most 200,000 lines looked at. Two passes over the bytes: the
+    last whole line and the answer says `truncated`), at most 200,000 lines looked at (every line counts, a request or
+    not). A line over 256 KiB (`REQUEST_LINE_MAX`; real records are about 2 KiB) or 100,000 values is not parsed: it
+    is counted in an extra answer key `skipped` and sets `truncated`. Two passes over the bytes: the
     first parses each line once (a request = a JSON object), finds the first `request_start_ns` and numbers the
     `worker_id`s by first appearance in the file (at most 1,024 workers, ids of at most 128 bytes; others null); the
     second re-parses only the rows returned: all when there are at most 5,000, else 5,000 evenly spaced (`k * (total -
@@ -724,7 +734,8 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
     of 1..6 digits, 0 when the record has a non-empty `error` without such a code, null without an error. No request,
     correlation, conversation or worker id, no error text: `error.message` and `error.type` are never read.
   * SkillEvaluator `summary`: `{run_id, skill, tiers, verdict, tier1, tier3}`. `tier1` (null when
-    `skillevaluator-tier1.json` is absent, over 8 MiB `MAX_RESULT_BYTES` or not an object): `validators` (at most 64;
+    `skillevaluator-tier1.json` is absent, over 1 MiB here (not `MAX_RESULT_BYTES`), over 100,000 values or not an
+    object): `validators` (at most 64;
     name matching `[A-Za-z0-9][A-Za-z0-9 &._/()+:-]{0,79}`, others left out; `passed` a bool or null; `status` a word
     or null; `findings` = counts by severity `critical/high/medium/low/info`, case-insensitive, a finding without a
     severity counted as `info` as `failed_checks` does, an unknown severity not counted), `rubric` (at most 32 of
@@ -734,24 +745,29 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
     `with_skill`, `without_skill` and `metrics` (at most 16, `[{name, with_skill, without_skill, delta}]`) from the
     numbers `summarize_tier3` already stored. Never a finding message, title, check or suggestion, criterion text,
     note, summary, conclusion, recommendation or error text.
-  * Data Designer `profile`: `{run_id, rows, columns, values_hidden, truncated}` over `records.jsonl` (the lines the
-    console exported, read with the same 16 MiB line bound as `files::for_each_line` and at most 64 MiB in all), at
-    most 2,000 records (`MAX_PREVIEW_RECORDS`; a 2,001st line sets `truncated`), values measured as `/records` shows
-    them (`cap_value`: strings cut to 2,048 characters). Columns in first-seen order, at most 200; a name not matching
-    `[A-Za-z0-9_][A-Za-z0-9_ .:-]{0,127}` is not profiled (both set `truncated`). Per column `{name, types: {string,
+  * Data Designer `profile`: `{run_id, rows, columns, columns_dropped, values_hidden, truncated}` over
+    `records.jsonl` (the lines the console exported), at most 64 MiB read; a line over 1 MiB (`PROFILE_LINE_MAX`) is
+    skipped without being held whole (`BufRead::skip_until`), so are lines over 100,000 values; at most 2,000 records
+    (`MAX_PREVIEW_RECORDS`), values measured as `/records` shows them (`cap_value`: strings cut to 2,048 characters).
+    `truncated` is true whenever a cap stopped or thinned the read (a 2,001st record, the byte cap before the end of
+    the file, a skipped line, a dropped column; wave-3 audit F3: these were silent). Columns in first-seen order, at
+    most 200; a name that is not an identifier (`[A-Za-z_][A-Za-z0-9_]{0,63}`, owner's decision F4) or past the 200th
+    is dropped and counted in `columns_dropped` (distinct names, counted up to 1,000). Per column `{name, types: {string,
     number, bool, null, object, array}, non_null, distinct, distinct_capped, length, numeric, top}`: `types.null` =
     records without a non-null value (absent keys count as null, so the counts add up to `rows`); `distinct` over
     non-null values, counted with per-request keyed 64-bit hashes up to 1,000 (`distinct_capped` past it);
     `length` / `numeric` = nearest-rank `{min, p50, p95, max}` of string lengths / finite numbers, null when there are
     none; `top` = the 10 most frequent non-null values (ties by first appearance) of a column with at most 50 distinct
-    values, a string or the JSON text of an object / array cut to 64 characters, numbers and booleans as they are,
-    ONLY for an admin (the handler passes `principal.role == Admin`; loopback trust is admin): a viewer gets `top: null`
-    everywhere and `values_hidden: true`, and the values are not even collected for a viewer.
+    values, a string or the JSON text of an object / array cut to 64 characters, numbers and booleans as they are.
+    `top` and `numeric` are cell values (a nearest-rank quantile IS a value of the column), so both are ONLY for an
+    admin (the handler passes `principal.role == Admin`; loopback trust is admin; owner's decision F4: viewers get
+    aggregates, never row values): a viewer gets `top: null` and `numeric: null` everywhere and `values_hidden: true`,
+    and those values are not even collected for a viewer. `length` (string lengths are not content) is for both.
   Parity: like D-36 and D-38, `tests/core_routes_table.rs` lists the three in `RUST_ONLY` (rows `"rust_only": "D-40"`
   in `parity/routes.rust.json`), the corpus has no case for them, and `assets/openapi.json` gains their entries by
   hand in the generated style (checked by `the_openapi_entries_of_the_run_routes_match_the_code`); the four
   `global.openapi.*` pins in `parity/pinned-diffs.json` gain exactly those three paths. Tests:
-  `tests/runviz_wave3.rs`.
+  `tests/runviz_wave3.rs`, `tests/runviz_memory.rs`.
 - **D-41 Wider run event data (addendum 9.15).** New keys only. `evaluator.run`: each `benchmarks[]` entry gains
   `ci_low`, `ci_high`, `tokens`, `elapsed_s`, `failure_rate`, copied from the run's stored `results` (which
   `Inner::results` already keeps from summary.json) when they are finite numbers (an integer stays an integer), else

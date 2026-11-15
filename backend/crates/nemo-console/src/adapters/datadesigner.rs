@@ -1819,18 +1819,20 @@ impl SystemAdapter for DataDesignerAdapter {
         let live = self.inner.live.run_id();
         let run_id = run_id.to_owned();
         runviz::blocking(move || {
-            runviz::load_meta(&run_dir, live.as_deref())
+            let (dir, _) = runviz::load_meta(&run_dir, live.as_deref())
                 .ok_or_else(|| AdapterError::UnknownId(run_id.clone()))?;
-            // the records the console exported for this run (at most MAX_PREVIEW_RECORDS lines are written there)
+            // the records the console exported for this run (at most MAX_PREVIEW_RECORDS lines are written there);
+            // lines over runviz::PROFILE_LINE_MAX (1 MiB) are skipped here, not parsed
             let mut lines = runviz::Lines::open(
-                &run_dir.join("records.jsonl"),
+                &dir,
+                "records.jsonl",
                 runviz::PROFILE_MAX_BYTES,
-                files::MAX_LINE_BYTES,
+                runviz::PROFILE_LINE_MAX,
             )
             .ok();
             Ok(runviz::dd_profile(
                 &run_id,
-                || lines.as_mut().and_then(runviz::Lines::next_line),
+                lines.as_mut(),
                 MAX_PREVIEW_RECORDS,
                 CELL_CAP,
                 with_values,

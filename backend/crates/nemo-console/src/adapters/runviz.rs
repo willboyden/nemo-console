@@ -3,20 +3,31 @@
 //! adapters already own; each adapter validates the run id, resolves its run directory and calls these on the
 //! blocking pool through [`blocking`].
 //!
-//! Bounds (wave-1 and wave-2 audits, applied from the start):
-//!   * files are opened with `O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC`, must be regular files and are read with a byte
-//!     cap ([`open_regular`]); a run directory or the AIPerf `artifacts` directory that is a symlink is not read;
+//! Bounds (wave-1 and wave-2 audits, applied from the start; the wave-3 audit's memory and file findings F1-F3):
+//!   * the run directory is opened once (`O_DIRECTORY | O_NOFOLLOW`) and every file below it is opened relative to
+//!     that descriptor (`openat`, `O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC`) ([`RunDir`]): no symlink at any level below
+//!     the runs directory is followed, a rename of a parent between check and open cannot redirect the read, only
+//!     regular files with ONE link are read (a hardlink to a file elsewhere is refused), each with a byte cap;
+//!   * memory is bounded by what is PARSED, not only what is read: a JSON document is parsed only when it is at most
+//!     [`DOC_MAX_BYTES`] and has at most [`JSON_MAX_NODES`] values (a cheap count before parsing), an AIPerf record
+//!     line only up to [`REQUEST_LINE_MAX`], a Data Designer record line only up to [`PROFILE_LINE_MAX`]; so one
+//!     request peaks at tens of MiB whatever the files hold (`tests/runviz_memory.rs` measures it);
 //!   * every string that reaches an answer is a name or identifier that passed a full-match check with a length
 //!     bound, or a unit; nothing else (no message, criterion, note, id or error text) is ever copied;
 //!   * non-finite numbers become null; per-file, per-row and per-list caps; maps, never searches (linear work);
-//!   * at most [`MAX_PARALLEL`] of these reads run at once (each holds a file of up to 16 MiB in memory).
+//!   * at most [`MAX_PARALLEL`] of these reads run at once.
 
 use std::collections::hash_map::RandomState;
 use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasher, Hash, Hasher};
 use std::io::{BufRead, BufReader, Read};
+use std::os::fd::OwnedFd;
+use std::os::unix::fs::MetadataExt as _;
 use std::path::Path;
 use std::sync::LazyLock;
+
+use nix::fcntl::{OFlag, open, openat};
+use nix::sys::stat::Mode;
 
 use regex::Regex;
 use serde_json::{Map, Value, json};
@@ -25,8 +36,8 @@ use crate::adapters::base::AdapterError;
 use crate::services::pyfmt::char_prefix;
 use crate::services::support::{self as sp, full};
 
-/// How many run-visualisation reads may run on the blocking pool at once (each may hold a file of up to 16 MiB).
-pub const MAX_PARALLEL: usize = 4;
+/// How many run-visualisation reads may run on the blocking pool at once.
+pub const MAX_PARALLEL: usize = 2;
 
 static PERMITS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(MAX_PARALLEL);
 
@@ -61,8 +72,8 @@ static VALIDATOR_RE: LazyLock<Regex> =
     LazyLock::new(|| full(r"[A-Za-z0-9][A-Za-z0-9 &._/()+:-]{0,79}"));
 /// A SkillEvaluator status word.
 static WORD_RE: LazyLock<Regex> = LazyLock::new(|| full(r"[a-z][a-z0-9_]{0,31}"));
-/// A Data Designer column name (it comes from the operator's script).
-static COLUMN_RE: LazyLock<Regex> = LazyLock::new(|| full(r"[A-Za-z0-9_][A-Za-z0-9_ .:-]{0,127}"));
+/// A Data Designer column name: an identifier (it comes from the operator's script; anything else is dropped).
+static COLUMN_RE: LazyLock<Regex> = LazyLock::new(|| full(r"[A-Za-z_][A-Za-z0-9_]{0,63}"));
 /// A Tier 3 agent name (= the adapter's `NAME_RE`).
 static AGENT_RE: LazyLock<Regex> = LazyLock::new(|| full(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}"));
 /// A router model alias (= the adapters' `MODEL_RE`).
@@ -127,60 +138,130 @@ fn verdict(meta: &Map<String, Value>, verdicts: &[&str]) -> Value {
 
 // ── files ───────────────────────────────────────────────────────────────────────────────────────
 
-/// A directory that is not a symlink (the run directory, the AIPerf `artifacts` directory).
-#[must_use]
-pub fn real_dir(p: &Path) -> bool {
-    std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_dir())
-}
+/// The largest JSON document (`run.json`, the AIPerf summary, the SkillEvaluator Tier 1 result) these routes parse;
+/// a larger one reads as absent (the documented null / empty answer). The real ones are a few KiB to 100 KiB.
+pub const DOC_MAX_BYTES: u64 = 1024 * 1024;
+/// The most JSON values one parsed document or line may hold (counted before parsing, [`json_nodes`]): a parsed tree
+/// takes about 100 bytes per value, so this bounds one parse to about 10 MiB however the bytes are shaped.
+pub const JSON_MAX_NODES: usize = 100_000;
 
-/// Open `p` for reading without following a final symlink and without blocking on a FIFO; only a regular file is
-/// accepted. Returns the file and its size.
-pub fn open_regular(p: &Path) -> std::io::Result<(std::fs::File, u64)> {
-    use std::os::unix::fs::OpenOptionsExt as _;
-    let f = std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(nix::libc::O_NOFOLLOW | nix::libc::O_NONBLOCK | nix::libc::O_CLOEXEC)
-        .open(p)?;
-    let md = f.metadata()?;
-    if !md.file_type().is_file() {
-        return Err(std::io::Error::other("not a regular file"));
+/// An upper bound of the number of values in a JSON text: one more than its `,` and `:` and its `[` and `{` outside
+/// strings. Linear, no allocation.
+#[must_use]
+pub fn json_nodes(b: &[u8]) -> usize {
+    let (mut n, mut in_str, mut esc) = (1usize, false, false);
+    for &c in b {
+        if in_str {
+            if esc {
+                esc = false;
+            } else if c == b'\\' {
+                esc = true;
+            } else if c == b'"' {
+                in_str = false;
+            }
+            continue;
+        }
+        match c {
+            b'"' => in_str = true,
+            b',' | b':' | b'[' | b'{' => n += 1,
+            _ => {}
+        }
     }
-    Ok((f, md.len()))
+    n
 }
 
-/// At most `cap` bytes of a regular file and whether it had more. `None` when it cannot be opened or read.
+/// `json.loads` of `b` when it holds at most [`JSON_MAX_NODES`] values (None: too many, or not JSON).
 #[must_use]
-pub fn read_capped(p: &Path, cap: u64) -> Option<(Vec<u8>, bool)> {
-    let (f, len) = open_regular(p).ok()?;
-    let mut buf = Vec::new();
-    f.take(cap).read_to_end(&mut buf).ok()?;
-    Some((buf, len > cap))
-}
-
-/// A JSON object from a regular file of at most `cap` bytes (`None`: absent, a symlink, too large, not an object).
-#[must_use]
-pub fn read_json_object(p: &Path, cap: u64) -> Option<Map<String, Value>> {
-    let (bytes, more) = read_capped(p, cap)?;
-    if more {
+pub fn parse_bounded(b: &[u8]) -> Option<Value> {
+    if json_nodes(b) > JSON_MAX_NODES {
         return None;
     }
-    match sp::json_loads_bytes(&bytes)? {
-        Value::Object(m) => Some(m),
-        _ => None,
+    sp::json_loads_bytes(b)
+}
+
+/// An open directory under the runs directory (the run directory, the AIPerf `artifacts` directory). Opened with
+/// `O_DIRECTORY | O_NOFOLLOW`, so a symlink is refused; files are opened relative to it.
+pub struct RunDir(OwnedFd);
+
+const DIR_FLAGS: OFlag = OFlag::O_RDONLY
+    .union(OFlag::O_DIRECTORY)
+    .union(OFlag::O_NOFOLLOW)
+    .union(OFlag::O_CLOEXEC);
+const FILE_FLAGS: OFlag = OFlag::O_RDONLY
+    .union(OFlag::O_NOFOLLOW)
+    .union(OFlag::O_NONBLOCK)
+    .union(OFlag::O_CLOEXEC);
+
+fn one_name(name: &str) -> std::io::Result<()> {
+    if name.is_empty() || name == "." || name == ".." || name.contains('/') {
+        return Err(std::io::Error::other("not a plain name"));
+    }
+    Ok(())
+}
+
+impl RunDir {
+    /// Open a run directory (None: absent, not a directory, or a symlink).
+    #[must_use]
+    pub fn open(p: &Path) -> Option<RunDir> {
+        open(p, DIR_FLAGS, Mode::empty()).ok().map(RunDir)
+    }
+
+    /// Open the directory `name` inside this one (None: absent, not a directory, or a symlink).
+    #[must_use]
+    pub fn sub(&self, name: &str) -> Option<RunDir> {
+        one_name(name).ok()?;
+        openat(&self.0, name, DIR_FLAGS, Mode::empty())
+            .ok()
+            .map(RunDir)
+    }
+
+    /// Open the file `name` inside this directory for reading: never through a symlink, never blocking on a FIFO,
+    /// only a regular file with exactly one link. Returns the file and its size.
+    pub fn file(&self, name: &str) -> std::io::Result<(std::fs::File, u64)> {
+        one_name(name)?;
+        let fd = openat(&self.0, name, FILE_FLAGS, Mode::empty()).map_err(std::io::Error::from)?;
+        let f = std::fs::File::from(fd);
+        let md = f.metadata()?;
+        if !md.file_type().is_file() {
+            return Err(std::io::Error::other("not a regular file"));
+        }
+        if md.nlink() != 1 {
+            return Err(std::io::Error::other("a file with more than one link"));
+        }
+        Ok((f, md.len()))
+    }
+
+    /// At most `cap` bytes of the file `name` and whether it had more. `None` when it cannot be opened or read.
+    #[must_use]
+    pub fn read_capped(&self, name: &str, cap: u64) -> Option<(Vec<u8>, bool)> {
+        let (f, len) = self.file(name).ok()?;
+        let mut buf = Vec::new();
+        f.take(cap).read_to_end(&mut buf).ok()?;
+        Some((buf, len > cap))
+    }
+
+    /// A JSON object from the file `name` (`None`: absent, a symlink, over [`DOC_MAX_BYTES`] or [`JSON_MAX_NODES`],
+    /// not an object).
+    #[must_use]
+    pub fn json_object(&self, name: &str) -> Option<Map<String, Value>> {
+        let (bytes, more) = self.read_capped(name, DOC_MAX_BYTES)?;
+        if more {
+            return None;
+        }
+        match parse_bounded(&bytes)? {
+            Value::Object(m) => Some(m),
+            _ => None,
+        }
     }
 }
 
-/// The largest `run.json` these routes read (the adapters write a few KiB).
-pub const MAX_META_BYTES: u64 = 4 * 1024 * 1024;
-
-/// A stored run's `run.json` as the adapters' `load_meta` reads it (a run left at `running` by a process that no
-/// longer runs it reads as interrupted), size-capped and never through a symlinked run directory. `None` = unknown.
+/// A stored run: its directory, opened once, and its `run.json` as the adapters' `load_meta` reads it (a run left at
+/// `running` by a process that no longer runs it reads as interrupted), bounded like every document here. `None` =
+/// unknown run (no such directory, a symlink, no readable `run.json`).
 #[must_use]
-pub fn load_meta(run_dir: &Path, live: Option<&str>) -> Option<Map<String, Value>> {
-    if !real_dir(run_dir) {
-        return None;
-    }
-    let mut meta = read_json_object(&run_dir.join("run.json"), MAX_META_BYTES)?;
+pub fn load_meta(run_dir: &Path, live: Option<&str>) -> Option<(RunDir, Map<String, Value>)> {
+    let dir = RunDir::open(run_dir)?;
+    let mut meta = dir.json_object("run.json")?;
     if meta.get("verdict").and_then(Value::as_str) == Some("running") {
         let same =
             matches!((meta.get("run_id"), live), (Some(Value::String(r)), Some(l)) if r == l);
@@ -188,7 +269,7 @@ pub fn load_meta(run_dir: &Path, live: Option<&str>) -> Option<Map<String, Value
             meta.insert("verdict".into(), json!("interrupted"));
         }
     }
-    Some(meta)
+    Some((dir, meta))
 }
 
 // ── AIPerf summary ──────────────────────────────────────────────────────────────────────────────
@@ -302,9 +383,11 @@ static KEY_PRESET_RE: LazyLock<Regex> = LazyLock::new(|| full(r"[a-z0-9][a-z0-9-
 
 /// At most this many rows in an answer (evenly sampled when the file has more).
 pub const REQUESTS_MAX_ROWS: usize = 5000;
-/// At most this many lines of `profile_export.jsonl` are looked at (a run has at most 2,100 requests; the rest of a
-/// larger file is not read and the answer says `truncated`).
+/// At most this many lines of `profile_export.jsonl` are looked at, every line counted (a run has at most 2,100
+/// requests; the rest of a larger file is not read and the answer says `truncated`).
 pub const REQUESTS_MAX_LINES: usize = 200_000;
+/// A record line longer than this is not parsed: it is counted in `skipped` (a real record is about 2 KiB).
+pub const REQUEST_LINE_MAX: usize = 256 * 1024;
 /// At most this many distinct workers get an index (later ones are null).
 pub const REQUESTS_MAX_WORKERS: usize = 1024;
 const WORKER_ID_MAX: usize = 128;
@@ -362,13 +445,16 @@ fn error_code(rec: &Map<String, Value>) -> Value {
 
 /// `GET /systems/aiperf/runs/{run_id}/requests` from the bytes of `profile_export.jsonl` (`cut`: the file had more
 /// than was read). Two passes over the bytes: the first parses every line once to count the requests, find the
-/// first start and number the workers by first appearance; the second re-reads only the sampled lines.
+/// first start and number the workers by first appearance; the second re-reads only the sampled lines. A line over
+/// [`REQUEST_LINE_MAX`] bytes or [`JSON_MAX_NODES`] values is not parsed: it counts in `skipped` (and `truncated`).
 #[must_use]
 pub fn aiperf_requests(run_id: &str, bytes: &[u8], cut: bool) -> Value {
     let mut lines: Vec<(usize, usize)> = Vec::new();
     let mut origin: Option<i64> = None;
     let mut workers: HashMap<String, u32> = HashMap::new();
     let mut truncated = cut;
+    let mut skipped = 0usize;
+    let mut seen = 0usize;
     let mut pos = 0usize;
     let mut parts = bytes.split_inclusive(|b| *b == b'\n').peekable();
     while let Some(line) = parts.next() {
@@ -378,9 +464,14 @@ pub fn aiperf_requests(run_id: &str, bytes: &[u8], cut: bool) -> Value {
         if cut && parts.peek().is_none() && !line.ends_with(b"\n") {
             break;
         }
-        if lines.len() >= REQUESTS_MAX_LINES {
+        if seen >= REQUESTS_MAX_LINES {
             truncated = true;
             break;
+        }
+        seen += 1;
+        if line.len() > REQUEST_LINE_MAX || json_nodes(line) > JSON_MAX_NODES {
+            skipped += 1;
+            continue;
         }
         let Some(Value::Object(rec)) = sp::json_loads_bytes(line) else {
             continue;
@@ -419,7 +510,7 @@ pub fn aiperf_requests(run_id: &str, bytes: &[u8], cut: bool) -> Value {
     let mut rows = Vec::with_capacity(picks.len());
     for i in picks {
         let (start, len) = lines[i];
-        let Some(Value::Object(rec)) = sp::json_loads_bytes(&bytes[start..start + len]) else {
+        let Some(Value::Object(rec)) = parse_bounded(&bytes[start..start + len]) else {
             continue;
         };
         let md = obj(rec.get("metadata"));
@@ -446,7 +537,8 @@ pub fn aiperf_requests(run_id: &str, bytes: &[u8], cut: bool) -> Value {
         "run_id": run_id,
         "total": total,
         "returned": returned,
-        "truncated": truncated || returned < total,
+        "skipped": skipped,
+        "truncated": truncated || skipped > 0 || returned < total,
         "rows": rows,
     })
 }
@@ -642,6 +734,8 @@ pub const PROFILE_TOP_N: usize = 10;
 pub const PROFILE_TOP_CHARS: usize = 64;
 /// At most this many bytes of `records.jsonl` are read for a profile.
 pub const PROFILE_MAX_BYTES: u64 = 64 * 1024 * 1024;
+/// A record line longer than this is skipped for a profile (and sets `truncated`); records are a few KiB.
+pub const PROFILE_LINE_MAX: u64 = 1024 * 1024;
 
 const TYPES: [&str; 6] = ["string", "number", "bool", "null", "object", "array"];
 
@@ -705,13 +799,16 @@ fn quantiles<T: Copy + Into<f64>>(sorted: &[T]) -> Value {
     })
 }
 
-/// `GET /systems/datadesigner/runs/{run_id}/profile` over at most `max_rows` lines of `records.jsonl` (read through
-/// `next_line`, which gives each line and None at the end). `with_values` (admin) fills `top`; for a viewer every
-/// `top` is null and `values_hidden` is true. Values are measured as the records route shows them (strings cut to
-/// `cell_cap` characters, `files::cap_value`).
+/// `GET /systems/datadesigner/runs/{run_id}/profile` over at most `max_rows` records of `records.jsonl` (read through
+/// `lines`; None: the file could not be opened). `with_values` (admin) fills `top` and `numeric`, which are cell
+/// values; for a viewer both are null everywhere, they are not even collected, and `values_hidden` is true. `length`
+/// (string lengths) is given to both. Values are measured as the records route shows them (strings cut to `cell_cap`
+/// characters, `files::cap_value`). A column whose name is not an identifier, or past the 200th, is dropped and
+/// counted in `columns_dropped`; `truncated` is true whenever a cap stopped or thinned the reading (rows, bytes, a
+/// line over the line cap or [`JSON_MAX_NODES`], columns).
 pub fn dd_profile(
     run_id: &str,
-    mut next_line: impl FnMut() -> Option<Vec<u8>>,
+    mut lines: Option<&mut Lines>,
     max_rows: usize,
     cell_cap: usize,
     with_values: bool,
@@ -720,12 +817,17 @@ pub fn dd_profile(
     let state = RandomState::new();
     let mut cols: Vec<Col> = Vec::new();
     let mut index: HashMap<String, usize> = HashMap::new();
+    let mut dropped: HashSet<u64> = HashSet::new();
     let mut rows = 0usize;
     let mut truncated = false;
-    while let Some(line) = next_line() {
+    while let Some(line) = lines.as_mut().and_then(|l| l.next_line()) {
         if rows >= max_rows {
             truncated = true;
             break;
+        }
+        if json_nodes(&line) > JSON_MAX_NODES {
+            truncated = true;
+            continue;
         }
         let Some(Value::Object(rec)) = sp::json_loads_bytes(&line) else {
             continue;
@@ -736,9 +838,11 @@ pub fn dd_profile(
             let ci = match index.get(k) {
                 Some(i) => *i,
                 None => {
-                    if cols.len() >= PROFILE_MAX_COLUMNS || k.len() > 128 || !COLUMN_RE.is_match(k)
-                    {
+                    if cols.len() >= PROFILE_MAX_COLUMNS || k.len() > 64 || !COLUMN_RE.is_match(k) {
                         truncated = true;
+                        if dropped.len() < PROFILE_DISTINCT_CAP {
+                            dropped.insert(state.hash_one(k));
+                        }
                         continue;
                     }
                     index.insert(k.clone(), cols.len());
@@ -759,7 +863,7 @@ pub fn dd_profile(
                     let n = s.chars().count().min(cell_cap);
                     col.lengths.push(u32::try_from(n).unwrap_or(u32::MAX));
                 }
-                Value::Number(n) => {
+                Value::Number(n) if with_values => {
                     if let Some(x) = n.as_f64().filter(|x| x.is_finite()) {
                         col.numbers.push(x);
                     }
@@ -790,6 +894,9 @@ pub fn dd_profile(
                 e.0 += 1;
             }
         }
+    }
+    if lines.as_ref().is_some_and(|l| l.capped()) {
+        truncated = true;
     }
     let rows_u64 = u64::try_from(rows).unwrap_or(u64::MAX);
     let columns: Vec<Value> = cols
@@ -828,7 +935,7 @@ pub fn dd_profile(
                 "distinct": c.seen.len(),
                 "distinct_capped": c.capped,
                 "length": quantiles(&c.lengths),
-                "numeric": quantiles(&c.numbers),
+                "numeric": if with_values { quantiles(&c.numbers) } else { Value::Null },
                 "top": top,
             })
         })
@@ -837,48 +944,73 @@ pub fn dd_profile(
         "run_id": run_id,
         "rows": rows,
         "columns": columns,
+        "columns_dropped": dropped.len(),
         "values_hidden": !with_values,
         "truncated": truncated,
     })
 }
 
-/// A line reader over a regular file: at most `total` bytes, lines of at most `line_cap` bytes (a longer line ends
-/// the reading, as `files::for_each_line` does).
+/// A line reader over a file of a [`RunDir`]: at most `total` bytes; a line longer than `line_cap` bytes is skipped
+/// without being held (counted in `long_lines`). [`Lines::capped`] says whether a cap thinned or stopped the read.
 pub struct Lines {
     r: BufReader<std::io::Take<std::fs::File>>,
     line_cap: u64,
+    total: u64,
+    len: u64,
     done: bool,
+    long_lines: usize,
+    hit_bytes: bool,
 }
 
 impl Lines {
-    pub fn open(p: &Path, total: u64, line_cap: u64) -> std::io::Result<Lines> {
-        let (f, _) = open_regular(p)?;
+    pub fn open(dir: &RunDir, name: &str, total: u64, line_cap: u64) -> std::io::Result<Lines> {
+        let (f, len) = dir.file(name)?;
         Ok(Lines {
             r: BufReader::new(f.take(total)),
             line_cap,
+            total,
+            len,
             done: false,
+            long_lines: 0,
+            hit_bytes: false,
         })
     }
 
-    /// The next line (with its newline), None at the end, on an error or past the line cap.
+    /// The next line within the caps (with its newline), None at the end or on an error.
     pub fn next_line(&mut self) -> Option<Vec<u8>> {
-        if self.done {
-            return None;
-        }
         let mut buf = Vec::new();
-        match (&mut self.r)
-            .take(self.line_cap + 1)
-            .read_until(b'\n', &mut buf)
-        {
-            Ok(0) | Err(_) => {
-                self.done = true;
-                None
+        while !self.done {
+            buf.clear();
+            match (&mut self.r)
+                .take(self.line_cap + 1)
+                .read_until(b'\n', &mut buf)
+            {
+                Ok(0) => {
+                    self.done = true;
+                    self.hit_bytes = self.len > self.total;
+                }
+                Err(_) => self.done = true,
+                Ok(n) if n as u64 > self.line_cap => {
+                    self.long_lines += 1;
+                    if !buf.ends_with(b"\n") && self.r.skip_until(b'\n').is_err() {
+                        self.done = true;
+                    }
+                }
+                Ok(_) => return Some(buf),
             }
-            Ok(n) if n as u64 > self.line_cap => {
-                self.done = true;
-                None
-            }
-            Ok(_) => Some(buf),
         }
+        None
+    }
+
+    /// Lines over the line cap that were skipped.
+    #[must_use]
+    pub fn long_lines(&self) -> usize {
+        self.long_lines
+    }
+
+    /// True when a line was skipped for its length or the byte cap ended the reading before the end of the file.
+    #[must_use]
+    pub fn capped(&self) -> bool {
+        self.long_lines > 0 || self.hit_bytes
     }
 }

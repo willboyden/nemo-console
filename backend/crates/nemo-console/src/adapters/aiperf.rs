@@ -1890,12 +1890,12 @@ impl SystemAdapter for AiPerfAdapter {
         let live = self.inner.live_run_id();
         let run_id = run_id.to_owned();
         runviz::blocking(move || {
-            let meta = runviz::load_meta(&run_dir, live.as_deref())
+            let (dir, meta) = runviz::load_meta(&run_dir, live.as_deref())
                 .ok_or_else(|| AdapterError::UnknownId(run_id.clone()))?;
-            let artifacts = run_dir.join("artifacts");
-            let profile = runviz::real_dir(&artifacts)
-                .then(|| runviz::read_json_object(&artifacts.join(SUMMARY_FILE), MAX_JSON_BYTES))
-                .flatten();
+            // at most runviz::DOC_MAX_BYTES (1 MiB) parsed here, not MAX_JSON_BYTES: a larger summary reads as absent
+            let profile = dir
+                .sub("artifacts")
+                .and_then(|a| a.json_object(SUMMARY_FILE));
             Ok(runviz::aiperf_summary(
                 &run_id,
                 &meta,
@@ -1911,15 +1911,12 @@ impl SystemAdapter for AiPerfAdapter {
         let live = self.inner.live_run_id();
         let run_id = run_id.to_owned();
         runviz::blocking(move || {
-            runviz::load_meta(&run_dir, live.as_deref())
+            let (dir, _) = runviz::load_meta(&run_dir, live.as_deref())
                 .ok_or_else(|| AdapterError::UnknownId(run_id.clone()))?;
-            let artifacts = run_dir.join("artifacts");
-            let (bytes, cut) = if runviz::real_dir(&artifacts) {
-                runviz::read_capped(&artifacts.join(RECORDS_FILE), MAX_EXPORT_BYTES)
-                    .unwrap_or_default()
-            } else {
-                (Vec::new(), false)
-            };
+            let (bytes, cut) = dir
+                .sub("artifacts")
+                .and_then(|a| a.read_capped(RECORDS_FILE, MAX_EXPORT_BYTES))
+                .unwrap_or_default();
             Ok(runviz::aiperf_requests(&run_id, &bytes, cut))
         })
         .await

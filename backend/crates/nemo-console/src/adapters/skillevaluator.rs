@@ -1830,12 +1830,10 @@ impl SystemAdapter for SkillEvaluatorAdapter {
         let live = self.inner.live.run_id();
         let run_id = run_id.to_owned();
         runviz::blocking(move || {
-            let meta = runviz::load_meta(&run_dir, live.as_deref())
+            let (dir, meta) = runviz::load_meta(&run_dir, live.as_deref())
                 .ok_or_else(|| AdapterError::UnknownId(run_id.clone()))?;
-            let tier1 = runviz::read_json_object(
-                &run_dir.join("skillevaluator-tier1.json"),
-                MAX_RESULT_BYTES,
-            );
+            // at most runviz::DOC_MAX_BYTES (1 MiB) parsed here, not MAX_RESULT_BYTES: a larger file reads as absent
+            let tier1 = dir.json_object("skillevaluator-tier1.json");
             Ok(runviz::se_summary(
                 &run_id,
                 &meta,
