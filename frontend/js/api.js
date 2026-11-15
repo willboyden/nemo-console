@@ -101,6 +101,8 @@ export function createClient({ base = '/api/v1', getKey = () => null, onUnauthor
     // Series for charts (addendum 9.13): one answer per chart. `keys` is an array (1..12 canonical keys) or a comma string;
     // `split` draws one line per label variant; `window` is 15m|1h|24h|7d.
     series: (id, { keys, window = '1h', split = false }, o) => get(`${sys(id)}/metrics/series`, { keys: [].concat(keys).join(','), window, split: split ? 1 : 0 }, o),
+    // GPU telemetry fleet heatmap (addendum 9.14): per-GPU history of every DCGM host Prometheus scrapes. q = {metric, window}.
+    fleet: (q, o) => get(`${sys('dcgm')}/fleet`, q, o),
     events: (id, limit = 50) => get(`${sys(id)}/events`, { limit }),
     configList: (id) => get(`${sys(id)}/config`),
     config: (id, file) => get(`${sys(id)}/config/${enc(file)}`),

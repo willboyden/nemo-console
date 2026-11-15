@@ -19,6 +19,12 @@ use crate::services::store::Store;
 pub const WINDOWS: [(&str, f64); 3] = [("15m", 900.0), ("1h", 3600.0), ("24h", 86400.0)];
 pub const MAX_SERIES_PER_SYSTEM: usize = 256;
 pub const ROLLUP_KEEP_S: f64 = 8.0 * 86400.0;
+/// The longest series name `record` keeps: the longest canonical key `KEY_RE` accepts (64 characters of name, 200 of
+/// labels and the two braces). A longer one (a hostile or broken upstream label) is dropped, never stored.
+pub const MAX_SERIES_NAME: usize = 64 + 2 + 200;
+/// A series with no point for this long leaves the ring and frees its slot of the per-system cap (its rollups stay),
+/// so label churn (models, routes, decision paths that come and go) cannot fill the cap for good.
+pub const SERIES_IDLE_EVICT_S: f64 = 1800.0;
 
 #[must_use]
 pub fn window_span(w: &str) -> Option<f64> {
@@ -222,6 +228,19 @@ struct Inner {
     pending: HashMap<(SystemId, String), [f64; 4]>,
     series_count: HashMap<SystemId, usize>,
     last_prune: f64,
+    /// When `record` last looked for idle series.
+    last_evict: f64,
+}
+
+/// What `record` refused or evicted (`MetricsPoller::record_stats`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RecordStats {
+    /// Points with a NaN or infinite value (never stored: NaN would poison a minute's average).
+    pub dropped_non_finite: usize,
+    /// Points whose series name is longer than [`MAX_SERIES_NAME`].
+    pub dropped_long_name: usize,
+    /// Series that left the ring after [`SERIES_IDLE_EVICT_S`] without a point.
+    pub evicted: usize,
 }
 
 pub struct MetricsPoller {
@@ -233,6 +252,9 @@ pub struct MetricsPoller {
     series_queries: AtomicUsize,
     series_rows: AtomicUsize,
     series_fallbacks: AtomicUsize,
+    dropped_non_finite: AtomicUsize,
+    dropped_long_name: AtomicUsize,
+    evicted: AtomicUsize,
 }
 
 impl MetricsPoller {
@@ -252,6 +274,9 @@ impl MetricsPoller {
             series_queries: AtomicUsize::new(0),
             series_rows: AtomicUsize::new(0),
             series_fallbacks: AtomicUsize::new(0),
+            dropped_non_finite: AtomicUsize::new(0),
+            dropped_long_name: AtomicUsize::new(0),
+            evicted: AtomicUsize::new(0),
         }
     }
 
@@ -285,7 +310,7 @@ impl MetricsPoller {
 
     pub async fn tick(&self) {
         for system in self.status.adapters.keys().copied().collect::<Vec<_>>() {
-            let snap = self.status.metrics(system).await;
+            let snap = self.status.poll_metrics(system).await;
             let points = if snap.available {
                 snap.points
             } else {
@@ -302,8 +327,23 @@ impl MetricsPoller {
         };
         #[allow(clippy::cast_possible_truncation)]
         let bucket = (ts / 60.0).floor() as i64;
+        // first, so a series that comes back (or a new one) finds the slots the idle ones held
+        if ts - g.last_evict >= 60.0 {
+            g.last_evict = ts;
+            self.evict_idle(&mut g, ts);
+        }
         for p in points {
-            let k = (system, series_name(p));
+            // one guard for every adapter: a non-finite value or an over-long name never reaches the ring or SQLite
+            if !p.value.is_finite() {
+                self.dropped_non_finite.fetch_add(1, Ordering::Relaxed);
+                continue;
+            }
+            let name = series_name(p);
+            if name.len() > MAX_SERIES_NAME {
+                self.dropped_long_name.fetch_add(1, Ordering::Relaxed);
+                continue;
+            }
+            let k = (system, name);
             if !g.ring.contains_key(&k) {
                 let count = g.series_count.get(&system).copied().unwrap_or(0);
                 if count >= MAX_SERIES_PER_SYSTEM {
@@ -352,6 +392,41 @@ impl MetricsPoller {
             let _ = self
                 .store
                 .execute("DELETE FROM rollup WHERE bucket < ?", [cutoff]);
+        }
+    }
+
+    /// Drop every series whose newest point is older than [`SERIES_IDLE_EVICT_S`] (its pending minute is written
+    /// first, so the rollups keep everything), and give its slot of the per-system cap back.
+    fn evict_idle(&self, g: &mut Inner, now: f64) {
+        let idle: Vec<(SystemId, String)> = g
+            .ring
+            .iter()
+            .filter(|(_, r)| {
+                r.points
+                    .back()
+                    .is_none_or(|(t, _)| now - t > SERIES_IDLE_EVICT_S)
+            })
+            .map(|(k, _)| k.clone())
+            .collect();
+        for k in idle {
+            if let Some(cur) = g.pending.remove(&k) {
+                self.flush_one(&k, cur);
+            }
+            g.ring.shift_remove(&k);
+            if let Some(c) = g.series_count.get_mut(&k.0) {
+                *c = c.saturating_sub(1);
+            }
+            self.evicted.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// Counters of what `record` refused or evicted.
+    #[must_use]
+    pub fn record_stats(&self) -> RecordStats {
+        RecordStats {
+            dropped_non_finite: self.dropped_non_finite.load(Ordering::Relaxed),
+            dropped_long_name: self.dropped_long_name.load(Ordering::Relaxed),
+            evicted: self.evicted.load(Ordering::Relaxed),
         }
     }
 

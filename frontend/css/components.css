@@ -3476,3 +3476,340 @@ text.rh-ring-tag {
 .rh-pick select {
   min-width: 0;
 }
+
+/* Wave 2 visualizations (addendum 9.14): the fleet heatmap and call-rate heatmap (js/charts/heatmap.js), the line / stack / timeline cards
+   (js/charts/lines-card.js, stack-card.js, timeline-chart.js) and the GPU health, Switchyard and Dynamo cards. Everything is told apart by
+   shape, glyph or text as well as colour; no style attributes (widths go through the CSSOM). */
+.fh0 {
+  --fhc: var(--heat0);
+}
+.fh1 {
+  --fhc: color-mix(in srgb, var(--heat0) 50%, var(--heat1));
+}
+.fh2 {
+  --fhc: var(--heat1);
+}
+.fh3 {
+  --fhc: color-mix(in srgb, var(--heat1) 50%, var(--heat2));
+}
+.fh4 {
+  --fhc: var(--heat2);
+}
+.fh5 {
+  --fhc: color-mix(in srgb, var(--heat2) 50%, var(--heat3));
+}
+.fh6 {
+  --fhc: var(--heat3);
+}
+.fh7 {
+  --fhc: color-mix(in srgb, var(--heat3) 50%, var(--heat4));
+}
+.fh8 {
+  --fhc: var(--heat4);
+}
+rect.heatc {
+  fill: var(--fhc);
+}
+i.heat-sw.heatc {
+  background: var(--fhc);
+}
+.heat-none-bg {
+  fill: var(--surface-2);
+}
+.heat-none-line {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+i.heat-sw.heat-none-sw {
+  background: repeating-linear-gradient(45deg, var(--surface-2) 0 3px, var(--border-strong) 3px 4px);
+  border: 1px solid var(--border);
+}
+.heat-readout {
+  min-height: 1.5em;
+  margin: 0 0 var(--s2);
+  overflow-wrap: anywhere;
+}
+.heat-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s3);
+  margin-top: var(--s2);
+}
+.heat-ramp {
+  display: inline-flex;
+}
+.heat-ramp i.heat-sw {
+  width: 16px;
+  margin: 0;
+  border-radius: 0;
+}
+.heat-ramp i.heat-sw:first-child {
+  border-radius: 3px 0 0 3px;
+}
+.heat-ramp i.heat-sw:last-child {
+  border-radius: 0 3px 3px 0;
+}
+.heat-nodata-key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+}
+.heatchart .heat-label {
+  fill: var(--text-2);
+}
+.heatchart .heat-label.down {
+  font-style: italic;
+  fill: var(--text-3);
+}
+.heatchart g.heat-row {
+  outline: none;
+}
+.heatchart g.heat-row:focus-visible .heat-label {
+  fill: var(--focus);
+  font-weight: 700;
+  text-decoration: underline;
+}
+.heat-cursor {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.5;
+}
+.fleet-hosts {
+  align-items: center;
+}
+.fleet-hosts:empty {
+  display: none;
+}
+
+/* line, stack and timeline cards */
+.lc-panels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+.lc-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s4);
+  margin-bottom: var(--s1);
+}
+.lc-head h4,
+h4.sc-sub {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  font-weight: 600;
+}
+.lc-legend {
+  margin: 0;
+}
+h4.sc-sub {
+  margin-top: var(--s3);
+}
+.sc-time {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+.sr-seg:hover {
+  filter: brightness(1.15);
+}
+.tlchart .tl-lane {
+  fill: var(--surface-2);
+  stroke: var(--border);
+}
+.tlchart .tl-label {
+  fill: var(--text-2);
+}
+.tl-mark {
+  cursor: pointer;
+  outline: none;
+}
+.tl-shape {
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+.tl-shape.ok {
+  fill: var(--ok);
+}
+.tl-shape.warn {
+  fill: var(--warn);
+}
+.tl-shape.bad {
+  fill: var(--bad);
+}
+.tl-shape.muted {
+  fill: var(--text-3);
+}
+.tl-glyph {
+  fill: var(--surface);
+  font: 700 10px var(--font);
+  pointer-events: none;
+}
+.tl-mark:hover .tl-shape,
+.tl-mark:focus-visible .tl-shape {
+  stroke: var(--text);
+  stroke-width: 2;
+}
+.tl-mark.selected .tl-shape {
+  stroke: var(--text);
+  stroke-width: 3;
+}
+i.tl-key {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+}
+i.tl-key.circle {
+  border-radius: 50%;
+}
+i.tl-key.diamond {
+  transform: rotate(45deg) scale(0.8);
+}
+i.tl-key.ok {
+  background: var(--ok);
+}
+i.tl-key.warn {
+  background: var(--warn);
+}
+i.tl-key.bad {
+  background: var(--bad);
+}
+.tl-details {
+  padding: var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--r1);
+  background: var(--surface-2);
+}
+.tl-details dl.facts {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.tl-details .kv {
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: var(--s2);
+}
+
+/* GPU health, Switchyard models, Dynamo capacity */
+.gpu-section > .hint {
+  margin: 0;
+}
+.busy-bars {
+  display: grid;
+  gap: 6px;
+}
+.busy-row {
+  display: grid;
+  grid-template-columns: 130px minmax(60px, 1fr) 46px;
+  align-items: center;
+  gap: var(--s2);
+  font-size: var(--fs-sm);
+}
+.busy-name {
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.busy-val {
+  text-align: right;
+}
+.busy-bar,
+.lbar {
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.busy-bar i,
+.lbar i {
+  display: block;
+  height: 100%;
+  background: var(--c1);
+}
+.lbar.bf1 i {
+  background: var(--c1);
+}
+.lbar.bf2 i {
+  background: var(--c2);
+}
+.lbar.bf3 i {
+  background: var(--c3);
+}
+.lbar.bf4 i {
+  background: var(--c4);
+}
+.lbar.bf-bad i {
+  background: var(--bad);
+}
+.busy-verdict {
+  align-items: center;
+}
+.sy-models th.sy-model {
+  white-space: nowrap;
+  font-weight: 600;
+  text-align: left;
+}
+.sy-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 120px;
+}
+.sy-cell .lbar {
+  flex: 1 1 56px;
+  min-width: 40px;
+  max-width: 110px;
+}
+.sy-cell .num {
+  min-width: 52px;
+  text-align: right;
+  white-space: nowrap;
+}
+.sy-flow-head {
+  align-items: center;
+}
+.w2-controls .field {
+  flex: 0 1 190px;
+  min-width: 130px;
+}
+.w2-controls .field:has(input[type='search']) {
+  flex: 1 1 220px;
+}
+.dyn-log td {
+  vertical-align: top;
+}
+.dyn-log td code {
+  overflow-wrap: anywhere;
+}
+.spec-rows {
+  display: grid;
+  gap: 6px;
+}
+.gpu-card .card-head h3 {
+  font-size: var(--fs);
+}
+.sy-flow-chart {
+  max-width: 920px;
+  margin: 0 auto;
+}
+/* a chart card inside a GPU card is the card's own chart, not a second box */
+.gpu-card .lines-card {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.gpu-card .lines-card .card-head {
+  padding-left: 0;
+  padding-right: 0;
+}
+.gpu-card .lines-card .card-body {
+  padding-left: 0;
+  padding-right: 0;
+}
+h4.sc-sub {
+  margin-top: var(--s2);
+}

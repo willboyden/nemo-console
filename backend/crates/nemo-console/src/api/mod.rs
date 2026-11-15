@@ -96,6 +96,7 @@ pub enum H {
     Metrics,
     History,
     Series,
+    Fleet,
     Events,
     EventsStream,
     RunRecords,
@@ -194,6 +195,8 @@ pub static ROUTES: &[RouteDef] = &[
         false,
         Series
     ),
+    // the DCGM fleet history (addendum 9.14; added after the port, PORTING.md D-38); other systems answer 404
+    r!(GET, "/systems/{system_id}/fleet", Viewer, false, Fleet),
     r!(GET, "/systems/{system_id}/events", Viewer, false, Events),
     r!(
         GET,
@@ -1091,6 +1094,7 @@ async fn run_handler(h: H, req: Req) -> Result<Response<Body>, ApiError> {
         H::Metrics => observe::system_metrics(req).await,
         H::History => observe::metrics_history(req).await,
         H::Series => observe::metrics_series(req).await,
+        H::Fleet => observe::dcgm_fleet(req).await,
         H::Events => observe::events(req).await,
         H::EventsStream => observe::events_stream(req).await,
         H::RunRecords => observe::run_records(req).await,

@@ -6,6 +6,8 @@
 // 422 invalid_request for a bad window, > 12 keys, an empty or malformed key or split not 0/1.
 // Values are a deterministic function of (key, labels, timestamp), so two requests agree and a chart does not jump on refresh.
 
+import { dcgmCounterRate, SY_COUNTER_RATE, DYN_COUNTER_RATE } from './mock-wave2.mjs';
+
 export const WINDOW_SPAN_S = { '15m': 900, '1h': 3600, '24h': 86400, '7d': 604800 };
 export const MAX_KEYS = 12;
 export const MAX_SERIES_PER_KEY = 32;
@@ -59,7 +61,11 @@ export function parseKey(key) {
   return { base: m[1], sel };
 }
 
-const isCounter = (base) => /_total$/.test(base);
+// Counters whose key does not end in _total (the adapters report them as lifetime counts), so they are drawn as rates too.
+const COUNTER_KEYS = new Set(['sy.model.calls', 'dyn.tokens']);
+const isCounter = (base) => /_total$/.test(base) || COUNTER_KEYS.has(base);
+// Gauges that do not wobble: a capacity, a limit, the largest context a model was given.
+const STEADY = /\.(capacity|max_context_tokens|power_limit_w)$/;
 // Per-second rate of each counter (the mock's own picture of a busy lab); anything else starts at a small default.
 const COUNTER_RATE = {
   'flare.generated_total': 42,
@@ -72,12 +78,18 @@ const COUNTER_RATE = {
   'dyn.requests_total': 0.2,
   'dcgm.pcie_replay_total': 0,
   'dcgm.xid_total': 0,
+  // addendum 9.14: a rate may depend on the series' labels (a function of them)
+  'dcgm.energy_mj_total': (l) => dcgmCounterRate('dcgm.energy_mj_total', l),
+  'dcgm.violation_us_total': (l) => dcgmCounterRate('dcgm.violation_us_total', l),
+  ...SY_COUNTER_RATE,
+  ...DYN_COUNTER_RATE,
 };
 /** The console / engine restarted at these offsets before "now": a counter starts again from zero there. */
 const RESETS_S = [40 * 60, 30 * 3600];
 
-function counterAt(base, id, ts, now) {
-  const rate0 = COUNTER_RATE[base] ?? 0.05;
+function counterAt(base, id, ts, now, labels = {}) {
+  const r = COUNTER_RATE[base];
+  const rate0 = (typeof r === 'function' ? r(labels || {}) : r) ?? 0.05;
   const phi = unit(`${base}|${id}|c`) * 6.283;
   const F = (u) => rate0 * (u - 300 * Math.cos(u / 600 + phi)); // integral of rate0 * (1 + 0.5 sin(u / 600 + phi))
   let last = now - 9 * 86400;
@@ -86,7 +98,7 @@ function counterAt(base, id, ts, now) {
 }
 
 function gaugeAt(base, id, ts, cur, unitName) {
-  if (cur === 0 || /(^|\.)(up|gateway_up|worker_up)$/.test(base) || /_up$/.test(base)) return cur;
+  if (cur === 0 || /(^|\.)(up|gateway_up|worker_up)$/.test(base) || /_up$/.test(base) || STEADY.test(base)) return cur;
   const phi = unit(`${base}|${id}|g`) * 6.283;
   const amp = unitName === 'ratio' ? 0.2 : unitName === 'B' ? 0.03 : 0.12;
   // A slow daily swing, a medium wave of a few hours and a small fast ripple: readable in every window, never aliased in the 7d one.
@@ -123,21 +135,21 @@ export function buildSeries({ keys, window, split, points, now, pollS = 2 }) {
         .filter((ts) => !holeAt(ts, now))
         .map((ts) => {
           const id = labelId(p.labels);
-          const avg = isCounter(base) ? counterAt(base, id, ts, now) : gaugeAt(base, id, ts, nominal(`${base}|${id}`, p.value), p.unit);
+          const avg = isCounter(base) ? counterAt(base, id, ts, now, p.labels) : gaugeAt(base, id, ts, nominal(`${base}|${id}`, p.value), p.unit);
           const spread = window === '15m' || isCounter(base) ? 0 : 0.05 + 0.1 * Math.abs(Math.sin(ts * 1.7 + unit(`${base}|${id}`) * 6.28));
           let max = avg * (1 + spread);
           if (p.unit === 'ratio') max = Math.min(1, max);
           return [ts, +avg.toFixed(4), +max.toFixed(4)];
         });
     if (!variants.length) {
-      series.push({ key: base, label: null, points: [] });
+      series.push({ key, label: null, points: [] });
     } else if (!split) {
       const per = variants.map(sample);
-      series.push({ key: base, label: null, points: per[0].map((p, i) => [p[0], +per.reduce((a, v) => a + v[i][1], 0).toFixed(4), +per.reduce((a, v) => a + v[i][2], 0).toFixed(4)]) });
+      series.push({ key, label: null, points: per[0].map((p, i) => [p[0], +per.reduce((a, v) => a + v[i][1], 0).toFixed(4), +per.reduce((a, v) => a + v[i][2], 0).toFixed(4)]) });
     } else {
       const ordered = [...variants].sort((a, b) => (labelId(a.labels) < labelId(b.labels) ? -1 : 1));
       if (ordered.length > MAX_SERIES_PER_KEY) truncated = true;
-      for (const p of ordered.slice(0, MAX_SERIES_PER_KEY)) series.push({ key: base, label: Object.keys(p.labels || {}).length ? { ...p.labels } : null, points: sample(p) });
+      for (const p of ordered.slice(0, MAX_SERIES_PER_KEY)) series.push({ key, label: Object.keys(p.labels || {}).length ? { ...p.labels } : null, points: sample(p) });
     }
   }
   return { window, step_s: step, from, to, series, truncated };

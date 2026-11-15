@@ -284,6 +284,15 @@ spare port against the real captures of one workstation (Relay 0.9.2: 7 ATOF fil
 | Run history (timeline, trend, A/B compare, filters) on 8 pages | Implemented | verified live on the systems that had runs that day (Data Designer: 8 runs incl. a failed one; SkillEvaluator: 1); the other six only against the mock | Built from `/events` data only. |
 | Data Designer records admin-only | Implemented | fakes (`tests/core_roles.rs`, records cases in `core_metrics_series.rs`) | D-37. |
 
+## Charts, wave 2 (addendum 9.14)
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| DCGM fleet route + Fleet heatmap | Implemented | verified live (2026-11-14, a debug build on a copy of the state against the lab's Prometheus: 7 GPUs on 6 hosts, 24 h, an outage drawn as no data); fakes `tests/dcgm_viz_wave2.rs` | Rust-only (D-38); fixed-table PromQL; no UUIDs or serials. |
+| DCGM per-GPU cards (busy, memory, power vs limit, energy, throttling, remapped rows, XID/diag timeline) | Implemented | verified live (busy and memory cards on two local GPUs); the rest against the mock | New keys D-39. |
+| Switchyard decisions and models tab | Implemented | verified live for the per-model and empty-decision states (no stage-router decisions were counted that day); decision flow against the mock | Two-column flow (source -> target): the decision counters carry no route. |
+| Dynamo windowed latency, breakdown, load, capacity, Events tab | Implemented | Events tab verified live in its "Dynamo is off" state; the rest against fixtures and the mock (Dynamo was off) | Windowed quantiles from histogram deltas. |
+
 ## Not planned for v1
 
 Editing Relay `plugins.toml` / `config.toml`; multi-user or per-user audit identity beyond the key

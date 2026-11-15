@@ -36,6 +36,7 @@ import {
 import { createTracesMock } from './mock-traces.mjs';
 import { parseSeriesQuery, buildSeries } from './mock-series.mjs';
 import { runSeeds, extraDdRuns } from './mock-runs.mjs';
+import { fleetAnswer, FLEET_WINDOWS, FLEET_UNITS, switchyardWave2Points, dynamoWave2Points, dynamoLogEvents, dcgmExtraEvents } from './mock-wave2.mjs';
 import { SWITCHYARD_ROUTES, RELAY_ROUTES, RELAY_PLUGINS, RELAY_CONFIG, DYNAMO_CATALOG, DD_SCRIPTS, DD_SCRIPT, DD_COLS, ddRows, DD_RUNS, DD_PREVIEW_FILES, DD_CREATE_FILES } from './mock-data.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -72,6 +73,7 @@ const state = {
   dynamoSince: now() - 5400,
   failNext: null,
   seven: { dcgmFixed: false, guardPlayground: true, dcgmGpus: 2 }, // dev toggles for the 9.8 systems (/__dev/seven)
+  wave2: { fleet: 'ok' }, // /__dev/wave2?fleet=ok|prom_down|empty|unsupported: what GET /systems/dcgm/fleet answers (addendum 9.14)
   settings: {
     version: '0.1.0-mock',
     urls: { switchyard: 'http://127.0.0.1:4010', relay: 'http://127.0.0.1:4040', dynamo: 'http://127.0.0.1:8020', dynamo_worker_metrics: 'http://127.0.0.1:8081', litellm: 'http://127.0.0.1:4000' },
@@ -458,8 +460,7 @@ function metrics(id) {
         P('sy.tokens', 41200, 'tok', { kind: 'completion' }),
         P('sy.tokens', 9800, 'tok', { kind: 'reasoning' }),
         P('sy.tokens', 120000, 'tok', { kind: 'cached' }),
-        P('sy.route.calls', 812, '', { route: 'auto-local' }),
-        P('sy.model.calls', 700, '', { model: 'nemotron-lightning' }),
+        ...switchyardWave2Points(wob), // sy.route.calls per route, sy.model.* per model, decisions, fallbacks, overhead, client outcomes (addendum 9.14)
       ],
     };
   if (id === 'relay')
@@ -493,6 +494,7 @@ function metrics(id) {
       P('dyn.itl_ms', wob(34, 5), 'ms', { q: 'p95' }),
       P('dyn.kv_cache_usage', wob(0.22, 0.05), 'ratio'),
       P('dyn.worker_up', 1),
+      ...dynamoWave2Points(wob), // windowed latency, phases, running / waiting, preemptions, capacity, spec-decode by position, output tokens (addendum 9.14)
     ],
   };
 }
@@ -571,7 +573,17 @@ function makeEvent(system) {
       data: { event_type: kind, agent: pick(['opencode', 'claude-local']), bytes: Math.round(300 + rnd() * 9000) },
     };
   }
-  return { ts, system, kind: 'dynamo.log', summary: pick(['request 200 ttft 231 ms', 'kv cache 21% used', 'router: worker 0 selected', 'prefix cache hit 8192 tokens']), data: { level: 'info' } };
+  const [component, level, text] = pick([
+    ['frontend', 'INFO', 'request 200 POST /v1/chat/completions ttft 231 ms'],
+    ['worker', 'INFO', 'kv cache usage 21% (3830 of 18240 blocks)'],
+    ['frontend', 'DEBUG', 'router: worker 0 selected (prefix match 8192 tokens)'],
+    ['worker', 'INFO', 'prefix cache hit 8192 tokens'],
+    ['worker', 'DEBUG', 'scheduler: 3 running, 1 waiting'],
+    ['worker', 'WARN', 'preempted 1 sequence: kv cache is full (92%)'],
+    ['frontend', 'WARN', 'GET /<img src=x onerror=alert(1)> 404 (shown as text, never as markup)'], // the live feed keeps a line with markup too, so it never ages out of the 200-event ring
+    ['worker', 'ERROR', 'request aborted: client closed the connection after 12 tokens'],
+  ]);
+  return { ts, system, kind: 'dynamo.log', summary: text, data: { component, level } };
 }
 for (const s of EVENTED)
   for (let i = 25; i > 0; i--) {
@@ -579,6 +591,9 @@ for (const s of EVENTED)
     e.ts -= i * 7;
     ring[s].unshift(e);
   }
+ring.dynamo = dynamoLogEvents(now()); // addendum 9.14: a longer log with levels and components (newest first) for the Events tab
+// addendum 9.14: a few more XID events (string gpu, like the console emits) for the GPU timeline
+ring.dcgm = [...ring.dcgm, ...dcgmExtraEvents(now())].sort((a, b) => b.ts - a.ts);
 // Data Designer has no periodic feed: one dd.run event per stored run (metadata only). The runs behind the three hand-written ones
 // are generated, so the Runs tab (records, files) and the Run history agree.
 DD_RUNS.push(...extraDdRuns(now(), { cols: DD_COLS, rows: ddRows, previewFiles: DD_PREVIEW_FILES, createFiles: DD_CREATE_FILES }));
@@ -1183,6 +1198,32 @@ async function api(req, res, url) {
       const m = metrics(id);
       return json(res, 200, buildSeries({ ...q, points: m.available ? m.points : [], now: Math.floor(now()), pollS: state.settings.poll_interval_s }));
     }
+    if (sub === '/fleet' && M === 'GET') {
+      // GET /systems/dcgm/fleet (addendum 9.14): any other system 404s; an unknown metric or window is 422 invalid_request
+      if (id !== 'dcgm' || state.wave2.fleet === 'unsupported') return err(res, 404, 'not_found', 'no such endpoint for this system');
+      const metric = url.searchParams.get('metric') ?? '',
+        window = url.searchParams.get('window') ?? '24h';
+      if (!(metric in FLEET_UNITS))
+        return err(
+          res,
+          422,
+          'invalid_request',
+          `metric must be one of ${Object.keys(FLEET_UNITS)
+            .sort()
+            .map((x) => `'${x}'`)
+            .join(', ')}`,
+        );
+      if (!(window in FLEET_WINDOWS))
+        return err(
+          res,
+          422,
+          'invalid_request',
+          `window must be one of ${Object.keys(FLEET_WINDOWS)
+            .map((x) => `'${x}'`)
+            .join(', ')}`,
+        );
+      return json(res, 200, fleetAnswer({ metric, window, now: Math.floor(now()), mode: state.wave2.fleet }));
+    }
     if (sub === '/metrics/history') return json(res, 200, history(id, url.searchParams.get('key') || '', url.searchParams.get('window') || '15m'));
     if (sub === '/events') return json(res, 200, (ring[id] || []).slice(0, Number(url.searchParams.get('limit') || 50))); // flare has no seeded events: an empty list, not a 500
     if (sub === '/events/stream') {
@@ -1345,6 +1386,10 @@ function dev(req, res, url) {
     if (q.has('playground')) state.seven.guardPlayground = q.get('playground') === '1';
     if (q.has('dcgm_gpus')) state.seven.dcgmGpus = Math.min(8, Math.max(2, Number(q.get('dcgm_gpus')) || 2));
     return json(res, 200, state.seven);
+  }
+  if (p === '/__dev/wave2') {
+    if (['ok', 'prom_down', 'empty', 'unsupported'].includes(q.get('fleet'))) state.wave2.fleet = q.get('fleet');
+    return json(res, 200, state.wave2);
   }
   if (p === '/__dev/dd') {
     const do_ = q.get('do');

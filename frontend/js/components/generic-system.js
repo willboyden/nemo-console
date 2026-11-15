@@ -45,6 +45,16 @@ function statsAndCharts(scope, ctx, desc) {
     note = h('div');
   const cards = new Map(); // key -> {card, split, rate}: a card is kept across refreshes so its picker and table stay as the user left them
   let drawnKeys = '';
+  // A page may add cards of its own under the numbers (desc.extras, addendum 9.14): they follow this window picker.
+  const windowListeners = new Set();
+  const shared = {
+    hash,
+    win: () => win,
+    onWindow: (f) => {
+      windowListeners.add(f);
+      scope.own(() => windowListeners.delete(f));
+    },
+  };
   const sel = select(
     SERIES_WINDOWS.map((w) => ({ value: w, label: t(`window.${w}`) })),
     win,
@@ -53,6 +63,7 @@ function statsAndCharts(scope, ctx, desc) {
       hash.set({ window: v === '1h' ? null : v });
       syncMaxToggle();
       load();
+      for (const f of [...windowListeners]) f(v);
     },
     { 'aria-label': t('routing.window') },
   );
@@ -84,9 +95,11 @@ function statsAndCharts(scope, ctx, desc) {
         cards.clear();
         drawnKeys = '';
         trendsHead.hidden = true;
+        if (extrasEl) extrasEl.hidden = true;
         return;
       }
       clear(note);
+      if (extrasEl) extrasEl.hidden = false;
       const grouped = groupPoints(m);
       const single = [...grouped.entries()]
         .filter(([k]) => !(desc.tables || []).includes(k) && (!desc.stats || desc.stats.includes(k)))
@@ -120,7 +133,7 @@ function statsAndCharts(scope, ctx, desc) {
         drawnKeys = order;
         clear(chartsHost).append(...keys.map((k) => cards.get(k).card.el));
       }
-      trendsHead.hidden = !keys.length;
+      trendsHead.hidden = !keys.length && !extrasEl;
       await Promise.all(
         keys.map(async (key) => {
           const c = cards.get(key);
@@ -143,10 +156,12 @@ function statsAndCharts(scope, ctx, desc) {
     h('div', { class: 'row gap wrap' }, sel, maxLabel, btn(t('common.refresh'), { size: 'sm', icon: 'restart', onClick: load })),
   );
   trendsHead.hidden = true;
+  const extrasEl = desc.extras ? desc.extras(scope, shared) : null;
+  if (extrasEl) extrasEl.hidden = true; // shown once the system reports metrics
   statsHost.append(skeleton(2));
   load();
   scope.every(10000, load);
-  return h('div', { class: 'stack-v' }, card(t('gen.numbers'), h('div', { class: 'stack-v' }, note, statsHost, allHost)), trendsHead, chartsHost, tablesHost);
+  return h('div', { class: 'stack-v' }, card(t('gen.numbers'), h('div', { class: 'stack-v' }, note, statsHost, allHost)), trendsHead, extrasEl, chartsHost, tablesHost);
 }
 
 /** Every metric point in one collapsed table: the complete, text form of the tiles above. */
@@ -227,6 +242,8 @@ export async function genericSystemView(view, desc) {
   if (!scope.alive) return;
   loading.remove();
   const tabDefs = [{ id: 'status', label: t('tab.status'), render: (s, ctx) => statusTab(s, ctx, desc) }];
+  // Tabs a page adds right after Status (the GPU fleet heatmap, addendum 9.14): `desc.extraTabs()` returns [{id, label, render(scope, ctx)}].
+  if (desc.extraTabs) tabDefs.push(...desc.extraTabs());
   // The run history (addendum 9.13) is built from the system's own run events; a page with no descriptor has no such tab.
   if (desc.runHistory) tabDefs.push({ id: 'history', label: t('tab.history'), render: (s, ctx) => runHistoryPanel(s, ctx, desc.runHistory) });
   if (Array.isArray(cfg) && cfg.length) tabDefs.push({ id: 'config', label: t('tab.config'), render: (s) => configEditor(s, desc.system) });

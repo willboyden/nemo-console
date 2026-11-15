@@ -220,6 +220,12 @@ pub trait SystemAdapter: Send + Sync {
     // ── observe ─────────────────────────────────────────────────────────────────────────────────
     async fn status(&self) -> Result<SystemStatus, AdapterError>;
     async fn metrics(&self) -> Result<MetricsSnapshot, AdapterError>;
+    /// The background poller's read (`MetricsPoller::tick`, addendum 9.14): the same snapshot as `metrics()`, but an
+    /// adapter with windowed keys (quantiles since the previous poll) moves its window here and only here, so API
+    /// and UI reads never change what the poller records. Default: `metrics()`.
+    async fn poll_metrics(&self) -> Result<MetricsSnapshot, AdapterError> {
+        self.metrics().await
+    }
     async fn recent_events(&self, limit: usize) -> Result<Vec<SystemEvent>, AdapterError>;
     /// Live tail. Must end promptly when dropped; bounded memory.
     fn follow_events(self: Arc<Self>, since_ts: Option<f64>) -> EventStream;
@@ -302,6 +308,13 @@ pub trait SystemAdapter: Send + Sync {
         &self,
         _request: crate::adapters::relay_traces::Request,
     ) -> Result<Value, AdapterError> {
+        Err(AdapterError::NoSuchEndpoint)
+    }
+
+    // ── DCGM fleet history (addendum 9.14): other systems answer 404 ────────────────────────────
+    /// `GET /systems/dcgm/fleet`: per-GPU history of every DCGM host Prometheus scrapes. `metric` and `window` are
+    /// validated by the route against the DCGM adapter's tables; `Invalid` -> 422.
+    async fn dcgm_fleet(&self, _metric: &str, _window: &str) -> Result<Value, AdapterError> {
         Err(AdapterError::NoSuchEndpoint)
     }
 

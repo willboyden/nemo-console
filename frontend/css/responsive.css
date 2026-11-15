@@ -218,3 +218,26 @@
     max-width: 150px;
   }
 }
+
+/* Wave 2 cards (rules in components.css; these override them and so come after). */
+@media (max-width: 720px) {
+  .busy-row {
+    grid-template-columns: 112px minmax(40px, 1fr) 42px;
+  }
+  .w2-controls .field,
+  .w2-controls .field:has(input[type='search']) {
+    flex: 1 1 calc(50% - var(--s3));
+  }
+  .sy-cell {
+    min-width: 100px;
+  }
+  .tl-details dl.facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .heat-legend {
+    gap: var(--s1) var(--s2);
+  }
+  .heat-ramp i.heat-sw {
+    width: 12px;
+  }
+}

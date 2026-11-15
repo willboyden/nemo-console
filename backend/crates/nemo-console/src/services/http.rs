@@ -118,6 +118,50 @@ impl Http {
             .await
     }
 
+    /// GET with query parameters, reading at most `max_bytes` of the body: `Ok(None)` when the answer is larger (a
+    /// `Content-Length` over the cap is refused before any of the body is read; otherwise reading stops at the first
+    /// chunk past the cap). The timeout covers the whole exchange, body included.
+    pub async fn get_query_capped(
+        &self,
+        url: &str,
+        query: &[(&str, &str)],
+        timeout_s: f64,
+        max_bytes: usize,
+    ) -> Result<Option<HttpResponse>, HttpError> {
+        let mut resp = self
+            .client
+            .get(url)
+            .query(query)
+            .timeout(Duration::from_secs_f64(timeout_s.max(0.001)))
+            .send()
+            .await
+            .map_err(|e| HttpError::from_reqwest(&e))?;
+        if resp
+            .content_length()
+            .is_some_and(|n| n > u64::try_from(max_bytes).unwrap_or(u64::MAX))
+        {
+            return Ok(None);
+        }
+        let status = resp.status().as_u16();
+        let headers = resp.headers().clone();
+        let mut body: Vec<u8> = Vec::new();
+        while let Some(chunk) = resp
+            .chunk()
+            .await
+            .map_err(|e| HttpError::from_reqwest(&e))?
+        {
+            if body.len() + chunk.len() > max_bytes {
+                return Ok(None);
+            }
+            body.extend_from_slice(&chunk);
+        }
+        Ok(Some(HttpResponse {
+            status,
+            headers,
+            body: Bytes::from(body),
+        }))
+    }
+
     /// POST a JSON body (`json=`), with extra headers.
     pub async fn post_json(
         &self,

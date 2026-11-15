@@ -8,13 +8,14 @@ use regex::Regex;
 use serde_json::{Map, Value, json};
 
 use crate::adapters::base::AdapterError;
+use crate::adapters::dcgm::{FLEET_DEFAULT_WINDOW, FLEET_METRICS, FLEET_WINDOWS};
 use crate::api::bodies::{V, query_int, query_str};
 use crate::api::{
     Req, adapter_failure, dep_adapter, dep_admin, dep_viewer, json_response, ok_json,
     validation_error,
 };
 use crate::config::VERSION;
-use crate::domain::models::{Health, now_ts};
+use crate::domain::models::{Health, SystemId, now_ts};
 use crate::services::errors::ApiError;
 use crate::services::events::event_stream;
 use crate::services::metrics::{
@@ -206,6 +207,51 @@ pub async fn metrics_series(req: Req) -> Result<Response<Body>, ApiError> {
             .await
             .map_err(|_| ApiError::internal())?;
     ok_json(&answer)
+}
+
+/// `GET /systems/dcgm/fleet?metric=util|temp|power|fb_used&window=1h|24h|7d` (addendum 9.14, Rust-only, PORTING.md
+/// D-38): per-GPU history of every DCGM host Prometheus scrapes. Every other system answers 404 (after the role
+/// check, before the query is looked at); an unknown metric or window is 422 `invalid_request`. The adapter builds
+/// the PromQL from its fixed table; nothing from the request reaches the expression but the table key.
+pub async fn dcgm_fleet(req: Req) -> Result<Response<Body>, ApiError> {
+    let a = dep_adapter(&req)?;
+    dep_viewer(&req)?;
+    if a.id() != SystemId::Dcgm {
+        return Err(ApiError::new(
+            404,
+            "not_found",
+            "no such endpoint for this system",
+        ));
+    }
+    let metric = query_str(&req.query, "metric").unwrap_or_default();
+    if !FLEET_METRICS.iter().any(|(m, _, _, _)| *m == metric) {
+        let mut names: Vec<&str> = FLEET_METRICS.iter().map(|(m, _, _, _)| *m).collect();
+        names.sort_unstable();
+        return Err(ApiError::new(
+            422,
+            "invalid_request",
+            format!("metric must be one of {}", list_repr(&names)),
+        ));
+    }
+    let window = query_str(&req.query, "window").unwrap_or_else(|| FLEET_DEFAULT_WINDOW.to_owned());
+    if !FLEET_WINDOWS.iter().any(|(w, _, _)| *w == window) {
+        let names: Vec<&str> = FLEET_WINDOWS.iter().map(|(w, _, _)| *w).collect();
+        return Err(ApiError::new(
+            422,
+            "invalid_request",
+            format!("window must be one of {}", list_repr(&names)),
+        ));
+    }
+    match a.dcgm_fleet(&metric, &window).await {
+        Ok(v) => Ok(json_response(200, &v)),
+        Err(AdapterError::NoSuchEndpoint) => Err(ApiError::new(
+            404,
+            "not_found",
+            "no such endpoint for this system",
+        )),
+        Err(AdapterError::Invalid(m)) => Err(ApiError::new(422, "invalid_request", m)),
+        Err(e) => Err(adapter_failure(&e)),
+    }
 }
 
 pub async fn events(req: Req) -> Result<Response<Body>, ApiError> {

@@ -323,12 +323,14 @@ async fn test_metrics_real_scrape() {
     );
     assert!(by.contains_key(&k("dcgm.tensor_active", "0"))); // DCP family present in the scrape
     assert!(!by.keys().any(|(key, _)| key == "dcgm.xid_last")); // never fabricated
+    // the scrape reports 0 C memory temperature (no sensor): no point, never a fabricated 0
     assert!(!by.keys().any(|(key, _)| key == "dcgm.mem_temp_c"));
     for p in &snap.points {
+        // `kind` (remapped rows) and `reason` (violations): addendum 9.14
         assert!(
-            p.labels
-                .keys()
-                .all(|l| ["gpu", "model", "host", "job"].contains(&l.as_str()))
+            p.labels.keys().all(|l| {
+                ["gpu", "model", "host", "job", "kind", "reason"].contains(&l.as_str())
+            })
         );
         assert!(p.labels.values().all(|v| v.chars().count() <= 40));
     }
