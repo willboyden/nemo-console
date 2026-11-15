@@ -22,6 +22,13 @@ pub mod gym;
 pub mod modelopt;
 // after the port: NVIDIA Flare (ADR-0020)
 pub mod flare;
+// after the port: the Relay trace explorer (addendum 9.12); not a system, a part of the Relay adapter
+pub mod relay_traces;
+// after the port: per-run visualisation answers (addendum 9.15) shared by AIPerf, SkillEvaluator and Data Designer
+pub mod runviz;
+// after the port: wave-4 visualisation answers (addendum 9.16)
+pub mod guardrails_rails;
+pub mod openshell_viz;
 
 use crate::adapters::base::{AdapterContext, AdapterError, AdapterRef};
 use crate::config::Settings;

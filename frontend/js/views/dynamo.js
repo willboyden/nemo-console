@@ -1,14 +1,11 @@
 import { NcView } from '../components/base.js';
 import { h, clear } from '../dom.js';
 import { t } from '../i18n.js';
-import { fmtInt, fmtMs, fmtRatio, fmtTick, debounce } from '../format.js';
-import { valueOf, keyWith } from '../metrics.js';
+import { debounce } from '../format.js';
 import { isLoading, parsePreflight } from '../status-util.js';
 import { pruneValues, changedKeys, needsRestart, isRedacted } from '../param-form.js';
-import { badge, btn, adminBtn, card, stat, select, errorBox, emptyBox, skeleton, problemList } from '../components/ui.js';
-import { lineChartCard } from '../components/chart-card.js';
+import { badge, adminBtn, card, errorBox, emptyBox, skeleton, problemList } from '../components/ui.js';
 import { systemPage } from '../components/system-page.js';
-import { statusDetails } from '../components/status-panel.js';
 import { playgroundPanel } from '../components/playground.js';
 import { actionsPanel, actionResultView } from '../components/actions-panel.js';
 import { renderParamForm } from '../components/param-field.js';
@@ -18,104 +15,8 @@ import { toastError } from '../components/toast.js';
 import { announce } from '../components/live.js';
 import { outcomeBanner } from '../components/config-editor.js';
 import { describeError } from '../errors.js';
-
-const WINDOWS = ['15m', '1h', '24h'];
-const SERIES = [
-  {
-    id: 'ttft',
-    title: 'dyn.ttft',
-    keys: [
-      ['p50', keyWith('dyn.ttft_ms', { q: 'p50' })],
-      ['p95', keyWith('dyn.ttft_ms', { q: 'p95' })],
-    ],
-    fmt: fmtMs,
-  },
-  {
-    id: 'itl',
-    title: 'dyn.itl',
-    keys: [
-      ['p50', keyWith('dyn.itl_ms', { q: 'p50' })],
-      ['p95', keyWith('dyn.itl_ms', { q: 'p95' })],
-    ],
-    fmt: fmtMs,
-  },
-  { id: 'inflight', title: 'dyn.inflight', keys: [['in-flight', 'dyn.in_flight']], fmt: fmtTick },
-  { id: 'kv', title: 'dyn.kv', keys: [['kv-cache', 'dyn.kv_cache_usage']], fmt: (v) => fmtRatio(v, 0) },
-];
-
-function statusTab(scope, ctx) {
-  let win = '15m';
-  const compHost = h('div'),
-    chartsHost = h('div', { class: 'grid two' }),
-    statsHost = h('div', { class: 'stats' }),
-    note = h('div');
-  ctx.onStatus((st) => {
-    clear(compHost).append(statusDetails(st));
-  });
-  const sel = select(
-    WINDOWS.map((w) => ({ value: w, label: t(`window.${w}`) })),
-    win,
-    (v) => {
-      win = v;
-      loadCharts();
-    },
-    { 'aria-label': t('routing.window') },
-  );
-  async function loadStats() {
-    try {
-      const m = await scope.api.metrics('dynamo');
-      if (!scope.alive) return;
-      if (!m.available) {
-        clear(statsHost);
-        clear(note).append(h('p', { class: 'note warn', role: 'status' }, m.error || t('dyn.metrics_unavailable')));
-        return;
-      }
-      clear(note);
-      const v = (k, l) => valueOf(m, k, l);
-      clear(statsHost).append(
-        stat(t('dyn.requests'), fmtInt(v('dyn.requests_total'))),
-        stat(t('dyn.in_flight'), fmtInt(v('dyn.in_flight'))),
-        stat(t('dyn.ttft_p95'), fmtMs(v('dyn.ttft_ms', { q: 'p95' }))),
-        stat(t('dyn.itl_p95'), fmtMs(v('dyn.itl_ms', { q: 'p95' }))),
-        stat(t('dyn.kv'), fmtRatio(v('dyn.kv_cache_usage'), 0)),
-        stat(t('dyn.models'), fmtInt(v('dyn.models'))),
-      );
-    } catch (e) {
-      if (scope.alive) clear(note).append(errorBox(e, loadStats));
-    }
-  }
-  async function loadCharts() {
-    try {
-      const cards = await Promise.all(
-        SERIES.map(async (s) => {
-          const res = await Promise.all(
-            s.keys.map(([name, key]) =>
-              scope.api
-                .history('dynamo', key, win)
-                .then((r) => ({ name, points: r.points || [] }))
-                .catch(() => ({ name, points: [] })),
-            ),
-          );
-          return lineChartCard({
-            title: t(`chart.${s.title}`),
-            series: res,
-            yFormat: s.fmt,
-            ariaLabel: t('dyn.chart_aria', { title: t(`chart.${s.title}`), win: t(`window.${win}`) }),
-            empty: t('dyn.chart_empty'),
-          });
-        }),
-      );
-      if (scope.alive) clear(chartsHost).append(...cards);
-    } catch (e) {
-      if (scope.alive) clear(chartsHost).append(errorBox(e, loadCharts));
-    }
-  }
-  loadStats();
-  loadCharts();
-  scope.every(10000, loadStats);
-  scope.every(15000, loadCharts);
-  return h('div', { class: 'stack-v' }, card(t('dyn.serving'), compHost), h('div', { class: 'row gap wrap between' }, h('h2', t('dyn.metrics')), sel), note, statsHost, chartsHost);
-}
+import { statusTab } from '../dynamo/status-tab.js';
+import { eventsTab } from '../dynamo/events-tab.js';
 
 function paramsTab(scope) {
   const host = h('div', { class: 'stack-v' }, skeleton(4));
@@ -373,6 +274,7 @@ class NcDynamo extends NcView {
       active: this.query?.tab,
       tabDefs: [
         { id: 'status', label: t('tab.status'), render: (scope, ctx) => statusTab(scope, ctx) },
+        { id: 'events', label: t('tab.events'), render: (scope, ctx) => eventsTab(scope, ctx) },
         { id: 'params', label: t('tab.params'), render: (scope) => paramsTab(scope) },
         { id: 'lifecycle', label: t('tab.lifecycle'), render: (scope) => lifecycleTab(scope) },
         { id: 'playground', label: t('tab.playground'), render: (scope) => playgroundPanel(scope, 'dynamo') },

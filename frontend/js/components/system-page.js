@@ -14,7 +14,7 @@ import { gettingStartedPanel, faqPanel } from './help-panel.js';
  * @param scope   the view's scope; each panel gets a child scope that is disposed when another tab opens
  * @param path    route path without the slash (`dynamo`, `settings`), for the `#/<path>?tab=<id>` mirror
  * @param helpKey the entry in i18n/help.en.json; name: the page's display name, for the tab list and help headings
- * @param panelCtx (panelScope) => the second argument handed to each tab's render
+ * @param panelCtx (panelScope, initial) => the second argument handed to each tab's render
  */
 export function helpTabs(scope, { path, helpKey, name, tabDefs: ownTabs, active, panelCtx = () => ({}) }) {
   // Help links may switch tabs; a link to a tab the page did not build (optional Config / Playground) is not shown.
@@ -27,11 +27,12 @@ export function helpTabs(scope, { path, helpKey, name, tabDefs: ownTabs, active,
   const tabDefs = [...ownTabs, { id: 'start', label: t('tab.start'), render: (s) => gettingStartedPanel(s, help) }, { id: 'faq', label: t('tab.faq'), render: (s) => faqPanel(s, help) }];
   const panel = h('div', { id: 'tabpanel', role: 'tabpanel', tabindex: '-1', class: 'tabpanel' });
   let panelScope = null;
-  function show(id) {
+  // `initial` = the first render of the page (a deep link's query is meant), not a click on a tab (which starts clean).
+  function show(id, initial = false) {
     panelScope?.dispose();
     panelScope = scope.child();
     const def = tabDefs.find((d) => d.id === id) || tabDefs[0];
-    clear(panel).append(def.render(panelScope, panelCtx(panelScope)));
+    clear(panel).append(def.render(panelScope, panelCtx(panelScope, initial)));
     try {
       history.replaceState(null, '', `#/${path}?tab=${def.id}`);
     } catch {
@@ -46,7 +47,7 @@ export function helpTabs(scope, { path, helpKey, name, tabDefs: ownTabs, active,
     show,
     t('sys.tabs', { name }),
   );
-  return { tablist, panel, show, open: () => show(startId) };
+  return { tablist, panel, show, open: () => show(startId, true) };
 }
 
 export function systemPage(view, { system, tabDefs, active }) {
@@ -77,7 +78,9 @@ export function systemPage(view, { system, tabDefs, active }) {
     name: t(`sys.${system}`),
     tabDefs,
     active,
-    panelCtx: (ps) => ({
+    panelCtx: (ps, initial) => ({
+      initial,
+      goTab: (id) => area.tablist.selectTab(id), // a link from one tab to another (the Relay explorer's trace -> session)
       lastStatus: () => last,
       onStatus: (f) => {
         cbs.add(f);
@@ -95,7 +98,8 @@ export function systemPage(view, { system, tabDefs, active }) {
 
 /** Overview, Audit, Settings: the page's own content as the first tab, then the help tabs. `page` is the route path. */
 export function consolePage(view, { page, tabDefs, active }) {
-  const area = helpTabs(view.scope, { path: page, helpKey: page, name: t(`nav.${page}`), tabDefs, active });
+  // `initial` tells a tab whether a deep link's query is meant (the first render) or it was opened by a click (which starts clean): the Audit tabs keep their filters in the URL (addendum 9.16).
+  const area = helpTabs(view.scope, { path: page, helpKey: page, name: t(`nav.${page}`), tabDefs, active, panelCtx: (ps, initial) => ({ initial }) });
   view.append(h('h1', t(`nav.${page}`)), area.tablist, area.panel);
   area.open();
   return area;

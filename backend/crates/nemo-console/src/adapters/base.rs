@@ -167,6 +167,12 @@ pub trait SystemAdapter: Send + Sync {
     // ── observe ─────────────────────────────────────────────────────────────────────────────────
     async fn status(&self) -> Result<SystemStatus, AdapterError>;
     async fn metrics(&self) -> Result<MetricsSnapshot, AdapterError>;
+    /// The background poller's read (`MetricsPoller::tick`, addendum 9.14): the same snapshot as `metrics()`, but an
+    /// adapter with windowed keys (quantiles since the previous poll) moves its window here and only here, so API
+    /// and UI reads never change what the poller records. Default: `metrics()`.
+    async fn poll_metrics(&self) -> Result<MetricsSnapshot, AdapterError> {
+        self.metrics().await
+    }
     async fn recent_events(&self, limit: usize) -> Result<Vec<SystemEvent>, AdapterError>;
     /// Live tail. Must end promptly when dropped; bounded memory.
     fn follow_events(self: Arc<Self>, since_ts: Option<f64>) -> EventStream;
@@ -240,6 +246,59 @@ pub trait SystemAdapter: Send + Sync {
     async fn run_files(&self, _run_id: &str) -> Result<Value, AdapterError> {
         Err(AdapterError::NoSuchEndpoint)
     }
+
+    // ── Relay trace explorer (addendum 9.12): other systems answer 404 ──────────────────────────
+    /// One read of the trace explorer (the request is already validated). Errors and their answers: `UnknownId`
+    /// -> 404 "unknown <what>", `Invalid` -> 422, `FileNotFound` -> 409 `content_unavailable` (the source line can
+    /// no longer be read), `Failed { class: "PermissionError" }` -> 403 `content_disabled`.
+    async fn trace_explorer(
+        &self,
+        _request: crate::adapters::relay_traces::Request,
+    ) -> Result<Value, AdapterError> {
+        Err(AdapterError::NoSuchEndpoint)
+    }
+
+    // ── DCGM fleet history (addendum 9.14): other systems answer 404 ────────────────────────────
+    /// `GET /systems/dcgm/fleet`: per-GPU history of every DCGM host Prometheus scrapes. `metric` and `window` are
+    /// validated by the route against the DCGM adapter's tables; `Invalid` -> 422.
+    async fn dcgm_fleet(&self, _metric: &str, _window: &str) -> Result<Value, AdapterError> {
+        Err(AdapterError::NoSuchEndpoint)
+    }
+
+    // ── per-run visualisation answers (addendum 9.15): other systems answer 404 ─────────────────
+    /// `GET /systems/{id}/runs/{run_id}/summary` (AIPerf, SkillEvaluator): numbers and identifiers of one stored
+    /// run. Errors: `Invalid` -> 422 (a run id the adapter's run-id check refuses), `UnknownId` -> 404 "unknown run".
+    async fn run_summary(&self, _run_id: &str) -> Result<Value, AdapterError> {
+        Err(AdapterError::NoSuchEndpoint)
+    }
+    /// `GET /systems/aiperf/runs/{run_id}/requests`: per-request numbers of one stored run (errors as above).
+    async fn run_requests(&self, _run_id: &str) -> Result<Value, AdapterError> {
+        Err(AdapterError::NoSuchEndpoint)
+    }
+    /// `GET /systems/datadesigner/runs/{run_id}/profile`: per-column aggregates of one stored run; `with_values`
+    /// (the caller is an admin) fills the top values, else they are withheld (errors as above).
+    async fn run_profile(&self, _run_id: &str, _with_values: bool) -> Result<Value, AdapterError> {
+        Err(AdapterError::NoSuchEndpoint)
+    }
+
+    // ── wave-4 visualisation answers (addendum 9.16): other systems answer 404 ─────────────────
+    /// `GET /systems/guardrails/rails`: the rail pipeline of each served config (flow names, main model, streaming).
+    async fn rails(&self) -> Result<Value, AdapterError> {
+        Err(AdapterError::NoSuchEndpoint)
+    }
+    /// `GET /systems/openshell/decisions?sandbox=&limit=`: the policy decisions in one live sandbox's log. `sandbox`
+    /// passed the route's name check and `limit` is 1..=2000; `UnknownId` -> 404 (not in the live list).
+    async fn decisions(&self, _sandbox: &str, _limit: usize) -> Result<Value, AdapterError> {
+        Err(AdapterError::NoSuchEndpoint)
+    }
+
+    // ── standing background work (addendum 9.12) ────────────────────────────────────────────────
+    /// Start the adapter's own standing background task, if it has one. Called once when the server starts and
+    /// background tasks are on; never from a request.
+    fn start_background(&self) {}
+
+    /// Stop that task and wait for it (server shutdown).
+    async fn stop_background(&self) {}
 }
 
 /// Shared handle to an adapter.

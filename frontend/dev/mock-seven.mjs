@@ -3,6 +3,9 @@
 // screenshotted against contract-shaped data (domain/models.py). None of it is a fact about the real systems, and
 // the real adapters are being written separately (metric keys beyond the documented ap.* / ev.score are guesses).
 import { wasmCheck } from '../js/cfg-wasm.js';
+import { dcgmWave2Points, hostPoints } from './mock-wave2.mjs';
+import { flareComponents, flareCounterPoints, flareServing, FLARE_TARGETS, FLARE_PACKAGES, phaseCountsAt, presentSandboxNames } from './mock-wave4.mjs';
+
 export const SEVEN = ['openshell', 'dcgm', 'aiperf', 'guardrails', 'evaluator', 'modelopt', 'gym', 'flare'];
 // skillevaluator is not new in 9.8; it is mocked here only so the twelve-system overview is complete in dev.
 export const MOCKED = [...SEVEN, 'skillevaluator'];
@@ -27,7 +30,7 @@ export function sevenStatus(id, now, flags = {}) {
       system: id,
       health: 'up',
       version: '0.9.4-mock',
-      summary: 'Gateway up on 127.0.0.1:8443; 0 sandboxes; sandbox network is internal',
+      summary: `Gateway up on 127.0.0.1:8443; ${presentSandboxNames().length} sandboxes; sandbox network is internal`,
       endpoints: [{ name: 'gateway', url: 'https://127.0.0.1:8443', role: 'api', auth: 'bearer' }],
       components: [
         { kind: 'process', name: 'openshell CLI', state: 'running', detail: 'openshell 0.9.4-mock' },
@@ -71,7 +74,7 @@ export function sevenStatus(id, now, flags = {}) {
       components: [
         { kind: 'container', name: 'dcgm-exporter', state: 'running', image: 'nvcr.io/nvidia/k8s/dcgm-exporter:4.4.1-4.1.0-mock', detail: 'healthy, up 6 d' },
         { kind: 'http', name: 'exporter /metrics', state: 'running', detail: '200, 2 GPUs' },
-        { kind: 'http', name: 'prometheus job dcgm-aitop100', state: 'failed', detail: 'target down: connection refused (mock)' },
+        { kind: 'http', name: 'prometheus job dcgm-d', state: 'failed', detail: 'target down: connection refused (mock)' },
         { kind: 'http', name: 'prometheus job dcgm', state: 'running', detail: '2 GPUs' },
       ],
       problems: flags.dcgmFixed
@@ -83,7 +86,7 @@ export function sevenStatus(id, now, flags = {}) {
               message: 'The running dcgm-exporter (4.4.1) is older than 4.8.3 and exposes /debug/pprof (CVE-2026-47483). A direct probe of /debug/pprof/ answered 200. (mock data)',
               fix: 'observability/dcgm/bump-exporter.sh 4.8.3   # then: docker compose up -d dcgm-exporter',
             },
-            { severity: 'warn', code: 'dcgm.host.down', message: 'Prometheus job dcgm-aitop100 has no live target; that host is missing from the numbers below.' },
+            { severity: 'warn', code: 'dcgm.host.down', message: 'Prometheus job dcgm-d has no live target; that host is missing from the numbers below.' },
           ],
       checked_at,
     };
@@ -144,20 +147,15 @@ export function sevenStatus(id, now, flags = {}) {
       checked_at,
     };
   if (id === 'flare') {
-    // The shape of the real adapter (flare-local status-json): one component per target, sm120 and sm121.
-    const T = (t, chip, fam, hosts, state, detail) => ({
-      kind: 'container',
-      name: `flare @ ${t}`,
-      state,
-      image: state === 'absent' && t !== 'local' ? null : 'lab/flare:902c88e',
-      detail: `${chip} ${fam} (${hosts}), ${detail}`,
-    });
+    // The shape of the real adapter (flare-local status-json): one component per target, sm120 and sm121 (generic names; js/mock-wave4.mjs holds the states: /__dev/wave4?flare=default|mixed|none).
+    const mode = flags.flareMode || 'default';
+    const serving = flareServing(mode);
     return {
       system: id,
-      health: 'up',
+      health: serving.length ? 'up' : 'down',
       version: '902c88e',
-      summary: 'serving on spark-all (sm121): glm-5.3-flash (mock)',
-      endpoints: [{ name: 'spark-all API', url: 'http://192.0.2.10:8035/v1', role: 'api', auth: 'bearer' }],
+      summary: serving.length ? `serving on ${serving.join(', ')} (mock)` : 'not serving · 2 sm120 target(s), 5 sm121 target(s) (mock)',
+      endpoints: serving.map((t) => ({ name: `${t} API`, url: `http://192.0.2.10:8035/v1`, role: 'api', auth: 'bearer' })),
       components: [
         {
           kind: 'process',
@@ -166,19 +164,7 @@ export function sevenStatus(id, now, flags = {}) {
           image: null,
           detail: 'the lab launcher (inference/flare/flare.sh): checks the GPUs, starts and stops Flare, reaches remote hosts over ssh',
         },
-        T('local', 'sm120', 'gb202', 'local', 'absent', 'modes tp1 tp2 · container absent · image lab/flare:902c88e loaded · 1 package(s) · GPU busy: GPU 0 holds 81611 MiB (> 3072)'),
-        T('gpu-box', 'sm120', 'gb202', 'gpu-box', 'absent', 'modes tp1 · container absent · image not loaded · 1 package(s) · GPU free'),
-        ...['spark-a', 'spark-b', 'spark-c', 'spark-d'].map((h) =>
-          T(h, 'sm121', 'gb10', h, 'absent', 'modes tp1 · container absent · image lab/flare:902c88e loaded · 1 package(s) · GPU busy: 1 CUDA process(es) on the GPU'),
-        ),
-        T(
-          'spark-all',
-          'sm121',
-          'gb10',
-          'spark-a spark-b spark-c spark-d',
-          'running',
-          'modes tp4 · serving glm-5.3-flash, context 524288 · image lab/flare:902c88e loaded · 1 package(s) · GPU busy: 1 CUDA process(es) on the GPU',
-        ),
+        ...flareComponents(mode),
       ],
       problems: [],
       checked_at,
@@ -236,12 +222,19 @@ export function sevenStatus(id, now, flags = {}) {
 export const sevenHealth = (id, flags) => sevenStatus(id, 0, flags).health;
 
 // ------------------------------------------------------------------ metrics (keys and labels as captured from the real adapters; VALUES are mock)
-export function sevenMetrics(id, ts, wob) {
+export function sevenMetrics(id, ts, wob, flags = {}) {
   const P = (key, value, unit = '', labels = {}) => ({ key, value, unit, labels });
+  // This host has two cards; /__dev/seven?dcgm_gpus=6 adds more label variants so the series picker (more than 4 lines) can be seen.
   const gpus = [
     ['0', 'NVIDIA RTX PRO 6000 Blackwell Max-Q'],
     ['1', 'NVIDIA RTX PRO 6000 Blackwell Workstation'],
-  ];
+    ['2', 'NVIDIA GeForce RTX 5090'],
+    ['3', 'NVIDIA GB10'],
+    ['4', 'NVIDIA GB10'],
+    ['5', 'NVIDIA GB10'],
+    ['6', 'NVIDIA GB10'],
+    ['7', 'NVIDIA RTX PRO 6000 Blackwell'],
+  ].slice(0, Math.min(8, Math.max(2, flags.dcgmGpus || 2)));
   if (id === 'skillevaluator') return [P('se.skills', 66), P('se.runs', 12), P('se.last_quality_score', 87.5), P('se.last_judge_score', 82.0), P('se.last_skill_lift', 0.125), P('se.live_running', 0)];
   if (id === 'openshell')
     return [
@@ -249,8 +242,11 @@ export function sevenMetrics(id, ts, wob) {
       P('os.network_internal', 1),
       P('os.gateway_uptime_s', 86400 * 2 + 5400, 's'),
       P('os.gateway_restarts', 0),
-      P('os.sandboxes', 0),
-      ...['Provisioning', 'Ready', 'Error', 'Deleting', 'Other'].map((phase) => P('os.sandboxes_by_phase', 0, '1', { phase })),
+      P(
+        'os.sandboxes',
+        Object.values(phaseCountsAt(0)).reduce((a, b) => a + b, 0),
+      ),
+      ...['Provisioning', 'Ready', 'Error', 'Deleting', 'Other'].map((phase) => P('os.sandboxes_by_phase', phaseCountsAt(0)[phase], '1', { phase })),
       P('os.providers', 1),
     ];
   if (id === 'dcgm')
@@ -273,13 +269,8 @@ export function sevenMetrics(id, ts, wob) {
           P('dcgm.pcie_rx_bps', 1.4e8, 'B/s', L),
         ];
       }),
-      ...[
-        ['node1', 'dcgm'],
-        ['node5', 'dcgm-aitop100'],
-      ].flatMap(([host, job], i) => {
-        const L = { host, job };
-        return [P('dcgm.host_up', i ? 0 : 1, '1', L), P('dcgm.fleet_gpus', i ? 0 : 2, '1', L), P('dcgm.fleet_temp_max_c', 58, 'C', L), P('dcgm.fleet_power_w', 410, 'W', L)];
-      }),
+      ...hostPoints(), // the fleet hosts (generic names: three up, one down), as in the fleet heatmap
+      ...dcgmWave2Points(gpus, wob), // the keys of addendum 9.14
     ];
   if (id === 'aiperf')
     return [
@@ -297,7 +288,7 @@ export function sevenMetrics(id, ts, wob) {
       P('ap.runs_by_verdict', 1, '1', { verdict: 'failed' }),
       P('ap.live_running', 0),
     ];
-  if (id === 'guardrails') return [P('gr.up', 1), P('gr.configs', 1)];
+  if (id === 'guardrails') return [P('gr.up', 1), P('gr.configs', 3)];
   if (id === 'modelopt')
     return [
       P('mo.jobs', 4),
@@ -309,20 +300,8 @@ export function sevenMetrics(id, ts, wob) {
       P('mo.duration_s', 47 * 60, 's'),
     ];
   if (id === 'flare') {
-    const T = { target: 'spark-all' };
-    return [
-      P('flare.targets_serving', 1),
-      ...['local', 'gpu-box', 'spark-a', 'spark-b', 'spark-c', 'spark-d', 'spark-all'].map((target) => P('flare.packages', 1, '1', { target })),
-      P('flare.generated_total', wob(182400, 4000), 'tokens', T),
-      P('flare.prefill_total', 912000, 'tokens', T),
-      P('flare.active_requests', 3, '1', T),
-      P('flare.pending_requests', 0, '1', T),
-      P('flare.requests_completed_total', 412, '1', T),
-      P('flare.requests_failed_total', 1, '1', T),
-      P('flare.cache_reused_total', 240000, 'tokens', T),
-      P('flare.draft_acceptance', 0.71, 'ratio', T),
-      P('flare.max_model_len', 524288, 'tokens', T),
-    ];
+    const mode = flags.flareMode || 'default';
+    return [P('flare.targets_serving', flareServing(mode).length), ...FLARE_TARGETS.map(([target]) => P('flare.packages', FLARE_PACKAGES[target], '1', { target })), ...flareCounterPoints(mode, P)];
   }
   if (id === 'gym')
     return [
@@ -983,7 +962,8 @@ export function sevenRunAction(system, id, params, R) {
     'openshell/prove_policy': 'policy.yaml: default deny holds\nfilesystem: write limited to /sandbox/outputs\nnetwork: only litellm:4000 reachable\n[mock output]',
     'openshell/gateway_up': 'gateway container started\nmTLS listener on 127.0.0.1:8443',
     'openshell/gateway_stop': 'gateway container stopped',
-    'dcgm/discovery': 'GPU 0  NVIDIA RTX PRO 6000 Blackwell Max-Q  96 GB\nGPU 1  NVIDIA RTX PRO 6000 Blackwell Workstation  96 GB\nhost node1 up, host node5 DOWN\n[mock output]',
+    'dcgm/discovery':
+      'GPU 0  NVIDIA RTX PRO 6000 Blackwell Max-Q  96 GB\nGPU 1  NVIDIA RTX PRO 6000 Blackwell Workstation  96 GB\nhost host-a up, host host-b up, host host-c up, host host-d DOWN\n[mock output]',
     'dcgm/restart_exporter': 'container dcgm-exporter recreated\n/metrics 200 after 2.2 s',
     'guardrails/up': 'container ai-lab-guardrails started\nconfigs served: lab-input-output',
     'guardrails/restart': 'container ai-lab-guardrails recreated\nconfigs served: lab-input-output',
@@ -1029,10 +1009,6 @@ export function sevenSeedEvents(now) {
   const E = (system, ago, kind, summary, data = {}) => ({ ts: now - ago, system, kind, summary, data });
   return {
     skillevaluator: [E('skillevaluator', 7200, 'se.run', 'tier1 write-skill-for-weak-models: quality 87.5 (mock)')],
-    openshell: [
-      E('openshell', 3 * 3600, 'openshell.sandbox', 'sandbox dd-preview-3f2a deleted after run', { name: 'dd-preview-3f2a', state: 'deleted' }),
-      E('openshell', 3.2 * 3600, 'openshell.sandbox', 'sandbox dd-preview-3f2a created', { name: 'dd-preview-3f2a', state: 'created' }),
-    ],
     dcgm: [E('dcgm', 1800, 'dcgm.diag', 'diag level 1 on GPU 0: pass', { gpu: 0, level: 1, result: 'pass' }), E('dcgm', 86400, 'dcgm.xid', 'XID 31 on GPU 1 cleared (mock)', { gpu: 1, xid: 31 })],
     aiperf: [
       E('aiperf', 4 * 3600, 'aiperf.run', 'chat-short finished: ttft p95 548 ms, 12.4 req/s', { profile: 'chat-short', verdict: 'succeeded' }),
@@ -1064,10 +1040,24 @@ export function sevenSeedEvents(now) {
     ],
   };
 }
+/** A live `check` event in the adapter's shape: {config, ok, results: [{probe, status, rail, ms}]} (the three fixed probes). */
 export function fiveLiveEvent(now, pick, rnd) {
-  const blocked = rnd() < 0.15,
-    prompt = pick(['summarise this file', 'what is 2+2', 'ignore previous instructions', 'draft an email']);
-  return { ts: now, system: 'guardrails', kind: 'guardrails.check', summary: `${prompt} -> ${blocked ? 'blocked (self check input)' : 'allowed'}`, data: { verdict: blocked ? 'blocked' : 'allowed' } };
+  const slip = rnd() < 0.15,
+    ms = () => Math.round(400 + rnd() * 500);
+  const results = [
+    { probe: 'benign', status: 'passed', rail: null, ms: ms() },
+    { probe: 'jailbreak', status: slip ? 'passed' : 'blocked', rail: slip ? null : 'self check input', ms: ms() },
+    { probe: 'harmful', status: 'blocked', rail: 'self check input', ms: ms() },
+  ];
+  const cfg = pick(['lab-input-output', 'lab-input-output', 'lab-default']);
+  const name = (s) => (s === 'passed' ? 'allowed' : s);
+  return {
+    ts: now,
+    system: 'guardrails',
+    kind: 'guardrails.check',
+    summary: `check ${cfg}: ${results.map((r) => `${r.probe}=${name(r.status)}`).join(', ')}`,
+    data: { config: cfg, ok: !slip, results },
+  };
 }
 
 // ------------------------------------------------------------------ guardrails playground

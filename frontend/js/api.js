@@ -98,6 +98,17 @@ export function createClient({ base = '/api/v1', getKey = () => null, onUnauthor
     status: (id) => get(`${sys(id)}/status`),
     metrics: (id) => get(`${sys(id)}/metrics`),
     history: (id, key, window) => get(`${sys(id)}/metrics/history`, { key, window }),
+    // Series for charts (addendum 9.13): one answer per chart. `keys` is an array (1..12 canonical keys) or a comma string;
+    // `split` draws one line per label variant; `window` is 15m|1h|24h|7d.
+    series: (id, { keys, window = '1h', split = false }, o) => get(`${sys(id)}/metrics/series`, { keys: [].concat(keys).join(','), window, split: split ? 1 : 0 }, o),
+    // GPU telemetry fleet heatmap (addendum 9.14): per-GPU history of every DCGM host Prometheus scrapes. q = {metric, window}.
+    fleet: (q, o) => get(`${sys('dcgm')}/fleet`, q, o),
+    // Wave 4 (addendum 9.16), all read-only GETs. The rail pipeline of each served Guardrails config; the policy decisions in one OpenShell sandbox's log (`sandbox` must be in
+    // the gateway's current list, else 404; at most 2000 rows); the audit summary of the last 24h | 7d | 30d (admin). The audit LOG takes since / until (epoch s), actor, status
+    // (ok|error) and system through `audit(q)`.
+    rails: (o) => get(`${sys('guardrails')}/rails`, null, o),
+    decisions: (sandbox, limit = 2000, o) => get(`${sys('openshell')}/decisions`, { sandbox, limit }, o),
+    auditSummary: (window, o) => get('/audit/summary', { window }, o),
     events: (id, limit = 50) => get(`${sys(id)}/events`, { limit }),
     configList: (id) => get(`${sys(id)}/config`),
     config: (id, file) => get(`${sys(id)}/config/${enc(file)}`),
@@ -111,6 +122,18 @@ export function createClient({ base = '/api/v1', getKey = () => null, onUnauthor
     actions: (id) => get(`${sys(id)}/actions`),
     runAction: (id, action, params, confirm) => post(`${sys(id)}/actions/${enc(action)}`, { params: params || {}, confirm: !!confirm }),
     playground: (id) => get(`${sys(id)}/playground`),
+    // Relay trace explorer (addendum 9.12). Read-only GETs; `o` may carry an AbortSignal ({signal}).
+    traceIndex: (o) => get(`${sys('relay')}/traces/index`, null, o),
+    traces: (q, o) => get(`${sys('relay')}/traces`, q, o),
+    trace: (id, o) => get(`${sys('relay')}/traces/${enc(id)}`, null, o),
+    spanContent: (traceId, spanId, q, o) => get(`${sys('relay')}/traces/${enc(traceId)}/spans/${enc(spanId)}/content`, q, o),
+    sessions: (q, o) => get(`${sys('relay')}/sessions`, q, o),
+    session: (key, o) => get(`${sys('relay')}/sessions/${enc(key)}`, null, o),
+    analytics: (q, o) => get(`${sys('relay')}/analytics`, q, o),
+    trajectories: (q, o) => get(`${sys('relay')}/trajectories`, q, o),
+    trajectory: (id, q, o) => get(`${sys('relay')}/trajectories/${enc(id)}`, q, o),
+    stepContent: (id, step, q, o) => get(`${sys('relay')}/trajectories/${enc(id)}/steps/${enc(step)}/content`, q, o),
+    capture: (o) => get(`${sys('relay')}/capture`, null, o),
     routingSummary: (window) => get('/routing/summary', { window }),
     audit: (q) => get('/audit', q),
     settings: () => get('/settings'),

@@ -26,11 +26,13 @@
 // run in a deployment checkout sees what CI and a fresh clone see (no system deployed). An API 4xx is judged by
 // what the page shows, not by the browser's network log line.
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, existsSync, mkdirSync, chmodSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, existsSync, mkdirSync, chmodSync, cpSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { visitRelayTraces } from './relay-traces.mjs';
+import { visitVizPages, checkRealSeriesRoute, checkRealFleetRoute } from './viz-pages.mjs';
 
 const FRONTEND = dirname(dirname(fileURLToPath(import.meta.url)));
 const BACKEND = join(FRONTEND, '..', 'backend');
@@ -43,6 +45,8 @@ const URL_KEYS = ['switchyard', 'relay', 'dynamo', 'dynamo_worker_metrics', 'lit
 const SETTLE_MS = 400; // the page must stay free of skeletons for this long to count as rendered
 const PAGE_TIMEOUT_MS = 20000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Synthetic Relay captures (backend/crates/nemo-console/tests/fixtures/relay_traces): ATOF event files and ATIF trajectories.
+const RELAY_FIXTURES = join(FRONTEND, '..', 'backend', 'crates', 'nemo-console', 'tests', 'fixtures', 'relay_traces');
 
 function findChrome() {
   if (process.env.CHROME_BIN) return process.env.CHROME_BIN;
@@ -108,7 +112,35 @@ export class Cdp {
   }
 }
 
-export async function startBackend(tmp, { port, frontendDir } = {}) {
+/** Copy the synthetic Relay captures into a throwaway home, where the backend looks for them by default. */
+export function seedRelayFixtures(home) {
+  const share = join(home, '.local', 'share', 'nemo-relay');
+  for (const dir of ['atof', 'atif']) {
+    mkdirSync(join(share, dir), { recursive: true });
+    cpSync(join(RELAY_FIXTURES, dir), join(share, dir), { recursive: true });
+  }
+}
+
+/** Wait until the trace index has read the seeded files: state ready with at least one trace (null on timeout). */
+async function waitIndexed({ base, key }, ms = 90000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    try {
+      const r = await fetch(`${base}/api/v1/systems/relay/traces/index`, { headers: { Authorization: `Bearer ${key}` } });
+      if (r.ok) {
+        const ix = await r.json();
+        if (ix.state === 'ready' && ix.traces > 0) return ix;
+      }
+    } catch {
+      /* not answering yet */
+    }
+    await sleep(500);
+  }
+  return null;
+}
+
+// `seed(home)` runs on the throwaway HOME before the backend starts (see seedRelayFixtures).
+export async function startBackend(tmp, { port, frontendDir, seed } = {}) {
   if (!existsSync(BIN)) throw new Error(`${BIN} missing: build it (make setup, or cd backend && cargo build --locked)`);
   port ||= await freePort();
   const home = join(tmp, 'home');
@@ -116,6 +148,7 @@ export async function startBackend(tmp, { port, frontendDir } = {}) {
   const repo = join(tmp, 'repo');
   const bin = join(tmp, 'bin'); // the hermetic PATH: empty, so every allowlisted CLI is "not found"
   for (const d of [home, state, repo, bin]) mkdirSync(d, { recursive: true });
+  seed?.(home);
   chmodSync(state, 0o700);
   const env = {
     PATH: LIVE ? process.env.PATH || '/usr/bin:/bin' : bin,
@@ -207,11 +240,35 @@ export async function startChrome(profile) {
   throw new Error(`Chrome never exposed DevTools:\n${err.slice(-1500)}`);
 }
 
+/** The frontend mock server (dependency-free, deterministic data: metrics, series, runs) on a free loopback port. */
+async function startMock() {
+  const port = await freePort();
+  const proc = spawn(process.execPath, [join(FRONTEND, 'dev', 'mock-server.mjs'), '--port', String(port)], { env: { PATH: process.env.PATH || '' }, stdio: ['ignore', 'ignore', 'pipe'] });
+  let err = '';
+  proc.stderr.on('data', (d) => {
+    err += d;
+  });
+  const base = `http://127.0.0.1:${port}`;
+  for (let i = 0; i < 100; i++) {
+    if (proc.exitCode !== null) throw new Error(`the mock server exited early (${proc.exitCode}): ${err.slice(-500)}`);
+    try {
+      if ((await fetch(`${base}/api/v1/health`)).ok) return { proc, base };
+    } catch {
+      /* not up yet */
+    }
+    await sleep(100);
+  }
+  proc.kill('SIGKILL');
+  throw new Error('the mock server never answered');
+}
+
 export async function main(argv = process.argv.slice(2)) {
   const keepProfile = argv.includes('--keep-profile');
   const tmp = mkdtempSync(join(tmpdir(), 'nc-e2e-'));
   const failures = [];
   let backend;
+  let seeded = null;
+  let mock = null; // the frontend mock server (dev/mock-server.mjs): the wave-1 chart and run-history checks need metrics and runs
   let chrome;
   let cdp;
   try {
@@ -246,12 +303,13 @@ export async function main(argv = process.argv.slice(2)) {
       } else if (m.method === 'Network.responseReceived') {
         const r = m.params.response;
         const u = new URL(r.url);
-        if (u.origin !== backend.base) return;
+        if (u.origin !== backend.base && u.origin !== seeded?.base && u.origin !== mock?.base) return;
         if (u.pathname.startsWith('/api/')) {
           if (r.status >= 500) problems(`HTTP ${r.status} from ${u.pathname}`);
           return;
         }
         if (r.status >= 400) problems(`frontend file ${u.pathname} answered ${r.status}`);
+        if (u.origin === mock?.base) return; // the mock serves its files `no-store`: the revalidation check is about the real backend
         seenHeaders.set(u.pathname, Object.entries(r.headers).find(([k]) => k.toLowerCase() === 'cache-control')?.[1] || '');
       }
     });
@@ -310,6 +368,31 @@ export async function main(argv = process.argv.slice(2)) {
         for (const e of st.errs) problems(`error state: ${e}`);
       }
     }
+    // The same browser, a second backend whose home holds the synthetic Relay captures: the five trace explorer tabs
+    // and one detail view of each, against data (e2e/relay-traces.mjs). The first pass above already opened every one of
+    // those tabs on an EMPTY home, which is the other state a fresh install is in.
+    route = 'relay traces (sign-in)';
+    seeded = await startBackend(join(tmp, 'seeded'), { seed: seedRelayFixtures });
+    await s('Page.navigate', { url: `${seeded.base}/` });
+    await sleep(500);
+    await evaluate(`sessionStorage.setItem('nc.bearer', ${JSON.stringify(seeded.key)}); true`);
+    await s('Page.reload', { ignoreCache: false });
+    await sleep(800);
+    route = 'relay traces (index)';
+    if (!(await waitIndexed(seeded))) problems('the trace index never became ready with a trace from the synthetic captures');
+    else await visitRelayTraces({ evaluate, settle, sleep, fail: (msg) => problems(msg), route: (name) => (route = name) });
+    // The real backend's series route (addendum 9.13), then the same browser against the frontend mock server: the charts (rates,
+    // 7d, show max, the line picker) and the run history of the eight run-based pages, which need metrics and runs the hermetic
+    // home does not have (e2e/viz-pages.mjs).
+    route = 'series route (real backend)';
+    await checkRealSeriesRoute(backend, (msg) => problems(msg));
+    route = 'fleet route (real backend)';
+    await checkRealFleetRoute(backend, (msg) => problems(msg));
+    route = 'viz pages (mock sign-in)';
+    mock = await startMock();
+    await s('Page.navigate', { url: `${mock.base}/` });
+    await sleep(800);
+    await visitVizPages({ base: mock.base, evaluate, settle, sleep, fail: (msg) => problems(msg), route: (name) => (route = name) });
     route = '(static files)';
     for (const [p, cc] of seenHeaders) if (!/\bno-cache\b/.test(cc)) problems(`${p} served without Cache-Control: no-cache (got '${cc}')`);
     if (!seenHeaders.size) problems('no frontend file was observed (the page never loaded?)');
@@ -322,10 +405,16 @@ export async function main(argv = process.argv.slice(2)) {
   } finally {
     cdp?.close();
     chrome?.proc.kill('SIGKILL');
-    if (backend) {
-      backend.proc.kill('SIGTERM');
-      for (let i = 0; i < 50 && backend.proc.exitCode === null; i++) await sleep(100);
-      if (backend.proc.exitCode === null) backend.proc.kill('SIGKILL');
+    if (mock) {
+      mock.proc.kill('SIGTERM');
+      for (let i = 0; i < 20 && mock.proc.exitCode === null; i++) await sleep(100);
+      if (mock.proc.exitCode === null) mock.proc.kill('SIGKILL');
+    }
+    for (const b of [backend, seeded]) {
+      if (!b) continue;
+      b.proc.kill('SIGTERM');
+      for (let i = 0; i < 50 && b.proc.exitCode === null; i++) await sleep(100);
+      if (b.proc.exitCode === null) b.proc.kill('SIGKILL');
     }
     if (!keepProfile) rmSync(tmp, { recursive: true, force: true });
   }

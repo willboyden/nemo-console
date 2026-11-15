@@ -52,7 +52,7 @@ test('thirteen system ids; every one has an i18n name, a route (except none miss
     FIVE_IDS,
     SIX_IDS.filter((id) => id !== 'modelopt'),
   );
-  const audit = fs.readFileSync(path.join(root, 'js/views/audit.js'), 'utf8');
+  const audit = fs.readFileSync(path.join(root, 'js/audit/log-tab.js'), 'utf8'); // the Log tab (addendum 9.16 moved the filter out of the view)
   assert.match(audit, /SYSTEM_IDS\.map/, 'the audit filter is built from the twelve-id list, not a hardcoded subset');
 });
 test('routes: unique paths and tags, every module file exists and defines its tag, nav + group labels resolve', () => {
@@ -133,6 +133,17 @@ test('metrics: documented prefixes only, labels (never in the key), the real key
       'dcgm.fleet_gpus',
       'dcgm.fleet_temp_max_c',
       'dcgm.fleet_power_w',
+      // addendum 9.14
+      'dcgm.fb_reserved_b',
+      'dcgm.mem_temp_c',
+      'dcgm.mem_clock_mhz',
+      'dcgm.enc_util',
+      'dcgm.dec_util',
+      'dcgm.power_limit_w',
+      'dcgm.energy_mj_total',
+      'dcgm.violation_us_total',
+      'dcgm.remapped_rows',
+      'dcgm.row_remap_failure',
     ],
     aiperf: ['ap.ttft_ms', 'ap.itl_ms', 'ap.latency_ms', 'ap.output_tps', 'ap.request_tps', 'ap.error_rate', 'ap.runs', 'ap.runs_by_verdict', 'ap.live_running'],
     guardrails: ['gr.up', 'gr.configs'],

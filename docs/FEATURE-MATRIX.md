@@ -135,7 +135,7 @@ Dynamo `restart`, assistive technology, browsers other than headless Firefox and
 
 | Feature | Status | Verification | Notes |
 |---|---|---|---|
-| Views: Overview, Switchyard, Relay, Dynamo, Audit (admin), Settings | Implemented | frontend rendered against the real backend: verified live (headless Firefox) | Dynamo tabs: Status, Params, Lifecycle, Playground. Switchyard: Routing, Config, Playground, Actions. Relay: Status, Config, Diagnostics, Playground (if offered). |
+| Views: Overview, Switchyard, Relay, Dynamo, Audit (admin), Settings | Implemented | frontend rendered against the real backend: verified live (headless Firefox) | Dynamo tabs: Status, Params, Lifecycle, Playground. Switchyard: Routing, Config, Playground, Actions. Relay: Status, Traces, Sessions, Analytics, Trajectories, Capture, Config, Diagnostics, Playground (if offered). |
 | Getting started and FAQ tabs on every system page, Overview, Audit and Settings | Implemented | 2026-11-04: `tests/help.test.mjs` (content complete, tab and page links valid), browser suite 86 pages and tabs (77 with the system pages only) with no error state, and in headless Chrome against the dev mock: tab links switch tab and hash, the filter narrows and opens matches, Expand all, no exceptions | Content in `frontend/i18n/help.en.json` (plain text, `code` spans, rendered as text nodes), loaded once on first open. Written from the docs, not checked against every live system: where a system's behaviour changes, update the file with it. |
 | Config editor: Form view (a typed control per value, edits written in place and read back by the real loaders), line-numbered Text view, live edit checks run by the backend's own validators compiled to WebAssembly (tomllib / PyYAML syntax, the AIPerf / Model Optimizer / Evaluator / Switchyard / Relay schemas, the secrets and NUL the save path refuses), unsaved drafts kept for the session | Implemented | 2026-11-14 (ADR-0022): `tests/cfg-wasm.test.mjs` runs the 110 shared vectors through the built module (same answers as the native `tests/vectors.rs`); `cfg-checks.test.mjs`, `cfg-parse.test.mjs`, `cfg-edit.test.mjs` (incl. the read-back); `e2e/config-editor.mjs` in `make e2e` and CI: the module gives the server validate route's exact diagnostics (severity, line, text; the 422 text for a secret) on 150 seeded mutations per file of six files (AIPerf, Model Optimizer, Evaluator, Switchyard, Relay routes and Flare's compose file, which has no schema), the mutations including values PyYAML's constructors refuse (a 500 from the server is a named exception in the browser), and in headless Chrome it loads under the CSP, the Form view flags an out-of-range value, refuses a wrong type and a date PyYAML cannot build, the Text view marks the line, the editor flags `token: abc"defghijk` with the server's text, the server check runs and a draft survives leaving the page. The 0.9.0 Form view was driven by hand against the dev mock in both themes, as a viewer and at phone width; not repeated for this change | ADR 0019, ADR 0022. Advisory only: the server's validator still decides every apply. Without the WebAssembly module (`make wasm`) the editor says live checks are unavailable, the YAML Form view waits and Form edits are refused. The Form view does not model YAML anchors, aliases, tags, several documents and multi-line flow or quoted values (such files open in the Text view, and are still checked live). Not yet used against the live lab's files through the deployed console. |
 | Config editor field help: an info pop-up on every Form setting (what it is, what a change does, accepted values, when it takes effect; Dynamo flags from the Params catalog) | Implemented | 2026-11-05: `tests/cfg-help.test.mjs` (every field of every mock file and every schema key has a description); `e2e/config-editor.mjs` opens a pop-up against the real backend and closes it with Esc; all 661 fields of the author's real lab configs covered (checked with a throwaway backend, read only); driven in headless Chrome at desktop and phone width | Descriptions are the console's own wording from the systems' docs and config comments; where upstream does not document a behaviour the text says less rather than guess. |
@@ -255,6 +255,61 @@ Dynamo `restart`, assistive technology, browsers other than headless Firefox and
 | `smoke` action (a console-owned background run, one at a time), `verify`, `report` | Implemented | fakes only | `smoke` is **disruptive** (router tokens on a shared engine; 1-20 tasks); `verify` (the wrapper's read-only network check) and `report` are **safe**. A restart leaves a running run `interrupted`. |
 | Config | Not applicable | — | The Gym environment config belongs to the lab wrapper; no Configure tab. |
 | NeMo RL training on the rollouts | Not planned for v1 | — | Nothing to start or read yet. |
+
+## Relay trace explorer (addendum 9.12)
+
+Verification below says **verified live (2026-11-14)** only for what the documentation author ran: a debug build on a
+spare port against the real captures of one workstation (Relay 0.9.2: 7 ATOF files, 2.4 GiB on disk, 565,467 events,
+1,889 traces, 153 sessions, 833 trajectories), with an independent checker of the 9.12 shapes and status codes (98 of
+98 checks on the real data, 95 of 95 on the synthetic fixtures) and headless-Chrome screenshots of every tab.
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| Trace index (pairing, traces, sessions, rotations incl. gzip, copytruncate, bounds) | Implemented | verified live (2026-11-14, real captures: all 7 files `indexed`, first build ~80 s debug, ~110 MB resident); fakes `tests/relay_traces_index.rs` | One background task, in memory only, metadata only. Incremental: per-file identity and offsets; a rotated copy is not read twice. |
+| Traces list and trace detail (waterfall, icicle, span table, routing, tokens) | Implemented | verified live (read path; every list and detail route < 100 ms on the real data, debug build) | Filters and facets per 9.12; deep links `#/relay?tab=traces&trace=<id>&span=<id>`. |
+| Sessions (swim lane, context growth, calls) | Implemented | verified live (read path) | The swim lane keeps at most 12 lanes; overlapping short traces are counted in a note (a real 494-trace session needed ~100 lanes before this). |
+| Analytics (totals, series, histograms, heatmaps, routing flows, tools, errors, scatter) | Implemented | verified live (read path) | Window ends at the newest event by default (`anchor=latest`), so an idle lab still shows its last activity. |
+| Trajectories (gateway ATIF and Hermes agents) | Implemented | verified live (820 gateway + 13 Hermes) | Hermes ids are not UUIDs: a stable derived UUIDv8 is used, the original id stays visible as `session_id`. |
+| Capture coverage (which Relay capture levels are on, what was observed, what a reader is missing) | Implemented | verified live (matched the gateway's real `plugins.toml`) | OTLP exports cannot be observed from the console: shown as `not observable`, with a reachability check of loopback endpoints. |
+| Span and step content (admin only) | Implemented | verified live (300 real span contents: no credential pattern left after scrubbing, only allowlisted header names); fakes incl. the marker test `tests/relay_traces_api.rs` | Read from the source line on demand; `scrub()` plus a content-only pass for secret-named `key: value` pairs; caps per 9.12; `RELAY_TRACE_CONTENT=off` turns it off. |
+| Content from gzip rotations | Implemented | see the CHANGELOG entry for the measured read times | Seek points recorded during the index scan bound how much of a rotation one content read decompresses. |
+| Index off / content off switches | Implemented | fakes only | See OPERATIONS. |
+
+## Charts for every system, wave 1 (addendum 9.13)
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| `/metrics/series` (many keys, 15m/1h/24h/7d, avg + max, split per label) | Implemented | verified live (2026-11-14, a debug build on a copy of the live state: two GPUs' 1h and 7d series); fakes `tests/core_metrics_series.rs` | Rust-only (D-36). `/metrics/history` unchanged. |
+| Counters as rates, 7d window, show max, series picker on generic pages | Implemented | verified live (DCGM page on real data, 24h with max); mock + unit tests | Rate charts draw no max (a counter's bucket max is its last value). |
+| Run history (timeline, trend, A/B compare, filters) on 8 pages | Implemented | verified live on the systems that had runs that day (Data Designer: 8 runs incl. a failed one; SkillEvaluator: 1); the other six only against the mock | Built from `/events` data only. |
+| Data Designer records admin-only | Implemented | fakes (`tests/core_roles.rs`, records cases in `core_metrics_series.rs`) | D-37. |
+
+## Charts, wave 2 (addendum 9.14)
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| DCGM fleet route + Fleet heatmap | Implemented | verified live (2026-11-14, a debug build on a copy of the state against the lab's Prometheus: 7 GPUs on 6 hosts, 24 h, an outage drawn as no data); fakes `tests/dcgm_viz_wave2.rs` | Rust-only (D-38); fixed-table PromQL; no UUIDs or serials. |
+| DCGM per-GPU cards (busy, memory, power vs limit, energy, throttling, remapped rows, XID/diag timeline) | Implemented | verified live (busy and memory cards on two local GPUs); the rest against the mock | New keys D-39. |
+| Switchyard decisions and models tab | Implemented | verified live for the per-model and empty-decision states (no stage-router decisions were counted that day); decision flow against the mock | Two-column flow (source -> target): the decision counters carry no route. |
+| Dynamo windowed latency, breakdown, load, capacity, Events tab | Implemented | Events tab verified live in its "Dynamo is off" state; the rest against fixtures and the mock (Dynamo was off) | Windowed quantiles from histogram deltas. |
+
+## Charts, wave 3 (addendum 9.15)
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| Run summary / requests / profile routes | Implemented | verified live for Data Designer (profile of a real run: viewer gets no values, admin gets the top values; records stay 403 for a viewer) and SkillEvaluator (summary of a real run: 13 validators, 9 rubric checks); AIPerf against fixtures; fakes `tests/runviz_wave3.rs` incl. a planted-marker test that no text leaks | Rust-only (D-40). |
+| Event data additions (Evaluator CI/cost fields, Gym rewards) | Implemented | fakes; parity pinned (D-41) | New keys only. |
+| AIPerf, Evaluator, Gym, Model Optimizer, SkillEvaluator, Data Designer run-detail cards | Implemented | verified live for Data Designer (timeline, profile) and SkillEvaluator (validator heatmap); the others only against the mock (no runs on the workstation that day) | Missing values are an en dash, never 0. |
+
+## Charts, wave 4 (addendum 9.16)
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| Guardrails rails route + pipeline, probe matrix, availability strip | Implemented | verified live (2026-11-14, a debug build on a copy of the state: the lab's `lab-input-output` config, its two rails, main model and streaming settings); fakes `tests/viz_wave4.rs` | Flow names only; YAML aliases never expanded. |
+| OpenShell persisted lifecycle events, lanes, phase area, decisions route | Implemented | fakes (no sandbox ran on the workstation that day; decisions parsed only from the fixture's line formats) | Allowlisted fields only; one CLI call at a time. |
+| Flare target grid and per-target rates | Implemented | verified live for the grid's "absent" states (no Flare target served that day); rates against the mock | |
+| Overview sparklines and problems by severity | Implemented | verified live (problems card over 13 systems) | |
+| Audit summary route, Summary tab, log filters | Implemented | verified live (30 days of the workstation's audit table) | Admin only, in the handler too. |
 
 ## Not planned for v1
 

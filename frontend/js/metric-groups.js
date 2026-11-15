@@ -17,9 +17,12 @@ export function groupPoints(snapshot) {
   }
   return m;
 }
+const keyOf = (c) => (typeof c === 'string' ? c : c?.key);
+/** A descriptor's `charts` entries as objects: a string is `{key}`; an object may add `rate` (true/false) and `split` (true/false). */
+export const chartEntries = (desc) => (desc.charts || []).map((c) => (typeof c === 'string' ? { key: c } : c)).filter((c) => c?.key);
 /** The chart keys to draw: the descriptor's preferred keys that exist; when none exist, the first few non-table keys. */
 export function pickChartKeys(desc, grouped) {
-  const wanted = (desc.charts || []).filter((k) => grouped.has(k));
+  const wanted = (desc.charts || []).map(keyOf).filter((k) => k && grouped.has(k));
   if (wanted.length || Array.isArray(desc.charts)) return wanted; // an explicit list (even empty) is respected
   return [...grouped.keys()].filter((k) => !(desc.tables || []).includes(k)).slice(0, 3);
 }

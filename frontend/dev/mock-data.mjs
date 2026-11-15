@@ -285,7 +285,7 @@ export const DYNAMO_CATALOG = [
 // Canned fixtures shaped like the contract addendum: config scripts in scripts_dir, run metadata
 // (never record text in events) and records for the /runs/{id}/records|files endpoints.
 export const DD_SCRIPTS = ['support_tickets.py', 'code_review_prs.py', 'release_notes.py'];
-export const DD_COLS = ['id', 'subject', 'priority', 'assignee', 'created_at', 'body'];
+export const DD_COLS = ['id', 'subject', 'priority', 'assignee', 'created_at', 'body', 'csat', 'escalated', 'tags'];
 
 export const DD_SCRIPT = `# Generate a synthetic support-ticket dataset through the lab router.
 # Every generation call goes to LiteLLM on 127.0.0.1:4000 (alias lab-text).
@@ -323,6 +323,7 @@ const SUBJECTS = [
 ];
 const PRIO = ['low', 'medium', 'high', 'urgent'];
 const AGENTS = ['ana', 'kwame', 'priya', 'tom'];
+const TAGS = ['billing', 'login', 'export', 'api', 'mobile', 'search', 'ui'];
 
 /** n deterministic canned records (mock only). `body` is deliberately long so the UI truncation shows. */
 export function ddRows(n) {
@@ -335,6 +336,9 @@ export function ddRows(n) {
       priority: PRIO[i % PRIO.length],
       assignee: AGENTS[i % AGENTS.length],
       created_at: `2026-10-${day}T09:${String(i % 60).padStart(2, '0')}:00Z`,
+      csat: i % 7 === 0 ? null : 1 + ((i * 7) % 5), // a customer-satisfaction score 1-5; about one record in seven has none
+      escalated: i % 9 === 0,
+      tags: [TAGS[i % TAGS.length], ...(i % 3 === 0 ? [TAGS[(i + 3) % TAGS.length]] : [])],
       body: `Customer reports ${SUBJECTS[i % SUBJECTS.length].toLowerCase()} after the 2026-10-${day} update. Reproduced twice on the staging tenant; support asked for the tenant id and the last audit entry before escalating to engineering. Ticket synthesized by Data Designer for evaluation use only.`,
     });
   }

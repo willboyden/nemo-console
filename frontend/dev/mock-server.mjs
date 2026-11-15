@@ -5,6 +5,9 @@
 // secret redaction ("[set, N chars]"), strict CSP + security headers on every response, optional bearer (MOCK_KEY).
 // All data is canned or simulated. Nothing here is a verified fact about the real systems.
 // Usage: node dev/mock-server.mjs [--port 18796] [--host 127.0.0.1]     env: MOCK_KEY=secret  MOCK_ROLE=viewer  MOCK_DYNAMO=up|loading|down
+//   Series + run history (9.13): GET /systems/{id}/metrics/series and 10-30 run events per run-based system are always on; /__dev/seven?dcgm_gpus=6 gives the DCGM page six GPUs (the series picker needs more than four lines)
+//   Wave 4 (9.16): GET /systems/guardrails/rails, GET /systems/openshell/decisions?sandbox=&limit=, GET /audit/summary?window= and the /audit filters (since, until, actor, status, system); persisted openshell.sandbox events; Flare targets; /__dev/wave4?rails=ok|empty|problem|unsupported&decisions=ok|empty|many|fail|sparse&flare=default|mixed|none
+//   Relay trace explorer (9.12): MOCK_TRACES=ready|building|empty|disabled  MOCK_CAPTURE=full|gen_ai  MOCK_TRACES_STALE=1  (or /__dev/traces?index=&content=admin|off&capture=&truncated=1&stale=1)
 // Dev helpers (not part of the contract): /__dev/scenario /__dev/touch /__dev/role /__dev/fail /__dev/vllm /__shot
 import http from 'node:http';
 import fs from 'node:fs';
@@ -32,6 +35,12 @@ import {
   GR_PLAY,
   GR_REFUSAL,
 } from './mock-seven.mjs';
+import { createTracesMock } from './mock-traces.mjs';
+import { RAILS_MODES, DECISION_MODES, FLARE_MODES, railsAnswer, openshellEvents, presentSandboxNames, decisionsAnswer, auditSeeds, auditSummary, filterAudit, SUMMARY_WINDOWS } from './mock-wave4.mjs';
+import { parseSeriesQuery, buildSeries } from './mock-series.mjs';
+import { runSeeds, extraDdRuns } from './mock-runs.mjs';
+import { aiperfSummary, aiperfRequests, skillSummary, ddProfile, RUN_ID_RE } from './mock-wave3.mjs';
+import { fleetAnswer, FLEET_WINDOWS, FLEET_UNITS, switchyardWave2Points, dynamoWave2Points, dynamoLogEvents, dcgmExtraEvents } from './mock-wave2.mjs';
 import { SWITCHYARD_ROUTES, RELAY_ROUTES, RELAY_PLUGINS, RELAY_CONFIG, DYNAMO_CATALOG, DD_SCRIPTS, DD_SCRIPT, DD_COLS, ddRows, DD_RUNS, DD_PREVIEW_FILES, DD_CREATE_FILES } from './mock-data.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -54,6 +63,7 @@ const KEY = process.env.MOCK_KEY || '';
 // --proxy http://127.0.0.1:8793 forwards /api/ to a REAL backend (screenshot/verification use), keeping the static host and /__shot helpers.
 const PROXY = argv('proxy', process.env.MOCK_PROXY || '');
 const now = () => Date.now() / 1000;
+const traceMock = createTracesMock({ now });
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 let seed = 7;
 const rnd = () => {
@@ -70,7 +80,9 @@ const state = {
   vllmRunning: false, // the container that shares the Workstation card
   dynamoSince: now() - 5400,
   failNext: null,
-  seven: { dcgmFixed: false, guardPlayground: true }, // dev toggles for the 9.8 systems (/__dev/seven)                                 // {status, n}
+  seven: { dcgmFixed: false, guardPlayground: true, dcgmGpus: 2 }, // dev toggles for the 9.8 systems (/__dev/seven)
+  wave2: { fleet: 'ok' }, // /__dev/wave2?fleet=ok|prom_down|empty|unsupported: what GET /systems/dcgm/fleet answers (addendum 9.14)
+  wave4: { rails: 'ok', decisions: 'ok' }, // /__dev/wave4?rails=&decisions=&flare=: what the wave-4 routes answer (addendum 9.16); flare is state.seven.flareMode
   settings: {
     version: '0.1.0-mock',
     urls: { switchyard: 'http://127.0.0.1:4010', relay: 'http://127.0.0.1:4040', dynamo: 'http://127.0.0.1:8020', dynamo_worker_metrics: 'http://127.0.0.1:8081', litellm: 'http://127.0.0.1:4000' },
@@ -216,6 +228,9 @@ const sseWrite = (res, data, event) => {
   if (!res.writableEnded) res.write(`${event ? `event: ${event}\n` : ''}data: ${typeof data === 'string' ? data : JSON.stringify(data)}\n\n`);
 };
 let auditSeq = 0;
+// Thirty days of audited calls behind the live ones (addendum 9.16: the summary and the log filters need history); ids continue after them.
+state.audit.push(...auditSeeds(now()));
+auditSeq = state.audit.length;
 const audit = (system, method, action, params, status, path) => {
   state.audit.unshift({
     id: ++auditSeq,
@@ -233,7 +248,7 @@ const audit = (system, method, action, params, status, path) => {
     params: redact(params),
     status,
   });
-  state.audit.length = Math.min(state.audit.length, 500);
+  state.audit.length = Math.min(state.audit.length, 3000);
 };
 // Content and secret-looking fields never enter the audit log.
 function redact(p) {
@@ -445,7 +460,7 @@ function metrics(id) {
   const ts = now(),
     P = (key, value, unit = '', labels = {}) => ({ key, value, unit, labels });
   const wob = (b, a) => b + Math.sin(ts / 7) * a + rnd() * a * 0.4;
-  if (MOCKED.includes(id)) return { system: id, ts, available: true, points: sevenMetrics(id, ts, wob) };
+  if (MOCKED.includes(id)) return { system: id, ts, available: true, points: sevenMetrics(id, ts, wob, state.seven) };
   if (id === 'switchyard')
     return {
       system: id,
@@ -459,8 +474,7 @@ function metrics(id) {
         P('sy.tokens', 41200, 'tok', { kind: 'completion' }),
         P('sy.tokens', 9800, 'tok', { kind: 'reasoning' }),
         P('sy.tokens', 120000, 'tok', { kind: 'cached' }),
-        P('sy.route.calls', 812, '', { route: 'auto-local' }),
-        P('sy.model.calls', 700, '', { model: 'nemotron-lightning' }),
+        ...switchyardWave2Points(wob), // sy.route.calls per route, sy.model.* per model, decisions, fallbacks, overhead, client outcomes (addendum 9.14)
       ],
     };
   if (id === 'relay')
@@ -494,6 +508,7 @@ function metrics(id) {
       P('dyn.itl_ms', wob(34, 5), 'ms', { q: 'p95' }),
       P('dyn.kv_cache_usage', wob(0.22, 0.05), 'ratio'),
       P('dyn.worker_up', 1),
+      ...dynamoWave2Points(wob), // windowed latency, phases, running / waiting, preemptions, capacity, spec-decode by position, output tokens (addendum 9.14)
     ],
   };
 }
@@ -540,6 +555,9 @@ function routingSummary(window) {
 // ---------------------------------------------------------------- events + SSE
 const ring = { switchyard: [], relay: [], dynamo: [], datadesigner: [], skillevaluator: [] };
 for (const [id, evs] of Object.entries(sevenSeedEvents(now()))) ring[id] = evs;
+// Run history (addendum 9.13): 10-30 runs per system in the adapters' event shapes (dev/mock-runs.mjs). The few hand-written seeds
+// above stay only where nothing replaces them (openshell, and dcgm's XID event next to its diagnostic runs).
+for (const [id, evs] of Object.entries(runSeeds(now()))) ring[id] = id === 'dcgm' ? [...evs, ...ring[id].filter((e) => e.kind !== 'dcgm.diag')].sort((a, b) => b.ts - a.ts) : evs;
 const streams = new Set();
 function makeEvent(system) {
   const ts = now();
@@ -569,7 +587,17 @@ function makeEvent(system) {
       data: { event_type: kind, agent: pick(['opencode', 'claude-local']), bytes: Math.round(300 + rnd() * 9000) },
     };
   }
-  return { ts, system, kind: 'dynamo.log', summary: pick(['request 200 ttft 231 ms', 'kv cache 21% used', 'router: worker 0 selected', 'prefix cache hit 8192 tokens']), data: { level: 'info' } };
+  const [component, level, text] = pick([
+    ['frontend', 'INFO', 'request 200 POST /v1/chat/completions ttft 231 ms'],
+    ['worker', 'INFO', 'kv cache usage 21% (3830 of 18240 blocks)'],
+    ['frontend', 'DEBUG', 'router: worker 0 selected (prefix match 8192 tokens)'],
+    ['worker', 'INFO', 'prefix cache hit 8192 tokens'],
+    ['worker', 'DEBUG', 'scheduler: 3 running, 1 waiting'],
+    ['worker', 'WARN', 'preempted 1 sequence: kv cache is full (92%)'],
+    ['frontend', 'WARN', 'GET /<img src=x onerror=alert(1)> 404 (shown as text, never as markup)'], // the live feed keeps a line with markup too, so it never ages out of the 200-event ring
+    ['worker', 'ERROR', 'request aborted: client closed the connection after 12 tokens'],
+  ]);
+  return { ts, system, kind: 'dynamo.log', summary: text, data: { component, level } };
 }
 for (const s of EVENTED)
   for (let i = 25; i > 0; i--) {
@@ -577,7 +605,13 @@ for (const s of EVENTED)
     e.ts -= i * 7;
     ring[s].unshift(e);
   }
-// Data Designer has no periodic feed: one dd.run event per stored run (metadata only).
+ring.openshell = openshellEvents(now()); // addendum 9.16: the persisted lifecycle events (created / phase / deleted), newest first, in the adapter's data shape
+ring.dynamo = dynamoLogEvents(now()); // addendum 9.14: a longer log with levels and components (newest first) for the Events tab
+// addendum 9.14: a few more XID events (string gpu, like the console emits) for the GPU timeline
+ring.dcgm = [...ring.dcgm, ...dcgmExtraEvents(now())].sort((a, b) => b.ts - a.ts);
+// Data Designer has no periodic feed: one dd.run event per stored run (metadata only). The runs behind the three hand-written ones
+// are generated, so the Runs tab (records, files) and the Run history agree.
+DD_RUNS.push(...extraDdRuns(now(), { cols: DD_COLS, rows: ddRows, previewFiles: DD_PREVIEW_FILES, createFiles: DD_CREATE_FILES }));
 for (const r of DD_RUNS) ring.datadesigner.unshift(ddEvent(r));
 setInterval(() => {
   if (rnd() < 0.3) {
@@ -616,6 +650,8 @@ function ddEvent(run) {
       destination: run.destination,
       format: run.format,
       duration_ms: run.duration_ms,
+      num_records_requested: run.num_records_requested ?? null,
+      batches: run.batches ?? null,
     },
   };
 }
@@ -1133,7 +1169,7 @@ async function api(req, res, url) {
   let m;
   if (p === '/health' && M === 'GET')
     return json(res, 200, { status: 'ok', version: '0.1.0-mock', trust: KEY ? 'bearer' : 'loopback-admin', role: state.role, systems: Object.fromEntries(SYSTEMS.map((s) => [s, health(s)])) });
-  if (!admin && p === '/audit') return err(res, 403, 'forbidden', 'the audit log is admin-only');
+  if (!admin && (p === '/audit' || p === '/audit/summary')) return err(res, 403, 'forbidden', 'the audit log is admin-only');
   if (p === '/overview') return json(res, 200, { systems: SYSTEMS.map(status), topology: topology(), ts: now() });
   if (p === '/topology') return json(res, 200, topology());
   if (p === '/systems')
@@ -1143,9 +1179,25 @@ async function api(req, res, url) {
       SYSTEMS.map((id) => ({ id, label: LABEL[id], health: health(id) })),
     );
   if (p === '/routing/summary') return json(res, 200, routingSummary(url.searchParams.get('window') || '1h'));
+  if (p === '/audit/summary') {
+    // GET /audit/summary?window=24h|7d|30d (addendum 9.16, admin): aggregate counts from the audit table, no parameters and no paths
+    const w = url.searchParams.get('window') ?? '7d';
+    if (!(w in SUMMARY_WINDOWS))
+      return err(
+        res,
+        422,
+        'invalid_request',
+        `window must be one of ${Object.keys(SUMMARY_WINDOWS)
+          .map((x) => `'${x}'`)
+          .join(', ')}`,
+      );
+    return json(res, 200, auditSummary(state.audit, w, now()));
+  }
   if (p === '/audit') {
-    const sys = url.searchParams.get('system');
-    return json(res, 200, state.audit.filter((a) => !sys || a.system === sys).slice(0, Number(url.searchParams.get('limit') || 100)));
+    // the log filters of 9.16: since / until (epoch seconds), actor, status ok|error, system, limit (at most 500)
+    const f = filterAudit(state.audit, url.searchParams);
+    if (f.error) return err(res, 422, 'invalid_request', f.error);
+    return json(res, 200, f.rows);
   }
   if (p === '/settings' && M === 'GET') return json(res, 200, state.settings);
   if (p === '/settings' && M === 'PUT') {
@@ -1171,8 +1223,56 @@ async function api(req, res, url) {
     if (!SYSTEMS.includes(id)) return err(res, 404, 'not_found', `unknown system ${id}`);
     if (sub === '/status') return json(res, 200, status(id));
     if (sub === '/metrics') return json(res, 200, metrics(id));
+    if (sub === '/metrics/series') {
+      const q = parseSeriesQuery(url.searchParams);
+      if (q.error) return err(res, 422, 'invalid_request', q.error);
+      const m = metrics(id);
+      return json(res, 200, buildSeries({ ...q, points: m.available ? m.points : [], now: Math.floor(now()), pollS: state.settings.poll_interval_s }));
+    }
+    if (sub === '/rails' && M === 'GET') {
+      // GET /systems/guardrails/rails (addendum 9.16): the rail pipeline of each served config; any other system 404
+      if (id !== 'guardrails' || state.wave4.rails === 'unsupported') return err(res, 404, 'not_found', 'no such endpoint for this system');
+      return json(res, 200, railsAnswer(state.wave4.rails));
+    }
+    if (sub === '/decisions' && M === 'GET') {
+      // GET /systems/openshell/decisions?sandbox=&limit= (addendum 9.16): the policy decisions in one sandbox's log. The sandbox must be in the current list (else 404); limit 1..2000 (else 422)
+      if (id !== 'openshell') return err(res, 404, 'not_found', 'no such endpoint for this system');
+      const sandbox = url.searchParams.get('sandbox') ?? '';
+      const lim = url.searchParams.get('limit');
+      const limit = lim == null || lim === '' ? 500 : Number(lim);
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(sandbox)) return err(res, 422, 'invalid_request', 'sandbox: a sandbox name is required');
+      if (!Number.isInteger(limit) || limit < 1 || limit > 2000) return err(res, 422, 'invalid_request', 'limit must be an integer from 1 to 2000');
+      if (!presentSandboxNames().includes(sandbox)) return err(res, 404, 'not_found', 'unknown sandbox');
+      return json(res, 200, decisionsAnswer(sandbox, limit, now(), state.wave4.decisions));
+    }
+    if (sub === '/fleet' && M === 'GET') {
+      // GET /systems/dcgm/fleet (addendum 9.14): any other system 404s; an unknown metric or window is 422 invalid_request
+      if (id !== 'dcgm' || state.wave2.fleet === 'unsupported') return err(res, 404, 'not_found', 'no such endpoint for this system');
+      const metric = url.searchParams.get('metric') ?? '',
+        window = url.searchParams.get('window') ?? '24h';
+      if (!(metric in FLEET_UNITS))
+        return err(
+          res,
+          422,
+          'invalid_request',
+          `metric must be one of ${Object.keys(FLEET_UNITS)
+            .sort()
+            .map((x) => `'${x}'`)
+            .join(', ')}`,
+        );
+      if (!(window in FLEET_WINDOWS))
+        return err(
+          res,
+          422,
+          'invalid_request',
+          `window must be one of ${Object.keys(FLEET_WINDOWS)
+            .map((x) => `'${x}'`)
+            .join(', ')}`,
+        );
+      return json(res, 200, fleetAnswer({ metric, window, now: Math.floor(now()), mode: state.wave2.fleet }));
+    }
     if (sub === '/metrics/history') return json(res, 200, history(id, url.searchParams.get('key') || '', url.searchParams.get('window') || '15m'));
-    if (sub === '/events') return json(res, 200, ring[id].slice(0, Number(url.searchParams.get('limit') || 50)));
+    if (sub === '/events') return json(res, 200, (ring[id] || []).slice(0, Number(url.searchParams.get('limit') || 50))); // flare has no seeded events: an empty list, not a 500
     if (sub === '/events/stream') {
       if (streams.size >= 8) return err(res, 429, 'too_many_streams', 'at most 8 concurrent event streams');
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', ...SEC });
@@ -1182,8 +1282,36 @@ async function api(req, res, url) {
       req.on('close', () => streams.delete(c));
       return;
     }
+    if (id === 'relay' && M === 'GET' && /^\/(traces|sessions|analytics|trajectories|capture)(\/|$)/.test(sub)) {
+      const r = traceMock.route(sub, url.searchParams, { admin });
+      if (r) return json(res, r.status, r.body);
+    }
+    if (id !== 'relay' && /^\/(traces|sessions|analytics|trajectories|capture)(\/|$)/.test(sub)) return err(res, 404, 'not_found', `${id} has no trace explorer`);
     if (sub === '/config') return json(res, 200, specs[id]);
     let rm;
+    // Wave 3 (addendum 9.15), viewer routes, GET only: the per-run summary (aiperf, skillevaluator), the per-request rows (aiperf) and the column profile (datadesigner).
+    // Any other system and an unknown run are 404 not_found; a malformed run id is 422 invalid_request. The profile's `top` values are filled for an admin only.
+    if ((rm = sub.match(/^\/runs\/([^/]+)\/(summary|requests|profile)$/)) && M === 'GET') {
+      const what = rm[2];
+      const ok = what === 'summary' ? id === 'aiperf' || id === 'skillevaluator' : what === 'requests' ? id === 'aiperf' : id === 'datadesigner';
+      if (!ok) return err(res, 404, 'not_found', `no ${what} for ${id}`);
+      let rid;
+      try {
+        rid = decodeURIComponent(rm[1]);
+      } catch {
+        return err(res, 422, 'invalid_request', 'run id is not valid UTF-8 percent-encoding');
+      }
+      if (!RUN_ID_RE.test(rid)) return err(res, 422, 'invalid_request', 'run id: letters, digits, dot, underscore and dash only');
+      if (id === 'datadesigner') {
+        const run = DD_RUNS.find((r) => r.run_id === rid) || (dd.live?.run_id === rid ? { rows: [], columns: [], run_id: rid } : null);
+        if (!run) return err(res, 404, 'not_found', `unknown run ${rid}`);
+        return json(res, 200, ddProfile(run, { admin }));
+      }
+      const ev = (ring[id] || []).find((e) => e.data?.run_id === rid);
+      if (!ev) return err(res, 404, 'not_found', `unknown run ${rid}`);
+      if (what === 'requests') return json(res, 200, aiperfRequests(ev));
+      return json(res, 200, id === 'aiperf' ? aiperfSummary(ev) : skillSummary(ev));
+    }
     if (id === 'datadesigner' && (rm = sub.match(/^\/runs\/([^/]+)\/(records|files)$/))) {
       const rid = decodeURIComponent(rm[1]);
       // A live create run has no records.jsonl yet: an empty (not a missing) records response.
@@ -1314,10 +1442,30 @@ function dev(req, res, url) {
     state.failNext = { status: Number(q.get('status') || 503), n: Number(q.get('n') || 1) };
     return json(res, 200, state.failNext);
   }
+  if (p === '/__dev/traces') {
+    const f = traceMock.flags;
+    if (['ready', 'building', 'empty', 'disabled'].includes(q.get('index'))) f.index = q.get('index');
+    if (['admin', 'off'].includes(q.get('content'))) f.content = q.get('content');
+    if (['full', 'gen_ai'].includes(q.get('capture'))) f.capture = q.get('capture');
+    if (q.has('truncated')) f.truncated = q.get('truncated') === '1';
+    if (q.has('stale')) traceMock.setStale(q.get('stale') === '1');
+    return json(res, 200, f);
+  }
   if (p === '/__dev/seven') {
     if (q.has('dcgm_fixed')) state.seven.dcgmFixed = q.get('dcgm_fixed') === '1';
     if (q.has('playground')) state.seven.guardPlayground = q.get('playground') === '1';
+    if (q.has('dcgm_gpus')) state.seven.dcgmGpus = Math.min(8, Math.max(2, Number(q.get('dcgm_gpus')) || 2));
     return json(res, 200, state.seven);
+  }
+  if (p === '/__dev/wave2') {
+    if (['ok', 'prom_down', 'empty', 'unsupported'].includes(q.get('fleet'))) state.wave2.fleet = q.get('fleet');
+    return json(res, 200, state.wave2);
+  }
+  if (p === '/__dev/wave4') {
+    if (RAILS_MODES.includes(q.get('rails'))) state.wave4.rails = q.get('rails');
+    if (DECISION_MODES.includes(q.get('decisions'))) state.wave4.decisions = q.get('decisions');
+    if (FLARE_MODES.includes(q.get('flare'))) state.seven.flareMode = q.get('flare');
+    return json(res, 200, { ...state.wave4, flare: state.seven.flareMode || 'default' });
   }
   if (p === '/__dev/dd') {
     const do_ = q.get('do');

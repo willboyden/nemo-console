@@ -10,6 +10,8 @@
 //            --only <regex on case id or route> (repeatable; ANDed with --filter)
 //            --allow-diff-routes <file>   (lines "METHOD /template", a case id, or "stub:<system_id>" = every case whose
 //                                          request path names only that system: diffs there do not fail the run)
+//                                          A `pinned-diffs.json` next to that file pins cases to their EXACT expected
+//                                          diffs (lib/compare.mjs pinMismatch): any other difference there still fails.
 //            --keep (keep the temp dirs)  --tmp <dir> (parent of the temp dirs; default os.tmpdir())  --list
 //            --dump (also write out/dump-<scenario>.json: A's normalised answer, argv and upstream calls per case)
 //
@@ -18,13 +20,13 @@
 // number kinds kept, SSE as a list of events, Prometheus text as normalised lines, other text exactly), the argv of
 // every fake CLI the backend ran during the case and the requests it sent to the fake upstreams. The normalisation
 // rules are all in corpus/normalise.mjs. Writes parity/out/report.json; exit 0 only when nothing differs.
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { startBackend, stopBackend, readCliLog, runCli } from './lib/servers.mjs';
 import { send, parseSse } from './lib/http.mjs';
 import { parse, pointer, toPlain, stringify } from './lib/json.mjs';
-import { compareTrees, comparePlain, compareSets } from './lib/compare.mjs';
+import { compareTrees, comparePlain, compareSets, pinMismatch } from './lib/compare.mjs';
 import { PARITY } from './lib/seed.mjs';
 import { makeNormaliser, isCachedArgv, isCachedHttp, OWN_VERSION_ROUTES, cspForCompare } from './corpus/normalise.mjs';
 import { SCENARIOS, casesFor } from './corpus/index.mjs';
@@ -96,8 +98,25 @@ function readAllowList(file) {
       : [],
   );
   const stubs = new Set([...lines].filter((l) => l.startsWith('stub:')).map((l) => l.slice(5)));
+  // pinned cases: {pins: [{case, deviation, diffs: [{path, a?, b?}]}]} (see pinMismatch)
+  const pins = new Map();
+  const pinFile = file ? join(dirname(file), 'pinned-diffs.json') : null;
+  if (pinFile && existsSync(pinFile)) {
+    for (const p of JSON.parse(readFileSync(pinFile, 'utf8')).pins) {
+      if (!/^D-\d+(, D-\d+)*$/.test(String(p.deviation))) throw new Error(`pinned-diffs.json: ${p.case}: deviation must be D-<n>[, D-<n>...]`);
+      if (lines.has(p.case)) throw new Error(`pinned-diffs.json: ${p.case} is also allowed whole in ${file}`);
+      pins.set(p.case, p);
+    }
+  }
   return {
     has: (x) => lines.has(x),
+    /** null when the case is not pinned; else `{ok, why}`: ok when its diffs are exactly the pinned ones. */
+    pinned: (id, diffs) => {
+      const p = pins.get(id);
+      if (!p) return null;
+      const why = pinMismatch(diffs, p);
+      return { ok: why === null, why: why ?? `pinned (${p.deviation})` };
+    },
     /** A case on a per-system route of a system that is still a stub: every request path of the case names only
      *  systems listed as `stub:<id>` (the id decoded as the router decodes it; unknown or mis-cased ids never match). */
     stubCase: (c) => {
@@ -199,7 +218,7 @@ function analyse(res, norm, route) {
   const out = { status: res.status, error: res.error ? res.error.replace(/\d{2,5}/g, '<n>') : undefined, headers: {} };
   for (const h of CHOSEN_HEADERS) {
     if (res.headers[h] === undefined) continue;
-    const v = h === 'content-security-policy' ? cspForCompare(norm.kind, res.headers[h]) : res.headers[h]; // csp-wasm (D-34)
+    const v = h === 'content-security-policy' ? cspForCompare(norm.kind, res.headers[h]) : res.headers[h]; // csp-wasm (D-44)
     out.headers[h] = h === 'etag' || h === 'last-modified' ? v : norm.str(v);
   }
   const ct = (res.headers['content-type'] || '').toLowerCase();
@@ -499,8 +518,11 @@ async function runScenario(name, opts, allow, report) {
         });
       }
       if (fallbackNote.length) diffs.push({ path: 'captured variable (an earlier answer differed)', a: fallbackNote.join('; '), b: '' });
-      if (diffs.length) out.diffs.push({ id: c.id, route: c.route, allowed: allow.has(c.route) || allow.has(c.id) || allow.stubCase(c), diffs });
-      else out.equal++;
+      if (diffs.length) {
+        const pin = allow.pinned(c.id, diffs);
+        const allowed = pin ? pin.ok : allow.has(c.route) || allow.has(c.id) || allow.stubCase(c);
+        out.diffs.push({ id: c.id, route: c.route, allowed, ...(pin ? { pin: pin.why } : {}), diffs });
+      } else out.equal++;
       if (process.env.PARITY_PROGRESS) process.stderr.write(`${diffs.length ? 'x' : '.'}`);
     }
     // over the whole run: the distinct argv / upstream requests (cached probes included) must be the same. Built from
@@ -560,7 +582,7 @@ async function main() {
     for (const [route, ds] of [...byRoute].sort()) {
       console.log(`  ${ds[0].allowed ? '[allowed] ' : ''}${route}: ${ds.length} case(s)`);
       for (const d of ds.slice(0, 4)) {
-        console.log(`    - ${d.id}`);
+        console.log(`    - ${d.id}${d.pin ? `  [${d.pin}]` : ''}`);
         for (const x of d.diffs.slice(0, 3))
           console.log(
             `        ${x.path}: A=${String(typeof x.a === 'string' ? x.a : JSON.stringify(x.a)).slice(0, 160)} | B=${String(typeof x.b === 'string' ? x.b : JSON.stringify(x.b)).slice(0, 160)}`,

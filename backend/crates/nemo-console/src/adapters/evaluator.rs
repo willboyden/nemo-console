@@ -432,6 +432,10 @@ impl Inner {
                 for k in ["bench", "status", "metric", "score", "samples"] {
                     o.insert(k.into(), rr.get(k).cloned().unwrap_or(Value::Null));
                 }
+                // addendum 9.15 (PORTING.md D-41): the numbers `results()` already keeps, finite numbers only
+                for k in ["ci_low", "ci_high", "tokens", "elapsed_s", "failure_rate"] {
+                    o.insert(k.into(), runviz_number(rr.get(k)));
+                }
                 Value::Object(o)
             })
             .collect();
@@ -1390,4 +1394,14 @@ async fn run_task(me: Arc<Inner>, run_dir: PathBuf, argv: Vec<String>, meta: Map
 /// Build the adapter (Python: registry `build_adapter`; the evaluator has no configure hook).
 pub fn build(ctx: &AdapterContext, _cfg: &Settings) -> Result<AdapterRef, AdapterError> {
     Ok(Arc::new(EvaluatorAdapter::new(ctx.clone())))
+}
+
+/// A finite JSON number as it is (an integer stays an integer), anything else null (addendum 9.15 event keys).
+fn runviz_number(v: Option<&Value>) -> Value {
+    match v {
+        Some(Value::Number(n)) if n.as_f64().is_some_and(f64::is_finite) => {
+            Value::Number(n.clone())
+        }
+        _ => Value::Null,
+    }
 }

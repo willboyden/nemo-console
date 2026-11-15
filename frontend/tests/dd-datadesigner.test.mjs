@@ -81,7 +81,7 @@ test('records/files endpoints: server-driven pagination, unknown run 404, files 
   assert.equal(b.total, 120);
   assert.equal(b.rows.length, 50);
   assert.equal(b.truncated, false);
-  assert.deepEqual(b.columns, ['id', 'subject', 'priority', 'assignee', 'created_at', 'body']);
+  assert.deepEqual(b.columns, ['id', 'subject', 'priority', 'assignee', 'created_at', 'body', 'csat', 'escalated', 'tags']);
   assert.equal(b.rows[0].id, 1);
   assert.equal(typeof b.rows[0].body, 'string');
   b = await (await get(`/systems/datadesigner/runs/${id}/records?limit=50&offset=100`)).json();

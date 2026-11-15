@@ -50,11 +50,11 @@ export const RULES = [
   {
     id: 'csp-wasm',
     kind: 'header',
-    why: "deviation D-34 (ADR-0022): the Rust backend's script-src also allows WebAssembly compilation; exactly the token ` 'wasm-unsafe-eval'` after `script-src 'self'` is removed from the Rust side's content-security-policy, nothing else, and never on the Python side",
+    why: "deviation D-44 (ADR-0022): the Rust backend's script-src also allows WebAssembly compilation; exactly the token ` 'wasm-unsafe-eval'` after `script-src 'self'` is removed from the Rust side's content-security-policy, nothing else, and never on the Python side",
   },
 ];
 
-/** csp-wasm (D-34): the one documented CSP difference, removed from the Rust side only. */
+/** csp-wasm (D-44): the one documented CSP difference, removed from the Rust side only. */
 export const CSP_WASM = "script-src 'self' 'wasm-unsafe-eval';";
 export function cspForCompare(kind, value) {
   if (kind !== 'rust' || typeof value !== 'string') return value;

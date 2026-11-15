@@ -101,8 +101,8 @@ pub fn panic_line(info: &std::panic::PanicHookInfo<'_>) -> String {
     )
 }
 
-/// Lifespan start: user dirs, the first-start admin key, credential values registered with the redactor, and the
-/// metrics poller (when `background_tasks`).
+/// Lifespan start: user dirs, the first-start admin key, credential values registered with the redactor, and (when
+/// `background_tasks`) the adapters' standing tasks and the metrics poller.
 pub fn startup(state: &Arc<AppState>) -> Option<tokio::task::JoinHandle<()>> {
     ensure_user_dirs(&state.cfg);
     match state.auth.ensure_bootstrap_key() {
@@ -118,13 +118,17 @@ pub fn startup(state: &Arc<AppState>) -> Option<tokio::task::JoinHandle<()>> {
     }
     register_secret_env(&state.cfg.capable_probe_key_env, &state.environ);
     if state.cfg.background_tasks {
+        // an adapter's own standing task (the Relay trace index, addendum 9.12)
+        for a in state.adapters.values() {
+            a.start_background();
+        }
         let poller = Arc::clone(&state.metrics);
         return Some(tokio::spawn(poller.run()));
     }
     None
 }
 
-/// Lifespan end: stop the poller, flush rollups, stop the active probe.
+/// Lifespan end: stop the poller, flush rollups, stop the active probe and the adapters' standing tasks.
 pub async fn shutdown(state: &Arc<AppState>, poller: Option<tokio::task::JoinHandle<()>>) {
     if let Some(p) = poller {
         p.abort();
@@ -133,6 +137,9 @@ pub async fn shutdown(state: &Arc<AppState>, poller: Option<tokio::task::JoinHan
     state.metrics.flush();
     if let Some(probe) = &state.capable_probe {
         probe.aclose().await;
+    }
+    for a in state.adapters.values() {
+        a.stop_background().await;
     }
 }
 

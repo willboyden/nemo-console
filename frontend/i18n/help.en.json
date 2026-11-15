@@ -96,7 +96,7 @@
     ]
   },
   "audit": {
-    "lead": "The Audit log is the append-only record of every change made through the console: when, which key, which system, which action or file, the parameters (redacted) and the HTTP status. Chat text and file bodies are never stored. Only admins can read it.",
+    "lead": "The Audit log is the append-only record of every change made through the console: when, which key, which system, which action or file, the parameters (redacted) and the HTTP status. Chat text and file bodies are never stored. Only admins can read it. The Summary tab adds the picture over time: actions per day by system, who acted on what, and the errors.",
     "steps": [
       {
         "title": "Sign in with an admin key",
@@ -104,8 +104,13 @@
         "cmd": "nemo-console mint-key admin"
       },
       {
-        "title": "Pick a system",
-        "body": "The Log tab shows the newest 200 calls. The filter narrows them to one system; Refresh reloads.",
+        "title": "Read the summary",
+        "body": "The Summary tab counts the audited actions of the last 24 hours, 7 days or 30 days: stacked bars per day by system, a matrix of actor by system (click a cell to open the log for that actor and system) and an error timeline. The counts are aggregates only: no parameters and no paths.",
+        "tab": "summary"
+      },
+      {
+        "title": "Filter the log",
+        "body": "The Log tab shows the newest 200 calls. Narrow them by time range (a preset, or your own UTC from and to), by actor (the key's alias), by status (succeeded or error) and by system. The filters live in the address, so a filtered log can be shared; Clear filters starts again, Refresh reloads.",
         "tab": "log"
       },
       {
@@ -216,6 +221,11 @@
         "tab": "routing"
       },
       {
+        "title": "See where decisions go and how each model does",
+        "body": "The Decisions and models tab draws the decision flow (which source decided, which target took the request), a row per model with latency, error rate, cache hits and largest context, a heatmap of calls per model over time, fallbacks with the routing overhead, and what clients got. Pick a window; the route and model filters narrow the cards and live in the URL.",
+        "tab": "flow"
+      },
+      {
         "title": "Send a test request",
         "body": "The Playground sends one chat request through a route you pick and streams the answer; nothing is stored. It needs an admin key, and the router credential named on the Settings page must be set in the console's environment.",
         "tab": "playground"
@@ -269,12 +279,27 @@
     ]
   },
   "relay": {
-    "lead": "NeMo Relay is the agent gateway: it forwards agent traffic to the router under a plugin policy and records ATOF events and ATIF trajectories. It runs as a systemd user unit (default `nemo-relay-gateway.service`). Here you read its health, policy findings and trace counts, edit its routes and run diagnostics.",
+    "lead": "NeMo Relay is the agent gateway: it forwards agent traffic to the router under a plugin policy and records ATOF events and ATIF trajectories. It runs as a systemd user unit (default `nemo-relay-gateway.service`). Here you read its health, policy findings and trace counts, edit its routes and run diagnostics.\n\nThe Traces, Sessions, Analytics, Trajectories and Capture tabs read what Relay captured on this machine, read-only: every request as a trace you can open, sessions, charts, agent trajectories and a list of what is switched on.",
     "steps": [
       {
         "title": "Check the gateway",
         "body": "The Status tab shows the plugin attestation, the unit and gateway state, and how many ATOF files and ATIF trajectories exist. Any answer under 500 from the gateway's `/health` counts as up; a 404 is expected.",
         "tab": "status"
+      },
+      {
+        "title": "Look at a trace",
+        "body": "The Traces tab lists what Relay captured, newest first, with a window picker (1h to all) and filters. Open one to see a waterfall of its spans, an icicle of the same tree and a span table; select a span for its details. Drag on the time axis of the waterfall to zoom.",
+        "tab": "traces"
+      },
+      {
+        "title": "Follow a conversation",
+        "body": "Sessions groups traces that belong to one client conversation and charts how the context grew from call to call and how much of it came from the cache. Analytics shows rates, latency, tokens, models, tools, routing and errors for the window; Trajectories lists the agent step-by-step records.",
+        "tab": "sessions"
+      },
+      {
+        "title": "Check what is being recorded",
+        "body": "The Capture tab answers how much of what Relay can record is switched on here: the capture levels, what is configured, what the console last saw written, and a to-do list of what you are missing.",
+        "tab": "capture"
       },
       {
         "title": "Bring it back if it is down",
@@ -322,6 +347,48 @@
       {
         "q": "A problem says `binary 'nemo-relay' not found on PATH`.",
         "a": "The console searches `PATH` plus `NEMO_CONSOLE_EXTRA_BIN_DIRS` (default `~/.local/bin`). Add the directory that holds `nemo-relay` to that setting and restart the console."
+      },
+      {
+        "q": "The Traces, Sessions or Analytics tab is empty. Why?",
+        "a": "The strip at the top says why. `empty` means the console found no ATOF files from Relay: turn the ATOF exporter on and send a request. `disabled` means the console was started with `NEMO_CONSOLE_RELAY_TRACE_INDEX=off`; set it to `on` in the environment or in `~/.config/nemo-console/env` and restart the console. `building` means the index is still reading the files and the lists are partial. With the window set to `24h` and the anchor to `Now`, an idle lab shows nothing: use `Latest event` or a wider window.",
+        "tab": "capture"
+      },
+      {
+        "q": "What is the difference between Latest event and Now?",
+        "a": "Both pick where the time window ends. `Latest event` ends it at the newest captured event, so a quiet lab still shows its last activity. `Now` ends it at the current time, so it only shows what happened recently."
+      },
+      {
+        "q": "How do I read the prompt and response of a span?",
+        "a": "Select the span and press Load content in its details panel. The console reads the text from the capture file only then, scrubs secrets and never keeps it. Nothing is fetched while you browse or while the page refreshes."
+      },
+      {
+        "q": "Why is Load content refused?",
+        "a": "`content_disabled` means this console runs with `NEMO_CONSOLE_RELAY_TRACE_CONTENT=off`; set it to `admin` in the environment or in `~/.config/nemo-console/env` and restart the console. Any other 403 is the role check: content needs an admin key (the key button in the top bar). `content_unavailable` means the capture file that held the span was rotated or deleted."
+      },
+      {
+        "q": "Does the console store my prompts?",
+        "a": "No. The trace index keeps metadata only (ids, names, timings, token counts) in memory and writes nothing to disk. Prompts and responses are read on demand from Relay's own files, for an admin, and are not logged or audited."
+      },
+      {
+        "q": "What does a hatched bar in the waterfall mean?",
+        "a": "The span has started but no end event was captured yet, so it is still running or the capture stopped. The hatched tail runs to the end of the trace so far. A red outline and a cross mark an error; diamonds on a row are routing decisions."
+      },
+      {
+        "q": "How is a session identified?",
+        "a": "By the session id the client sent in its first request (for example an `x-session-id` style header), else by Relay's own session id, else by the trace itself. Traces with the same key are shown together on the Sessions tab."
+      },
+      {
+        "q": "What do the states on the Capture tab mean?",
+        "a": "`active`: something was written in the last 15 minutes. `idle`: within 7 days. `stale`: longer ago. `off`: not configured. `not observable`: the level leaves this machine (OpenTelemetry exports), so the console can only show how it is configured. An endpoint on this machine is probed once a minute and shows `reachable` or `not reachable`; any other endpoint shows `not checked`."
+      },
+      {
+        "q": "What does \"once per trace endpoint\" mean on the Capture tab?",
+        "a": "OpenTelemetry logs and metrics with no endpoint of their own are sent to every trace endpoint. With one trace endpoint that is fine. With several, every log record and metric is exported once per endpoint, so a backend that receives from more than one of them sees duplicates. The row warns about it; give the signal its own endpoint, or keep a single trace endpoint.",
+        "tab": "capture"
+      },
+      {
+        "q": "What does `complete request on every call` mean?",
+        "a": "The payload setting `full` writes the complete request, every message, on every call, so a long conversation is stored again and again. `newest turn only` (`turn_filtered`) writes just the newest turn of each request: smaller files, but earlier messages are not in the capture."
       }
     ]
   },
@@ -332,6 +399,16 @@
         "title": "Look at the state",
         "body": "The Status tab shows the frontend and worker containers and, while serving, requests, in-flight requests, TTFT and ITL p95 and KV cache use. \"Loading\" (degraded) during a cold start is normal; it takes several minutes.",
         "tab": "status"
+      },
+      {
+        "title": "Read the latency and load",
+        "body": "Under the numbers the Status tab shows latency for the chosen window (quantiles of the requests that finished since the previous poll) next to the since-start figures, where the time goes (queue, prefill, decode), load, output tokens per second, the prefix-cache hit ratio and the engine capacity.",
+        "tab": "status"
+      },
+      {
+        "title": "Read the log",
+        "body": "The Events tab lists the frontend and worker log lines with filters for level, component and text. Before a line leaves the server the console replaces secret-looking patterns in it; the redaction is pattern-based, so treat the lines as sensitive.",
+        "tab": "events"
       },
       {
         "title": "Run the preflight",
@@ -391,6 +468,11 @@
       {
         "q": "Why do Dynamo events look like log lines?",
         "a": "They are redacted container log lines, not an allowlist of metadata fields as for the other systems. Secrets are redacted, but treat them as raw logs."
+      },
+      {
+        "q": "Why is \"for the window\" latency empty?",
+        "a": "It is computed from the requests that finished since the previous poll. When no request finished there is no figure, and the console shows that instead of a latency of 0. The since-start quantiles stay.",
+        "tab": "status"
       }
     ]
   },
@@ -454,6 +536,16 @@
       {
         "q": "How many reports are kept?",
         "a": "The newest 200 runs. Each `run.json` holds metadata and redacted error text only; the reports sit next to it in the console state directory."
+      },
+      {
+        "q": "How do I compare two runs?",
+        "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
+        "tab": "history"
+      },
+      {
+        "q": "What do the charts under the run history show?",
+        "a": "A heatmap of each validator's status and worst finding severity over the latest Tier 1 runs, the rubric scores and quality dimensions of the selected run, and the Tier 3 skill lift as a with-and-without dumbbell per agent and metric. The charts show numbers only, never finding or criterion text. A skill can influence its own Tier 3 score, so read a high lift as evidence, not proof.",
+        "tab": "history"
       }
     ]
   },
@@ -512,6 +604,16 @@
       {
         "q": "How many runs are kept?",
         "a": "The newest 100, in the console state directory."
+      },
+      {
+        "q": "How do I compare two runs?",
+        "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
+        "tab": "history"
+      },
+      {
+        "q": "What does the column profile show?",
+        "a": "Select a run on the Runs tab: the type mix of each column, how many values are missing, how many differ, and the spread of text lengths and numbers. These figures are the same for everyone. The most frequent values of a column are model-written content, so only an admin sees them. A run timeline above the list shows how long each run took and how many records it wrote against how many were requested.",
+        "tab": "runs"
       }
     ]
   },
@@ -578,8 +680,13 @@
       },
       {
         "title": "Read the GPUs",
-        "body": "Further down the Status tab: temperature, power, utilisation and memory per GPU, a trend chart per value for the chosen window, and a collapsed table with every value.",
+        "body": "Further down the Status tab: a trend chart per value for the chosen window, then per-GPU cards: whether the GPU is really busy (utilisation next to graphics, tensor and DRAM activity), memory used / reserved / free, power against its limit, energy over the window, throttle violations, remapped rows, and a timeline of XID errors and diagnostics (select a mark for details). A collapsed table holds every value.",
         "tab": "status"
+      },
+      {
+        "title": "Compare every host",
+        "body": "The Fleet tab is a heatmap of every GPU of every host the lab's Prometheus scrapes: pick utilisation, temperature, power or memory and a window. A hatched cell is a gap in the data, not a low value.",
+        "tab": "fleet"
       },
       {
         "title": "Run a diagnostic",
@@ -618,6 +725,36 @@
       {
         "q": "Why is there no version for the other hosts' exporters?",
         "a": "Prometheus does not expose it, and the console does not guess. Only this host's exporter version is checked."
+      },
+      {
+        "q": "How do I compare two runs?",
+        "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
+        "tab": "history"
+      },
+      {
+        "q": "A chart shows only four GPUs. Where are the others?",
+        "a": "A chart with more than four lines starts with the four busiest. Under the chart, toggle the others on or off, or press Busiest 4 to go back. Your choice is kept in the page address.",
+        "tab": "status"
+      },
+      {
+        "q": "Why does a chart show a rate instead of a total?",
+        "a": "A counter only ever goes up, so its chart shows how fast it grows: per second, or per minute when that is under 0.1 a second. When a counter restarts from zero the chart starts a new line there instead of drawing a spike or a negative rate.",
+        "tab": "status"
+      },
+      {
+        "q": "What does Show max do on the charts?",
+        "a": "It draws the highest value in each time bucket as a thin line and a band above the average, so a short spike the average hides stays visible. It needs a window of an hour or longer; the 15-minute view already shows every sample. Counters drawn as rates have no max.",
+        "tab": "status"
+      },
+      {
+        "q": "Why can a GPU read 100% utilisation and still be idle?",
+        "a": "DCGM utilisation is the share of time any kernel was running. One small kernel running all the time reads 100%. The Status tab puts the graphics, tensor and DRAM activity beside it; when those stay low the card says it looks busier than it is.",
+        "tab": "status"
+      },
+      {
+        "q": "What is a hatched cell in the fleet heatmap?",
+        "a": "No data: the host was down, the exporter did not answer, or Prometheus has no sample for that moment. It is never drawn as zero.",
+        "tab": "fleet"
       }
     ]
   },
@@ -666,6 +803,21 @@
       {
         "q": "The numbers look far worse than usual.",
         "a": "The engine may be busy with other traffic, or the run hit the AIPerf key's own rate limits on the router. Compare with a quiet moment and a smaller preset before drawing conclusions."
+      },
+      {
+        "q": "How do I compare two runs?",
+        "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
+        "tab": "history"
+      },
+      {
+        "q": "What does Show max do on the charts?",
+        "a": "It draws the highest value in each time bucket as a thin line and a band above the average, so a short spike the average hides stays visible. It needs a window of an hour or longer; the 15-minute view already shows every sample. Counters drawn as rates have no max.",
+        "tab": "status"
+      },
+      {
+        "q": "What do the charts under the run history show?",
+        "a": "Select a run on the History tab (Shift+click a second one to overlay it): you get the percentile curves of time to first token, inter-token latency and request latency, the HTTP phases of a request, and, for run A, every request laid out by worker with its error codes. A scatter of throughput against latency covers all the runs shown. Every number includes the router hop, because AIPerf calls the router, not the engine.",
+        "tab": "history"
       }
     ]
   },
@@ -719,6 +871,11 @@
       {
         "q": "Are probe prompts stored?",
         "a": "No. Events carry names and verdicts only, never prompt text."
+      },
+      {
+        "q": "How do I compare two runs?",
+        "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
+        "tab": "history"
       }
     ]
   },
@@ -771,6 +928,16 @@
       {
         "q": "My run is `interrupted`.",
         "a": "The console stopped while it ran. Start it again."
+      },
+      {
+        "q": "How do I compare two runs?",
+        "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
+        "tab": "history"
+      },
+      {
+        "q": "What do the charts under the run history show?",
+        "a": "Scores with the confidence intervals NeMo Evaluator reports for run A (and B if you pick one), a model by benchmark matrix of the newest score for each pair, cost (tokens or time) against score, and failure rates. A run recorded before these figures existed shows a bar without a whisker and is left out of the cost chart; a missing figure is never drawn as zero.",
+        "tab": "history"
       }
     ]
   },
@@ -822,6 +989,21 @@
       {
         "q": "Why are there no numbers?",
         "a": "Every number comes from a finished job's `run.json`; nothing is estimated. With no job yet only the job count (0) is shown."
+      },
+      {
+        "q": "How do I compare two runs?",
+        "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
+        "tab": "history"
+      },
+      {
+        "q": "What does Show max do on the charts?",
+        "a": "It draws the highest value in each time bucket as a thin line and a band above the average, so a short spike the average hides stays visible. It needs a window of an hour or longer; the 15-minute view already shows every sample. Counters drawn as rates have no max.",
+        "tab": "status"
+      },
+      {
+        "q": "What do the charts under the run history show?",
+        "a": "How long a running job has run against what a finished job of the same method takes (a job that runs much longer than that is flagged), a timeline of job durations coloured by method with the verdict as an outline, glyph and word, and the base model size against the output size with the ratio.",
+        "tab": "history"
       }
     ]
   },
@@ -873,6 +1055,21 @@
       {
         "q": "Where do the reward numbers come from?",
         "a": "From the console's own `run.json` of a finished smoke run, parsed from the wrapper's printed result. Nothing is estimated."
+      },
+      {
+        "q": "How do I compare two runs?",
+        "a": "Open the History tab. Click a run on the verdict timeline (or a point on the trend) to select it as run A, then Shift+click another to compare it as run B. The table shows each number for both runs, the difference, and whether B is better or worse. A dash means that run did not record the number; it is never read as zero. The selection is kept in the page address, so you can share the link.",
+        "tab": "history"
+      },
+      {
+        "q": "What does Show max do on the charts?",
+        "a": "It draws the highest value in each time bucket as a thin line and a band above the average, so a short spike the average hides stays visible. It needs a window of an hour or longer; the 15-minute view already shows every sample. Counters drawn as rates have no max.",
+        "tab": "status"
+      },
+      {
+        "q": "What do the charts under the run history show?",
+        "a": "The reward of every task in the selected run (and in a second run, overlaid), how many rollouts of each run produced a reward, and the mean reward and pass@1 by model across the runs shown. A run that recorded no per-task rewards has no bars.",
+        "tab": "history"
       }
     ]
   },
@@ -941,6 +1138,16 @@
       {
         "q": "A target says it could not be checked.",
         "a": "Its host did not answer ssh within a few seconds. The page keeps showing the last report and checks again about once a minute; the launcher never waits long on a dead host."
+      },
+      {
+        "q": "Why does a chart show a rate instead of a total?",
+        "a": "A counter only ever goes up, so its chart shows how fast it grows: per second, or per minute when that is under 0.1 a second. When a counter restarts from zero the chart starts a new line there instead of drawing a spike or a negative rate.",
+        "tab": "status"
+      },
+      {
+        "q": "What does Show max do on the charts?",
+        "a": "It draws the highest value in each time bucket as a thin line and a band above the average, so a short spike the average hides stays visible. It needs a window of an hour or longer; the 15-minute view already shows every sample. Counters drawn as rates have no max.",
+        "tab": "status"
       }
     ]
   }

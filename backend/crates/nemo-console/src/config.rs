@@ -385,6 +385,21 @@ pub struct Settings {
     pub capable_probe_timeout_s: f64,
     pub capable_probe_retry_s: f64,
     pub capable_probe_key_env: String,
+    // the Relay trace explorer (addendum 9.12); environment or the user env file only, read at start
+    /// `on` | `off`: off = no index task, the explorer routes answer an empty index with `state = "disabled"`.
+    pub relay_trace_index: String,
+    /// `admin` | `off`: off = the two content routes answer 403 `content_disabled` for everyone.
+    pub relay_trace_content: String,
+    /// Uncompressed bytes of never-seen capture files the index may read (newest file first).
+    pub relay_trace_scan_bytes: i64,
+    /// Spans kept; past it the oldest traces are dropped first.
+    pub relay_trace_max_spans: i64,
+    /// A longer capture line is skipped and counted.
+    pub relay_trace_max_line_bytes: i64,
+    /// A larger trajectory file is skipped and counted.
+    pub relay_trace_max_atif_bytes: i64,
+    /// Seconds between two passes of the index task.
+    pub relay_trace_refresh_s: f64,
 }
 
 /// Field kinds, used for parsing env strings (complex fields take JSON) and nested `__` keys.
@@ -459,6 +474,13 @@ const FIELDS: &[(&str, Kind)] = &[
     ("capable_probe_timeout_s", Kind::Scalar),
     ("capable_probe_retry_s", Kind::Scalar),
     ("capable_probe_key_env", Kind::Scalar),
+    ("relay_trace_index", Kind::Scalar),
+    ("relay_trace_content", Kind::Scalar),
+    ("relay_trace_scan_bytes", Kind::Scalar),
+    ("relay_trace_max_spans", Kind::Scalar),
+    ("relay_trace_max_line_bytes", Kind::Scalar),
+    ("relay_trace_max_atif_bytes", Kind::Scalar),
+    ("relay_trace_refresh_s", Kind::Scalar),
 ];
 
 /// Startup failure, rendered like pydantic's `ValidationError` / pydantic-settings' `SettingsError`.
@@ -840,6 +862,38 @@ impl Settings {
                     .to_owned())
             }
         });
+        let relay_trace_index = v.literal("relay_trace_index", "on", &["on", "off"]);
+        let relay_trace_content = v.literal("relay_trace_content", "admin", &["admin", "off"]);
+        let relay_trace_scan_bytes = v.int(
+            "relay_trace_scan_bytes",
+            crate::adapters::relay_traces::DEFAULT_SCAN_BYTES,
+            Some(16 * 1024 * 1024),
+            Some(256 * 1024 * 1024 * 1024),
+        );
+        let relay_trace_max_spans = v.int(
+            "relay_trace_max_spans",
+            crate::adapters::relay_traces::DEFAULT_MAX_SPANS,
+            Some(1000),
+            Some(5_000_000),
+        );
+        let relay_trace_max_line_bytes = v.int(
+            "relay_trace_max_line_bytes",
+            crate::adapters::relay_traces::DEFAULT_MAX_LINE_BYTES,
+            Some(64 * 1024),
+            Some(1024 * 1024 * 1024),
+        );
+        let relay_trace_max_atif_bytes = v.int(
+            "relay_trace_max_atif_bytes",
+            crate::adapters::relay_traces::DEFAULT_MAX_ATIF_BYTES,
+            Some(64 * 1024),
+            Some(16 * 1024 * 1024 * 1024),
+        );
+        let relay_trace_refresh_s = v.float(
+            "relay_trace_refresh_s",
+            crate::adapters::relay_traces::DEFAULT_REFRESH_S,
+            Some(2.0),
+            Some(3600.0),
+        );
         if !errs.is_empty() {
             return Err(SettingsError::Invalid(errs));
         }
@@ -906,6 +960,13 @@ impl Settings {
             capable_probe_timeout_s,
             capable_probe_retry_s,
             capable_probe_key_env,
+            relay_trace_index,
+            relay_trace_content,
+            relay_trace_scan_bytes,
+            relay_trace_max_spans,
+            relay_trace_max_line_bytes,
+            relay_trace_max_atif_bytes,
+            relay_trace_refresh_s,
         })
     }
 
@@ -999,6 +1060,14 @@ impl Settings {
                 .join("share")
                 .join("nemo-relay")
                 .join("atif"),
+        );
+        // optional: trajectories other agents wrote next to Relay's own (`<agent>/atif/*.json`), addendum 9.12
+        put(
+            "relay_hermes_dir",
+            home.join(".local")
+                .join("share")
+                .join("nemo-relay")
+                .join("hermes"),
         );
         put("dynamo_dir", lay("dynamo"));
         put("dynamo_compose", lay("dynamo").join("docker-compose.yml"));
@@ -1128,6 +1197,27 @@ impl Fields<'_> {
                 self.fail(k, kind, msg);
                 default.to_owned()
             }),
+        }
+    }
+
+    /// One of a fixed set of words (pydantic `Literal[...]`, with its message).
+    fn literal(&mut self, k: &str, default: &str, choices: &[&str]) -> String {
+        let Some(v) = self.get(k) else {
+            return default.to_owned();
+        };
+        match v {
+            Value::String(s) if choices.contains(&s.as_str()) => s.clone(),
+            _ => {
+                let quoted: Vec<String> = choices.iter().map(|c| str_repr(c)).collect();
+                let expected = match quoted.split_last() {
+                    Some((last, rest)) if !rest.is_empty() => {
+                        format!("{} or {last}", rest.join(", "))
+                    }
+                    _ => quoted.join(""),
+                };
+                self.fail(k, "literal_error", format!("Input should be {expected}"));
+                default.to_owned()
+            }
         }
     }
 

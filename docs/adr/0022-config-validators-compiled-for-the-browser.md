@@ -50,7 +50,7 @@ Rust.
    `frontend-test` depend on it; CI installs `wasm-bindgen-cli@0.2.129` and runs it.
 7. **CSP.** `script-src 'self' 'wasm-unsafe-eval'`: the page may compile WebAssembly from its own origin, and
    nothing else changes. `eval`, `new Function` and inline script stay forbidden (`static-guards.test.mjs` also
-   scans the generated glue). For the parity harness this is deviation D-34, removed from the Rust side's header
+   scans the generated glue). For the parity harness this is deviation D-44, removed from the Rust side's header
    by one documented normalisation rule.
 
 What stays the same: the API contract v1 (no route, no field), the server as the authority (ADR-0019 section 3),

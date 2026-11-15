@@ -5,6 +5,53 @@ implemented / verified-live / unverified defined in the README.
 
 ## [Unreleased]
 
+### Added
+
+- **Charts, wave 4** (addendum 9.16). **NeMo Guardrails:** each config's rail pipeline (input rails, main model, output
+  rails, streaming; flow names only, from `/systems/guardrails/rails`), a probe matrix over check runs (expected vs
+  actual, latency) and an availability strip. **OpenShell:** sandbox lifecycle lanes from lifecycle events that now
+  survive restarts (`<state>/openshell/events.jsonl`, bounded), sandbox counts by phase, and a policy-decision timeline
+  per sandbox (`/systems/openshell/decisions`: category, verdict, kind and target only). **NVIDIA Flare:** a target
+  grid and per-target rates, token mix and queue. **Overview:** a sparkline per system tile and problems by severity.
+  **Audit:** a Summary tab (actions per day by system, an actor x system matrix, errors over time;
+  `/audit/summary`) and time, actor and status filters on the log.
+- **Charts, wave 3** (addendum 9.15), as run details driven by the run history. **AIPerf:** p1..p99 curves of TTFT,
+  ITL and latency with an A/B overlay, the HTTP phases, a per-request histogram, worker swim lanes and error codes, and
+  throughput against latency over runs (new numbers-only routes `/runs/{id}/summary` and `/runs/{id}/requests`).
+  **NeMo Evaluator:** scores with confidence intervals, a model x benchmark heatmap, cost against score and failure
+  rates. **NeMo Gym:** the per-task reward distribution and trends by model. **Model Optimizer:** a job timeline, base
+  vs output size and the age of a running job. **SkillEvaluator:** a validator x run heatmap, rubric bars and the
+  Tier 3 lift per agent and metric (no finding or model text). **Data Designer:** a run timeline and a column profile
+  (`/runs/{id}/profile`): types, missing share, distinct values and text lengths for everyone; numeric ranges and the
+  most frequent values (real cell values) for admins only.
+- **Charts, wave 2** (addendum 9.14). **GPU telemetry:** a Fleet tab with a heatmap of every GPU of every DCGM host
+  Prometheus scrapes (utilisation, temperature, power or memory over 1 h, 24 h or 7 d; gaps drawn as gaps), from a new
+  route that builds its queries from a fixed table; on Status, an "is it really busy?" card per GPU (utilisation next
+  to graphics, tensor and DRAM activity), memory used / reserved / free, power against its limit, energy over the
+  window, throttling by reason, remapped rows and an XID / diagnostics timeline. **Switchyard:** a "Decisions and
+  models" tab (decision flow, per-model latency, error rate, cache hit and largest context, a call-rate heatmap,
+  fallbacks, routing overhead, client outcomes) and route / model filters on the Routing tab. **Dynamo:** latency for
+  the chosen window (not only since start), a queue / prefill / decode breakdown, load, output tokens per second,
+  prefix-cache hit ratio, capacity, spec-decode acceptance by position, and an Events tab for the containers' logs.
+- **Charts for every system, wave 1** (addendum 9.13): a Rust-only route `/systems/{id}/metrics/series` returns up to
+  12 metric keys in one call (each split into at most 32 series by label on request), for 15 minutes, 1 hour, 24 hours or 7 days, with each bucket's maximum next to its average
+  and, on request, one series per label (per GPU, per model). Generic system pages use it: counters are drawn as
+  rates, a 7-day window and a "show max" toggle are offered, and a chart with more than four lines gets a picker.
+- **Run history** on the eight run-based pages (AIPerf, NeMo Evaluator, NeMo Gym, Model Optimizer, SkillEvaluator,
+  Data Designer, DCGM diagnostics, NeMo Guardrails checks): a verdict timeline, a trend of any recorded number across
+  runs grouped by model, preset or script, an A/B compare of two runs with the difference and a better/worse mark
+  (judged only between successful runs, except where the verdict is the measured outcome), and filters; the
+  selection is kept in the URL.
+- **Relay trace explorer** (addendum 9.12, ADR-0021): five new tabs on the Relay page, read from the files NeMo Relay
+  writes on this machine. **Traces**: a filterable list (client, model, kind, status, duration) and a trace view with a
+  waterfall, an icicle and a span table sharing one selection, the routing decision, tokens, first chunk and chunk
+  cadence. **Sessions**: every trace of an agent session on one timeline and the context growth call by call (cached
+  and uncached input, output). **Analytics**: totals, time series, latency and token histograms, an activity heatmap,
+  routing flows, tools, errors and a duration/output scatter. **Trajectories**: Relay's ATIF trajectories and the
+  Hermes agents' own, step by step. **Capture**: which of Relay's capture levels are switched on, what was observed for
+  each, and what a reader of the traces is missing. Charts are dependency-free SVG; the CSP is unchanged.
+- Seven settings `RELAY_TRACE_*` (OPERATIONS), and the optional `relay_hermes_dir` path.
+
 ### Changed
 
 - **The config editor runs the backend's own validators in the browser** (ADR-0022). The live checks used to be a
@@ -32,9 +79,28 @@ implemented / verified-live / unverified defined in the README.
 
 - The CSP's `script-src` is `'self' 'wasm-unsafe-eval'` (was `'self'`): the page may compile WebAssembly from its own
   origin; `eval`, `new Function` and inline script stay forbidden. `.wasm` files are served as `application/wasm`.
-  For the parity harness this is deviation D-34 (one documented normalisation rule).
+  For the parity harness this is deviation D-44 (one documented normalisation rule).
+- Data Designer run records (the generated rows) are admin-only; viewers keep the run list, run details and the
+  artifact list. Parity deviation D-37.
 - **rusqlite 0.41.0** (was 0.40.2) brings the bundled SQLite of `libsqlite3-sys` 0.39.1, which fixes CVE-2026-119375
   (RUSTSEC-2026-0459). Both versions pass the 14-day crate-age cooldown on their own; no code change was needed.
+- The index and every viewer route carry metadata only; a test plants a marker in every payload field of the
+  fixtures and proves it never reaches a viewer route (and does reach the admin content route). Content routes are
+  admin-only, can be switched off, scrub secrets (the adapter's patterns plus secret-named `key: value` pairs, which
+  also catches credentials inside tool results; linear-time regexes only), return an exact allowlist of headers with
+  identifier-shaped values, and stay under 4 MiB. No route takes a path; a trajectory whose file or directories changed
+  since indexing is refused. Index memory is bounded by `relay_trace_max_spans` (spans, marks, ids and labels) and the
+  scan budget counts decompressed bytes, whatever a gzip trailer claims.
+- The Relay adapter's shared secret scrubber runs on the linear `regex` engine (it was a backtracking engine that
+  could give up on long runs of blank lines and leave the rest of a text unredacted); its output is checked against
+  the old pattern as an oracle.
+
+### Performance
+
+- Content of a span in a gzip-rotated capture is read through seek points recorded while the index scans the file
+  (about every 32 MiB of decompressed output, at most 160 per file, about 33 KB each), so one read decompresses at
+  most one spacing. Measured 2026-11-14 on the real 1 GB `relay-events.jsonl.3.gz` with a debug build: the deepest
+  spans went from up to 54 s to under 1 s.
 
 ## [0.10.0] - 2026-11-05
 

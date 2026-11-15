@@ -8,15 +8,19 @@ use regex::Regex;
 use serde_json::{Map, Value, json};
 
 use crate::adapters::base::AdapterError;
+use crate::adapters::dcgm::{FLEET_DEFAULT_WINDOW, FLEET_METRICS, FLEET_WINDOWS};
 use crate::api::bodies::{V, query_int, query_str};
 use crate::api::{
-    Req, adapter_failure, dep_adapter, dep_viewer, json_response, ok_json, validation_error,
+    Req, adapter_failure, dep_adapter, dep_admin, dep_viewer, json_response, ok_json,
+    validation_error,
 };
 use crate::config::VERSION;
-use crate::domain::models::{Health, now_ts};
+use crate::domain::models::{Health, SystemId, now_ts};
 use crate::services::errors::ApiError;
 use crate::services::events::event_stream;
-use crate::services::metrics::{WINDOWS, window_span};
+use crate::services::metrics::{
+    SERIES_MAX_KEYS, SERIES_WINDOWS, WINDOWS, series_window, window_span,
+};
 use crate::services::pyfmt::list_repr;
 use crate::services::status::clean_event;
 
@@ -119,6 +123,137 @@ pub async fn metrics_history(req: Req) -> Result<Response<Body>, ApiError> {
     Ok(json_response(200, &json!({"key": key, "points": points})))
 }
 
+/// The longest `keys` parameter of the series route: 12 keys of the longest form `KEY_RE` accepts (64 characters of
+/// name, 200 of labels and the two braces) and the 11 commas between them. Longer is refused before it is split.
+pub const SERIES_KEYS_MAX_LEN: usize = SERIES_MAX_KEYS * (64 + 2 + 200) + (SERIES_MAX_KEYS - 1);
+
+/// Split the `keys` parameter of the series route on the commas outside braces (a labelled key such as
+/// `sy.tokens{kind=prompt,model=x}` keeps its own commas).
+fn split_keys(raw: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut depth = 0usize;
+    for c in raw.chars() {
+        match c {
+            '{' => depth += 1,
+            '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                out.push(std::mem::take(&mut cur));
+                continue;
+            }
+            _ => {}
+        }
+        cur.push(c);
+    }
+    out.push(cur);
+    out
+}
+
+/// `GET /systems/{id}/metrics/series` (addendum 9.13, Rust-only, PORTING.md D-36): several keys over 15m (the
+/// ring) / 1h / 24h (1-minute rollups) / 7d (10-minute buckets), `[ts, avg, max]` points, optionally one line per
+/// label variant.
+pub async fn metrics_series(req: Req) -> Result<Response<Body>, ApiError> {
+    let a = dep_adapter(&req)?;
+    dep_viewer(&req)?;
+    let window = query_str(&req.query, "window").unwrap_or_else(|| "1h".to_owned());
+    if series_window(&window).is_none() {
+        let mut names: Vec<&str> = SERIES_WINDOWS.iter().map(|(k, _, _)| *k).collect();
+        names.sort_unstable();
+        return Err(ApiError::new(
+            422,
+            "invalid_request",
+            format!("window must be one of {}", list_repr(&names)),
+        ));
+    }
+    let raw = query_str(&req.query, "keys").unwrap_or_default();
+    if raw.len() > SERIES_KEYS_MAX_LEN {
+        return Err(ApiError::new(
+            422,
+            "invalid_request",
+            format!("keys is longer than {SERIES_KEYS_MAX_LEN} characters"),
+        ));
+    }
+    let keys = split_keys(&raw);
+    if keys.len() > SERIES_MAX_KEYS {
+        return Err(ApiError::new(
+            422,
+            "invalid_request",
+            format!("at most {SERIES_MAX_KEYS} keys"),
+        ));
+    }
+    if !keys.iter().all(|k| KEY_RE.is_match(k)) {
+        return Err(ApiError::new(
+            422,
+            "invalid_request",
+            "keys must be a comma-separated list of canonical metric keys, e.g. sy.requests_total",
+        ));
+    }
+    let split = match query_str(&req.query, "split").as_deref() {
+        None | Some("0") => false,
+        Some("1") => true,
+        Some(_) => {
+            return Err(ApiError::new(
+                422,
+                "invalid_request",
+                "split must be 0 or 1",
+            ));
+        }
+    };
+    // SQLite reads: on the blocking pool, never on a runtime worker
+    let metrics = Arc::clone(&req.state.metrics);
+    let system = a.id();
+    let answer =
+        tokio::task::spawn_blocking(move || metrics.series(system, &window, &keys, split, None))
+            .await
+            .map_err(|_| ApiError::internal())?;
+    ok_json(&answer)
+}
+
+/// `GET /systems/dcgm/fleet?metric=util|temp|power|fb_used&window=1h|24h|7d` (addendum 9.14, Rust-only, PORTING.md
+/// D-38): per-GPU history of every DCGM host Prometheus scrapes. Every other system answers 404 (after the role
+/// check, before the query is looked at); an unknown metric or window is 422 `invalid_request`. The adapter builds
+/// the PromQL from its fixed table; nothing from the request reaches the expression but the table key.
+pub async fn dcgm_fleet(req: Req) -> Result<Response<Body>, ApiError> {
+    let a = dep_adapter(&req)?;
+    dep_viewer(&req)?;
+    if a.id() != SystemId::Dcgm {
+        return Err(ApiError::new(
+            404,
+            "not_found",
+            "no such endpoint for this system",
+        ));
+    }
+    let metric = query_str(&req.query, "metric").unwrap_or_default();
+    if !FLEET_METRICS.iter().any(|(m, _, _, _)| *m == metric) {
+        let mut names: Vec<&str> = FLEET_METRICS.iter().map(|(m, _, _, _)| *m).collect();
+        names.sort_unstable();
+        return Err(ApiError::new(
+            422,
+            "invalid_request",
+            format!("metric must be one of {}", list_repr(&names)),
+        ));
+    }
+    let window = query_str(&req.query, "window").unwrap_or_else(|| FLEET_DEFAULT_WINDOW.to_owned());
+    if !FLEET_WINDOWS.iter().any(|(w, _, _)| *w == window) {
+        let names: Vec<&str> = FLEET_WINDOWS.iter().map(|(w, _, _)| *w).collect();
+        return Err(ApiError::new(
+            422,
+            "invalid_request",
+            format!("window must be one of {}", list_repr(&names)),
+        ));
+    }
+    match a.dcgm_fleet(&metric, &window).await {
+        Ok(v) => Ok(json_response(200, &v)),
+        Err(AdapterError::NoSuchEndpoint) => Err(ApiError::new(
+            404,
+            "not_found",
+            "no such endpoint for this system",
+        )),
+        Err(AdapterError::Invalid(m)) => Err(ApiError::new(422, "invalid_request", m)),
+        Err(e) => Err(adapter_failure(&e)),
+    }
+}
+
 pub async fn events(req: Req) -> Result<Response<Body>, ApiError> {
     let a = dep_adapter(&req)?;
     dep_viewer(&req)?;
@@ -201,10 +336,12 @@ fn run_error(e: &AdapterError) -> ApiError {
     }
 }
 
-/// Data Designer run records (addendum 9.7): records.jsonl only, values capped by the adapter.
+/// Data Designer run records (addendum 9.7): records.jsonl only, values capped by the adapter. Admin-only since
+/// addendum 9.13 (model-written content, like Relay span content; PORTING.md D-37: the Python reference served it
+/// to viewers).
 pub async fn run_records(req: Req) -> Result<Response<Body>, ApiError> {
     let a = dep_adapter(&req)?;
-    dep_viewer(&req)?;
+    dep_admin(&req)?;
     let (limit, offset) = run_query(&req, 50)?;
     match a.records_page(req.param("run_id"), limit, offset).await {
         Ok(v) => Ok(json_response(200, &v)),
@@ -220,4 +357,115 @@ pub async fn run_files(req: Req) -> Result<Response<Body>, ApiError> {
         Ok(v) => Ok(json_response(200, &v)),
         Err(e) => Err(run_error(&e)),
     }
+}
+
+/// The answer of a per-run visualisation route (addendum 9.15): 404 for a system without the route, 404 "unknown
+/// run", 422 `invalid_request` for a run id the adapter's run-id check refuses.
+fn viz_answer(r: Result<Value, AdapterError>) -> Result<Response<Body>, ApiError> {
+    match r {
+        Ok(v) => Ok(json_response(200, &v)),
+        Err(AdapterError::Invalid(m)) => Err(ApiError::new(422, "invalid_request", m)),
+        Err(e) => Err(run_error(&e)),
+    }
+}
+
+/// `GET /systems/{id}/runs/{run_id}/summary` (addendum 9.15, Rust-only, PORTING.md D-40): numbers and identifiers of
+/// one stored AIPerf or SkillEvaluator run. Every other system answers 404.
+pub async fn run_summary(req: Req) -> Result<Response<Body>, ApiError> {
+    let a = dep_adapter(&req)?;
+    dep_viewer(&req)?;
+    viz_answer(a.run_summary(req.param("run_id")).await)
+}
+
+/// `GET /systems/aiperf/runs/{run_id}/requests` (addendum 9.15, D-40): per-request numbers of one stored AIPerf run
+/// (at most 5000 rows, evenly sampled; no request, conversation or worker id, no error text).
+pub async fn run_requests(req: Req) -> Result<Response<Body>, ApiError> {
+    let a = dep_adapter(&req)?;
+    dep_viewer(&req)?;
+    viz_answer(a.run_requests(req.param("run_id")).await)
+}
+
+/// `GET /systems/datadesigner/runs/{run_id}/profile` (addendum 9.15, D-40): per-column aggregates of one stored Data
+/// Designer run. The top values are model-written content (addendum 9.13): only an admin gets them; a viewer's
+/// answer has `top: null` everywhere and `values_hidden: true`.
+pub async fn run_profile(req: Req) -> Result<Response<Body>, ApiError> {
+    let a = dep_adapter(&req)?;
+    dep_viewer(&req)?;
+    let admin = req.principal.role == crate::services::auth::PrincipalRole::Admin;
+    viz_answer(a.run_profile(req.param("run_id"), admin).await)
+}
+
+/// The answer of a wave-4 visualisation route (addendum 9.16): 404 for a system without the route.
+fn wave4_answer(r: Result<Value, AdapterError>, unknown: &str) -> Result<Response<Body>, ApiError> {
+    match r {
+        Ok(v) => Ok(json_response(200, &v)),
+        Err(AdapterError::NoSuchEndpoint) => Err(ApiError::new(
+            404,
+            "not_found",
+            "no such endpoint for this system",
+        )),
+        Err(AdapterError::UnknownId(_)) => Err(ApiError::new(404, "not_found", unknown)),
+        Err(AdapterError::Invalid(m)) => Err(ApiError::new(422, "invalid_request", m)),
+        Err(e) => Err(adapter_failure(&e)),
+    }
+}
+
+fn only(a: &crate::adapters::base::AdapterRef, system: SystemId) -> Result<(), ApiError> {
+    if a.id() == system {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            404,
+            "not_found",
+            "no such endpoint for this system",
+        ))
+    }
+}
+
+/// `GET /systems/guardrails/rails` (addendum 9.16, Rust-only, PORTING.md D-42): the rail pipeline of each config
+/// (flow names, main model, streaming). Every other system answers 404.
+pub async fn guardrails_rails(req: Req) -> Result<Response<Body>, ApiError> {
+    let a = dep_adapter(&req)?;
+    dep_viewer(&req)?;
+    only(&a, SystemId::Guardrails)?;
+    wave4_answer(a.rails().await, "not found")
+}
+
+/// A sandbox name (= the OpenShell adapter's `NAME_RE`).
+#[allow(clippy::expect_used)]
+static SANDBOX_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z").expect("static regex"));
+
+/// `GET /systems/openshell/decisions?sandbox=<name>&limit=<1..2000>` (addendum 9.16, D-42): the policy decisions in
+/// one live sandbox's log. A malformed or missing `sandbox`, a bad `limit`: 422; a name not in the live list: 404.
+pub async fn openshell_decisions(req: Req) -> Result<Response<Body>, ApiError> {
+    use crate::adapters::openshell_viz::{DECISIONS_DEFAULT_LIMIT, DECISIONS_MAX_ROWS};
+    let a = dep_adapter(&req)?;
+    dep_viewer(&req)?;
+    only(&a, SystemId::Openshell)?;
+    let sandbox = query_str(&req.query, "sandbox").unwrap_or_default();
+    if !SANDBOX_RE.is_match(&sandbox) {
+        return Err(ApiError::new(
+            422,
+            "invalid_request",
+            "sandbox must be a sandbox name (letters, digits and . _ -, starting with a letter or digit)",
+        ));
+    }
+    let mut v = V::new();
+    let limit = query_int(
+        &mut v,
+        &req.query,
+        "limit",
+        i64::try_from(DECISIONS_DEFAULT_LIMIT).unwrap_or(500),
+        Some(1),
+        Some(i64::try_from(DECISIONS_MAX_ROWS).unwrap_or(2000)),
+    );
+    let Some(limit) = limit.filter(|_| v.errors.is_empty()) else {
+        return Err(validation_error(&v.errors));
+    };
+    wave4_answer(
+        a.decisions(&sandbox, usize::try_from(limit).unwrap_or(1))
+            .await,
+        "unknown sandbox",
+    )
 }

@@ -159,3 +159,24 @@ test('after a 401 nothing is sent with the same key until the hold is cleared; /
   await assert.rejects(api.overview());
   assert.equal(sent.length, 6, 'clearAuthHold lets the same key be tried again (signing in again with it)');
 });
+
+test('series: one GET per chart with keys joined by commas, the window and an explicit split (0 or 1); no CSRF header on a GET', async () => {
+  const calls = [];
+  const api = createClient({
+    fetchImpl: async (u, o) => {
+      calls.push({ u, o });
+      return res(200, { window: '7d', step_s: 600, from: 0, to: 1, series: [], truncated: false });
+    },
+  });
+  await api.series('dcgm', { keys: ['dcgm.gpu_util', 'dcgm.power_w'], window: '7d', split: true });
+  await api.series('flare', { keys: 'flare.generated_total' });
+  assert.equal(calls[0].u, '/api/v1/systems/dcgm/metrics/series?keys=dcgm.gpu_util%2Cdcgm.power_w&window=7d&split=1');
+  assert.equal(calls[1].u, '/api/v1/systems/flare/metrics/series?keys=flare.generated_total&window=1h&split=0', 'defaults: 1h, unsplit');
+  assert.equal(calls[0].o.method, 'GET');
+  assert.equal(calls[0].o.headers['X-Console'], undefined);
+  const e = await createClient({ fetchImpl: async () => res(422, { error: { code: 'invalid_request', message: 'window: bad' } }) })
+    .series('dcgm', { keys: 'a.b', window: '2h' })
+    .catch((x) => x);
+  assert.equal(e.status, 422);
+  assert.equal(e.code, 'invalid_request');
+});

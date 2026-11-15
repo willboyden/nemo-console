@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parse, stringify, pointer } from '../lib/json.mjs';
-import { compareTrees, compareSets } from '../lib/compare.mjs';
+import { compareTrees, compareSets, pinMismatch } from '../lib/compare.mjs';
 import { parseSse } from '../lib/http.mjs';
 import { makeNormaliser, isCachedArgv, OWN_VERSION_ROUTES, cspForCompare } from '../corpus/normalise.mjs';
 import { respond, initialWorld } from '../fakes/cli-table.mjs';
@@ -118,11 +118,62 @@ test("normalise: the console's own version is replaced only on the routes that r
   assert.ok(!OWN_VERSION_ROUTES.has('GET /api/v1/systems/{system_id}/status'));
 });
 
-test("normalise csp-wasm (D-34): only the Rust side's 'wasm-unsafe-eval' token goes, nothing else", () => {
+test("normalise csp-wasm (D-44): only the Rust side's 'wasm-unsafe-eval' token goes, nothing else", () => {
   const py = "default-src 'none'; script-src 'self'; style-src 'self'; frame-ancestors 'none'";
   const rs = "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; frame-ancestors 'none'";
   assert.equal(cspForCompare('rust', rs), py);
   assert.equal(cspForCompare('python', rs), rs); // the Python side keeps it: a Python CSP with the token still differs
   assert.equal(cspForCompare('rust', rs.replace("style-src 'self'", "style-src 'self' 'unsafe-inline'")), py.replace("style-src 'self'", "style-src 'self' 'unsafe-inline'"));
   assert.equal(cspForCompare('rust', "script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval';"), "script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval';");
+});
+
+test('pinned diffs: exactly the pinned paths and values, nothing more or less', () => {
+  const pin = {
+    diffs: [
+      { path: 'status', a: 200, b: 403 },
+      { path: 'body/x', a: '(absent)' },
+    ],
+  };
+  assert.equal(
+    pinMismatch(
+      [
+        { path: 'status', a: 200, b: 403 },
+        { path: 'body/x', a: '(absent)', b: 'anything' },
+      ],
+      pin,
+    ),
+    null,
+  );
+  assert.match(
+    pinMismatch(
+      [
+        { path: 'status', a: 200, b: 404 },
+        { path: 'body/x', a: '(absent)', b: 1 },
+      ],
+      pin,
+    ),
+    /B differs/,
+  );
+  assert.match(pinMismatch([{ path: 'status', a: 200, b: 403 }], pin), /no longer seen: body\/x/);
+  assert.match(
+    pinMismatch(
+      [
+        { path: 'status', a: 200, b: 403 },
+        { path: 'body/x', a: '(absent)' },
+        { path: 'body/y', a: 1, b: 2 },
+      ],
+      pin,
+    ),
+    /unpinned difference at body\/y/,
+  );
+  assert.match(
+    pinMismatch(
+      [
+        { path: 'body/x', a: 1, b: 2 },
+        { path: 'status', a: 200, b: 403 },
+      ],
+      pin,
+    ),
+    /A differs/,
+  );
 });

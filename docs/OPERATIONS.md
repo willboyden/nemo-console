@@ -68,6 +68,13 @@ Names read by `backend/crates/nemo-console/src/config.rs` (each is `NEMO_CONSOLE
 | `SWITCHYARD_IMAGE` | `ai-lab-switchyard:0.3.0` | Image the routes validator's `--dry-run` uses when the container cannot be inspected. |
 | `SWITCHYARD_LOG_PATH` | `/var/log/switchyard/routing.jsonl` | The routing log inside the container (absolute; read with `docker exec ... tail`). |
 | `RELAY_UNIT` | `nemo-relay-gateway.service` | systemd `--user` unit of the Relay gateway (must end in `.service`). |
+| `RELAY_TRACE_INDEX` | `on` | The Relay trace explorer's index (addendum 9.12): one background task reads Relay's ATOF files (`~/.local/share/nemo-relay/atof`, plain and gzip rotations), its ATIF trajectories (`.../atif`) and the Hermes trajectories (`.../hermes/<agent>/atif`) into memory, metadata only. `off`: no task; the list views answer empty with `state: "disabled"`, the detail views 404. |
+| `RELAY_TRACE_CONTENT` | `admin` | Who may open a span's or step's content (prompts, completions, tool arguments and results, read from the source line on demand, secrets scrubbed, sizes capped): `admin`, or `off` for nobody (403 `content_disabled`). |
+| `RELAY_TRACE_SCAN_BYTES` | `17179869184` (16 GiB) | Uncompressed bytes one full index build may read, newest file first (16 MiB to 256 GiB); older files beyond it are `partial` or `skipped`. |
+| `RELAY_TRACE_MAX_SPANS` | `300000` | Spans kept in memory (1000 to 5000000); the oldest traces are dropped first and the index says `truncated`. |
+| `RELAY_TRACE_MAX_LINE_BYTES` | `67108864` (64 MiB) | A longer ATOF line is skipped and counted (64 KiB to 1 GiB). |
+| `RELAY_TRACE_MAX_ATIF_BYTES` | `268435456` (256 MiB) | A larger trajectory file is skipped and counted (64 KiB to 16 GiB). |
+| `RELAY_TRACE_REFRESH_S` | `5` | Seconds between incremental refreshes (2 to 3600). Measured 2026-11-14 on 2.4 GiB of real captures (7 files, 565k events) first build about 15 s with the release build (about 80 s debug), then refreshes of a few ms, about 100 MB resident. |
 | `DYNAMO_COMPOSE_PROJECT` | `ai-lab-dynamo` | Compose project label the Dynamo containers must carry. |
 | `DYNAMO_SERVICES` | `frontend dynamo-frontend`, `worker dynamo-worker`, `mocker dynamo-mocker`, `sv_frontend dynamo-sv-frontend` | JSON object role -> compose service; single roles merge over the defaults (`NEMO_CONSOLE_DYNAMO_SERVICES__WORKER=...`). The generated override and the GPU parse use these names. |
 | `DYNAMO_CONTAINERS` | `ai-lab-dynamo-dynamo-<service>-1` per role | JSON object role -> container name; merges like `DYNAMO_SERVICES`; each role needs its own name. |
@@ -216,7 +223,8 @@ curl -s -X POST -H "Authorization: Bearer $KEY" -H 'X-Console: 1' -H 'Content-Ty
   browser admin. `GET /api/v1/health` returns `role` (`admin`, `viewer`, `public`) and a `trust_notice` that is `null` unless you
   opted in to loopback trust and it was forced off (then it says why).
 - **Roles:** `viewer` may `GET`. Everything else, including "safe" actions such as `preflight` (they are POSTs) and
-  the playground, needs `admin`. `GET /api/v1/audit` is admin-only.
+  the playground, needs `admin`. A few `GET`s are admin-only too: `/api/v1/audit`, Relay span and step content, and
+  Data Designer run records (the generated rows).
 - **Revoking a key:** there is no command in v0.1.0. Stop the console and delete the row from the `keys` table in
   `<STATE_DIR>/console.db` with `sqlite3`.
 - **Audit and denials:** the audit table (`GET /api/v1/audit`, admin) records authenticated, authorised mutating calls
@@ -228,7 +236,9 @@ curl -s -X POST -H "Authorization: Bearer $KEY" -H 'X-Console: 1' -H 'Content-Ty
 
 State directory contents: `console.db` (+ `-wal`, `-shm`): keys (hashed), append-only audit, config revisions
 (full previous file bytes), 1-minute metric rollups (8 days), settings and saved Dynamo parameters;
-`bootstrap-admin.key` / `minted-*.key`; `dynamo/override.yml` (0600) once parameters are applied.
+`bootstrap-admin.key` / `minted-*.key`; `dynamo/override.yml` (0600) once parameters are applied;
+`openshell/events.jsonl` (0600, at most about 6000 lines): the OpenShell sandbox lifecycle events, so the lanes survive a restart
+(addendum 9.16; safe to delete, the history restarts).
 
 **Back up the console:** stop it, copy the directory (or, running, `sqlite3 console.db ".backup /path/backup.db"`).
 Treat the copy as sensitive (it holds config revisions, key hashes and audit paths). Losing it loses rollback
@@ -290,7 +300,7 @@ shows is prefixed with the code words for security rejections.
 | 403 `cross origin: cross-origin requests are not allowed` | An unsafe request carried an `Origin` (or `Origin: null`) that is not the console's own host. | Use the console UI from its own origin; strip `Origin` in scripts. |
 | 403 `csrf header required: send the header 'X-Console: 1' on non-GET requests` | Missing `X-Console: 1`. Required even with a bearer. | `curl -H 'X-Console: 1' ...` |
 | 401 `unauthorized: a valid bearer API key is required` | No or wrong key. Unless you opted in with `TRUST_LOOPBACK=true` every caller needs one, and loopback trust is refused when `X-Forwarded-For`/`Forwarded` is present, the host is non-loopback or `ALLOWED_HOSTS` is set. A wrong key never falls back to loopback trust. Only `/health` is open. | Send `Authorization: Bearer <key>`; mint one (section 4). |
-| 403 `forbidden` "this key has the viewer role (read-only)" / "this action needs the admin role" | A viewer key on a POST/PUT, on the playground, or on the audit list. | Use an admin key. |
+| 403 `forbidden` "this key has the viewer role (read-only)" / "this action needs the admin role" | A viewer key on a POST/PUT, on the playground, on the audit list, on Relay span/step content or on Data Designer run records. | Use an admin key. |
 | 413 `payload_too_large` | Body over 1 MiB (also detected while streaming a chunked body). | Send less. |
 | 404 `not_found` "no such file" | Path outside the static allowlist (including `/docs`; Swagger is disabled). | Use the UI at `/`. |
 | Browser shows a blank page, console errors mention CSP | A local edit added an inline script/style or external origin. | The `static-guards` frontend test finds these: `make frontend-test`. |

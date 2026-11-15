@@ -68,6 +68,8 @@ pub const DEFAULT_MODEL: &str = "glm-5.3-flash-fp4-local";
 pub const MAX_LIMIT: i64 = 20;
 pub const MAX_RUN_BYTES: u64 = 64 * 1024;
 pub const MAX_REWARDS: usize = 50;
+/// The most rewards a `gym.smoke` event carries (addendum 9.15).
+pub const EVENT_MAX_REWARDS: usize = 20;
 pub const LAB_WRAPPER: &str = "clients/nemo-gym/gym-local";
 
 static RUN_ID_RE: LazyLock<Option<Regex>> =
@@ -511,6 +513,19 @@ impl Inner {
                 }
             }
         }
+        // addendum 9.15 (PORTING.md D-41): the per-task rewards run.json keeps, at most EVENT_MAX_REWARDS finite
+        // numbers; null when the run recorded none
+        let rewards = meta.get("rewards").and_then(Value::as_array).map(|r| {
+            r.iter()
+                .filter_map(|v| wsb::json_num(Some(v)).filter(|x| x.is_finite()))
+                .take(EVENT_MAX_REWARDS)
+                .map(|x| json!(x))
+                .collect::<Vec<_>>()
+        });
+        data.insert(
+            "rewards".to_owned(),
+            rewards.map_or(Value::Null, Value::Array),
+        );
         SystemEvent {
             ts: wsb::json_num(meta.get("ts")).unwrap_or(0.0),
             system: SystemId::Gym,

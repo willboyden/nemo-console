@@ -50,7 +50,8 @@ tag `python-final`, which must name commit `aa2f810` (`parity/ref.mjs` refuses a
 uses that commit when the tag has not been fetched). `node parity/ref.mjs` extracts that revision's `backend/` into
 `parity/.ref/` and builds its venv once with `uv sync --frozen`; set `PARITY_UV_ONLINE=1` for that first install on a
 new machine (PyPI). A deliberate behaviour change is recorded as a deviation in `backend/PORTING.md` section 13 and,
-when the harness sees it, in `parity/allow-diffs.txt`.
+when the harness sees it, in `parity/allow-diffs.txt` (a whole case) or `parity/pinned-diffs.json` (the exact
+diff lines, preferred: any other difference in that case still fails).
 
 ## 5. Bumping the Rust toolchain
 

@@ -25,7 +25,7 @@ additive only, appended to §9 and relayed to affected agents immediately.
 | 7 | Trust/policy files (`~/.config/nemo-relay/plugins.toml`, `config.toml`) are **read-only** in v1 | They hold the signature-enforcement key and attestation mode; editing is a human security decision (AGENTS.md rule 4) |
 | 8 | Dynamo tunables = structured param catalog → generated compose **override** in the console state dir; repo compose never edited | Verified against the pinned image `--help`; reversible by deleting one file |
 | 9 | Dynamo lifecycle by `docker compose` directly, **never `scripts/use-model.sh`** | use-model.sh also stops the other card's engine (measured 2026-09-23). Preflight names what shares the card and requires explicit confirm |
-| 10 | Events carry **metadata only** (route, tier, tokens, latency, event type) — never prompt/completion text | ATOF/ATIF and routing logs can contain conversation content |
+| 10 | Events carry **metadata only** (route, tier, tokens, latency, event type) — never prompt/completion text | ATOF/ATIF and routing logs can contain conversation content. The one exception is the Relay trace explorer's two admin-only content routes (addendum 9.12, ADR-0021) |
 | 11 | Playground chat is proxied, streamed, **never persisted**; credential resolved server-side by env NAME | Secrets never touch disk or the browser |
 | 12 | SQLite (WAL) for metrics rollups, config revisions, audit, settings; SSE for live streams | Single node, zero ops |
 | 13 | Zero-build frontend with zero runtime npm dependencies (ES modules + web components, SVG charts), strict CSP | No supply-chain surface (same as Engine Console) |
@@ -312,7 +312,7 @@ nothing above changes. Contract: feature "datadesigner" (2026-10-23).
   `confirm:true`; admin; `data-designer-local check-models <script>` — the CLI's own --help requires a config
   source argument, so the action takes the script enum), `show_config` (safe; read-only provider/alias dump).
 * API (additive, viewer GET, headers/auth identical to the other observe endpoints):
-  `GET /api/v1/systems/datadesigner/runs/{run_id}/records?limit=50&offset=0` → `{run_id, total, columns, rows,
+  `GET /api/v1/systems/datadesigner/runs/{run_id}/records?limit=50&offset=0` (admin-only since 9.13) → `{run_id, total, columns, rows,
   truncated}` — reads records.jsonl ONLY (never parquet); values pass through as-is, no string over 2 KiB
   (truncated, no marker fields); total from run.json's records when present, else the counted lines. A live create
   run answers an empty records page (not 404). `GET /api/v1/systems/datadesigner/runs/{run_id}/files` →
@@ -466,3 +466,457 @@ Additive; defaults reproduce the earlier constants exactly.
   `switchyard.tier.capable_broken` (warn, degrades Switchyard, summary prefix "capable tier not answering"),
   `switchyard.tier.probe_unconfigured` and `switchyard.tier.probe_denied` (info). Only the verdict and a status are kept
   and logged.
+
+**9.12 (2026-11-14): Relay trace explorer — sessions, traces, trajectories, analytics and capture coverage.**
+Additive; no existing route, model or metric key changes. Read-only views over what NeMo Relay captured on this
+machine. Decision record: ADR 0021.
+
+* **Sources** (all under `ctx.paths`, read-only, `O_NOFOLLOW`, regular files only, contained in their directory):
+  `relay_atof_dir` (files matching `^.+\.jsonl(\.\d+)?(\.gz)?$`: the live file, plain rotations, gzip rotations),
+  `relay_atif_dir` (`*.json`), `relay_plugins` (already known), and the new optional `relay_hermes_dir`
+  (`~/.local/share/nemo-relay/hermes`; trajectories in `<agent>/atif/*.json`, `<agent>` matching
+  `^[a-z][a-z0-9-]{0,40}$`). A missing directory is an empty source, never an error.
+* **Trace index** (`adapters/relay_traces.rs`, new): built and refreshed by ONE background task, never on the request
+  path; requests read a snapshot. In memory only (nothing is written to disk). It pairs ATOF `scope` start/end events by
+  `uuid` into spans, keeps non-chunk `mark` events, and groups spans into traces (a trace = a root span and its
+  descendants; the root is the span whose parent is null or not in the index) and sessions (below).
+  * It stores **metadata only**: identifier-shaped strings (the adapter's `IDENT` rule), numbers, booleans and
+    timestamps. No prompt, message, tool argument, tool result or header value (except the allowlisted identifiers
+    named below) is ever held in the index. Content is read from the source file on demand (see the content route).
+  * `llm.chunk` marks are not stored one by one: per parent LLM span the index keeps their count, the largest gap
+    between two chunks and at most 64 evenly thinned offsets (ms from the span start).
+  * Unpaired scopes are data: a start without an end is a span with `status = "open"`; an end without a start is
+    kept with `start_ts = null`.
+  * Refresh is incremental: per file it remembers (device, inode, size, a hash of the first 4 KiB) and the consumed
+    offset; a file that grew is read from that offset, a file that shrank (logrotate `copytruncate`) is re-read from
+    0, a rotated copy with a known first-4-KiB hash and size is not read again. gzip rotations are stream-decompressed.
+  * Bounds (settings, environment or the user env file only, validated at start):
+    `relay_trace_scan_bytes` (uncompressed bytes one full build may read, newest file first; default 16 GiB, min 16
+    MiB, max 256 GiB), `relay_trace_max_spans` (default 300000, 1000..5000000; the oldest traces are dropped first),
+    `relay_trace_max_line_bytes` (default 64 MiB, 64 KiB..1 GiB; a longer line is skipped and counted),
+    `relay_trace_max_atif_bytes` (default 256 MiB per trajectory file), `relay_trace_refresh_s` (default 5, 2..3600),
+    `relay_trace_index` (`on` default | `off`: no task; see "Index off" below),
+    `relay_trace_content` (`admin` default | `off`).
+  * Session key of a trace, first match: the client session id taken from the first LLM request's headers
+    (`x-opencode-session-id`, `x-session-id`, `x-claude-code-session-id`), else Relay's `metadata.session_id`, else the
+    trace id. `client` is derived from the `user-agent` product token (`opencode`, `claude-cli`, …; identifier-shaped,
+    else null). `kind` is `metadata.agent_kind` (`gateway`, `claude-code`, `codex`, …; else `unknown`).
+* **Routes** (all `GET`, under `/api/v1/systems/{id}`; any system other than `relay` answers 404 `not_found`, as the
+  Data Designer run routes do). `viewer` unless stated. Timestamps are epoch seconds (float). Absent data is `null`,
+  never 0. Common query: `window` = `1h|6h|24h|7d|30d|all` (default `24h`), `anchor` = `latest|now` (default
+  `latest`: the window ends at the newest indexed event, so an idle lab still shows its last activity); every answer
+  that takes them returns `range: {from, to}`. Invalid query values are 422 `invalid_request`.
+
+  | Path | Returns |
+  |---|---|
+  | `/traces/index` | `IndexState` |
+  | `/traces` | `{range, total, offset, limit, items: TraceSummary[], facets}`. Filters: `client`, `model`, `kind`, `status` (`ok\|error\|open`), `session`, `q` (substring of trace id, session key, model or root name; <= 80 chars of the `IDENT` alphabet), `min_ms`. `sort` = `start\|duration\|tokens\|llm_calls` (default `start`), `order` = `asc\|desc` (default `desc`), `limit` 1..200 (default 50), `offset` |
+  | `/traces/{trace_id}` | `{trace: TraceSummary, spans: Span[], marks: Mark[], truncated}` (at most 5000 spans and 5000 marks, earliest first); 404 unknown, 422 if the id is not UUID-shaped |
+  | `/traces/{trace_id}/spans/{span_id}/content` | **admin**. `SpanContent`. 403 `content_disabled` when `relay_trace_content = off`; 404 unknown; 409 `content_unavailable` when the source line can no longer be read. Query: `max_chars` 1000..200000 (default 32768, per text), `messages` = `tail\|head` (default `tail`) |
+  | `/sessions` | `{range, total, offset, limit, items: SessionSummary[]}`. Filters `client`, `kind`, `q`; `sort` = `last\|traces\|tokens` (default `last`), `order`, `limit`, `offset` |
+  | `/sessions/{session_key}` | `{session: SessionSummary, traces: TraceSummary[] (<= 500, by start), calls: SessionCall[] (<= 2000, by time)}`; 404 unknown |
+  | `/analytics` | `Analytics` for the window; filters `client`, `model`, `kind`; `buckets` 12..240 (default 60) |
+  | `/trajectories` | `{total, offset, limit, items: TrajectorySummary[]}`; filters `source`, `q`, `trace` (a trace id: only the trajectories linked to that trace; 422 if not UUID-shaped); newest first; `limit` 1..200 (default 50) |
+  | `/trajectories/{id}` | `{trajectory: TrajectorySummary, steps: TrajectoryStep[] (<= 2000), truncated}`; query `source` when the id is not unique; 404 unknown (or when its `<agent>` or `atif` directory is now a symlink); 409 `content_unavailable` when the file changed since it was indexed (device, inode, size or mtime) |
+  | `/trajectories/{id}/steps/{step_id}/content` | **admin**, same switch and errors as span content; takes `source` like the route above. `StepContent` |
+  | `/capture` | `Capture` (which capture levels are configured, and what was observed for each) |
+
+  Shapes (every key is always present; unknown values are `null`):
+  * Pinned details (2026-11-14, after the first frontend pass asked):
+    * `facets` = `{client: [{value, count}], model: [..], kind: [..], status: [..]}`: the keys are the filter
+      names; each list is counted over the window BEFORE any filter (so choosing one value does not empty the other
+      lists), sorted by count descending then value, at most 50 entries. A null client or kind is counted under
+      `value: null`.
+    * `Span.flags` are the ATOF `attributes` flags (`streaming`, `parallel`, `remote`, `stateful`, `relocatable`,
+      or any other identifier-shaped flag). `Span.role` is `session`, `turn`, `subagent` or null
+      (`metadata.nemo_relay_scope_role`). `Span.subtype` is `category_profile.subtype` or null.
+    * `heatmap.latency.counts[t][b]`: first index time bucket (`ts[t]`), second index duration bucket
+      (`edges_ms[b]`..`edges_ms[b+1]`). `heatmap.activity.counts[d][h]`: first index day, second hour (UTC).
+    * `Capture.levels[].detail` and `.observed` are objects with these keys (unknown values null; `observed` is `{}`
+      for a level the console cannot observe):
+      `atof`: detail `{sinks: [{type, file, mode}]}`, observed `{last_ts, events, bytes, files}`;
+      `atif`: detail `{agent_name}`, observed `{last_ts, trajectories, bytes}`;
+      `otel_traces`: detail `{endpoints: [{projection, target, transport, service_name, reachable}]}`;
+      `otel_logs`: detail `{minimum_severity, derived, endpoints: [{target, transport, reachable}]}`;
+      `otel_metrics`: detail `{export_interval_ms, derived, endpoints: [{target, transport, reachable}]}`
+      (`derived` = true when the section has no explicit endpoints, so Relay exports the signal once per trace
+      endpoint: with more than one trace endpoint that is a duplicate export and a hint says so);
+      `payloads`: detail `{mode: "full" | "turn_filtered"}`; `redaction`: detail `{detectors: [..]}`;
+      `resource_metrics`: detail `{polling, interval_ms}`; `pricing`: detail `{}`.
+      `target` is `host:port`. `Capture.projections` = `{gen_ai, openinference, full}` booleans.
+    * A 403 on a content route is `content_disabled` when the switch is off; any other 403 is the role check.
+    * Index off (`relay_trace_index = off`; amended 2026-11-14 to match the implementation): `/traces/index` answers
+      `state: "disabled"`; `/traces`, `/sessions`, `/analytics`, `/trajectories` and `/capture` answer 200 with their
+      usual shape, empty, plus one extra key `state: "disabled"` (the only answers that carry `state`; it is absent
+      while the index is on); the detail routes answer 404 `not_found` with a message naming `relay_trace_index =
+      off`; the content routes answer 403 `content_disabled` when content is also off, else 404 like the details.
+    * Content scrubbing = the adapter's `sk-`/Bearer patterns, its `key = "value"` line rule (run with the linear
+      `regex` engine), plus a content-only pass for `key: value`, `"key": "value"`
+      (also escaped inside JSON strings) and `KEY=value` pairs whose key names a secret (`api_key`, `secret`,
+      `password`, `token`, `private_key`, `access_key`, `credential`, `auth`, ...; values of 8+ chars; config
+      placeholders such as `${...}`, `{env:...}`, `{file:...}` are kept). Added 2026-11-14: tool results can
+      carry configuration text whose credential pairs `scrub()` does not match.
+    * Settings are read from the environment as `NEMO_CONSOLE_<NAME IN UPPER CASE>`, for example
+      `NEMO_CONSOLE_RELAY_TRACE_INDEX=off` and `NEMO_CONSOLE_RELAY_TRACE_CONTENT=off`.
+  * `IndexState`: `{state: "building"|"ready"|"empty"|"disabled", generation, last_refresh_ts, build_ms,
+    files: [{name, bytes, scanned_bytes, compressed, events, skipped_lines, state: "indexed"|"partial"|"skipped"|"error",
+    first_ts, last_ts}], events, spans, open_spans, marks, chunk_marks, traces, sessions, trajectories,
+    coverage: {from_ts, to_ts}, truncated, limits: {scan_bytes, max_spans, max_line_bytes}, content: "admin"|"off",
+    problems: [{code, message}]}`. File names only, never directories.
+  * `TraceSummary`: `{trace_id, root_name, kind, client, session_key, relay_session_id, start_ts, end_ts, duration_ms,
+    status: "ok"|"error"|"open", spans, llm_calls, tool_calls, tool_errors, marks, subagents, models: [..<=8],
+    input_tokens, output_tokens, cached_tokens, reasoning_tokens, total_tokens, max_input_tokens, ttfc_ms,
+    routing: {algorithm, route, decision, served_model, overhead_ms, errors} | null,
+    error: {type, phase} | null, has_trajectory}`. A trace is `error` when any of its spans is; `open` when its root
+    has no end and nothing failed.
+  * `Span`: `{id, parent_id, name, category, subtype, role, flags: [..], start_ts, end_ts, duration_ms, status, depth,
+    turn_index, llm: Llm | null, tool: {name, call_id, type, mcp} | null, error: {type, status_code} | null,
+    content_available, size_bytes}` with `Llm = {model, served_model, provider, api, stream, input_tokens,
+    output_tokens, cached_tokens, cache_write_tokens, reasoning_tokens, total_tokens, ttfc_ms, tokens_per_s,
+    finish_reason, messages, tool_defs, tool_calls_requested, requested_tools: [..<=16 names], max_tokens,
+    reasoning_effort, chunks, chunk_offsets_ms: [..<=64], max_chunk_gap_ms, correlation}`. `category` is the ATOF
+    category; `api` is the scope name (`openai.chat_completions`, `anthropic.messages`, …); `tokens_per_s` =
+    output tokens / (duration - time to first chunk) when both are known and positive.
+  * `Mark`: `{id, parent_id, ts, name, category, schema, severity, data}`; `data` holds only allowlisted scalar
+    fields (the ones `parse_atof_line` already allows, plus `selected_model`, `decision`, `route`, `tier`,
+    `hook_event_name`, `tool_name`) and, for a metric mark, `measurements: [{name, kind, value, unit, attributes}]`
+    (<= 8, attributes <= 8 identifier pairs).
+  * `SpanContent`: `{span_id, category, source: {file, compressed}, request: {model, params, system: Part[],
+    messages: [{role, parts: Part[]}], tools: [{name, description}], messages_total, messages_returned} | null,
+    response: {model, finish_reason, parts: Part[], usage} | null, tool: {arguments: Part | null, result: Part | null}
+    | null, headers: {name: value}, truncated, redactions}` with `Part = {type: "text"|"reasoning"|"tool_call"|
+    "tool_result"|"image"|"other", text, name, call_id, chars, truncated}`. `params` are scalars only. `headers` is an
+    exact allowlist of 18 names (`user-agent`, `content-type`, `traceparent`, `tracestate`, `x-opencode-client`, the
+    session headers and named `x-nemo-relay-*` id headers such as `-session-id`, `-turn-id`, `-request-id`; no
+    wildcard), and a value is shown only when it is identifier-shaped (user-agent: printable ASCII, <= 256 chars) and
+    the scrubber changes nothing in it. Every text goes through the content scrubbing below; `redactions` counts what it
+    replaced. At most 400 messages; the whole answer <= 4 MiB, a hard bound (texts are cut, then every string, then the
+    longest lists are halved; `truncated = true`). Images and any block of an unknown type are reported as a part with
+    its type and `chars` only, never its data.
+  * `SessionSummary`: `{session_key, client, kind, first_ts, last_ts, span_ms, traces, llm_calls, tool_calls, errors,
+    models: [..], input_tokens, output_tokens, cached_tokens, max_input_tokens}`.
+    `SessionCall`: `{ts, trace_id, span_id, model, input_tokens, cached_tokens, output_tokens, reasoning_tokens,
+    duration_ms, ttfc_ms, status}`.
+  * `Analytics`: `{range, bucket_s, totals: {traces, sessions, llm_calls, tool_calls, errors, error_rate,
+    input_tokens, output_tokens, cached_tokens, reasoning_tokens, cache_hit_ratio, p50_ms, p95_ms, p99_ms,
+    ttfc_p50_ms, ttfc_p95_ms, tokens_per_s_p50}, series: {ts: [..], traces: [..], llm_calls: [..], errors: [..],
+    input_tokens: [..], output_tokens: [..], cached_tokens: [..], p50_ms: [..], p95_ms: [..], ttfc_p50_ms: [..],
+    by_model: [{model, llm_calls: [..], tokens: [..]}]}, by_model: [{model, llm_calls, errors, input_tokens,
+    output_tokens, cached_tokens, reasoning_tokens, p50_ms, p95_ms, ttfc_p50_ms, ttfc_p95_ms, tokens_per_s_p50,
+    tokens_per_s_p95}], by_client: [{client, traces, llm_calls, tokens, errors}], by_kind: [{kind, traces, llm_calls,
+    tokens, errors}], histograms: {duration_ms, ttfc_ms, input_tokens, output_tokens, tokens_per_s, chunk_gap_ms}
+    (each `{edges: [..n+1], counts: [..n]}`), heatmap: {activity: {days: [..<=31 "YYYY-MM-DD" UTC], hours: [0..23],
+    counts: [[..24]..]}, latency: {ts: [..], edges_ms: [..], counts: [[..]..]}}, tools: [{name, calls, errors, p50_ms,
+    p95_ms}], tool_requests: [{name, count}], routing: {requests, by_algorithm: [{algorithm, count}], decisions:
+    [{route, decision, served_model, count}], judge: {calls, errors, p50_ms, p95_ms}, overhead_p50_ms,
+    overhead_p95_ms, failures: [{kind, phase, count}], flows: [{source, target, value}]}, errors: {by_type: [{type,
+    count}], by_status: [{status, count}], finish_reasons: [{reason, count}], recent: [{ts, trace_id, span_id, model,
+    type}]}, scatter: [{trace_id, span_id, ts, duration_ms, input_tokens, output_tokens, model, status}]}`.
+    Durations and percentiles are over LLM spans unless the key says otherwise (`totals.p*_ms` and
+    `series.p*_ms`: LLM span duration). `series.by_model` and `by_model` list the 8 busiest models, the rest as
+    `other`. `tools`, `tool_requests` <= 30 rows, `errors.recent` <= 20, `scatter` <= 600 evenly sampled LLM spans.
+    Percentiles of an empty set are `null`. `routing.flows` are the edges route -> decision -> served model.
+  * `TrajectorySummary`: `{id, source, file, bytes, mtime, schema_version, agent: {name, version, model}, session_id,
+    steps, tool_calls, prompt_tokens, completion_tokens, cached_tokens, first_ts, last_ts, trace_id}`. `source` is
+    `gateway` for `relay_atif_dir`, else the Hermes agent directory name. `trace_id` links to an indexed trace when
+    a step's `extra.ancestry` names one of its spans. `id` is the first UUID among `trajectory_id`, `session_id` and
+    the file name; when there is none (Hermes writes `IDENT`-shaped ids such as `<name>_<hex>_<date>_<time>`), it is
+    DERIVED: the first 16 bytes of SHA-256 over `"nemo-console/atif-id\0" + source + "\0" + trajectory_id (else
+    session_id)`, with the UUIDv8 version and variant bits set, so it is stable across restarts and the routes keep
+    one id shape; the original id stays visible as `session_id`. A file with neither is counted as not readable.
+    (Amended 2026-11-14 after the first run on real captures: all Hermes trajectories were being skipped.)
+    `TrajectoryStep`: `{step_id, ts, source, model, message_chars, reasoning_chars, tool_calls: [{id, name,
+    arguments_chars}], observations, metrics: {prompt_tokens, completion_tokens, cached_tokens, reasoning_tokens},
+    duration_ms, span_id, status}`. `StepContent`: `{step_id, message: Part | null, reasoning: Part | null,
+    tool_calls: [{id, name, arguments: Part}], observations: [{call_id, content: Part}], truncated, redactions}`.
+  * `Capture`: `{relay_version, levels: [{id, label, enabled, state: "active"|"idle"|"stale"|"off"|"unknown",
+    detail, observed}], projections: {gen_ai, openinference, full}, hints: [{code, message}]}` with level ids
+    `atof`, `atif`, `otel_traces`, `otel_logs`, `otel_metrics`, `payloads`, `redaction`, `resource_metrics`,
+    `pricing`. `detail` comes from `plugins.toml` (exporter kinds, projection per trace endpoint, `host:port` of an
+    endpoint, never its path, query, user info or headers); `observed` from the index (`last_ts`, counts, bytes).
+    `state`: `off` when not configured; `active` when something was written in the last 15 minutes, `idle` within 7
+    days, `stale` beyond; `unknown` when the console cannot observe that level (OTLP exports). An OTLP endpoint on a
+    loopback host also gets `reachable` (one cached HTTP GET, 300 ms timeout, at most once a minute; anything that
+    answers counts). `hints` name what a reader of the traces is missing (for example only the `gen_ai` projection is
+    exported, marks are not exported as logs, payloads are turn-filtered).
+* **Security.** The index and every viewer route are metadata-only, as `parse_atof_line` is. Content routes are
+  admin-only, can be switched off, scrub secrets and cap sizes. Like every other GET they write no audit row; the
+  access log line carries the route label only (no ids). Ids in paths are
+  validated before use (UUID shape for trace, span and trajectory ids; `IDENT` for session keys; a decimal for step
+  ids). No route takes a file name or path. The frontend renders every string with `textContent`; nothing from a
+  capture is ever parsed as HTML. Threat model rows I-9 / R-25.
+* **Frontend.** The Relay page gains the tabs `traces`, `sessions`, `analytics`, `trajectories` and `capture`
+  (after `status`, before `config`). Charts are dependency-free SVG built by pure geometry functions in
+  `frontend/js/viz/` (unit-tested in Node) and rendered with `dom.js`; no library, no canvas, no inline style or
+  script (the CSP is unchanged). Deep links: `#/relay?tab=traces&trace=<id>&span=<id>`,
+  `#/relay?tab=sessions&session=<key>`, `#/relay?tab=trajectories&id=<id>`. The mock server serves every route above
+  with deterministic data, and the browser suite visits every new tab and one detail view of each.
+
+**9.13 (2026-11-14): visualizations for every system, wave 1 — series history, run history, shared charts.**
+Additive except one role change (Data Designer records become admin-only). Later waves (per-system views) build on it
+and get their own addenda.
+
+* **Route `GET /api/v1/systems/{id}/metrics/series`** (viewer; every system; Rust-only, parity deviation D-36). The
+  existing `/metrics/history` route is unchanged. Query: `keys` = a comma-separated list of 1..12 canonical metric keys
+  (each matching the existing `KEY_RE`; a bare key also matches its label variants), `window` = `15m|1h|24h|7d`
+  (default `1h`), `split` = `0|1` (default `0`). Answer:
+  `{window, step_s, from, to, series: [{key, label: {..} | null, points: [[ts, avg, max], ..]}], truncated}`.
+  * `split=0`: one series per requested key, label variants summed per bucket (as `/metrics/history` does), `label`
+    null. `split=1`: one series per stored series name (label variant), `label` = its labels parsed into an object
+    (`sy.model.calls{model="x"}` -> `{"model": "x"}`), at most 32 series per key (the rest dropped, `truncated: true`),
+    ordered by key then label.
+  * Buckets: `15m` = the in-memory ring, raw points (`step_s` = the poll interval, `max` = the value itself); `1h` and
+    `24h` = the 1-minute rollups (`step_s` 60); `7d` = the rollups regrouped into 10-minute buckets (`step_s` 600; avg
+    weighted by each minute's sample count `n`, max = max of maxes). Timestamps are bucket starts, epoch seconds.
+    Points are in time order; a key with no data is a series with `points: []` (never an error). Values are numbers;
+    no gap filling (the client draws gaps).
+  * 422 `invalid_request` for an unknown window, more than 12 keys, an empty or malformed key, `split` not 0/1.
+  * Rollups are kept 8 days (`ROLLUP_KEEP_S`), so `7d` is always covered once the console has run that long.
+  * Pinned details (2026-11-14, from the build): `keys` is split on commas outside braces (a labelled key keeps its
+    commas); with `split=1` an unlabelled stored name gets `label: {}`, and the 32 kept are the first by name (not the
+    busiest; the client picks what to draw); with `split=0` the bucket `max` is the sum of the variants' maxes (an upper
+    bound of the true max of the sum); a key with no data is one series with `label: null` and `points: []`; series of a
+    key that have no point in the window are left out; `to` is now, `from` the first bucket's start (a 10-minute
+    boundary for `7d`); `step_s` is a number; non-finite values are dropped; a duplicated key is answered twice.
+* **Role change: `GET /systems/{id}/runs/{run_id}/records` is admin** (was viewer). Data Designer rows are model-written
+  content, like Relay span content (ADR-0021); viewers keep the run list, run detail and artifact list (paths and
+  sizes). The role test lists it among the admin GETs. A viewer gets 403 `forbidden` (the role check). Parity:
+  deviation D-37 (the Python reference served it to viewers). Threat model: E-7 says the records are admin-only.
+  A later wave adds an aggregates-only column profile for viewers.
+* **Frontend (no new dependency, CSP unchanged):**
+  * `frontend/js/viz/*` and the reusable chart cards in `frontend/js/rt/charts.js` become a shared toolkit any view may
+    import (move shared helpers out of `rt/` into `frontend/js/viz/` or a new `frontend/js/charts/` folder if they are
+    Relay-specific in name only; keep Relay working unchanged).
+  * Generic system pages (`components/generic-system.js`): (1) a counter series is drawn as a per-second (or
+    per-minute, label says which) rate, never as a rising total: a descriptor entry may say `rate: true`, and keys
+    ending in `_total` are rates by default; resets (a negative delta) start a new segment; (2) the window picker gains
+    `7d`; (3) a "show max" toggle draws the bucket max as a thin line or band above the average where `step_s` > the
+    poll interval; (4) charts fetch through the new series route (one request per chart, `split=1` where the
+    descriptor asks for one line per label, e.g. per GPU), with a series picker when there are more than 4 lines
+    (default: the 4 busiest, the rest toggled on by the user; the choice is kept in the URL hash).
+  * **Run history component** (`frontend/js/components/run-history.js` or similar), configured by a descriptor per
+    system, built only from `GET /systems/{id}/events?limit=500` (event `data`), so no backend change: `{kind,
+    id, label, verdict, numbers: [{field, label, unit, better: "lower"|"higher"}], groupBy: [field..], filters:
+    [field..]}`. It shows: (a) a verdict timeline (one mark per run, coloured by verdict, hover = summary, click =
+    select); (b) a trend chart of one chosen number across runs (points coloured by a chosen group field, e.g. model or
+    preset; line per group); (c) A/B compare: pick two runs, a table of every configured number with the difference and
+    a better/worse mark; (d) filters by the descriptor's fields (enum dropdowns built from the values seen). Run ids
+    and field values are rendered with textContent; the URL hash keeps the selection (`run=`, `vs=`, `metric=`,
+    `group=`, filters).
+  * Wired into the eight run-based pages with descriptors read from their adapters' event data: aiperf (`aiperf.run`),
+    evaluator (`evaluator.run`, per-benchmark scores flattened as `bench:<name>` numbers), gym (`gym.smoke`),
+    modelopt (`modelopt.job`), skillevaluator (`skilleval.run`), datadesigner (`dd.run`), dcgm (`dcgm.diag`), guardrails
+    (`guardrails.check`, per-probe pass as numbers). A page whose events lack a field shows `—`, never 0.
+  * The mock server serves `/metrics/series` and realistic run events for all eight systems; the browser suite visits
+    every page that gains a chart, the run history with one A/B compare, and the 7d window.
+
+**9.14 (2026-11-14): visualizations, wave 2 — GPU telemetry (DCGM), Switchyard, Dynamo.** Additive (new metric keys,
+one new route, new tabs/cards); no existing key, route or shape changes. Builds on 9.13 (series route, shared charts).
+
+* **New metric keys** (all go through the existing poller, ring and rollups, so the series route serves them; label
+  sets as listed; counters end in `_total` so the frontend draws them as rates; a value the source does not report is
+  simply absent, never 0; label values from upstreams are cleaned to `[A-Za-z0-9_.:/-]`, at most 64 characters;
+  non-finite values and series names longer than the key bound give no point; a series idle for 30 minutes leaves the
+  ring and frees its slot under the 256-series cap, its rollups stay):
+  * DCGM, labels `{gpu, model}` like the existing per-GPU keys, from families the exporter already serves
+    (`observability/dcgm/counters.csv`): `dcgm.fb_reserved_b`, `dcgm.mem_temp_c`, `dcgm.mem_clock_mhz`,
+    `dcgm.enc_util`, `dcgm.dec_util`, `dcgm.power_limit_w` (`DCGM_FI_DEV_POWER_MGMT_LIMIT`, else
+    `ENFORCED_POWER_LIMIT`), `dcgm.energy_mj_total` (`TOTAL_ENERGY_CONSUMPTION`, mJ, counter),
+    `dcgm.violation_us_total{reason=power|thermal|board|low_util|reliability|sync_boost}` (the `*_VIOLATION` counters),
+    `dcgm.remapped_rows{kind=correctable|uncorrectable}`, `dcgm.row_remap_failure`. Existing keys unchanged.
+  * Switchyard, from `/v1/stats` and `/metrics` the adapter already fetches: `sy.model.latency_ms{model, q=p50|p99}`
+    (model call latency), `sy.model.errors_total{model}`, `sy.model.cache_hit_ratio{model}`,
+    `sy.model.max_context_tokens{model}`, `sy.routing_overhead_ms{q=p50|p99}`,
+    `sy.fallbacks_total{reason}` (`context_window`, `unavailable`, ...), `sy.decisions_total{source, target}`
+    (stage-router decision source -> target name), `sy.client_responses_total{outcome}`. A `/v1/stats` reset (recreate,
+    `reset_stats`) is a counter reset; the frontend already starts a new segment.
+  * Dynamo, from the frontend and worker `/metrics` the adapter already scrapes:
+    `dyn.ttft_window_ms{q=p50|p95|p99}` and `dyn.itl_window_ms{q}` (quantiles of the requests that finished SINCE THE
+    PREVIOUS POLL — only the background poller's read moves the window; API/UI reads compare with the previous poll — from histogram bucket deltas; absent when no request finished; the existing since-start
+    `dyn.ttft_ms` / `dyn.itl_ms` stay), `dyn.phase_ms{phase=queue|prefill|decode|inference, q=p50|p95}` (worker
+    histograms, windowed the same way), `dyn.preemptions_total`, `dyn.capacity{kind=context_length|kv_blocks|
+    max_num_seqs|max_batched_tokens}` (gauges, as reported), `dyn.spec_accept_pos{pos}` (acceptance rate per draft
+    position when the worker reports it).
+* **Route `GET /api/v1/systems/dcgm/fleet`** (viewer; any other system 404; Rust-only, parity deviation D-38): per-GPU
+  history of every DCGM host Prometheus scrapes, so the fleet heatmap covers remote hosts. Query `metric` =
+  `util|temp|power|fb_used` and `window` = `1h|24h|7d` (default `24h`). The server builds the PromQL from a fixed table
+  (no client-supplied expression; ADR-0014): the DCGM family for the metric, restricted to the configured
+  `dcgm_prometheus_jobs`, `query_range` with step 60 / 300 / 1800 s. Answer `{metric, unit, window, step_s, from, to,
+  rows: [{host, job, gpu, model, points: [[ts, value], ..]}], truncated}`: at most 64 rows (ordered host, gpu),
+  `host` as the adapter already names hosts for `dcgm.host_up`, no GPU UUID or serial (E-8). Prometheus down -> 200 with
+  `rows: []` and a `problem: {code, message}` field; 422 for an unknown metric or window. Cached for 30 s per
+  (metric, window); a Prometheus failure is answered from memory for 5 s for every (metric, window); one Prometheus
+  request at a time; answers over 16 MiB are refused. One call per heatmap.
+* **Frontend** (shared toolkit of 9.13; textContent only; CSP unchanged):
+  * **GPU telemetry page:** a Fleet tab with a heatmap (rows = host / GPU, columns = time, colour = the chosen metric,
+    a legend with the scale, hover = value and time, a metric and window picker, URL state) from `/dcgm/fleet`; on
+    Status: a "really busy?" card per local GPU (util next to graphics, tensor and DRAM activity and SM clock), a
+    memory card (used / reserved / free stacked per GPU), power against its limit, energy over the window (from the
+    counter), throttle-violation rates by reason, PCIe tx/rx and replay rate, remapped rows; an XID and diagnostics
+    timeline (swim lane per GPU from `dcgm.xid` / `dcgm.diag` events, click = details).
+  * **Switchyard page:** a decision-flow card (decision source -> target model, with the routes listed beside it: the decision counters
+    carry no route label, so route -> source cannot be joined; widths = request share over
+    the window, from `sy.route.calls` and `sy.decisions_total` rates; a flows chart exists in the toolkit), per-model
+    latency (p50 / p99 bars, error rate, cache-hit ratio, largest context), a heatmap of call rate per model over time
+    (series route, `split=1`), fallbacks and routing overhead (tiles + lines), client outcomes; filters by route /
+    model on the share cards (frontend filtering of what is served).
+  * **Dynamo page:** latency for the chosen window from the windowed keys (labelled as such; the since-start ones
+    labelled "since start"), a latency breakdown (stacked queue -> prefill -> decode, p50 and p95), a load chart
+    (running, waiting, preemption rate, KV usage), output tokens per second (rate of `dyn.tokens{kind=completion}`),
+    prefix-cache hit ratio, a capacity panel, spec-decode acceptance by position when present, and an Events tab
+    (the existing `dynamo.log` events with level and component filters; the log lines are redacted text, R-5).
+  * Mock server: the new keys with plausible values for all three systems, the fleet route (several hosts incl. a down
+    one), Dynamo log events; the browser suite visits the new tabs and cards.
+* Pinned details (2026-11-14, from the build): Dynamo output tokens are the existing `dyn.tokens{kind=completion}`;
+  the fleet route's path is `/systems/{system_id}/fleet` (404 for every system but dcgm), its values use the per-GPU key
+  units (util as a 0..1 ratio, bytes, °C, W), `metric` is required, `problem` is absent on success (codes
+  `dcgm.prometheus.unreachable`, `dcgm.prometheus.bad_answer`, `dcgm.fleet.no_jobs`), failures are cached 5 s, and the
+  PromQL groups by `job, host, gpu, modelName` only (no UUID or serial can come back); `dcgm.mem_temp_c` is absent on
+  boards that report 0 (no sensor); `*_VIOLATION` counters are nanoseconds in the exporter, scaled to microseconds;
+  windowed Dynamo quantiles use the previous POLL as baseline (adapters gain an optional `poll_metrics()`, default
+  `metrics()`, which the poller calls; only it moves a baseline), and are absent on the first poll, after a reset or
+  when nothing finished;
+  `dyn.capacity` is the largest across models; `dyn.spec_accept_pos` is since the worker started; Switchyard picks
+  `/v1/stats` first and `/metrics` per key. New keys are appended after the existing ones, and idle series are evicted after 30 minutes, so churn cannot fill
+  the per-system 256-series cap for good.
+
+**9.15 (2026-11-14): visualizations, wave 3 — AIPerf, NeMo Evaluator, NeMo Gym, Model Optimizer, SkillEvaluator, Data
+Designer.** Additive (three per-run routes, wider event data, new cards); no existing route or shape changes except
+the event `data` additions below (new keys only).
+
+* **Route `GET /api/v1/systems/{id}/runs/{run_id}/summary`** (viewer; numbers and identifiers only; Rust-only, parity
+  deviation D-40). Systems: `aiperf`, `skillevaluator`; every other system 404 `not_found`; unknown run 404; run id
+  validated as the adapters already validate run ids; files read with the existing hardened reader (no symlinks, size
+  caps, I-7).
+  * `aiperf`: `{run_id, preset, model, verdict, concurrency, requests, isl, osl, duration_s, metrics: {<name>: {unit,
+    avg, min, max, std, p1, p5, p10, p25, p50, p75, p90, p95, p99}}, http_phases_ms: {dns, connecting, sending,
+    waiting, receiving} | null}` from `profile_export_aiperf.json` (every numeric metric it has, at most 100; absent
+    statistics are null; strings other than units and names dropped).
+  * `skillevaluator`: `{run_id, skill, tiers, verdict, tier1: {validators: [{name, passed, status, findings: {critical,
+    high, medium, low, info}}], rubric: [{id, importance, score, pass, judge_pass}], dimensions: {<name>: number}} |
+    null, tier3: {agents: [{name, model, skill_lift, with_skill, without_skill, metrics: [{name, with_skill,
+    without_skill, delta}]}]} | null}`. No finding message, rubric criterion text, notes, conclusions or
+    recommendations (they are skill- or model-influenced text; E-5/E-6).
+* **Route `GET /api/v1/systems/aiperf/runs/{run_id}/requests`** (viewer; Rust-only, D-40): one row per request from
+  `profile_export.jsonl`, numbers only: `{run_id, total, returned, truncated, rows: [{i, start_ms, end_ms, latency_ms,
+  ttft_ms, itl_avg_ms, input_tokens, output_tokens, worker, error_code}]}` (`start_ms` relative to the first request;
+  `worker` a small integer index assigned by first appearance; `error_code` an integer or null; no request,
+  conversation or worker ids, no error text). At most 5000 rows (evenly sampled when there are more), file size cap as
+  for the records reader.
+* **Route `GET /api/v1/systems/datadesigner/runs/{run_id}/profile`** (viewer; Rust-only, D-40): per-column aggregates
+  of `records.jsonl`: `{run_id, rows, columns: [{name, types: {string, number, bool, null, object, array}, non_null,
+  distinct, distinct_capped, length: {min, p50, p95, max} | null, numeric: {min, p50, p95, max} | null, top: [{value,
+  count}] | null}]}`. `top` (the 10 most frequent values of a column with at most 50 distinct values, each value cut
+  to 64 characters) is filled ONLY for an admin; for a viewer it is null and the answer says `values_hidden: true` —
+  the values are model-written content (9.13). `numeric` (min, p50, p95, max: nearest-rank, so real cell values) is
+  admin-only too, null for a viewer; `length` is shown to both. Column names are shown to both but must be identifiers
+  (`[A-Za-z_][A-Za-z0-9_]{0,63}`); any other column is dropped and `truncated` is set. At most 200 columns and 2000
+  rows; the read is capped in bytes and per line (the records file on disk is not itself byte-capped), and any cap that
+  stops the read sets `truncated`. Amended 2026-11-14 after the pre-merge audit (viewers get lengths, counts and
+  shapes, never cell values; an oversized run.json or Tier 1 file — over 1 MiB, far above the few KB seen in
+  practice — reads as absent).
+* **Event `data` additions** (new keys only; parity D-41 pins the exact added keys): `evaluator.run` benchmarks gain
+  `ci_low`, `ci_high`, `tokens`, `elapsed_s`, `failure_rate`; `gym.smoke` gains `rewards` (the per-task rewards array,
+  at most 20 numbers).
+* **Frontend** (shared toolkit; textContent only; CSP unchanged; viewers never see a value the API withholds):
+  * **AIPerf:** in the run history, a run detail: percentile curves (p1..p99) of TTFT, ITL and latency for the selected
+    run and, when two are selected, both overlaid (A/B); an HTTP-phase stacked bar; a per-request view (latency
+    histogram, a request timeline as swim lanes by worker, error codes as bars); a throughput-vs-latency scatter over
+    runs (one point per run, colour by concurrency). Every chart says the numbers include the router hop.
+  * **Evaluator:** scores with confidence-interval bars per benchmark (A/B), a model x benchmark heatmap (latest score
+    per pair), cost vs score (tokens or time vs score) and failure-rate bars.
+  * **Gym:** the per-task reward distribution of a run (strip or histogram, A/B overlay), rewarded / rollouts stacked
+    bars per run, mean reward and pass@1 trends by model.
+  * **Model Optimizer:** job timeline (duration bars coloured by verdict and method), base vs output size per job
+    (ratio label), age of a running job (a stuck job stands out).
+  * **SkillEvaluator:** a validator x run (or x skill) heatmap of status and finding severity, rubric bars (score and
+    pass), the Tier 3 lift as a dumbbell per agent and per metric (with vs without the skill), labelled "a skill can
+    influence its own Tier 3 score".
+  * **Data Designer:** a column profile on the Runs tab for the selected run: type mix, null rate, distinct count,
+    length distribution, numeric range, and for admins the top values; plus a run timeline (duration by script,
+    verdict colours, requested vs produced records).
+  * Mock server: realistic answers for the three routes and the new event keys; the browser suite visits every new
+    card.
+* Pinned details (2026-11-14, from the build): a bad run id is 422 `invalid_request` on the three new routes (the
+  older `/records` and `/files` keep their 404); the profile always carries `values_hidden` and a `truncated` flag
+  (rows over 2000, columns over 200, or column names that fail the check), `types.null` counts explicit nulls and
+  missing keys, `distinct` is counted up to 1000 per column (`distinct_capped`), lengths are measured as `/records`
+  shows values (at most 2048 characters), at most 64 MiB of `records.jsonl` is read, and top values are not even
+  collected for a viewer; request rows give `error_code` 0 for a failed request with no usable code (null = success),
+  number workers by first appearance over the whole file (at most 1024), and convert ns/us/ms/s (any other unit is
+  null); the AIPerf summary drops `count`/`sum`, takes each HTTP phase's average, and answers `metrics: {}` for a run
+  without a profile file. After the pre-merge audit (2026-11-14): at most 2 of these reads run at once on the
+  blocking pool; every JSON document (run.json, the AIPerf summary, the Tier 1 file) is parsed only if it is at most
+  1 MiB and 100,000 values (else it reads as absent: `metrics: {}` / `tier1: null`); a request line over 256 KiB or
+  100,000 values is not parsed and is counted in a new `skipped` key (and sets `truncated`), every line counts toward
+  the 200,000-line cap; a profile line over 1 MiB is skipped and sets `truncated`; the profile answer gains
+  `columns_dropped` (columns that are not identifiers or come after the 200th); hard links are refused and every file
+  is opened relative to the run directory (`openat`, `O_NOFOLLOW`). Peak memory per request measured at 5-37 MiB
+  (`tests/runviz_memory.rs`).
+
+**9.16 (2026-11-14): visualizations, wave 4 — NeMo Guardrails, OpenShell, NVIDIA Flare, Overview, Audit.** Additive
+(new routes, persisted OpenShell events, new cards); no existing route or shape changes except the additive audit
+query parameters below. Same rules as 9.13-9.15: viewers never see content, every string identifier-checked and
+capped, files read without following links and with byte/line caps, parsing off the async workers, bounded memory.
+
+* **Guardrails — `GET /api/v1/systems/guardrails/rails`** (viewer; Rust-only D-42): the rail pipeline of each served
+  config, parsed from the config files the adapter already reads: `{configs: [{id, main_model, input: [flow, ..],
+  output: [flow, ..], streaming: {enabled, chunk_size, context_size} | null, retrieval: [flow, ..]}], problems}`.
+  Flow names identifier-checked (letters, digits, space, `_-.`, at most 80 chars; others dropped and counted); no
+  prompt text, no `.co` content. Config ids as the adapter already lists them.
+* **OpenShell — persisted sandbox events:** the adapter's `openshell.sandbox` lifecycle events (created / phase /
+  deleted) are also appended to `<state>/openshell/events.jsonl` (0600, at most 5000 lines: older lines dropped by a
+  rewrite when it grows past 6000; one writer), and `recent_events` reads them after a restart. Only the fields the
+  ring already has (name, id, phase, action, previous_phase, ts).
+* **OpenShell — `GET /api/v1/systems/openshell/decisions?sandbox=<name>&limit=<1..2000>`** (viewer; D-42): the
+  policy decisions in a sandbox's log (the OCSF lines `openshell logs` prints): `{sandbox, rows: [{ts, category,
+  verdict: "allowed"|"denied", kind, target}], truncated}`. `sandbox` must be a name in the current sandbox list
+  (else 404); `category`/`kind` from fixed allowlists of the OCSF fields seen in the fixtures (others "other");
+  `target` only when it is host:port or a path-free identifier (at most 120 chars, else null). No free text, no
+  command line, no file contents. The CLI call reuses the adapter's existing `sandbox_logs` runner path with its
+  timeout and redaction; at most 2000 rows; cached 10 s per sandbox.
+* **Audit — `GET /api/v1/audit` gains optional `since`, `until` (epoch seconds), `actor`, `status`
+  (`ok|error`)** (still admin; additive; parity D-43 if the corpus notices), and **`GET /api/v1/audit/summary?window=
+  24h|7d|30d`** (admin; Rust-only D-42): `{window, by_day: [{day, system, count}], by_actor: [{actor, system, count}],
+  errors: [{ts_bucket, count}], denied_total}` from the audit table (actor = the key's alias as stored; no params).
+* **Frontend** (shared toolkit; textContent only; CSP unchanged):
+  * **Guardrails:** a probe matrix over time (rows = the three probes, columns = check runs, cell = expected vs
+    actual, a latency strip) from the existing check events; the rail pipeline diagram per config (input flows -> main
+    model -> output flows, streaming settings) from `/rails`; an up/down strip from `gr.up` history.
+  * **OpenShell:** sandbox lifecycle swim lanes (one lane per sandbox, coloured phase segments, create -> ready ->
+    delete) from the persisted events, a phase-count stacked area from `os.sandboxes_by_phase` history, and a
+    per-sandbox policy-decision timeline (allowed vs denied by category) from `/decisions`. Read-only: no new controls
+    that change policy; delete stays the existing destructive action.
+  * **Flare:** a target grid (target x host x chip x state: serving / loading / busy / absent, package counts) from
+    status, tokens/s and request rate per target (rates of the existing counters, series route split by target),
+    prefill vs generated vs cache-reused stacked bars, active vs pending per target.
+  * **Overview:** a sparkline of one key metric per system tile (series route, 1h), problem counts by severity across
+    systems, and an up/down strip for systems that have a `*.up`-style metric.
+  * **Audit:** actions per day stacked by system, an actor x system heatmap, an error timeline, time-range, actor,
+    status filters (URL state) on the log.
+  * Mock server: every new route and the persisted OpenShell events, generic names; the browser suite visits every
+    new card.
+* Pinned details (2026-11-14, from the build): the three routes are templated (`/systems/{system_id}/rails`,
+  `/decisions`; 404 for every other system). Rails: read from `config.yml`, else `config.yaml`; flow order kept; the
+  YAML is composed but never constructed (aliases are not expanded: no alias bomb), merge keys are not applied;
+  problems are `{config, code, count}` with fixed codes (no free text); an unreadable config is listed with empty
+  lists. Decisions: a row only when the token after the level is ALLOWED/ALLOW/DENIED/DENY/BLOCKED, `target` only the
+  next token when it passes the check; rows oldest first (the newest `limit`, default 500); one `openshell logs` call at
+  a time for this route (`-n 2000`, the action's 30 s timeout, 512,000-byte cap, redaction); a failed call is 200 with
+  `rows: []` and a fixed `problem`. Persisted events: re-checked on write and on read; after a restart the newest 200
+  refill the ring and the sandboxes they leave alive become the baseline (no burst of "present" events; a sandbox
+  deleted while the console was down is reported once). Audit summary: default `7d`, extra keys `from`, `to`,
+  `bucket_s` (3600 / 21600 / 86400), `truncated`; `denied_total` counts audit rows with status 401/403 (requests
+  refused before a handler are not audit rows); an unknown stored system is `"other"`, an actor that fails the check
+  is null.
+* After the pre-merge audit (2026-11-14): decisions `target` is only `host:port` (a DNS name, IPv4 or [IPv6] address
+  and a port 1-65535; the token after the verdict, else the token after ` -> `; at most 120 characters), else null;
+  output that reaches the CLI cap (1 MiB for this route) is parsed up to its last complete line and sets `truncated`
+  (the log is chronological, so a capped answer holds the OLDER part of the requested lines),
+  any other CLI failure gives `rows: []` and `problem`; cached 10 s per sandbox, at most 32 sandboxes. Persisted
+  events: a time from 0 to now + 1 day; the rewrite keeps the newest 5000 valid lines, re-serialised; one ordered
+  writer; stale temp files reaped on load; reads through a bounded ring. Rails: the main model and flow names must come
+  out of `redact()` unchanged; a key past the first 256 entries of a mapping is not found; at most 32 distinct
+  `models` items are looked at; at most 4096 directory entries are listed for config ids (beyond that, which ids appear
+  is not defined). The Audit summary's `denied_total` is labelled for what it is: audited calls answered
+  401/403 (requests refused before a handler are not audited).

@@ -51,11 +51,11 @@ export function timeAgo(ts, now = Date.now()) {
 }
 export function fmtDate(ts) {
   const t = toMs(ts);
-  return isNum(t) ? new Date(t).toISOString().replace('T', ' ').slice(0, 19) : '–';
+  return isNum(t) && Math.abs(t) <= 8.64e15 ? new Date(t).toISOString().replace('T', ' ').slice(0, 19) : '–';
 }
 export function fmtTime(ts) {
   const t = toMs(ts);
-  return isNum(t) ? new Date(t).toISOString().slice(11, 19) : '–';
+  return isNum(t) && Math.abs(t) <= 8.64e15 ? new Date(t).toISOString().slice(11, 19) : '–';
 }
 export function fmtClock(ts) {
   const d = new Date(toMs(ts));

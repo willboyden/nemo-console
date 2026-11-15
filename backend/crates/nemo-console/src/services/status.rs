@@ -140,7 +140,17 @@ impl StatusService {
     }
 
     pub async fn metrics(&self, system: SystemId) -> MetricsSnapshot {
+        self.metrics_read(system, false).await
+    }
+
+    /// The poller's read: `poll_metrics()` (an adapter's windowed keys advance only here; addendum 9.14).
+    pub async fn poll_metrics(&self, system: SystemId) -> MetricsSnapshot {
+        self.metrics_read(system, true).await
+    }
+
+    async fn metrics_read(&self, system: SystemId, poll: bool) -> MetricsSnapshot {
         let res = match self.adapters.get(&system) {
+            Some(a) if poll => with_timeout(self.timeout, a.poll_metrics()).await,
             Some(a) => with_timeout(self.timeout, a.metrics()).await,
             None => Err(AdapterError::UnknownId(system.to_string())),
         };

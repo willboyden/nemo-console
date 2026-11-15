@@ -2,19 +2,50 @@ import { NcView } from '../components/base.js';
 import { h, clear } from '../dom.js';
 import { t } from '../i18n.js';
 import { healthChanges } from '../status-util.js';
-import { card, healthBadge, compBadge, problemList, errorBox, skeleton, emptyBox, btn } from '../components/ui.js';
+import { card, errorBox, skeleton, emptyBox, btn } from '../components/ui.js';
 import { topologyGraph } from '../components/topology.js';
 import { announce } from '../components/live.js';
 import { consolePage } from '../components/system-page.js';
+import { createTile } from '../overview/tile.js';
+import { problemsCard } from '../overview/problems-card.js';
+import { SPARK_STALE_MS } from '../overview-model.js';
 
 class NcOverview extends NcView {
   setup() {
     consolePage(this, { page: 'overview', active: this.query?.tab, tabDefs: [{ id: 'status', label: t('tab.status'), render: (scope) => this.statusTab(scope) }] });
   }
-  /** Topology + one card per system, polled every 5 s while this tab is open. */
+  /**
+   * Topology + the problem counts + one card per system, polled every 5 s while this tab is open. A tile is created once and updated in place; its sparkline (addendum 9.16) is fetched
+   * lazily when the tile scrolls near the viewport (one batched series request per system) and refreshed at most once a minute while it stays in view.
+   */
   statusTab(scope) {
     const topoHost = h('div', {}, skeleton(3)),
       tiles = h('div', { class: 'grid tiles' }, skeleton(3));
+    const problems = problemsCard(scope);
+    problems.el.hidden = true;
+    const views = new Map(); // system -> tile
+    const inView = new Set();
+    // ---- lazy sparklines: a tile asks for its data when it is near the viewport (without IntersectionObserver, every tile asks, one at a time)
+    const io =
+      typeof IntersectionObserver === 'undefined'
+        ? null
+        : new IntersectionObserver(
+            (entries) => {
+              for (const e of entries) {
+                const sys = e.target.dataset.system;
+                if (e.isIntersecting) {
+                  inView.add(sys);
+                  views.get(sys)?.ensure();
+                } else inView.delete(sys);
+              }
+            },
+            { rootMargin: '160px' },
+          );
+    scope.own(() => io?.disconnect());
+    scope.every(SPARK_STALE_MS, () => {
+      for (const sys of inView) views.get(sys)?.ensure();
+    });
+    let drawn = '';
     const load = async () => {
       try {
         const ov = await scope.api.overview();
@@ -22,7 +53,24 @@ class NcOverview extends NcView {
         for (const c of healthChanges(this.prev, ov)) announce(t('sys.health_changed', { name: t(`sys.${c.id}`), health: t(`health.${c.to}`) }));
         this.prev = ov;
         clear(topoHost).append(topologyGraph(ov.topology));
-        clear(tiles).append(...ov.systems.map((x) => this.tile(x)));
+        problems.update(ov.systems);
+        problems.el.hidden = false;
+        for (const s of ov.systems) {
+          let v = views.get(s.system);
+          if (!v) {
+            v = createTile(scope, s.system);
+            v.el.dataset.system = s.system;
+            views.set(s.system, v);
+            io?.observe(v.el);
+            if (!io) queueMicrotask(() => v.ensure());
+          }
+          v.update(s);
+        }
+        const order = ov.systems.map((s) => s.system).join('|');
+        if (order !== drawn) {
+          drawn = order;
+          clear(tiles).append(...ov.systems.map((s) => views.get(s.system).el));
+        }
       } catch (e) {
         if (scope.alive && !this.prev) {
           clear(topoHost).append(errorBox(e, load));
@@ -36,30 +84,9 @@ class NcOverview extends NcView {
       'div',
       { class: 'stack-v' },
       card(t('overview.topology'), topoHost, btn(t('common.refresh'), { size: 'sm', icon: 'restart', onClick: load })),
+      problems.el,
       h('h2', { class: 'section' }, t('overview.systems')),
       tiles,
-    );
-  }
-  tile(s) {
-    return h(
-      'section',
-      { class: `card tile ${s.health}`, 'aria-label': t(`sys.${s.system}`) },
-      h('header', { class: 'card-head' }, h('h3', h('a', { href: `#/${s.system}` }, t(`sys.${s.system}`))), healthBadge(s.health)),
-      h(
-        'div',
-        { class: 'card-body' },
-        h('div', { class: 'muted small' }, s.version ? `v${s.version}` : t('overview.no_version')),
-        h('p', { class: 'status-summary' }, s.summary),
-        h(
-          'div',
-          { class: 'row gap wrap' },
-          s.components.map((c) => h('span', { class: 'comp-chip' }, h('code', c.name), ' ', compBadge(c.state))),
-        ),
-        s.problems.length
-          ? h('div', {}, h('h4', { class: 'sub' }, t('overview.problems', { count: s.problems.length })), problemList(s.problems))
-          : h('p', { class: 'note ok' }, t('overview.no_problems')),
-        h('div', { class: 'row end' }, h('a', { class: 'btn', href: `#/${s.system}` }, t('overview.open'))),
-      ),
     );
   }
 }

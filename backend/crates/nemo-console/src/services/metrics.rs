@@ -2,10 +2,14 @@
 //! Port of `services/metrics.py`. Storage contract: table `rollup(system, series, bucket, avg, max, n)`.
 
 use std::collections::{HashMap, VecDeque};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use indexmap::IndexMap;
+use rusqlite::{Connection, OpenFlags};
+use serde::Serialize;
+use serde_json::{Map, Value};
 
 use crate::domain::models::{MetricPoint, SystemId, now_ts};
 use crate::services::common::RecoverLock as _;
@@ -15,10 +19,171 @@ use crate::services::store::Store;
 pub const WINDOWS: [(&str, f64); 3] = [("15m", 900.0), ("1h", 3600.0), ("24h", 86400.0)];
 pub const MAX_SERIES_PER_SYSTEM: usize = 256;
 pub const ROLLUP_KEEP_S: f64 = 8.0 * 86400.0;
+/// The longest series name `record` keeps: the longest canonical key `KEY_RE` accepts (64 characters of name, 200 of
+/// labels and the two braces). A longer one (a hostile or broken upstream label) is dropped, never stored.
+pub const MAX_SERIES_NAME: usize = 64 + 2 + 200;
+/// A series with no point for this long leaves the ring and frees its slot of the per-system cap (its rollups stay),
+/// so label churn (models, routes, decision paths that come and go) cannot fill the cap for good.
+pub const SERIES_IDLE_EVICT_S: f64 = 1800.0;
 
 #[must_use]
 pub fn window_span(w: &str) -> Option<f64> {
     WINDOWS.iter().find(|(k, _)| *k == w).map(|(_, v)| *v)
+}
+
+/// Windows of the series route (addendum 9.13): name, span in seconds, bucket in seconds (0: the ring's raw
+/// points). `WINDOWS` above stays the history route's (it has no `7d`).
+pub const SERIES_WINDOWS: [(&str, f64, i64); 4] = [
+    ("15m", 900.0, 0),
+    ("1h", 3600.0, 60),
+    ("24h", 86400.0, 60),
+    ("7d", 7.0 * 86400.0, 600),
+];
+/// At most this many keys per series request.
+pub const SERIES_MAX_KEYS: usize = 12;
+/// With `split=1`, at most this many label variants per key (the rest dropped, `truncated: true`).
+pub const SERIES_PER_KEY: usize = 32;
+
+/// `(span_s, bucket_s)` of a series window; `None` for an unknown one.
+#[must_use]
+pub fn series_window(w: &str) -> Option<(f64, i64)> {
+    SERIES_WINDOWS
+        .iter()
+        .find(|(k, _, _)| *k == w)
+        .map(|(_, span, bucket)| (*span, *bucket))
+}
+
+/// The labels of a stored series name as an object: `sy.tokens{kind=prompt,model=x}` -> `{"kind": "prompt",
+/// "model": "x"}`; `{}` for a name without labels. Inverse of [`series_name`], which does not escape: a part
+/// without `=` belongs to the previous value (a value with a comma), and a value wrapped in double quotes
+/// (`model="x"`) is unwrapped.
+#[must_use]
+pub fn series_labels(name: &str) -> Map<String, Value> {
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    let Some(open) = name.find('{') else {
+        return Map::new();
+    };
+    let rest = &name[open + 1..];
+    let inner = rest.strip_suffix('}').unwrap_or(rest);
+    if !inner.is_empty() {
+        for part in inner.split(',') {
+            match part.split_once('=') {
+                Some((k, v)) if !k.is_empty() => pairs.push((k.to_owned(), v.to_owned())),
+                _ => {
+                    if let Some(last) = pairs.last_mut() {
+                        last.1.push(',');
+                        last.1.push_str(part);
+                    }
+                }
+            }
+        }
+    }
+    let mut out = Map::new();
+    for (k, v) in pairs {
+        let v = match v.strip_prefix('"').and_then(|x| x.strip_suffix('"')) {
+            Some(inner) => inner.to_owned(),
+            None => v,
+        };
+        out.insert(k, Value::String(v));
+    }
+    out
+}
+
+/// One line of a series answer: `points` are `[ts, avg, max]`, bucket starts in epoch seconds, in time order.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Series {
+    pub key: String,
+    /// `null` with `split=0` (and for a key without data); the parsed labels with `split=1`.
+    pub label: Option<Map<String, Value>>,
+    pub points: Vec<[f64; 3]>,
+}
+
+/// The answer of `GET /systems/{id}/metrics/series` (addendum 9.13).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SeriesAnswer {
+    pub window: String,
+    pub step_s: f64,
+    pub from: f64,
+    pub to: f64,
+    pub series: Vec<Series>,
+    pub truncated: bool,
+}
+
+/// The rollup reads below bind `?1` system, `?2` first minute, `?3` the key itself, `?4`..`?5` the range of its label
+/// variants (`variant_range`), `?6` the last series name to read (or the LIMIT of `NAMES`); finite values only.
+/// `?6` when every variant is read: above any stored name (the key alphabet is ASCII).
+const MAX_NAME: &str = "\u{7f}";
+/// One row per series and minute: `series, ts, a (avg), m (max)`.
+const PER_SERIES_1M: &str = concat!(
+    "SELECT series, bucket * 60 AS ts, avg AS a, max AS m FROM rollup WHERE ",
+    "system=?1 AND bucket>=?2 AND (series=?3 OR (series>=?4 AND series<?5)) AND series<=?6 ",
+    "AND abs(avg)<=1.7976931348623157e308 AND abs(max)<=1.7976931348623157e308"
+);
+/// One row per series and 10-minute bucket: avg weighted by each minute's sample count `n`, max of maxes.
+const PER_SERIES_10M: &str = concat!(
+    "SELECT series, (bucket / 10) * 600 AS ts, ",
+    "CASE WHEN SUM(n) > 0 THEN SUM(avg * n) / SUM(n) ELSE AVG(avg) END AS a, MAX(max) AS m FROM rollup WHERE ",
+    "system=?1 AND bucket>=?2 AND (series=?3 OR (series>=?4 AND series<?5)) AND series<=?6 ",
+    "AND abs(avg)<=1.7976931348623157e308 AND abs(max)<=1.7976931348623157e308 ",
+    "GROUP BY series, bucket / 10"
+);
+/// `SERIES_PER_KEY` + 1: the extra name only tells that some were dropped.
+#[allow(clippy::cast_possible_wrap)]
+const NAMES_LIMIT: i64 = SERIES_PER_KEY as i64 + 1;
+/// The first `?6` distinct series names of a key in the window, in byte order.
+const NAMES: &str = concat!(
+    "SELECT DISTINCT series FROM rollup WHERE ",
+    "system=?1 AND bucket>=?2 AND (series=?3 OR (series>=?4 AND series<?5)) ",
+    "AND abs(avg)<=1.7976931348623157e308 AND abs(max)<=1.7976931348623157e308 ",
+    "ORDER BY series LIMIT ?6"
+);
+
+/// Counters of the series route (`MetricsPoller::series_stats`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SeriesStats {
+    /// SQL statements run.
+    pub queries: usize,
+    /// Rollup point rows read (after the SQL grouping).
+    pub rows: usize,
+    /// Reads that went through the store's own connection (the read-only one could not be opened or failed).
+    pub fallbacks: usize,
+}
+
+/// What one series request reads, shared by its keys.
+struct KeyQuery<'a> {
+    system: SystemId,
+    /// 0: the ring; 60 or 600: the rollups.
+    bucket: i64,
+    /// First rollup minute.
+    since: i64,
+    /// First ring timestamp.
+    cutoff: f64,
+    split: bool,
+    reader: Option<&'a Connection>,
+}
+
+/// `split=1` lines of one key from its raw rows (already capped), labels parsed from the stored names.
+fn labelled(key: &str, raw: RawSeries) -> Vec<Series> {
+    raw.into_iter()
+        .map(|(name, points)| Series {
+            key: key.to_owned(),
+            label: Some(series_labels(&name)),
+            points,
+        })
+        .collect()
+}
+
+/// Raw rows of one requested key: (stored series name, points), names in byte order.
+type RawSeries = Vec<(String, Vec<[f64; 3]>)>;
+
+/// Bounds for a range scan of a bare key's label variants in the `(system, series, bucket)` primary key:
+/// `key{...}` sorts at or after `key{` and before `key|` (`|` follows `{`). A labelled key matches itself only.
+fn variant_range(key: &str) -> (String, String) {
+    if key.contains('{') {
+        (String::new(), String::new())
+    } else {
+        (format!("{key}{{"), format!("{key}|"))
+    }
 }
 
 /// `key` or `key{a=1,b=2}` (labels sorted by name).
@@ -31,6 +196,23 @@ pub fn series_name(p: &MetricPoint) -> String {
     labels.sort();
     let inner: Vec<String> = labels.iter().map(|(k, v)| format!("{k}={v}")).collect();
     format!("{}{{{}}}", p.key, inner.join(","))
+}
+
+/// `split=0`: the label variants summed per bucket (avg and max each summed), in time order.
+fn sum_variants(raw: RawSeries) -> Vec<[f64; 3]> {
+    let mut all: Vec<[f64; 3]> = raw.into_iter().flat_map(|(_, p)| p).collect();
+    all.sort_by(|a, b| a[0].total_cmp(&b[0]));
+    let mut out: Vec<[f64; 3]> = Vec::with_capacity(all.len());
+    for p in all {
+        match out.last_mut() {
+            Some(last) if last[0].total_cmp(&p[0]).is_eq() => {
+                last[1] += p[1];
+                last[2] += p[2];
+            }
+            _ => out.push(p),
+        }
+    }
+    out
 }
 
 struct Ring {
@@ -46,6 +228,19 @@ struct Inner {
     pending: HashMap<(SystemId, String), [f64; 4]>,
     series_count: HashMap<SystemId, usize>,
     last_prune: f64,
+    /// When `record` last looked for idle series.
+    last_evict: f64,
+}
+
+/// What `record` refused or evicted (`MetricsPoller::record_stats`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RecordStats {
+    /// Points with a NaN or infinite value (never stored: NaN would poison a minute's average).
+    pub dropped_non_finite: usize,
+    /// Points whose series name is longer than [`MAX_SERIES_NAME`].
+    pub dropped_long_name: usize,
+    /// Series that left the ring after [`SERIES_IDLE_EVICT_S`] without a point.
+    pub evicted: usize,
 }
 
 pub struct MetricsPoller {
@@ -54,6 +249,12 @@ pub struct MetricsPoller {
     interval: Mutex<f64>,
     pub ring_seconds: i64,
     inner: Mutex<Inner>,
+    series_queries: AtomicUsize,
+    series_rows: AtomicUsize,
+    series_fallbacks: AtomicUsize,
+    dropped_non_finite: AtomicUsize,
+    dropped_long_name: AtomicUsize,
+    evicted: AtomicUsize,
 }
 
 impl MetricsPoller {
@@ -70,6 +271,12 @@ impl MetricsPoller {
             interval: Mutex::new(interval),
             ring_seconds,
             inner: Mutex::new(Inner::default()),
+            series_queries: AtomicUsize::new(0),
+            series_rows: AtomicUsize::new(0),
+            series_fallbacks: AtomicUsize::new(0),
+            dropped_non_finite: AtomicUsize::new(0),
+            dropped_long_name: AtomicUsize::new(0),
+            evicted: AtomicUsize::new(0),
         }
     }
 
@@ -103,7 +310,7 @@ impl MetricsPoller {
 
     pub async fn tick(&self) {
         for system in self.status.adapters.keys().copied().collect::<Vec<_>>() {
-            let snap = self.status.metrics(system).await;
+            let snap = self.status.poll_metrics(system).await;
             let points = if snap.available {
                 snap.points
             } else {
@@ -120,8 +327,23 @@ impl MetricsPoller {
         };
         #[allow(clippy::cast_possible_truncation)]
         let bucket = (ts / 60.0).floor() as i64;
+        // first, so a series that comes back (or a new one) finds the slots the idle ones held
+        if ts - g.last_evict >= 60.0 {
+            g.last_evict = ts;
+            self.evict_idle(&mut g, ts);
+        }
         for p in points {
-            let k = (system, series_name(p));
+            // one guard for every adapter: a non-finite value or an over-long name never reaches the ring or SQLite
+            if !p.value.is_finite() {
+                self.dropped_non_finite.fetch_add(1, Ordering::Relaxed);
+                continue;
+            }
+            let name = series_name(p);
+            if name.len() > MAX_SERIES_NAME {
+                self.dropped_long_name.fetch_add(1, Ordering::Relaxed);
+                continue;
+            }
+            let k = (system, name);
             if !g.ring.contains_key(&k) {
                 let count = g.series_count.get(&system).copied().unwrap_or(0);
                 if count >= MAX_SERIES_PER_SYSTEM {
@@ -170,6 +392,41 @@ impl MetricsPoller {
             let _ = self
                 .store
                 .execute("DELETE FROM rollup WHERE bucket < ?", [cutoff]);
+        }
+    }
+
+    /// Drop every series whose newest point is older than [`SERIES_IDLE_EVICT_S`] (its pending minute is written
+    /// first, so the rollups keep everything), and give its slot of the per-system cap back.
+    fn evict_idle(&self, g: &mut Inner, now: f64) {
+        let idle: Vec<(SystemId, String)> = g
+            .ring
+            .iter()
+            .filter(|(_, r)| {
+                r.points
+                    .back()
+                    .is_none_or(|(t, _)| now - t > SERIES_IDLE_EVICT_S)
+            })
+            .map(|(k, _)| k.clone())
+            .collect();
+        for k in idle {
+            if let Some(cur) = g.pending.remove(&k) {
+                self.flush_one(&k, cur);
+            }
+            g.ring.shift_remove(&k);
+            if let Some(c) = g.series_count.get_mut(&k.0) {
+                *c = c.saturating_sub(1);
+            }
+            self.evicted.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// Counters of what `record` refused or evicted.
+    #[must_use]
+    pub fn record_stats(&self) -> RecordStats {
+        RecordStats {
+            dropped_non_finite: self.dropped_non_finite.load(Ordering::Relaxed),
+            dropped_long_name: self.dropped_long_name.load(Ordering::Relaxed),
+            evicted: self.evicted.load(Ordering::Relaxed),
         }
     }
 
@@ -251,6 +508,243 @@ impl MetricsPoller {
         }
         acc.sort_by(|a, b| a.0.total_cmp(&b.0));
         acc.into_iter().map(|(t, v)| [t, v]).collect()
+    }
+
+    /// `GET /systems/{id}/metrics/series` (addendum 9.13). `window` must be one of [`SERIES_WINDOWS`] (the route
+    /// validates it; an unknown one reads as `1h`), every key is a validated canonical key. Blocking (SQLite): the
+    /// route runs it on the blocking pool. Each distinct key is read once; a repeated key gets a copy of the answer.
+    /// The rollups are read on a read-only connection of their own (WAL readers do not wait for the writer), so a
+    /// long read never holds the store lock the poller's flush and the audit log write through.
+    #[must_use]
+    pub fn series(
+        &self,
+        system: SystemId,
+        window: &str,
+        keys: &[String],
+        split: bool,
+        now: Option<f64>,
+    ) -> SeriesAnswer {
+        let now = now.unwrap_or_else(now_ts);
+        let (window, (span, bucket)) = match series_window(window) {
+            Some(w) => (window, w),
+            None => ("1h", (3600.0, 60)),
+        };
+        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+        let (step_s, from, since) = match bucket {
+            0 => (self.interval(), now - span, 0),
+            60 => {
+                let since = ((now - span) / 60.0).floor() as i64;
+                (60.0, (since * 60) as f64, since)
+            }
+            // 10-minute buckets start on a multiple of ten minutes, so the first one is never partial
+            _ => {
+                let since = ((now - span) / 600.0).floor() as i64 * 10;
+                (600.0, (since * 60) as f64, since)
+            }
+        };
+        let reader = if bucket > 0 {
+            self.flush();
+            self.reader()
+        } else {
+            None
+        };
+        let q = KeyQuery {
+            system,
+            bucket,
+            since,
+            cutoff: now - span,
+            split,
+            reader: reader.as_ref(),
+        };
+        let mut done: HashMap<&str, (Vec<Series>, bool)> = HashMap::new();
+        let mut series = Vec::new();
+        let mut truncated = false;
+        for key in keys {
+            let (lines, cut) = done
+                .entry(key.as_str())
+                .or_insert_with(|| self.one_key(&q, key));
+            truncated |= *cut;
+            series.extend(lines.iter().cloned());
+        }
+        SeriesAnswer {
+            window: window.to_owned(),
+            step_s,
+            from,
+            to: now,
+            series,
+            truncated,
+        }
+    }
+
+    /// Counters of the series route since start (tests and measurements).
+    #[must_use]
+    pub fn series_stats(&self) -> SeriesStats {
+        SeriesStats {
+            queries: self.series_queries.load(Ordering::Relaxed),
+            rows: self.series_rows.load(Ordering::Relaxed),
+            fallbacks: self.series_fallbacks.load(Ordering::Relaxed),
+        }
+    }
+
+    /// A read-only connection to the console database; `None` when it cannot be opened (the reads then go through
+    /// the store's own connection).
+    fn reader(&self) -> Option<Connection> {
+        let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
+        let c = Connection::open_with_flags(&self.store.path, flags).ok()?;
+        c.busy_timeout(Duration::from_secs(5)).ok()?;
+        Some(c)
+    }
+
+    /// Run one read on the read-only connection, falling back to the store's connection when there is none or the
+    /// read fails on it.
+    fn read<T>(
+        &self,
+        reader: Option<&Connection>,
+        f: impl Fn(&Connection) -> rusqlite::Result<T>,
+    ) -> Option<T> {
+        self.series_queries.fetch_add(1, Ordering::Relaxed);
+        if let Some(c) = reader
+            && let Ok(v) = f(c)
+        {
+            return Some(v);
+        }
+        self.series_fallbacks.fetch_add(1, Ordering::Relaxed);
+        self.store.with(f).ok()
+    }
+
+    /// The series lines of one key and whether some were dropped (`split=1`, more than [`SERIES_PER_KEY`]).
+    fn one_key(&self, q: &KeyQuery<'_>, key: &str) -> (Vec<Series>, bool) {
+        let empty = || {
+            vec![Series {
+                key: key.to_owned(),
+                label: None,
+                points: Vec::new(),
+            }]
+        };
+        if q.bucket == 0 {
+            let mut raw = self.ring_series(q.system, key, q.cutoff);
+            raw.sort_by(|a, b| a.0.cmp(&b.0));
+            if !q.split {
+                return (
+                    vec![Series {
+                        key: key.to_owned(),
+                        label: None,
+                        points: sum_variants(raw),
+                    }],
+                    false,
+                );
+            }
+            if raw.is_empty() {
+                return (empty(), false);
+            }
+            let cut = raw.len() > SERIES_PER_KEY;
+            raw.truncate(SERIES_PER_KEY);
+            return (labelled(key, raw), cut);
+        }
+        let (lo, hi) = variant_range(key);
+        let per_series = if q.bucket == 60 {
+            PER_SERIES_1M
+        } else {
+            PER_SERIES_10M
+        };
+        if !q.split {
+            // the variants summed per bucket in SQL: one row per bucket leaves the database
+            let sql =
+                format!("SELECT ts, SUM(a), SUM(m) FROM ({per_series}) GROUP BY ts ORDER BY ts");
+            let rows: Vec<(i64, f64, f64)> = self
+                .read(q.reader, |db| {
+                    let mut st = db.prepare_cached(&sql)?;
+                    st.query_map(
+                        rusqlite::params![q.system.as_str(), q.since, key, lo, hi, MAX_NAME],
+                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                    )?
+                    .collect()
+                })
+                .unwrap_or_default();
+            self.series_rows.fetch_add(rows.len(), Ordering::Relaxed);
+            #[allow(clippy::cast_precision_loss)]
+            let points = rows
+                .into_iter()
+                .filter(|(_, a, m)| a.is_finite() && m.is_finite())
+                .map(|(ts, a, m)| [ts as f64, a, m])
+                .collect();
+            return (
+                vec![Series {
+                    key: key.to_owned(),
+                    label: None,
+                    points,
+                }],
+                false,
+            );
+        }
+        // split=1: the first SERIES_PER_KEY + 1 names (the extra one only says "truncated"), then the points of the
+        // first SERIES_PER_KEY only, bounded by the last kept name, so a key with many variants never reads the rest
+        let names: Vec<String> = self
+            .read(q.reader, |db| {
+                let mut st = db.prepare_cached(NAMES)?;
+                st.query_map(
+                    rusqlite::params![q.system.as_str(), q.since, key, lo, hi, NAMES_LIMIT],
+                    |r| r.get(0),
+                )?
+                .collect()
+            })
+            .unwrap_or_default();
+        let cut = names.len() > SERIES_PER_KEY;
+        let Some(last) = names.iter().take(SERIES_PER_KEY).next_back() else {
+            return (empty(), false);
+        };
+        let sql = format!("SELECT series, ts, a, m FROM ({per_series}) ORDER BY series, ts");
+        let rows: Vec<(String, i64, f64, f64)> = self
+            .read(q.reader, |db| {
+                let mut st = db.prepare_cached(&sql)?;
+                st.query_map(
+                    rusqlite::params![q.system.as_str(), q.since, key, lo, hi, last],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                )?
+                .collect()
+            })
+            .unwrap_or_default();
+        self.series_rows.fetch_add(rows.len(), Ordering::Relaxed);
+        let mut raw: RawSeries = Vec::new();
+        for (name, ts, avg, max) in rows {
+            if !avg.is_finite() || !max.is_finite() {
+                continue;
+            }
+            #[allow(clippy::cast_precision_loss)]
+            let p = [ts as f64, avg, max];
+            match raw.last_mut() {
+                Some((n, pts)) if *n == name => pts.push(p),
+                _ => raw.push((name, vec![p])),
+            }
+        }
+        if raw.is_empty() {
+            return (empty(), false);
+        }
+        (labelled(key, raw), cut)
+    }
+
+    /// The ring's raw points at or after `cutoff` (`max` = the value itself); series without one are left out.
+    fn ring_series(&self, system: SystemId, key: &str, cutoff: f64) -> RawSeries {
+        let Ok(g) = self.inner.lock_recovering() else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for ((sys, name), r) in &g.ring {
+            if *sys != system || !Self::matches(name, key) {
+                continue;
+            }
+            let mut points: Vec<[f64; 3]> = r
+                .points
+                .iter()
+                .filter(|(ts, v)| *ts >= cutoff && v.is_finite())
+                .map(|(ts, v)| [*ts, *v, *v])
+                .collect();
+            points.sort_by(|a, b| a[0].total_cmp(&b[0]));
+            if !points.is_empty() {
+                out.push((name.clone(), points));
+            }
+        }
+        out
     }
 
     /// Ring length of one series (tests).

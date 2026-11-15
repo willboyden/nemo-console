@@ -1,0 +1,1182 @@
+{
+  "_comment": "Cases that differ from the Python reference by a documented deviation (backend/PORTING.md section 13) and pass ONLY when they differ exactly as pinned here (parity/run.mjs, lib/compare.mjs pinMismatch). A pin entry without `a` or `b` matches any value there. Regenerate an entry from parity/out/report.json when a deviation changes on purpose.",
+  "pins": [
+    {
+      "case": "ddrun.preview.records.viewer",
+      "deviation": "D-37",
+      "why": "Data Designer run records are admin-only: a viewer gets 403 forbidden (the Python reference answers 200 with the rows)",
+      "diffs": [
+        {
+          "path": "status",
+          "a": "200",
+          "b": "403"
+        },
+        {
+          "path": "body/columns",
+          "a": "[\"product_category\",\"review\"]",
+          "b": "(absent)"
+        },
+        {
+          "path": "body/error",
+          "a": "(absent)",
+          "b": "{\"code\":\"forbidden\",\"message\":\"this key has the viewer role (read-only)\"}"
+        },
+        {
+          "path": "body/rows",
+          "a": "[{\"product_category\":\"Books\",\"review\":\"I couldn't put this book down—the characters felt like old friends by the second chapter, and the twist at the end completely caught me off guard. Highly recommend to anyone who enjoys a story that lingers with you long after the last page.\"},{\"product_category\":\"Electronics\",\"review\":\"**Noise-Cancelling Headphones Review**\\n\\n★★★★★\\nThese headphones complete...[715 chars]",
+          "b": "(absent)"
+        },
+        {
+          "path": "body/run_id",
+          "a": "\"<run:7>-reviews_smoke.py\"",
+          "b": "(absent)"
+        },
+        {
+          "path": "body/total",
+          "a": "2",
+          "b": "(absent)"
+        },
+        {
+          "path": "body/truncated",
+          "a": "false",
+          "b": "(absent)"
+        }
+      ]
+    },
+    {
+      "case": "metrics.viewer",
+      "deviation": "D-37",
+      "why": "Data Designer run records are admin-only: the viewer gets 403 (Python 200), and the console's request counters read afterwards count that request as a 403",
+      "diffs": [
+        {
+          "path": "body:prometheus-lines",
+          "a": ["nemo_console_http_requests_total{method=\"GET\",route=\"/systems/{system_id}/runs/{run_id}/records\",status=\"200\"} 5.0"],
+          "b": [
+            "nemo_console_http_requests_created{method=\"GET\",route=\"/systems/{system_id}/runs/{run_id}/records\",status=\"403\"} <created>",
+            "nemo_console_http_requests_total{method=\"GET\",route=\"/systems/{system_id}/runs/{run_id}/records\",status=\"200\"} 4.0",
+            "nemo_console_http_requests_total{method=\"GET\",route=\"/systems/{system_id}/runs/{run_id}/records\",status=\"403\"} 1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "case": "metrics.admin",
+      "deviation": "D-37",
+      "why": "Data Designer run records are admin-only: the viewer gets 403 (Python 200), and the console's request counters read afterwards count that request as a 403",
+      "diffs": [
+        {
+          "path": "body:prometheus-lines",
+          "a": ["nemo_console_http_requests_total{method=\"GET\",route=\"/systems/{system_id}/runs/{run_id}/records\",status=\"200\"} 5.0"],
+          "b": [
+            "nemo_console_http_requests_created{method=\"GET\",route=\"/systems/{system_id}/runs/{run_id}/records\",status=\"403\"} <created>",
+            "nemo_console_http_requests_total{method=\"GET\",route=\"/systems/{system_id}/runs/{run_id}/records\",status=\"200\"} 4.0",
+            "nemo_console_http_requests_total{method=\"GET\",route=\"/systems/{system_id}/runs/{run_id}/records\",status=\"403\"} 1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "case": "global.openapi.admin",
+      "deviation": "D-34, D-36, D-38, D-40, D-42, D-43",
+      "why": "D-34, D-36, D-38, D-40 and D-42: the document lists the eleven Relay trace explorer routes, the series route, the DCGM fleet route, the three per-run visualisation routes and the three wave-4 routes (Guardrails rails, OpenShell decisions, the audit summary), which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned); D-43: the /audit entry gains a description and the four optional filter parameters (pinned exactly)",
+      "diffs": [
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/description",
+          "a": "(absent)",
+          "b": "\"The audit log, newest first (admin). Optional filters (addendum 9.16): `since` / `until` (epoch seconds, inclusive), `actor` (the key's alias as stored), `status` (`ok` = status < 400, `error` = status >= 400); an empty value means no filter.\""
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/parameters/2",
+          "a": "(absent)",
+          "b": "{\"in\":\"query\",\"name\":\"since\",\"required\":false,\"schema\":{\"anyOf\":[{\"maximum\":100000000000.0,\"minimum\":0,\"type\":\"number\"},{\"type\":\"null\"}],\"title\":\"Since\"}}"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/parameters/3",
+          "a": "(absent)",
+          "b": "{\"in\":\"query\",\"name\":\"until\",\"required\":false,\"schema\":{\"anyOf\":[{\"maximum\":100000000000.0,\"minimum\":0,\"type\":\"number\"},{\"type\":\"null\"}],\"title\":\"Until\"}}"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/parameters/4",
+          "a": "(absent)",
+          "b": "{\"in\":\"query\",\"name\":\"actor\",\"required\":false,\"schema\":{\"anyOf\":[{\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,63}$\",\"type\":\"string\"},{\"type\":\"null\"}],\"title\":\"Actor\"}}"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/parameters/5",
+          "a": "(absent)",
+          "b": "{\"in\":\"query\",\"name\":\"status\",\"required\":false,\"schema\":{\"anyOf\":[{\"enum\":[\"ok\",\"error\"],\"type\":\"string\"},{\"type\":\"null\"}],\"title\":\"Status\"}}"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit~1summary",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1analytics",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1capture",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1decisions",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1fleet",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1metrics~1series",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1rails",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1profile",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1requests",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1summary",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1sessions",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1sessions~1{session_key}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1index",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1{trace_id}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1{trace_id}~1spans~1{span_id}~1content",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories~1{trajectory_id}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories~1{trajectory_id}~1steps~1{step_id}~1content",
+          "a": "(absent)"
+        }
+      ]
+    },
+    {
+      "case": "global.openapi.viewer",
+      "deviation": "D-34, D-36, D-38, D-40, D-42, D-43",
+      "why": "D-34, D-36, D-38, D-40 and D-42: the document lists the eleven Relay trace explorer routes, the series route, the DCGM fleet route, the three per-run visualisation routes and the three wave-4 routes (Guardrails rails, OpenShell decisions, the audit summary), which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned); D-43: the /audit entry gains a description and the four optional filter parameters (pinned exactly)",
+      "diffs": [
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/description",
+          "a": "(absent)",
+          "b": "\"The audit log, newest first (admin). Optional filters (addendum 9.16): `since` / `until` (epoch seconds, inclusive), `actor` (the key's alias as stored), `status` (`ok` = status < 400, `error` = status >= 400); an empty value means no filter.\""
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/parameters/2",
+          "a": "(absent)",
+          "b": "{\"in\":\"query\",\"name\":\"since\",\"required\":false,\"schema\":{\"anyOf\":[{\"maximum\":100000000000.0,\"minimum\":0,\"type\":\"number\"},{\"type\":\"null\"}],\"title\":\"Since\"}}"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/parameters/3",
+          "a": "(absent)",
+          "b": "{\"in\":\"query\",\"name\":\"until\",\"required\":false,\"schema\":{\"anyOf\":[{\"maximum\":100000000000.0,\"minimum\":0,\"type\":\"number\"},{\"type\":\"null\"}],\"title\":\"Until\"}}"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/parameters/4",
+          "a": "(absent)",
+          "b": "{\"in\":\"query\",\"name\":\"actor\",\"required\":false,\"schema\":{\"anyOf\":[{\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,63}$\",\"type\":\"string\"},{\"type\":\"null\"}],\"title\":\"Actor\"}}"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/parameters/5",
+          "a": "(absent)",
+          "b": "{\"in\":\"query\",\"name\":\"status\",\"required\":false,\"schema\":{\"anyOf\":[{\"enum\":[\"ok\",\"error\"],\"type\":\"string\"},{\"type\":\"null\"}],\"title\":\"Status\"}}"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit~1summary",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1analytics",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1capture",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1decisions",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1fleet",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1metrics~1series",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1rails",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1profile",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1requests",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1summary",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1sessions",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1sessions~1{session_key}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1index",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1{trace_id}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1{trace_id}~1spans~1{span_id}~1content",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories~1{trajectory_id}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories~1{trajectory_id}~1steps~1{step_id}~1content",
+          "a": "(absent)"
+        }
+      ]
+    },
+    {
+      "case": "global.openapi.admin.after",
+      "deviation": "D-34, D-36, D-38, D-40, D-42, D-43",
+      "why": "D-34, D-36, D-38, D-40 and D-42: the document lists the eleven Relay trace explorer routes, the series route, the DCGM fleet route, the three per-run visualisation routes and the three wave-4 routes (Guardrails rails, OpenShell decisions, the audit summary), which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned); D-43: the /audit entry gains a description and the four optional filter parameters (pinned exactly)",
+      "diffs": [
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/description",
+          "a": "(absent)",
+          "b": "\"The audit log, newest first (admin). Optional filters (addendum 9.16): `since` / `until` (epoch seconds, inclusive), `actor` (the key's alias as stored), `status` (`ok` = status < 400, `error` = status >= 400); an empty value means no filter.\""
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/parameters/2",
+          "a": "(absent)",
+          "b": "{\"in\":\"query\",\"name\":\"since\",\"required\":false,\"schema\":{\"anyOf\":[{\"maximum\":100000000000.0,\"minimum\":0,\"type\":\"number\"},{\"type\":\"null\"}],\"title\":\"Since\"}}"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/parameters/3",
+          "a": "(absent)",
+          "b": "{\"in\":\"query\",\"name\":\"until\",\"required\":false,\"schema\":{\"anyOf\":[{\"maximum\":100000000000.0,\"minimum\":0,\"type\":\"number\"},{\"type\":\"null\"}],\"title\":\"Until\"}}"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/parameters/4",
+          "a": "(absent)",
+          "b": "{\"in\":\"query\",\"name\":\"actor\",\"required\":false,\"schema\":{\"anyOf\":[{\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,63}$\",\"type\":\"string\"},{\"type\":\"null\"}],\"title\":\"Actor\"}}"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/parameters/5",
+          "a": "(absent)",
+          "b": "{\"in\":\"query\",\"name\":\"status\",\"required\":false,\"schema\":{\"anyOf\":[{\"enum\":[\"ok\",\"error\"],\"type\":\"string\"},{\"type\":\"null\"}],\"title\":\"Status\"}}"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit~1summary",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1analytics",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1capture",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1decisions",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1fleet",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1metrics~1series",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1rails",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1profile",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1requests",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1summary",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1sessions",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1sessions~1{session_key}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1index",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1{trace_id}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1{trace_id}~1spans~1{span_id}~1content",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories~1{trajectory_id}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories~1{trajectory_id}~1steps~1{step_id}~1content",
+          "a": "(absent)"
+        }
+      ]
+    },
+    {
+      "case": "global.openapi.viewer.after",
+      "deviation": "D-34, D-36, D-38, D-40, D-42, D-43",
+      "why": "D-34, D-36, D-38, D-40 and D-42: the document lists the eleven Relay trace explorer routes, the series route, the DCGM fleet route, the three per-run visualisation routes and the three wave-4 routes (Guardrails rails, OpenShell decisions, the audit summary), which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned); D-43: the /audit entry gains a description and the four optional filter parameters (pinned exactly)",
+      "diffs": [
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/description",
+          "a": "(absent)",
+          "b": "\"The audit log, newest first (admin). Optional filters (addendum 9.16): `since` / `until` (epoch seconds, inclusive), `actor` (the key's alias as stored), `status` (`ok` = status < 400, `error` = status >= 400); an empty value means no filter.\""
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/parameters/2",
+          "a": "(absent)",
+          "b": "{\"in\":\"query\",\"name\":\"since\",\"required\":false,\"schema\":{\"anyOf\":[{\"maximum\":100000000000.0,\"minimum\":0,\"type\":\"number\"},{\"type\":\"null\"}],\"title\":\"Since\"}}"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/parameters/3",
+          "a": "(absent)",
+          "b": "{\"in\":\"query\",\"name\":\"until\",\"required\":false,\"schema\":{\"anyOf\":[{\"maximum\":100000000000.0,\"minimum\":0,\"type\":\"number\"},{\"type\":\"null\"}],\"title\":\"Until\"}}"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/parameters/4",
+          "a": "(absent)",
+          "b": "{\"in\":\"query\",\"name\":\"actor\",\"required\":false,\"schema\":{\"anyOf\":[{\"pattern\":\"^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,63}$\",\"type\":\"string\"},{\"type\":\"null\"}],\"title\":\"Actor\"}}"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit/get/parameters/5",
+          "a": "(absent)",
+          "b": "{\"in\":\"query\",\"name\":\"status\",\"required\":false,\"schema\":{\"anyOf\":[{\"enum\":[\"ok\",\"error\"],\"type\":\"string\"},{\"type\":\"null\"}],\"title\":\"Status\"}}"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1audit~1summary",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1analytics",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1capture",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1decisions",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1fleet",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1metrics~1series",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1rails",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1profile",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1requests",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1runs~1{run_id}~1summary",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1sessions",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1sessions~1{session_key}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1index",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1{trace_id}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1traces~1{trace_id}~1spans~1{span_id}~1content",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories~1{trajectory_id}",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1trajectories~1{trajectory_id}~1steps~1{step_id}~1content",
+          "a": "(absent)"
+        }
+      ]
+    },
+    {
+      "case": "read.switchyard.metrics",
+      "deviation": "D-39",
+      "why": "New metric keys (addendum 9.14): the Switchyard snapshot appends the new keys after every key the Python reference serves; nothing before them differs",
+      "diffs": [
+        {
+          "path": "body/points/15",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.latency_ms\",\"labels\":{\"model\":\"nemotron-lightning\",\"q\":\"p50\"},\"unit\":\"ms\",\"value\":528.72}"
+        },
+        {
+          "path": "body/points/16",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.latency_ms\",\"labels\":{\"model\":\"nemotron-lightning\",\"q\":\"p99\"},\"unit\":\"ms\",\"value\":9451.1}"
+        },
+        {
+          "path": "body/points/17",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.errors_total\",\"labels\":{\"model\":\"nemotron-lightning\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/18",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.cache_hit_ratio\",\"labels\":{\"model\":\"nemotron-lightning\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/19",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.max_context_tokens\",\"labels\":{\"model\":\"nemotron-lightning\"},\"unit\":\"tok\",\"value\":116047.0}"
+        },
+        {
+          "path": "body/points/20",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.latency_ms\",\"labels\":{\"model\":\"qwen3.8-27b-1m\",\"q\":\"p50\"},\"unit\":\"ms\",\"value\":1055.91}"
+        },
+        {
+          "path": "body/points/21",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.latency_ms\",\"labels\":{\"model\":\"qwen3.8-27b-1m\",\"q\":\"p99\"},\"unit\":\"ms\",\"value\":2977.17}"
+        },
+        {
+          "path": "body/points/22",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.errors_total\",\"labels\":{\"model\":\"qwen3.8-27b-1m\"},\"unit\":\"1\",\"value\":1.0}"
+        },
+        {
+          "path": "body/points/23",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.cache_hit_ratio\",\"labels\":{\"model\":\"qwen3.8-27b-1m\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/24",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.max_context_tokens\",\"labels\":{\"model\":\"qwen3.8-27b-1m\"},\"unit\":\"tok\",\"value\":370.0}"
+        },
+        {
+          "path": "body/points/25",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.latency_ms\",\"labels\":{\"model\":\"qwen3.8-flash-next\",\"q\":\"p50\"},\"unit\":\"ms\",\"value\":8449.91}"
+        },
+        {
+          "path": "body/points/26",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.latency_ms\",\"labels\":{\"model\":\"qwen3.8-flash-next\",\"q\":\"p99\"},\"unit\":\"ms\",\"value\":47093.45}"
+        },
+        {
+          "path": "body/points/27",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.errors_total\",\"labels\":{\"model\":\"qwen3.8-flash-next\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/28",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.cache_hit_ratio\",\"labels\":{\"model\":\"qwen3.8-flash-next\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/29",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.max_context_tokens\",\"labels\":{\"model\":\"qwen3.8-flash-next\"},\"unit\":\"tok\",\"value\":143002.0}"
+        },
+        {
+          "path": "body/points/30",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.routing_overhead_ms\",\"labels\":{\"q\":\"p50\"},\"unit\":\"ms\",\"value\":26.76}"
+        },
+        {
+          "path": "body/points/31",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.routing_overhead_ms\",\"labels\":{\"q\":\"p99\"},\"unit\":\"ms\",\"value\":508.79}"
+        },
+        {
+          "path": "body/points/32",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.fallbacks_total\",\"labels\":{\"reason\":\"context_window\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/33",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.fallbacks_total\",\"labels\":{\"reason\":\"unavailable\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/34",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.decisions_total\",\"labels\":{\"source\":\"capable_hold\",\"target\":\"qwen3.8-flash-next\"},\"unit\":\"1\",\"value\":2.0}"
+        },
+        {
+          "path": "body/points/35",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.decisions_total\",\"labels\":{\"source\":\"dimensions\",\"target\":\"qwen3.8-flash-next\"},\"unit\":\"1\",\"value\":1.0}"
+        },
+        {
+          "path": "body/points/36",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.decisions_total\",\"labels\":{\"source\":\"fall_open\",\"target\":\"nemotron-lightning\"},\"unit\":\"1\",\"value\":7.0}"
+        },
+        {
+          "path": "body/points/37",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.decisions_total\",\"labels\":{\"source\":\"llm-classifier\",\"target\":\"nemotron-lightning\"},\"unit\":\"1\",\"value\":48.0}"
+        },
+        {
+          "path": "body/points/38",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.decisions_total\",\"labels\":{\"source\":\"llm-classifier\",\"target\":\"qwen3.8-flash-next\"},\"unit\":\"1\",\"value\":1.0}"
+        },
+        {
+          "path": "body/points/39",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.client_responses_total\",\"labels\":{\"outcome\":\"client_disconnected\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/40",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.client_responses_total\",\"labels\":{\"outcome\":\"ok\"},\"unit\":\"1\",\"value\":72.0}"
+        },
+        {
+          "path": "body/points/41",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.client_responses_total\",\"labels\":{\"outcome\":\"other_error\"},\"unit\":\"1\",\"value\":1.0}"
+        },
+        {
+          "path": "body/points/42",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.client_responses_total\",\"labels\":{\"outcome\":\"retryable_error\"},\"unit\":\"1\",\"value\":0.0}"
+        }
+      ]
+    },
+    {
+      "case": "read.dynamo.metrics",
+      "deviation": "D-39",
+      "why": "New metric keys (addendum 9.14): the Dynamo snapshot appends the new keys after every key the Python reference serves; nothing before them differs",
+      "diffs": [
+        {
+          "path": "body/points/17",
+          "a": "(absent)",
+          "b": "{\"key\":\"dyn.capacity\",\"labels\":{\"kind\":\"context_length\"},\"unit\":\"tok\",\"value\":262144.0}"
+        },
+        {
+          "path": "body/points/18",
+          "a": "(absent)",
+          "b": "{\"key\":\"dyn.capacity\",\"labels\":{\"kind\":\"kv_blocks\"},\"unit\":\"1\",\"value\":359.0}"
+        },
+        {
+          "path": "body/points/19",
+          "a": "(absent)",
+          "b": "{\"key\":\"dyn.capacity\",\"labels\":{\"kind\":\"max_num_seqs\"},\"unit\":\"1\",\"value\":64.0}"
+        },
+        {
+          "path": "body/points/20",
+          "a": "(absent)",
+          "b": "{\"key\":\"dyn.capacity\",\"labels\":{\"kind\":\"max_batched_tokens\"},\"unit\":\"tok\",\"value\":8192.0}"
+        },
+        {
+          "path": "body/points/21",
+          "a": "(absent)",
+          "b": "{\"key\":\"dyn.preemptions_total\",\"labels\":{},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/22",
+          "a": "(absent)",
+          "b": "{\"key\":\"dyn.spec_accept_pos\",\"labels\":{\"pos\":\"0\"},\"unit\":\"ratio\",\"value\":1.0}"
+        },
+        {
+          "path": "body/points/23",
+          "a": "(absent)",
+          "b": "{\"key\":\"dyn.spec_accept_pos\",\"labels\":{\"pos\":\"1\"},\"unit\":\"ratio\",\"value\":0.7333333333333333}"
+        }
+      ]
+    },
+    {
+      "case": "read.dcgm.metrics",
+      "deviation": "D-39",
+      "why": "New metric keys (addendum 9.14): the DCGM snapshot appends the new keys after every key the Python reference serves; nothing before them differs",
+      "diffs": [
+        {
+          "path": "body/points/50",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.fb_reserved_b\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"B\",\"value\":667942912.0}"
+        },
+        {
+          "path": "body/points/51",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.fb_reserved_b\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"B\",\"value\":670040064.0}"
+        },
+        {
+          "path": "body/points/52",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.mem_clock_mhz\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"MHz\",\"value\":13365.0}"
+        },
+        {
+          "path": "body/points/53",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.mem_clock_mhz\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"MHz\",\"value\":7001.0}"
+        },
+        {
+          "path": "body/points/54",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.enc_util\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/55",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.enc_util\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/56",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.dec_util\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/57",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.dec_util\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/58",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.energy_mj_total\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"mJ\",\"value\":6849681072.0}"
+        },
+        {
+          "path": "body/points/59",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.energy_mj_total\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"mJ\",\"value\":7493425318.0}"
+        },
+        {
+          "path": "body/points/60",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.row_remap_failure\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/61",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.row_remap_failure\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/62",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.remapped_rows\",\"labels\":{\"gpu\":\"1\",\"kind\":\"correctable\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/63",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.remapped_rows\",\"labels\":{\"gpu\":\"0\",\"kind\":\"correctable\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/64",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.remapped_rows\",\"labels\":{\"gpu\":\"1\",\"kind\":\"uncorrectable\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/65",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.remapped_rows\",\"labels\":{\"gpu\":\"0\",\"kind\":\"uncorrectable\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        }
+      ]
+    },
+    {
+      "case": "sysv.metrics.viewer",
+      "deviation": "D-39",
+      "why": "New metric keys (addendum 9.14): the Dynamo snapshot appends the new keys after every key the Python reference serves; nothing before them differs",
+      "diffs": [
+        {
+          "path": "body/points/50",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.fb_reserved_b\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"B\",\"value\":667942912.0}"
+        },
+        {
+          "path": "body/points/51",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.fb_reserved_b\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"B\",\"value\":670040064.0}"
+        },
+        {
+          "path": "body/points/52",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.mem_clock_mhz\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"MHz\",\"value\":13365.0}"
+        },
+        {
+          "path": "body/points/53",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.mem_clock_mhz\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"MHz\",\"value\":7001.0}"
+        },
+        {
+          "path": "body/points/54",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.enc_util\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/55",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.enc_util\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/56",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.dec_util\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/57",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.dec_util\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/58",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.energy_mj_total\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"mJ\",\"value\":6849681072.0}"
+        },
+        {
+          "path": "body/points/59",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.energy_mj_total\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"mJ\",\"value\":7493425318.0}"
+        },
+        {
+          "path": "body/points/60",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.row_remap_failure\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/61",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.row_remap_failure\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/62",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.remapped_rows\",\"labels\":{\"gpu\":\"1\",\"kind\":\"correctable\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/63",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.remapped_rows\",\"labels\":{\"gpu\":\"0\",\"kind\":\"correctable\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/64",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.remapped_rows\",\"labels\":{\"gpu\":\"1\",\"kind\":\"uncorrectable\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/65",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.remapped_rows\",\"labels\":{\"gpu\":\"0\",\"kind\":\"uncorrectable\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        }
+      ]
+    },
+    {
+      "case": "reread.switchyard.metrics",
+      "deviation": "D-39",
+      "why": "New metric keys (addendum 9.14): the Switchyard snapshot appends the new keys after every key the Python reference serves; nothing before them differs",
+      "diffs": [
+        {
+          "path": "body/points/15",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.latency_ms\",\"labels\":{\"model\":\"nemotron-lightning\",\"q\":\"p50\"},\"unit\":\"ms\",\"value\":528.72}"
+        },
+        {
+          "path": "body/points/16",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.latency_ms\",\"labels\":{\"model\":\"nemotron-lightning\",\"q\":\"p99\"},\"unit\":\"ms\",\"value\":9451.1}"
+        },
+        {
+          "path": "body/points/17",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.errors_total\",\"labels\":{\"model\":\"nemotron-lightning\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/18",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.cache_hit_ratio\",\"labels\":{\"model\":\"nemotron-lightning\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/19",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.max_context_tokens\",\"labels\":{\"model\":\"nemotron-lightning\"},\"unit\":\"tok\",\"value\":116047.0}"
+        },
+        {
+          "path": "body/points/20",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.latency_ms\",\"labels\":{\"model\":\"qwen3.8-27b-1m\",\"q\":\"p50\"},\"unit\":\"ms\",\"value\":1055.91}"
+        },
+        {
+          "path": "body/points/21",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.latency_ms\",\"labels\":{\"model\":\"qwen3.8-27b-1m\",\"q\":\"p99\"},\"unit\":\"ms\",\"value\":2977.17}"
+        },
+        {
+          "path": "body/points/22",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.errors_total\",\"labels\":{\"model\":\"qwen3.8-27b-1m\"},\"unit\":\"1\",\"value\":1.0}"
+        },
+        {
+          "path": "body/points/23",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.cache_hit_ratio\",\"labels\":{\"model\":\"qwen3.8-27b-1m\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/24",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.max_context_tokens\",\"labels\":{\"model\":\"qwen3.8-27b-1m\"},\"unit\":\"tok\",\"value\":370.0}"
+        },
+        {
+          "path": "body/points/25",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.latency_ms\",\"labels\":{\"model\":\"qwen3.8-flash-next\",\"q\":\"p50\"},\"unit\":\"ms\",\"value\":8449.91}"
+        },
+        {
+          "path": "body/points/26",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.latency_ms\",\"labels\":{\"model\":\"qwen3.8-flash-next\",\"q\":\"p99\"},\"unit\":\"ms\",\"value\":47093.45}"
+        },
+        {
+          "path": "body/points/27",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.errors_total\",\"labels\":{\"model\":\"qwen3.8-flash-next\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/28",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.cache_hit_ratio\",\"labels\":{\"model\":\"qwen3.8-flash-next\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/29",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.model.max_context_tokens\",\"labels\":{\"model\":\"qwen3.8-flash-next\"},\"unit\":\"tok\",\"value\":143002.0}"
+        },
+        {
+          "path": "body/points/30",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.routing_overhead_ms\",\"labels\":{\"q\":\"p50\"},\"unit\":\"ms\",\"value\":26.76}"
+        },
+        {
+          "path": "body/points/31",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.routing_overhead_ms\",\"labels\":{\"q\":\"p99\"},\"unit\":\"ms\",\"value\":508.79}"
+        },
+        {
+          "path": "body/points/32",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.fallbacks_total\",\"labels\":{\"reason\":\"context_window\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/33",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.fallbacks_total\",\"labels\":{\"reason\":\"unavailable\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/34",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.decisions_total\",\"labels\":{\"source\":\"capable_hold\",\"target\":\"qwen3.8-flash-next\"},\"unit\":\"1\",\"value\":2.0}"
+        },
+        {
+          "path": "body/points/35",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.decisions_total\",\"labels\":{\"source\":\"dimensions\",\"target\":\"qwen3.8-flash-next\"},\"unit\":\"1\",\"value\":1.0}"
+        },
+        {
+          "path": "body/points/36",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.decisions_total\",\"labels\":{\"source\":\"fall_open\",\"target\":\"nemotron-lightning\"},\"unit\":\"1\",\"value\":7.0}"
+        },
+        {
+          "path": "body/points/37",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.decisions_total\",\"labels\":{\"source\":\"llm-classifier\",\"target\":\"nemotron-lightning\"},\"unit\":\"1\",\"value\":48.0}"
+        },
+        {
+          "path": "body/points/38",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.decisions_total\",\"labels\":{\"source\":\"llm-classifier\",\"target\":\"qwen3.8-flash-next\"},\"unit\":\"1\",\"value\":1.0}"
+        },
+        {
+          "path": "body/points/39",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.client_responses_total\",\"labels\":{\"outcome\":\"client_disconnected\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/40",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.client_responses_total\",\"labels\":{\"outcome\":\"ok\"},\"unit\":\"1\",\"value\":72.0}"
+        },
+        {
+          "path": "body/points/41",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.client_responses_total\",\"labels\":{\"outcome\":\"other_error\"},\"unit\":\"1\",\"value\":1.0}"
+        },
+        {
+          "path": "body/points/42",
+          "a": "(absent)",
+          "b": "{\"key\":\"sy.client_responses_total\",\"labels\":{\"outcome\":\"retryable_error\"},\"unit\":\"1\",\"value\":0.0}"
+        }
+      ]
+    },
+    {
+      "case": "reread.dynamo.metrics",
+      "deviation": "D-39",
+      "why": "New metric keys (addendum 9.14): the Dynamo snapshot appends the new keys after every key the Python reference serves; nothing before them differs",
+      "diffs": [
+        {
+          "path": "body/points/17",
+          "a": "(absent)",
+          "b": "{\"key\":\"dyn.capacity\",\"labels\":{\"kind\":\"context_length\"},\"unit\":\"tok\",\"value\":262144.0}"
+        },
+        {
+          "path": "body/points/18",
+          "a": "(absent)",
+          "b": "{\"key\":\"dyn.capacity\",\"labels\":{\"kind\":\"kv_blocks\"},\"unit\":\"1\",\"value\":359.0}"
+        },
+        {
+          "path": "body/points/19",
+          "a": "(absent)",
+          "b": "{\"key\":\"dyn.capacity\",\"labels\":{\"kind\":\"max_num_seqs\"},\"unit\":\"1\",\"value\":64.0}"
+        },
+        {
+          "path": "body/points/20",
+          "a": "(absent)",
+          "b": "{\"key\":\"dyn.capacity\",\"labels\":{\"kind\":\"max_batched_tokens\"},\"unit\":\"tok\",\"value\":8192.0}"
+        },
+        {
+          "path": "body/points/21",
+          "a": "(absent)",
+          "b": "{\"key\":\"dyn.preemptions_total\",\"labels\":{},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/22",
+          "a": "(absent)",
+          "b": "{\"key\":\"dyn.spec_accept_pos\",\"labels\":{\"pos\":\"0\"},\"unit\":\"ratio\",\"value\":1.0}"
+        },
+        {
+          "path": "body/points/23",
+          "a": "(absent)",
+          "b": "{\"key\":\"dyn.spec_accept_pos\",\"labels\":{\"pos\":\"1\"},\"unit\":\"ratio\",\"value\":0.7333333333333333}"
+        }
+      ]
+    },
+    {
+      "case": "reread.dcgm.metrics",
+      "deviation": "D-39",
+      "why": "New metric keys (addendum 9.14): the DCGM snapshot appends the new keys after every key the Python reference serves; nothing before them differs",
+      "diffs": [
+        {
+          "path": "body/points/50",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.fb_reserved_b\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"B\",\"value\":667942912.0}"
+        },
+        {
+          "path": "body/points/51",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.fb_reserved_b\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"B\",\"value\":670040064.0}"
+        },
+        {
+          "path": "body/points/52",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.mem_clock_mhz\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"MHz\",\"value\":13365.0}"
+        },
+        {
+          "path": "body/points/53",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.mem_clock_mhz\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"MHz\",\"value\":7001.0}"
+        },
+        {
+          "path": "body/points/54",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.enc_util\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/55",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.enc_util\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/56",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.dec_util\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/57",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.dec_util\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"ratio\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/58",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.energy_mj_total\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"mJ\",\"value\":6849681072.0}"
+        },
+        {
+          "path": "body/points/59",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.energy_mj_total\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"mJ\",\"value\":7493425318.0}"
+        },
+        {
+          "path": "body/points/60",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.row_remap_failure\",\"labels\":{\"gpu\":\"1\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/61",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.row_remap_failure\",\"labels\":{\"gpu\":\"0\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/62",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.remapped_rows\",\"labels\":{\"gpu\":\"1\",\"kind\":\"correctable\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/63",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.remapped_rows\",\"labels\":{\"gpu\":\"0\",\"kind\":\"correctable\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/64",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.remapped_rows\",\"labels\":{\"gpu\":\"1\",\"kind\":\"uncorrectable\",\"model\":\"RTX-PRO-6000-Blackwell-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        },
+        {
+          "path": "body/points/65",
+          "a": "(absent)",
+          "b": "{\"key\":\"dcgm.remapped_rows\",\"labels\":{\"gpu\":\"0\",\"kind\":\"uncorrectable\",\"model\":\"RTX-PRO-6000-Blackwell-Max-Q-Workstation\"},\"unit\":\"1\",\"value\":0.0}"
+        }
+      ]
+    },
+    {
+      "case": "reread.evaluator.events",
+      "deviation": "D-41",
+      "why": "Wider event data (addendum 9.15): an evaluator.run benchmark also carries the confidence interval, tokens, elapsed time and failure rate that run.json already holds; nothing else differs",
+      "diffs": [
+        {
+          "path": "body/0/data/benchmarks/0/ci_high",
+          "a": "(absent)",
+          "b": "1"
+        },
+        {
+          "path": "body/0/data/benchmarks/0/ci_low",
+          "a": "(absent)",
+          "b": "1"
+        },
+        {
+          "path": "body/0/data/benchmarks/0/elapsed_s",
+          "a": "(absent)",
+          "b": "0.0"
+        },
+        {
+          "path": "body/0/data/benchmarks/0/failure_rate",
+          "a": "(absent)",
+          "b": "0"
+        },
+        {
+          "path": "body/0/data/benchmarks/0/tokens",
+          "a": "(absent)",
+          "b": "2875"
+        }
+      ]
+    }
+  ]
+}

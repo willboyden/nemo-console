@@ -9,6 +9,13 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/audit/summary",
+      "auth": "admin",
+      "body": false,
+      "rust_only": "D-42"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/health",
       "auth": "public",
       "body": false
@@ -69,6 +76,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/systems/{system_id}/analytics",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/capture",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/systems/{system_id}/config",
       "auth": "viewer",
       "body": false
@@ -105,6 +126,13 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/systems/{system_id}/decisions",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-42"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/systems/{system_id}/events",
       "auth": "viewer",
       "body": false
@@ -117,6 +145,13 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/systems/{system_id}/fleet",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-38"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/systems/{system_id}/metrics",
       "auth": "viewer",
       "body": false
@@ -126,6 +161,13 @@
       "path": "/api/v1/systems/{system_id}/metrics/history",
       "auth": "viewer",
       "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/metrics/series",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-36"
     },
     {
       "method": "GET",
@@ -159,21 +201,116 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/systems/{system_id}/rails",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-42"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/systems/{system_id}/runs/{run_id}/files",
       "auth": "viewer",
       "body": false
     },
     {
       "method": "GET",
-      "path": "/api/v1/systems/{system_id}/runs/{run_id}/records",
+      "path": "/api/v1/systems/{system_id}/runs/{run_id}/profile",
       "auth": "viewer",
-      "body": false
+      "body": false,
+      "rust_only": "D-40"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/runs/{run_id}/records",
+      "auth": "admin",
+      "body": false,
+      "auth_deviation": {
+        "python": "viewer",
+        "deviation": "D-37"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/runs/{run_id}/requests",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-40"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/runs/{run_id}/summary",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-40"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/sessions",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/sessions/{session_key}",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
     },
     {
       "method": "GET",
       "path": "/api/v1/systems/{system_id}/status",
       "auth": "viewer",
       "body": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/traces",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/traces/index",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/traces/{trace_id}",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/traces/{trace_id}/spans/{span_id}/content",
+      "auth": "admin",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/trajectories",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/trajectories/{trajectory_id}",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-34"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/trajectories/{trajectory_id}/steps/{step_id}/content",
+      "auth": "admin",
+      "body": false,
+      "rust_only": "D-34"
     },
     {
       "method": "GET",

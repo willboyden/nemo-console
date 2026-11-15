@@ -140,7 +140,7 @@ because the GET catch-all matches every path, every non-GET to an unknown path i
 | GET | .../metrics/history `?window=15m&key=` | viewer | | observe.metrics_history | |
 | GET | .../events `?limit=1..500 (100)` | viewer | | observe.events | |
 | GET | .../events/stream (SSE) | viewer | | observe.events_stream | |
-| GET | .../runs/{run_id}/records `?limit=1..200 (50)&offset>=0` | viewer | | observe.dd_run_records | |
+| GET | .../runs/{run_id}/records `?limit=1..200 (50)&offset>=0` | viewer (admin in Rust since D-37) | | observe.dd_run_records | |
 | GET | .../runs/{run_id}/files | viewer | | observe.dd_run_files | |
 | GET | .../config | viewer | | configure.config_list | |
 | GET | .../config/{file_id} | viewer (viewers get `redact(keep_env_names)` content) | | configure.config_get | |
@@ -516,7 +516,347 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
   profile read back as `auth_style: bearer [redacted]: authorization`). The Rust masks match within one line, so
   config reads of such files differ (case ids `cfgread.openshell.provider-profile` and `.viewer` in
   `parity/allow-diffs.txt`). Every other difference on that route still fails the gate.
-- **D-34 `script-src` allows WebAssembly compilation (ADR-0022).** The config editor runs the backend's own
+- **D-34 The Relay trace explorer (addendum 9.12, ADR-0021), eleven routes added after the port.** Eleven read-only GETs
+  under `/api/v1/systems/{system_id}/` (`traces/index`, `traces`, `traces/{trace_id}`, the admin-only
+  `traces/{trace_id}/spans/{span_id}/content`, `sessions`, `sessions/{session_key}`, `analytics`, `trajectories`,
+  `trajectories/{trajectory_id}`, the admin-only `trajectories/{trajectory_id}/steps/{step_id}/content`, `capture`) read
+  NeMo Relay's capture files into an in-memory index (`adapters/relay_traces`, one standing background task, started and
+  stopped with the server). The Python reference has none of them: `tests/core_routes_table.rs` lists them as
+  `RUST_ONLY` and marks their rows `"rust_only": "D-34"` in `parity/routes.rust.json`, so `parity/check-routes.mjs`
+  lists them, checks that Python has none of them and leaves them out of the route-set comparison; the corpus has no
+  cases for them (Python would answer 404). `assets/openapi.json` lists them (entries added by hand in the generated
+  style; `parity/gen/gen_openapi.py` would drop them again, which
+  `core_roles::test_openapi_and_app_routes_are_exactly_the_enumerated_ones` catches), so the document differs from the
+  reference's by exactly those eleven paths (case ids `global.openapi.admin`, `.viewer` and their `.after` repeats in
+  `parity/allow-diffs.txt`). Shared code: `services/gzip.rs` gains a streaming reader (`GzReader`, an `std::io::Read`
+  over every member with CRC and length checks, bounded memory, `UnexpectedEof` after what could be decoded from a
+  truncated file) and a faster CRC (`crc_update_fast`, same values), and the reader can record seek points
+  (`GzReader::with_checkpoints`: a `GzCheckpoint` at a deflate block boundary about every 32 MiB of output, with its bit
+  offset, output offset, member start and the 32 KiB window; at most 160 per file, the spacing doubles past that, so
+  under about 5 MiB per file) and start again from one (`GzReader::resume`, which skips the CRC and length check of the
+  member it starts inside only). The trace index keeps a file's points with its identity (device, inode, size, mtime)
+  and the content route resumes at the nearest point at or before the line (after the usual head check; points of
+  another file are never used), so a line deep in a large rotation costs at most about one spacing of decompression. The
+  one-shot reader (`read_tail`, the Relay events route's) is unchanged: no line of the old code was edited. Content text
+  also gets a trace-explorer-only credential-pair pass after `scrub()` (`adapters/relay_traces/secrets.rs`, the `regex`
+  crate: JSON pairs plain, escaped and single-quoted, YAML/env/query forms); the shared `scrub()` is unchanged.
+  `adapters/relay.rs` gains the `trace_explorer` / `start_background` / `stop_background` implementations and helpers
+  (`scrub_count`, `ident_ok`, `atof_rotation`), and makes its file-opening helpers `pub(crate)`; its existing routes
+  behave as before.
+- **D-35 The Relay secret scrubber's `key = "value"` rule is linear (security audit of the trace explorer, F1 and R1).**
+  The Python reference's third `SECRET_PATTERNS` entry, `(?im)^(\s*KEY\s*=\s*)(["'])(?!\[REDACTED)[^"'\n]+\2`, needs a
+  back-reference and a look-ahead; the port ran it on fancy-regex, which gives up past its backtrack limit (about a
+  thousand blank lines before an unclosed quote), where the Rust `scrub()` then copied the rest of the text unredacted.
+  `adapters/relay.rs` now runs it on the `regex` crate (linear, no limit): the back-reference becomes one alternative
+  per quote and the look-ahead a check in the replacement (a value already starting with `[REDACTED` is left as it is,
+  which is what the original's failed match leaves). The blanks around `=` stay D-32's same-line `[^\S\r\n]*`. On every
+  input both can finish the output is the same, checked against the old pattern as an oracle
+  (`tests/relay_relay_scrub.rs`, 400 generated texts); Python's `re` has no backtrack limit and redacts correctly, so
+  the two now agree on the pathological inputs too. No fail-closed backstop remains in `scrub()` (nothing in it can give
+  up). The trace explorer's content goes through the same `scrub_count()` and then its own credential-pair pass
+  (`adapters/relay_traces/secrets.rs`).
+- **D-36 The series route (addendum 9.13), one route added after the port.** `GET
+  /api/v1/systems/{system_id}/metrics/series` (viewer, every system): `keys` = 1..12 canonical keys separated by the
+  commas outside braces (so a labelled key such as `sy.tokens{kind=prompt,model=x}` keeps its own commas), `window` =
+  `15m|1h|24h|7d` (default `1h`), `split` = `0|1` (default `0`); answer `{window, step_s, from, to, series: [{key,
+  label, points: [[ts, avg, max]]}], truncated}`. `15m` reads the in-memory ring (raw points, `max` = the value,
+  `step_s` = the poll interval, `from` = now - 900); `1h` and `24h` the `rollup` table at 60 s after the same flush
+  of pending minutes the history route does (`from` = the first minute's start); `7d` regroups the rollups into
+  600 s buckets in SQL (`bucket / 10`; avg = `SUM(avg * n) / SUM(n)`, max = `MAX(max)`; `from` aligned down to a
+  10-minute boundary so the first bucket is never partial). A bare key matches its label variants with a range scan of
+  the `(system, series, bucket)` primary key (`key{` <= series < `key|`). `split=0` sums the variants per bucket (avg
+  and max each summed, `label` null); `split=1` gives one series per stored name, ordered by name, `label` = the
+  name's labels parsed into an object (`services::metrics::series_labels`, the inverse of `series_name`: `k=v` pairs,
+  a part without `=` continues the previous value, a value in double quotes is unwrapped; a name without labels gives
+  `{}`), at most 32 per key (`truncated: true` when any key lost some). A key without data is one series with
+  `label` null and `points: []`; non-finite values are left out. 422 `invalid_request` for a `keys` parameter longer
+  than 12 x 266 + 11 = 3203 characters (`SERIES_KEYS_MAX_LEN`: 12 keys of the longest form `KEY_RE` accepts and their
+  commas; checked before splitting), an unknown window, more than 12 keys, an empty or malformed key, `split` other
+  than `0`/`1`. Cost bounds (wave-1 audit): the work runs on the blocking pool (`spawn_blocking`); each distinct key
+  is read once and a repeated key gets a copy of its answer (the contract answers every requested key); the rollups
+  are read on a read-only SQLite connection of the request's own (WAL readers do not wait for the writer), so a long
+  read never holds the store lock the poller's flush and the audit log write through (it falls back to the store's
+  connection only when that cannot be opened; `series_stats().fallbacks` counts it); `split=0` sums the variants in
+  SQL (one row per bucket leaves the database); `split=1` first reads the first 33 distinct names (`LIMIT`; the 33rd
+  only sets `truncated`) and then the points of the first 32 only, bounded by the 32nd name, so a key with hundreds
+  of variants never reads the rest. Measured (release profile, 256 variants x 8 days = 2.95 M rollup rows, 12 copies
+  of the key): `7d` split=0 0.91 s, split=1 0.32 s; `24h` 0.17 s / 0.27 s; `1h` 0.10 s / 0.03 s (the audit measured
+  13.5-18.4 s for `7d` before; `tests/core_metrics_series.rs::measure_worst_case_series`, ignored, run by hand). The
+  history route and `WINDOWS` (no `7d`) are untouched. Parity: like D-34, `tests/core_routes_table.rs` lists it in
+  `RUST_ONLY` (row `"rust_only": "D-36"` in `parity/routes.rust.json`), the corpus has no case for it, and
+  `assets/openapi.json` gains its entry by hand in the generated style (its `window` and `split` enums are checked
+  against `SERIES_WINDOWS` by a test), so the `global.openapi.*` cases differ by one more path; those four cases are
+  pinned in `parity/pinned-diffs.json` to exactly the twelve added paths (D-34 and D-36), so any other difference in
+  the document fails the run. Tests: `tests/core_metrics_series.rs`.
+  Worst case with 12 DISTINCT keys sharing the 256-series budget (7d, release, from the re-audit): about 3.0 s
+  (split=0) and 4.2 s (split=1), a 10.7 MB answer: inherent data volume, off the async workers and off the store
+  lock. A cap on concurrent series reads (a small semaphore) is a possible follow-up.
+- **D-37 Data Designer run records are admin-only (addendum 9.13).** `GET
+  /api/v1/systems/{system_id}/runs/{run_id}/records` returns model-written rows, like Relay span content (ADR-0021),
+  so its role dependency is `admin` (the handler's `dep_admin`, the route table's role, the role test's admin-GET
+  list); viewers keep the run list, run detail and the artifact list (`/files`: paths and sizes). The Python reference
+  declares `viewer`, so: `tests/core_routes_table.rs` lists the row in `ROLE_CHANGED` and writes it to
+  `parity/routes.rust.json` with `"auth_deviation": {"python": "viewer", "deviation": "D-37"}`;
+  `parity/check-routes.mjs` checks that Python still has exactly that old role, that the Rust role is stricter (admin >
+  viewer > public; a loosening is never accepted as a deviation) and that the deviation has its bullet here, and
+  compares the row with the Python role. Of the corpus, only `ddrun.preview.records.viewer` differs (Python 200 with
+  the rows, Rust 403 `forbidden`), and with it the console's own request counters read afterwards by `metrics.viewer`
+  and `metrics.admin` (the records route's `status="200"` total is one lower and a `status="403"` series appears; no
+  other line differs). The three cases are pinned in `parity/pinned-diffs.json` to exactly those differences
+  (`parity/run.mjs` reads the file next to the allow list; `lib/compare.mjs` `pinMismatch`: every diff must match a
+  pinned path and value, and every pinned one must be seen), so any other difference in them fails the run. The role sweep (`roleSweepCases`) builds its
+  viewer cases from the Python table, where the route is a viewer route, so it adds none; its no-key case is 401 on
+  both. The OpenAPI document carries no roles, so it is unchanged for this route.
+- **D-38 The DCGM fleet route (addendum 9.14), one route added after the port.** `GET
+  /api/v1/systems/{system_id}/fleet` (viewer; DCGM only: every other system answers 404 `not_found` after the role
+  check and before the query is read, through the adapter port's `dcgm_fleet`, whose default is `NoSuchEndpoint` like
+  the trace explorer's): `metric` = `util|temp|power|fb_used` (required), `window` = `1h|24h|7d` (default `24h`); 422
+  `invalid_request` for anything else (an empty value included). Answer `{metric, unit, window, step_s, from, to,
+  rows: [{host, job, gpu, model, points: [[ts, value]]}], truncated}`. The PromQL is
+  `max by (job, host, gpu, modelName) (<FAMILY>{job=~"<jobs>"})`: `<FAMILY>` from the fixed table `FLEET_METRICS`
+  (`DCGM_FI_DEV_GPU_UTIL` / `_GPU_TEMP` / `_POWER_USAGE` / `_FB_USED`), `<jobs>` the configured
+  `dcgm_prometheus_jobs` that pass the adapter's job-name check (`[A-Za-z0-9_-]{1,64}`, the same `jobs_regex()` the
+  instant queries use), so no request text reaches the expression (ADR-0014); grouping by those four labels means no
+  UUID, serial or address ever comes back (E-8). `query_range` on the configured Prometheus URL with the instant
+  queries' client and 5 s timeout (async), the body read with a cap of 16 MiB (`FLEET_MAX_BYTES`: a `Content-Length`
+  over it is refused before reading, otherwise reading stops at the first chunk past it; `Http::get_query_capped`),
+  parsed and turned into rows on the blocking pool (`fleet_rows`: at most 1,024 series looked at, ordered and cut to
+  64 BEFORE any points are built), step 60 / 300 / 1800 s, `to` = now aligned
+  down to the step, `from` = `to` - the window. Values are scaled to the per-GPU keys' units (util ratio, temp C,
+  power W, fb_used B); NaN/Inf samples are left out; `host` is named as for `dcgm.host_up` (`host` label, else `local`
+  for job `dcgm`, else the job); rows without a short numeric `gpu` label are dropped; at most 64 rows (`FLEET_MAX_ROWS`)
+  ordered by host, then GPU numerically, then job (`truncated: true` when more). Prometheus refused / timed out ->
+  200 with `rows: []` and `problem: {code: "dcgm.prometheus.unreachable", message}`; an error status, a non-success
+  document or a body over the cap -> `dcgm.prometheus.bad_answer`; no configured job -> `dcgm.fleet.no_jobs` without a
+  request; `problem` is absent on success. One request reaches Prometheus at a time (single flight: a waiting request
+  answers from the cache the first one filled). Successful answers are cached 30 s per (metric, window) in the adapter
+  (at most 12 entries); a Prometheus failure is answered from memory for 5 s for EVERY (metric, window)
+  (`FLEET_FAIL_CACHE_S`), so concurrent requests during an outage do not each wait for the timeout; a success clears
+  it. Parity: like D-36, `tests/core_routes_table.rs` lists it in
+  `RUST_ONLY` (row `"rust_only": "D-38"`), the corpus has no case for it, and `assets/openapi.json` gains its entry by
+  hand in the generated style (its `metric` and `window` enums are checked against `FLEET_METRICS` / `FLEET_WINDOWS`
+  by `tests/dcgm_viz_wave2.rs::test_the_openapi_entry_of_the_fleet_route_matches_the_code`); the four
+  `global.openapi.*` pins in `parity/pinned-diffs.json` gain exactly that path. Tests: `tests/dcgm_viz_wave2.rs`.
+- **D-39 New metric keys (addendum 9.14).** The DCGM, Switchyard and Dynamo adapters emit more keys from the sources
+  they already read, APPENDED after every key the Python reference emits (so, under the 256-series cap per system,
+  the older keys keep their places and nothing before the new points moves). DCGM (`GPU_METRICS_9_14` and friends,
+  labels `{gpu, model}`): `dcgm.fb_reserved_b` (`FB_RESERVED`, MiB -> B), `dcgm.mem_temp_c` (`MEMORY_TEMP`; 0 = no
+  sensor, so no point), `dcgm.mem_clock_mhz` (`MEM_CLOCK`), `dcgm.enc_util` / `dcgm.dec_util` (`ENC_UTIL` /
+  `DEC_UTIL`, % -> ratio), `dcgm.power_limit_w` (`POWER_MGMT_LIMIT`, else `ENFORCED_POWER_LIMIT`, per GPU),
+  `dcgm.energy_mj_total` (`TOTAL_ENERGY_CONSUMPTION`, mJ), `dcgm.violation_us_total{reason}` (the six `*_VIOLATION`
+  counters, documented in ns by the exporter's counters.csv, x 0.001), `dcgm.remapped_rows{kind}`
+  (`CORRECTABLE_` / `UNCORRECTABLE_REMAPPED_ROWS`), `dcgm.row_remap_failure`. Switchyard (`points_9_14`; per key
+  `/v1/stats` first, `/metrics` when the stats lack that block): `sy.model.latency_ms{model, q=p50|p99}`
+  (`models.*.model_call_latency.p50_ms|p99_ms`, else the `switchyard_model_call_latency_ms` buckets per model; a
+  block whose `count` is 0 gives nothing), `sy.model.errors_total{model}` (`errors`, else `switchyard_errors_total`),
+  `sy.model.cache_hit_ratio{model}` (`cache_hit_rate`), `sy.model.max_context_tokens{model}`
+  (`max_observed_context_tokens`), `sy.routing_overhead_ms{q}` (`routing_overhead.p50_ms|p99_ms`, else the
+  `switchyard_routing_overhead_ms` buckets summed over algorithms), `sy.fallbacks_total{reason}`
+  (`routing_fallbacks.*`), `sy.decisions_total{source, target}`
+  (`algorithm_stats.stage_router.routing_decisions.<source>.targets.<target>`, else
+  `switchyard_stage_router_routing_decisions_total{decision_source, target_name}`), `sy.client_responses_total{outcome}`
+  (`switchyard_client_responses_total`). Upstream text is untrusted (wave-2 audit): every Switchyard label value goes
+  through `switchyard::label_value` (characters outside `A-Z a-z 0-9 _ . : / -` become `-`, runs collapse, `-` trimmed,
+  at most 64 characters, empty -> no point; a name that already fits is unchanged, so the new keys join
+  `sy.model.calls{model}`), at most 64 values per key and scrape (`MAX_GROUPS`), at most 256 distinct `le` bounds per
+  histogram group (`MAX_BUCKETS`), bounds that are not `+Inf` or finite and non-finite samples are ignored, bucket
+  sums use maps (linear in the scrape). Dynamo: `dyn.ttft_window_ms{q=p50|p95|p99}` /
+  `dyn.itl_window_ms{q}` (frontend `dynamo_frontend_time_to_first_token_seconds` /
+  `_inter_token_latency_seconds`), `dyn.phase_ms{phase=queue|prefill|decode|inference, q=p50|p95}` (worker
+  `vllm:request_queue_time_seconds` / `_prefill_time_` / `_decode_time_` / `_inference_time_seconds`): quantiles of
+  the bucket DELTAS since the previous POLL (`HistWindows`: per family the read of the previous poll, per label set).
+  Only the poller moves a baseline: the adapter port gains `poll_metrics()` (default: `metrics()`), which
+  `MetricsPoller::tick` calls through `StatusService::poll_metrics`; Dynamo's `poll_metrics` reads and then makes this
+  read the next baseline, its `metrics()` (the `/systems/dynamo/metrics` route, the UI) compares with the previous
+  poll and changes nothing, so the window is one poll interval (longer after a poll that aborted midway, which neither advances nor clears the baseline) whatever the interval is (a `PUT /settings`
+  change included) and however often the UI reads. No point before the first poll, when nothing finished, on a
+  counter reset (a bucket of a label set went down: on a poll the reset read becomes the baseline) or, on a poll, after
+  the family was absent or the frontend unreadable (the window starts afresh); a label set only one read has adds
+  nothing; at most 64 label sets of 256 bounds per family and scrape (`HIST_MAX_SETS`, `HIST_MAX_BUCKETS`),
+  non-finite bounds and counts ignored, maps not searches (linear),
+  `dyn.preemptions_total` (`vllm:num_preemptions_total`), `dyn.capacity{kind=context_length|kv_blocks|max_num_seqs|
+  max_batched_tokens}` (the frontend's `dynamo_frontend_model_*` gauges, the largest across models),
+  `dyn.spec_accept_pos{pos}` (`vllm:spec_decode_num_accepted_tokens_per_pos_total{position}` /
+  `vllm:spec_decode_num_drafts_total`, since the worker started; `position` must be one or two digits, at most 32
+  positions). A value the source does not report, or a non-finite one, is absent, never 0. One guard for every adapter
+  in `MetricsPoller::record`: a point with a NaN/Inf value or a series name longer than `MAX_SERIES_NAME` (266, the
+  longest key `KEY_RE` accepts) is dropped before the ring and the rollups (`record_stats()` counts them). And a series
+  without a point for `SERIES_IDLE_EVICT_S` (30 min) leaves the ring and gives its slot of the 256 back (its pending
+  minute is written first; its rollups stay), so label churn cannot fill the cap for good; the cap itself still
+  admits series first come, first served. Series budget: DCGM 31 per local GPU + 4 per Prometheus host (this lab: 2 GPUs + 6 hosts = 86 of 256; 7 GPUs
+  still fit, with 8 the last of the NEW per-GPU keys are the ones the cap drops); Switchyard about 6 per model plus
+  decision paths; Dynamo about 27 more. Parity: of the corpus only the seven `/systems/{id}/metrics` cases of these
+  systems differ (`read.*.metrics`, `reread.*.metrics`, `sysv.metrics.viewer`), every difference an appended point
+  (`A` absent); they are pinned in `parity/pinned-diffs.json` to exactly those points. Tests:
+  `tests/dcgm_viz_wave2.rs`, `tests/switchyard_viz_wave2.rs`, `tests/dynamo_viz_wave2.rs`.
+- **D-40 Three per-run visualisation routes (addendum 9.15), added after the port.** All `GET`, viewer, under
+  `/api/v1/systems/{system_id}/runs/{run_id}/`: `summary` (AIPerf and SkillEvaluator), `requests` (AIPerf) and
+  `profile` (Data Designer), through three adapter-port methods (`run_summary`, `run_requests`, `run_profile`) whose
+  defaults answer `NoSuchEndpoint`, so every other system answers 404 `not_found` (after the role check, whatever the
+  run id). The adapter checks the run id with its own `RUN_ID_RE` (AIPerf: lowercase preset; SkillEvaluator and Data
+  Designer: `\d{8}T\d{6}-\d{3}-[A-Za-z0-9._-]{1,128}`): a refused id is 422 `invalid_request` (unlike `/records`
+  and `/files`, which answer 404 for it: the Python reference's behaviour, kept there); a run without a readable
+  `run.json` is 404 "unknown run". Nothing from the request but that run id reaches a path. Files are read in
+  `adapters/runviz.rs` on the blocking pool, at most two reads at a time (`MAX_PARALLEL`). Files (wave-3 audit F2):
+  the run directory is opened once with `O_DIRECTORY | O_NOFOLLOW` (`RunDir`), the AIPerf `artifacts` directory and
+  every file relative to it with `openat` (`O_NOFOLLOW`; files also `O_NONBLOCK | O_CLOEXEC`), so no symlink below
+  the runs directory is followed and a parent renamed between a check and the open cannot redirect a read; only
+  regular files with exactly one link are read (a FIFO neither blocks nor is read, a hardlink to a file elsewhere is
+  refused), each size-capped. A run left at `running` reads as `interrupted`, as `load_meta` does. Memory (wave-3
+  audit F1: a byte cap alone did not bound the parsed tree; a 16 MiB line `[0,0,...]` peaked at 1.2 GiB): every JSON
+  document these routes parse (`run.json`, the AIPerf summary, the Tier 1 result) is at most 1 MiB (`DOC_MAX_BYTES`;
+  larger reads as absent), and every document or line is counted before parsing (`json_nodes`: one more than its
+  `,` `:` `[` `{` outside strings) and refused past 100,000 values (`JSON_MAX_NODES`, about 10 MiB of tree);
+  `tests/runviz_memory.rs` runs each hostile shape in a fresh process and checks the peak resident set (`VmHWM`):
+  5-37 MiB, the 200 MiB bound asserted. Answers:
+  * AIPerf `summary`: `{run_id, preset, model, verdict, concurrency, requests, isl, osl, duration_s, metrics,
+    http_phases_ms}` from `run.json` and `artifacts/profile_export_aiperf.json` (at most 1 MiB here, not `MAX_JSON_BYTES`): every
+    top-level object with at least one finite statistic and a name matching `[a-z][a-z0-9_]{0,63}`, in file order, at
+    most 100, each `{unit, avg, min, max, std, p1, p5, p10, p25, p50, p75, p90, p95, p99}` (absent or non-finite ->
+    null; `count` and `sum` dropped; a unit not matching `[A-Za-z%][A-Za-z0-9/%._ -]{0,31}` -> null). `http_phases_ms`
+    = the `avg` of `http_req_dns_lookup` / `_connecting` / `_sending` / `_waiting` / `_receiving` in ms (null when none
+    is there); `duration_s` = `benchmark_duration` (sec), else `run.json` `metrics.duration_s`. `preset`, `model` and
+    `verdict` pass the adapter's checks or are null; the numbers are finite numbers or null. No metric without numbers
+    (`input_config`, `run_info`, `error_summary`, ids, times) reaches the answer. Without a profile `metrics` is `{}`.
+  * AIPerf `requests`: from `artifacts/profile_export.jsonl` (16 MiB, `MAX_EXPORT_BYTES`; a longer file is cut at the
+    last whole line and the answer says `truncated`), at most 200,000 lines looked at (every line counts, a request or
+    not). A line over 256 KiB (`REQUEST_LINE_MAX`; real records are about 2 KiB) or 100,000 values is not parsed: it
+    is counted in an extra answer key `skipped` and sets `truncated`. Two passes over the bytes: the
+    first parses each line once (a request = a JSON object), finds the first `request_start_ns` and numbers the
+    `worker_id`s by first appearance in the file (at most 1,024 workers, ids of at most 128 bytes; others null); the
+    second re-parses only the rows returned: all when there are at most 5,000, else 5,000 evenly spaced (`k * (total -
+    1) / 4999`, first and last included). Row `{i, start_ms, end_ms, latency_ms, ttft_ms, itl_avg_ms, input_tokens,
+    output_tokens, worker, error_code}`: `i` = the request's index in the file; times relative to the first start;
+    `latency_ms` / `ttft_ms` / `itl_avg_ms` from the record metrics `request_latency` / `time_to_first_token` /
+    `inter_token_latency` (`{value, unit}`, unit ms, ns, us or s converted, any other unit null); tokens from
+    `input_sequence_length` (else `usage_prompt_tokens`, `error_isl`) and `output_sequence_length` (else
+    `output_token_count`, `usage_completion_tokens`); `error_code` = an integer `error.code` in 0..999999 or a string
+    of 1..6 digits, 0 when the record has a non-empty `error` without such a code, null without an error. No request,
+    correlation, conversation or worker id, no error text: `error.message` and `error.type` are never read.
+  * SkillEvaluator `summary`: `{run_id, skill, tiers, verdict, tier1, tier3}`. `tier1` (null when
+    `skillevaluator-tier1.json` is absent, over 1 MiB here (not `MAX_RESULT_BYTES`), over 100,000 values or not an
+    object): `validators` (at most 64;
+    name matching `[A-Za-z0-9][A-Za-z0-9 &._/()+:-]{0,79}`, others left out; `passed` a bool or null; `status` a word
+    or null; `findings` = counts by severity `critical/high/medium/low/info`, case-insensitive, a finding without a
+    severity counted as `info` as `failed_checks` does, an unknown severity not counted), `rubric` (at most 32 of
+    `rubric_eval.checks`: `id` matching `[a-z][a-z0-9_]{0,63}`, `importance` high/medium/low or null, `score`, `pass`,
+    `judge_pass`), `dimensions` (`quality_summary[0].dimensions.<name>.score`, at most 16). `tier3` (null unless
+    `run.json` has a `tier3` object): `agents` (at most 8, the adapter's name and model checks) with `skill_lift`,
+    `with_skill`, `without_skill` and `metrics` (at most 16, `[{name, with_skill, without_skill, delta}]`) from the
+    numbers `summarize_tier3` already stored. Never a finding message, title, check or suggestion, criterion text,
+    note, summary, conclusion, recommendation or error text.
+  * Data Designer `profile`: `{run_id, rows, columns, columns_dropped, values_hidden, truncated}` over
+    `records.jsonl` (the lines the console exported), at most 64 MiB read; a line over 1 MiB (`PROFILE_LINE_MAX`) is
+    skipped without being held whole (`BufRead::skip_until`), so are lines over 100,000 values; at most 2,000 records
+    (`MAX_PREVIEW_RECORDS`), values measured as `/records` shows them (`cap_value`: strings cut to 2,048 characters).
+    `truncated` is true whenever a cap stopped or thinned the read (a 2,001st record, the byte cap before the end of
+    the file, a skipped line, a dropped column; wave-3 audit F3: these were silent). Columns in first-seen order, at
+    most 200; a name that is not an identifier (`[A-Za-z_][A-Za-z0-9_]{0,63}`, owner's decision F4) or past the 200th
+    is dropped and counted in `columns_dropped` (distinct names, counted up to 1,000). Per column `{name, types: {string,
+    number, bool, null, object, array}, non_null, distinct, distinct_capped, length, numeric, top}`: `types.null` =
+    records without a non-null value (absent keys count as null, so the counts add up to `rows`); `distinct` over
+    non-null values, counted with per-request keyed 64-bit hashes up to 1,000 (`distinct_capped` past it);
+    `length` / `numeric` = nearest-rank `{min, p50, p95, max}` of string lengths / finite numbers, null when there are
+    none; `top` = the 10 most frequent non-null values (ties by first appearance) of a column with at most 50 distinct
+    values, a string or the JSON text of an object / array cut to 64 characters, numbers and booleans as they are.
+    `top` and `numeric` are cell values (a nearest-rank quantile IS a value of the column), so both are ONLY for an
+    admin (the handler passes `principal.role == Admin`; loopback trust is admin; owner's decision F4: viewers get
+    aggregates, never row values): a viewer gets `top: null` and `numeric: null` everywhere and `values_hidden: true`,
+    and those values are not even collected for a viewer. `length` (string lengths are not content) is for both.
+  Parity: like D-36 and D-38, `tests/core_routes_table.rs` lists the three in `RUST_ONLY` (rows `"rust_only": "D-40"`
+  in `parity/routes.rust.json`), the corpus has no case for them, and `assets/openapi.json` gains their entries by
+  hand in the generated style (checked by `the_openapi_entries_of_the_run_routes_match_the_code`); the four
+  `global.openapi.*` pins in `parity/pinned-diffs.json` gain exactly those three paths. Tests:
+  `tests/runviz_wave3.rs`, `tests/runviz_memory.rs`.
+- **D-41 Wider run event data (addendum 9.15).** New keys only. `evaluator.run`: each `benchmarks[]` entry gains
+  `ci_low`, `ci_high`, `tokens`, `elapsed_s`, `failure_rate`, copied from the run's stored `results` (which
+  `Inner::results` already keeps from summary.json) when they are finite numbers (an integer stays an integer), else
+  null. `gym.smoke`: `rewards`, the per-task rewards `run.json` keeps (finite numbers, at most 20,
+  `EVENT_MAX_REWARDS`), null when the run recorded none. Parity: of the corpus only `reread.evaluator.events`
+  differs, by exactly the five keys of its one benchmark (`A` absent), pinned in `parity/pinned-diffs.json`; the gym
+  change is not visible to the harness (the Python reference has no NeMo Gym adapter: `stub:gym`, D-8). Tests:
+  `tests/runviz_wave3.rs` (`evaluator_events_carry_the_benchmark_numbers`, `gym_events_carry_at_most_20_rewards`).
+- **D-42 Three wave-4 routes (addendum 9.16), added after the port; OpenShell events persisted.** All `GET`.
+  * `/api/v1/systems/{system_id}/rails` (viewer; Guardrails only, every other system 404 `not_found` before anything
+    is read, through the adapter port's `rails`, default `NoSuchEndpoint`): `{configs: [{id, main_model, input, output,
+    streaming: {enabled, chunk_size, context_size} | null, retrieval}], problems: [{config, code, count}]}`. Config ids
+    as the adapter lists them (`guardrails_rails::config_ids_in`, which `GuardrailsAdapter::config_ids` now calls; it
+    looks at no more than 4,096 directory entries), at most 64 (`configs.capped`, config null). Per config `config.yml`, else `config.yaml`, opened relative to an
+    `O_NOFOLLOW` directory descriptor (`runviz::RunDir`: no symlink, no hard link, regular file, at most 256 KiB:
+    `config.too_large`; `config.unreadable`, `config.not_utf8`, `config.yaml_error`, `config.not_a_mapping`). The YAML
+    is COMPOSED (`pyyaml::compose`), never constructed, so an alias points at a shared node (an alias bomb or a large
+    aliased scalar costs nothing) and only the fixed key path is walked. Bounds after the pre-merge audit (F3): a key
+    lookup scans at most 256 entries of a mapping (`MAP_SCAN`; a key past them is not found) and `models` at most 32
+    distinct items (`MODELS_SCAN`; an alias of an item already seen is skipped), so aliasing one large mapping into
+    `models` many times stays linear (the audit measured 2.75 s per config before). `models[type=main].model` (the
+    first; must pass the adapters' model check and come out of `redact()` unchanged, else null and
+    `main_model.dropped`), `rails.{input,output,retrieval}.flows` (string scalars matching `[A-Za-z0-9 _.-]{1,80}` that
+    `redact()` leaves unchanged, else dropped and counted in `flows.dropped`; at most 64 per list, the rest
+    `flows.capped`), `rails.output.streaming.{enabled (YAML 1.1 bool), chunk_size, context_size (plain decimal
+    ints 0..10^9, else null)}`, else a top-level boolean `streaming` as `{enabled, null, null}`, else null. Merge keys
+    (`<<`) are not applied. No prompt, instruction, parameter or `.co` text is read into the answer. Runs on the
+    run-visualisation blocking pool (`runviz::blocking`, 2 at a time). A config that cannot be read is still listed
+    with empty lists.
+  * `/api/v1/systems/{system_id}/decisions?sandbox=&limit=` (viewer; OpenShell only, 404 for the others before the
+    query is read): `sandbox` must match the adapter's `NAME_RE` (else 422), `limit` 1..2000, default 500 (pydantic
+    422 texts); a name not in the live list (`sandbox list`, the 2 s snapshot; a failed list counts as "not live") is
+    404 "unknown sandbox". The CLI call is the `sandbox_logs` action's runner path (`sandbox_log`: `openshell -g
+    openshell logs NAME -n 2000`, 30 s; output cap 1 MiB `DECISIONS_MAX_BYTES`, so 2,000 lines of up to ~520 bytes
+    fit; the action itself keeps 512,000), the text ANSI-stripped and redacted, then parsed on the blocking pool (`openshell_viz::decisions`): a row only from a line
+    `[ts] [src] [OCSF ] [ocsf] CLASS:ACTIVITY [LEVEL] VERDICT [TARGET] ...` whose verdict is `ALLOWED`/`ALLOW`
+    (`allowed`) or `DENIED`/`DENY`/`BLOCKED` (`denied`); `category` from `CATEGORIES` (SSH, CONFIG, NET/NETWORK, HTTP,
+    DNS, PROC/PROCESS, FILE/FS, POLICY, AUTH), `kind` from `KINDS` (OPEN, CLOSE, CONNECT, REQUEST, APPLYING, BUILT,
+    EXEC, READ, WRITE, RESOLVE, LOAD), anything else `other`; `target` only `host:port` (a DNS name of
+    letters/digits/`-` labels, an IPv4 address or `[IPv6]`, and a port 1..65535; at most 120 characters): the token
+    after the verdict, else the token after the first ` -> `, else null (audit F6: no other word of the line is ever
+    shown); only the first 1,024 bytes of a line are looked at; a non-finite time drops the row. Answer `{sandbox, rows: [{ts, category, verdict, kind, target}], truncated}`,
+    rows oldest first, the newest `limit` of at most 2,000 kept; `truncated` when rows were dropped (more than 2,000,
+    more than `limit`, or the CLI output reached its cap). Output that reaches the cap is a capped SUCCESS (audit F2:
+    the runner SIGKILLs the command there, exit -9 without `timed_out`): stdout up to its last newline is parsed (the
+    cut last line is dropped) and `truncated` is set. A failed CLI call (any other non-zero exit, a timeout) answers
+    200 with `rows: []` and `problem: {code: "openshell.logs.failed", message}` (a fixed message; nothing of the CLI's
+    text). Parsed answers are cached 10 s per sandbox (at most 32 sandboxes, the oldest evicted); the cache lock is held across the CLI call, so one `openshell logs` runs
+    at a time for this route.
+  * `/api/v1/audit/summary?window=24h|7d|30d` (ADMIN, default `7d`, 422 otherwise; the handler checks the role too):
+    `{window, from, to, bucket_s, by_day: [{day, system, count}], by_actor: [{actor, system, count}], errors:
+    [{ts_bucket, count}], denied_total, truncated}` over audit rows with `from <= ts <= to` (`to` = now). `day` is a
+    UTC `YYYY-MM-DD`; `system` a known system id, null for a row without one, `other` for any other stored value;
+    `actor` as stored when it matches `[A-Za-z0-9][A-Za-z0-9_.:@-]{0,63}`, else null (merged); at most 200 (actor,
+    system) rows, the busiest first (`truncated`); `errors` = rows with status >= 400 per `bucket_s` (3,600 / 21,600 /
+    86,400 s), only non-empty buckets; `denied_total` = rows with status 401 or 403 (requests refused before a handler
+    are never audit rows: they are only counted by the denial log). No path, no params. Run on the blocking pool on a
+    read-only connection of its own (the store's connection only when that cannot be opened).
+  * OpenShell sandbox events are also written to `<state>/openshell/events.jsonl` (directory 0700, file 0600, opened
+    relative to an `O_NOFOLLOW` directory descriptor, regular single-link file only; `openshell_viz::append`). ONE
+    ordered writer (audit F7e): each poll's events are queued (at most 64 batches; past that a batch is dropped with a
+    warning) and a single drainer on the blocking pool, spawned before the request can be dropped, writes the batches
+    in poll order; the queue lock is held only to push or pop, the writer lock only on the blocking pool, and the
+    "read back yet" check on the async workers is an `AtomicBool` (F7f). Only the ring's fields; each event is checked
+    again before it is written (name `NAME_RE`, id `[A-Za-z0-9._:-]{0,64}`, phase `[A-Za-z0-9 _.-]{0,24}`, the four
+    actions, a time from 0 to now + 1 day: F5) and its summary rebuilt from them. An append to a file whose last byte
+    is not a newline starts with one (F7c). Past 6,000 lines the file is rewritten (exclusive temp file + `renameat`)
+    to the newest 5,000 lines that are still valid events, each written again from its checked fields (F7a). On the
+    first poll or read after a start, stale `.events.jsonl.<16 hex>.tmp` files of an interrupted rewrite are removed
+    (at most 1,024 directory entries looked at; F7b) and the file's tail (at most 8 MiB, read through a ring of the
+    newest 8,192 non-empty lines, so memory never follows the number of lines: F7d; lines over 4 KiB skipped, every
+    field checked again, summaries rebuilt) is read back:
+    the newest 200 events seed the ring, and the sandboxes they leave alive become the baseline, so a restart neither
+    repeats `present` for every sandbox nor misses one deleted while the console was down (that deletion is reported at
+    the next poll). The ring, `RING`, `recent_events` and `follow_events` are otherwise unchanged.
+  Parity: like D-36, D-38 and D-40, `tests/core_routes_table.rs` lists the three in `RUST_ONLY` (rows
+  `"rust_only": "D-42"`), the corpus has no case for them, and `assets/openapi.json` gains their entries by hand in the
+  generated style (checked by `tests/viz_wave4.rs::the_openapi_entries_of_the_wave4_routes_match_the_code`); the four
+  `global.openapi.*` pins in `parity/pinned-diffs.json` gain exactly those three paths. The persisted events change no
+  corpus answer (each backend starts with an empty state directory). Tests: `tests/viz_wave4.rs`.
+- **D-43 `GET /audit` gains optional filters (addendum 9.16).** Still admin. `since`, `until` (epoch seconds 0..10^11,
+  inclusive), `actor` (the stored actor, same check as the summary), `status` (`ok` = status < 400, `error` = status
+  >= 400); an empty value means no filter; anything else (non-numbers, `nan`, `inf`, out of range, `since` > `until`,
+  another status word) is 422 `invalid_request`. Without filters the query is unchanged
+  (`SELECT * FROM audit [WHERE system=?] ORDER BY id DESC LIMIT ?`), so every corpus case answers as before; the read
+  now runs on the blocking pool. Parity: only the OpenAPI document differs: the `/api/v1/audit` entry gains a
+  `description` and the four parameters (`parameters/2..5`), pinned with their exact values in the four
+  `global.openapi.*` entries. Tests: `tests/viz_wave4.rs`.
+- **D-44 `script-src` allows WebAssembly compilation (ADR-0022).** The config editor runs the backend's own
   validators in the browser (`crates/nemo-console-wasm`, built by `make wasm`), so the Rust backend's CSP is
   `script-src 'self' 'wasm-unsafe-eval'` where the Python reference sends `script-src 'self'`. Every response carries
   the header, so instead of an allow-diff per case the harness removes exactly that one token from the Rust side's
@@ -904,4 +1244,4 @@ the nesting budget is the same as natively (vectors at 496 and 497 arrays). The 
 (`crates/nemo-console-core/tests/vectors/check.json`) run natively (`tests/vectors.rs`) and through the built module
 in Node (`frontend/tests/cfg-wasm.test.mjs`); both must give the recorded answers exactly. The e2e suite compares the
 module with the server's validate route on seeded mutations, diagnostic by diagnostic. Size budget 1,500,000 bytes
-(`make wasm` fails above it); no build-machine path in the module or its glue (`make wasm` checks). CSP: D-34.
+(`make wasm` fails above it); no build-machine path in the module or its glue (`make wasm` checks). CSP: D-44.

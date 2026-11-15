@@ -18,6 +18,7 @@ pub mod configure;
 pub mod observe;
 pub use nemo_console_core::api::pyjson; // in nemo-console-core since ADR-0022
 pub mod static_files;
+pub mod traces;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -49,7 +50,7 @@ pub const CSRF_HEADER: &str = "x-console";
 pub const AUDIT_BODY_CAP: usize = 64 * 1024;
 /// `script-src` allows the page's own scripts and WebAssembly compilation of its own module (`'wasm-unsafe-eval'`,
 /// ADR-0022: the config editor runs the backend's validators in the browser). No inline script, no `eval`, no other
-/// origin. A documented parity deviation (PORTING.md D-34): the Python reference sends `script-src 'self'`.
+/// origin. A documented parity deviation (PORTING.md D-44): the Python reference sends `script-src 'self'`.
 pub const CSP: &str = "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 pub const SECURITY_HEADERS: [(&str, &str); 7] = [
     ("content-security-policy", CSP),
@@ -97,10 +98,28 @@ pub enum H {
     Status,
     Metrics,
     History,
+    Series,
+    Fleet,
+    Rails,
+    Decisions,
     Events,
     EventsStream,
     RunRecords,
     RunFiles,
+    RunSummary,
+    RunRequests,
+    RunProfile,
+    TraceIndex,
+    Traces,
+    Trace,
+    SpanContent,
+    Sessions,
+    Session,
+    Analytics,
+    Trajectories,
+    Trajectory,
+    StepContent,
+    Capture,
     ConfigList,
     ConfigGet,
     ConfigValidate,
@@ -116,6 +135,7 @@ pub enum H {
     PlaygroundChat,
     Routing,
     Audit,
+    AuditSummary,
     SettingsGet,
     SettingsPut,
     ConsoleMetrics,
@@ -176,6 +196,26 @@ pub static ROUTES: &[RouteDef] = &[
         false,
         History
     ),
+    // the series route (addendum 9.13; added after the port, PORTING.md D-36)
+    r!(
+        GET,
+        "/systems/{system_id}/metrics/series",
+        Viewer,
+        false,
+        Series
+    ),
+    // the DCGM fleet history (addendum 9.14; added after the port, PORTING.md D-38); other systems answer 404
+    r!(GET, "/systems/{system_id}/fleet", Viewer, false, Fleet),
+    // wave-4 answers (addendum 9.16; added after the port, PORTING.md D-42): the Guardrails rail pipeline and the
+    // OpenShell policy decisions; other systems answer 404
+    r!(GET, "/systems/{system_id}/rails", Viewer, false, Rails),
+    r!(
+        GET,
+        "/systems/{system_id}/decisions",
+        Viewer,
+        false,
+        Decisions
+    ),
     r!(GET, "/systems/{system_id}/events", Viewer, false, Events),
     r!(
         GET,
@@ -184,10 +224,11 @@ pub static ROUTES: &[RouteDef] = &[
         false,
         EventsStream
     ),
+    // admin since addendum 9.13 (PORTING.md D-37; the Python reference has viewer)
     r!(
         GET,
         "/systems/{system_id}/runs/{run_id}/records",
-        Viewer,
+        Admin,
         false,
         RunRecords
     ),
@@ -198,6 +239,96 @@ pub static ROUTES: &[RouteDef] = &[
         false,
         RunFiles
     ),
+    // per-run visualisation answers (addendum 9.15; added after the port, PORTING.md D-40); the summary serves
+    // AIPerf and SkillEvaluator, the requests AIPerf, the profile Data Designer; other systems answer 404
+    r!(
+        GET,
+        "/systems/{system_id}/runs/{run_id}/summary",
+        Viewer,
+        false,
+        RunSummary
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/runs/{run_id}/requests",
+        Viewer,
+        false,
+        RunRequests
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/runs/{run_id}/profile",
+        Viewer,
+        false,
+        RunProfile
+    ),
+    // observe: the Relay trace explorer (addendum 9.12; added after the port, PORTING.md D-34). The literal
+    // `/traces/index` comes before `/traces/{trace_id}` so that "index" is never read as an id.
+    r!(
+        GET,
+        "/systems/{system_id}/traces/index",
+        Viewer,
+        false,
+        TraceIndex
+    ),
+    r!(GET, "/systems/{system_id}/traces", Viewer, false, Traces),
+    r!(
+        GET,
+        "/systems/{system_id}/traces/{trace_id}",
+        Viewer,
+        false,
+        Trace
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/traces/{trace_id}/spans/{span_id}/content",
+        Admin,
+        false,
+        SpanContent
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/sessions",
+        Viewer,
+        false,
+        Sessions
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/sessions/{session_key}",
+        Viewer,
+        false,
+        Session
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/analytics",
+        Viewer,
+        false,
+        Analytics
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/trajectories",
+        Viewer,
+        false,
+        Trajectories
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/trajectories/{trajectory_id}",
+        Viewer,
+        false,
+        Trajectory
+    ),
+    r!(
+        GET,
+        "/systems/{system_id}/trajectories/{trajectory_id}/steps/{step_id}/content",
+        Admin,
+        false,
+        StepContent
+    ),
+    r!(GET, "/systems/{system_id}/capture", Viewer, false, Capture),
     // configure
     r!(
         GET,
@@ -282,6 +413,8 @@ pub static ROUTES: &[RouteDef] = &[
     // admin
     r!(GET, "/routing/summary", Viewer, false, Routing),
     r!(GET, "/audit", Admin, false, Audit),
+    // the audit summary (addendum 9.16; added after the port, PORTING.md D-42)
+    r!(GET, "/audit/summary", Admin, false, AuditSummary),
     r!(GET, "/settings", Viewer, false, SettingsGet),
     r!(PUT, "/settings", Admin, true, SettingsPut),
     // root router
@@ -1004,10 +1137,28 @@ async fn run_handler(h: H, req: Req) -> Result<Response<Body>, ApiError> {
         H::Status => observe::system_status(req).await,
         H::Metrics => observe::system_metrics(req).await,
         H::History => observe::metrics_history(req).await,
+        H::Series => observe::metrics_series(req).await,
+        H::Fleet => observe::dcgm_fleet(req).await,
+        H::Rails => observe::guardrails_rails(req).await,
+        H::Decisions => observe::openshell_decisions(req).await,
         H::Events => observe::events(req).await,
         H::EventsStream => observe::events_stream(req).await,
         H::RunRecords => observe::run_records(req).await,
         H::RunFiles => observe::run_files(req).await,
+        H::RunSummary => observe::run_summary(req).await,
+        H::RunRequests => observe::run_requests(req).await,
+        H::RunProfile => observe::run_profile(req).await,
+        H::TraceIndex => traces::index(req).await,
+        H::Traces => traces::traces(req).await,
+        H::Trace => traces::trace(req).await,
+        H::SpanContent => traces::span_content(req).await,
+        H::Sessions => traces::sessions(req).await,
+        H::Session => traces::session(req).await,
+        H::Analytics => traces::analytics(req).await,
+        H::Trajectories => traces::trajectories(req).await,
+        H::Trajectory => traces::trajectory(req).await,
+        H::StepContent => traces::step_content(req).await,
+        H::Capture => traces::capture(req).await,
         H::ConfigList => configure::config_list(req).await,
         H::ConfigGet => configure::config_get(req).await,
         H::ConfigValidate => configure::config_validate(req).await,
@@ -1023,6 +1174,7 @@ async fn run_handler(h: H, req: Req) -> Result<Response<Body>, ApiError> {
         H::PlaygroundChat => act::playground_chat(req).await,
         H::Routing => admin::routing(req).await,
         H::Audit => admin::audit(req).await,
+        H::AuditSummary => admin::audit_summary(req).await,
         H::SettingsGet => admin::settings_get(req).await,
         H::SettingsPut => admin::settings_put(req).await,
         H::ConsoleMetrics => admin::console_metrics(req).await,
