@@ -8,7 +8,10 @@
 //!     hard link, only regular files, at most [`MAX_CONFIG_BYTES`] (larger reads as unreadable);
 //!   * the YAML is COMPOSED, never constructed: aliases point at shared nodes, so an alias bomb or a large aliased
 //!     scalar costs nothing (constructing would copy the scalar into every alias), and only the fixed key path below
-//!     is walked; each mapping is scanned once per looked-up key (linear in its size);
+//!     is walked. A key lookup scans at most [`MAP_SCAN`] entries of a mapping and the `models` list at most
+//!     [`MODELS_SCAN`] distinct items, so aliasing one big mapping many times (`models: [*m, *m, ...]`) cannot make
+//!     the walk quadratic: the work per config is bounded by a constant plus one pass over each flow list;
+//!   * flow names and the main model also pass `redact()` unchanged (a credential-looking value is dropped);
 //!   * flow names pass a full-match check (letters, digits, space, `_-.`, at most 80 characters) or are dropped and
 //!     counted; at most [`RAILS_MAX_FLOWS`] per list and [`RAILS_MAX_CONFIGS`] configs (the rest counted);
 //!   * the main model passes the adapters' model-alias check or is dropped (counted);
@@ -32,6 +35,12 @@ pub const RAILS_MAX_CONFIGS: usize = 64;
 pub const RAILS_MAX_FLOWS: usize = 64;
 /// The longest flow name kept.
 pub const FLOW_MAX_CHARS: usize = 80;
+/// A key lookup looks at no more than this many entries of a mapping (a key past them is not found).
+pub const MAP_SCAN: usize = 256;
+/// The `models` list: no more than this many items are looked at (an aliased item seen before is skipped).
+pub const MODELS_SCAN: usize = 32;
+/// The config directory: no more than this many entries are looked at.
+pub const CONFIG_DIR_SCAN: usize = 4096;
 
 const STR_TAG: &str = "tag:yaml.org,2002:str";
 const BOOL_TAG: &str = "tag:yaml.org,2002:bool";
@@ -80,7 +89,7 @@ fn map_get(c: &Composed, node: NodeId, key: &str) -> Option<NodeId> {
         return None;
     };
     let mut found = None;
-    for (k, v) in pairs {
+    for (k, v) in pairs.iter().take(MAP_SCAN) {
         if let Some(n) = c.node(*k)
             && n.tag == STR_TAG
             && matches!(&n.kind, NodeKind::Scalar(s) if s == key)
@@ -136,6 +145,11 @@ fn int_scalar(c: &Composed, node: NodeId) -> Option<i64> {
     t.parse::<i64>().ok().filter(|v| *v <= 1_000_000_000)
 }
 
+/// True when `redact()` leaves the value as it is (nothing in it looks like a credential).
+fn unredacted(s: &str) -> bool {
+    crate::services::common::redact(s) == s
+}
+
 /// The flow names of `rails.<kind>.flows`: checked, capped, the rest counted.
 fn flows(c: &Composed, root: NodeId, kind: &str, cfg: &str, p: &mut Problems) -> Vec<Value> {
     let mut out = Vec::new();
@@ -148,7 +162,7 @@ fn flows(c: &Composed, root: NodeId, kind: &str, cfg: &str, p: &mut Problems) ->
     let (mut dropped, mut capped) = (0usize, 0usize);
     for item in items {
         match str_scalar(c, *item) {
-            Some(name) if FLOW_RE.is_match(name) => {
+            Some(name) if FLOW_RE.is_match(name) && unredacted(name) => {
                 if out.len() < RAILS_MAX_FLOWS {
                     out.push(Value::String(name.to_owned()));
                 } else {
@@ -171,14 +185,22 @@ fn main_model(c: &Composed, root: NodeId, cfg: &str, p: &mut Problems) -> Value 
     let Some(NodeKind::Seq(items)) = c.node(models).map(|n| &n.kind) else {
         return Value::Null;
     };
+    let mut seen: Vec<NodeId> = Vec::new();
     for m in items {
+        if seen.contains(m) {
+            continue; // an alias of an item already looked at
+        }
+        if seen.len() == MODELS_SCAN {
+            break;
+        }
+        seen.push(*m);
         if map_get(c, *m, "type").and_then(|t| str_scalar(c, t)) != Some("main") {
             continue;
         }
         let Some(model) = map_get(c, *m, "model").and_then(|n| str_scalar(c, n)) else {
             continue;
         };
-        if MODEL_RE.is_match(model) {
+        if MODEL_RE.is_match(model) && unredacted(model) {
             return Value::String(model.to_owned());
         }
         p.add(Some(cfg), "main_model.dropped", 1);
@@ -271,6 +293,7 @@ pub fn config_ids_in(root: &Path) -> Vec<String> {
         return Vec::new();
     };
     let mut ids: Vec<String> = rd
+        .take(CONFIG_DIR_SCAN)
         .flatten()
         .map(|e| e.path())
         .filter(|p| {

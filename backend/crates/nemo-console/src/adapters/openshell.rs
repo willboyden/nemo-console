@@ -326,11 +326,13 @@ pub struct OpenShellAdapter {
     timing: Mutex<OpenShellTiming>,
     st: Arc<Mutex<St>>,
     snap: tokio::sync::Mutex<Snap>,
-    /// The persisted events (addendum 9.16): whether the file was read back, its line count. ONE writer: every file
-    /// operation runs on the blocking pool under this lock.
+    /// The persisted events (addendum 9.16): whether the file was read back, its line count. Only ever locked on the
+    /// blocking pool (by the loader and the single drainer), never on an async worker.
     persist: Arc<Mutex<Persist>>,
-    /// event writes spawned and not finished yet (tests wait for 0)
-    pending: Arc<std::sync::atomic::AtomicUsize>,
+    /// set once the file was read back: the async fast path, so no request takes the writer lock
+    loaded: Arc<std::sync::atomic::AtomicBool>,
+    /// batches waiting to be written, oldest first, and whether a drainer runs; locked only for a push or a pop
+    queue: Arc<Mutex<PersistQueue>>,
     /// sandbox name -> (when, the parsed decisions) (addendum 9.16); held across the CLI call, so one `openshell
     /// logs` runs at a time for this route.
     decisions_cache: tokio::sync::Mutex<HashMap<String, (Instant, Arc<Decisions>)>>,
@@ -342,6 +344,19 @@ struct Persist {
     loaded: bool,
     lines: usize,
 }
+
+/// The ordered write queue of the persisted events (addendum 9.16): ONE drainer at a time writes the batches in the
+/// order the polls made them.
+#[derive(Default)]
+struct PersistQueue {
+    batches: VecDeque<Vec<SystemEvent>>,
+    draining: bool,
+}
+
+/// At most this many batches wait to be written (a stuck disk must not grow memory); newer ones are dropped.
+const MAX_QUEUED_BATCHES: usize = 64;
+/// At most this many sandboxes' decisions are held in memory (each at most 2,000 rows).
+const DECISIONS_CACHE_ENTRIES: usize = 32;
 
 /// One sandbox's parsed decisions (addendum 9.16).
 struct Decisions {
@@ -401,7 +416,8 @@ impl OpenShellAdapter {
             })),
             snap: tokio::sync::Mutex::new(Snap::empty("not polled")),
             persist: Arc::new(Mutex::new(Persist::default())),
-            pending: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            loaded: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            queue: Arc::new(Mutex::new(PersistQueue::default())),
             decisions_cache: tokio::sync::Mutex::new(HashMap::new()),
         }
     }
@@ -878,11 +894,13 @@ impl OpenShellAdapter {
     /// ring, and the sandboxes they leave alive become the baseline, so a restart neither repeats "present" for every
     /// sandbox nor misses one deleted while the console was down.
     async fn ensure_loaded(&self) {
-        if lock(&self.persist).loaded {
+        use std::sync::atomic::Ordering;
+        if self.loaded.load(Ordering::Acquire) {
             return;
         }
-        let (persist, st, dir) = (
+        let (persist, flag, st, dir) = (
             Arc::clone(&self.persist),
+            Arc::clone(&self.loaded),
             Arc::clone(&self.st),
             self.events_dir(),
         );
@@ -891,12 +909,13 @@ impl OpenShellAdapter {
             if p.loaded {
                 return;
             }
-            p.loaded = true;
             let loaded = super::openshell_viz::load(&dir);
             p.lines = loaded.lines;
             if !loaded.events.is_empty() {
                 Self::seed(&mut lock(&st), loaded.events);
             }
+            p.loaded = true;
+            flag.store(true, Ordering::Release);
         })
         .await;
     }
@@ -942,28 +961,50 @@ impl OpenShellAdapter {
         }
     }
 
-    /// Append the events the last diff emitted to the file, on the blocking pool (spawned at once, so a request
-    /// dropped meanwhile still writes; one writer at a time under the persist lock).
+    /// Queue the events the last diff emitted for the file and make sure ONE drainer runs: it writes the batches in
+    /// order on the blocking pool (spawned at once, so a request dropped meanwhile still writes) and stops when the
+    /// queue is empty. The queue lock is held only to push or pop, never across file work.
     fn persist(&self) {
         let events = std::mem::take(&mut lock(&self.st).fresh);
         if events.is_empty() {
             return;
         }
-        let (persist, pending, dir) = (
+        {
+            let mut q = lock(&self.queue);
+            if q.batches.len() >= MAX_QUEUED_BATCHES {
+                tracing::warn!(
+                    "the OpenShell event writer is behind; dropped a batch of sandbox events"
+                );
+                return;
+            }
+            q.batches.push_back(events);
+            if q.draining {
+                return;
+            }
+            q.draining = true;
+        }
+        let (persist, queue, dir) = (
             Arc::clone(&self.persist),
-            Arc::clone(&self.pending),
+            Arc::clone(&self.queue),
             self.events_dir(),
         );
-        pending.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         drop(tokio::task::spawn_blocking(move || {
-            {
+            loop {
+                let next = {
+                    let mut q = lock(&queue);
+                    let next = q.batches.pop_front();
+                    if next.is_none() {
+                        q.draining = false;
+                    }
+                    next
+                };
+                let Some(events) = next else { break };
                 let mut p = lock(&persist);
                 match super::openshell_viz::append(&dir, &events, p.lines) {
                     Ok(n) => p.lines = n,
                     Err(_) => tracing::warn!("could not persist the OpenShell sandbox events"),
                 }
             }
-            pending.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
         }));
     }
 
@@ -973,20 +1014,24 @@ impl OpenShellAdapter {
         lock(&self.persist).lines
     }
 
-    /// Wait (at most 10 s) until the spawned event writes have finished (tests).
+    /// Wait (at most 10 s) until the queued event writes have finished (tests).
     pub async fn flush_persisted(&self) {
         for _ in 0..2000 {
-            if self.pending.load(std::sync::atomic::Ordering::SeqCst) == 0 {
-                return;
+            {
+                let q = lock(&self.queue);
+                if q.batches.is_empty() && !q.draining {
+                    return;
+                }
             }
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
     }
 
     // ── decisions (addendum 9.16) ───────────────────────────────────────────────────────────
-    /// `openshell logs NAME -n N`: the `sandbox_logs` action's runner path (timeout 30 s, output cap 512,000 bytes).
-    async fn sandbox_log(&self, name: &str, n: usize) -> CommandResult {
-        self.cli(&["logs", name, "-n", &n.to_string()], 30.0, 512_000)
+    /// `openshell logs NAME -n N`: the `sandbox_logs` action's runner path (timeout 30 s; the action's output cap is
+    /// 512,000 bytes, the decisions route's [`super::openshell_viz::DECISIONS_MAX_BYTES`]).
+    async fn sandbox_log(&self, name: &str, n: usize, max_bytes: usize) -> CommandResult {
+        self.cli(&["logs", name, "-n", &n.to_string()], 30.0, max_bytes)
             .await
     }
 
@@ -997,10 +1042,23 @@ impl OpenShellAdapter {
         if let Some((_, d)) = cache.get(name) {
             return Ok(Arc::clone(d));
         }
-        let r = self.sandbox_log(name, viz::DECISIONS_LOG_LINES).await;
-        let d = if r.returncode == 0 {
-            let cut = r.stdout.len() >= viz::DECISIONS_MAX_BYTES;
-            let text = combined(&r);
+        let r = self
+            .sandbox_log(name, viz::DECISIONS_LOG_LINES, viz::DECISIONS_MAX_BYTES)
+            .await;
+        // The runner stops a command whose output reaches the cap (SIGKILL: exit -9, not a timeout): that is a capped
+        // SUCCESS here. Its last line may be cut, so the text ends at the last newline; the rest is parsed.
+        let capped = !r.timed_out
+            && !r.stdout.is_empty()
+            && (r.returncode == -9 || r.stdout.len() >= viz::DECISIONS_MAX_BYTES);
+        let d = if r.returncode == 0 || capped {
+            let cut = capped || r.stdout.len() >= viz::DECISIONS_MAX_BYTES;
+            let text = if capped {
+                r.stdout
+                    .rfind('\n')
+                    .map_or_else(String::new, |i| r.stdout[..=i].to_owned())
+            } else {
+                combined(&r)
+            };
             let (rows, more) = crate::adapters::runviz::blocking(move || {
                 Ok(viz::decisions(&redact(&strip_ansi(&text))))
             })
@@ -1018,8 +1076,15 @@ impl OpenShellAdapter {
             }
         };
         let d = Arc::new(d);
-        if cache.len() >= MAX_SANDBOXES {
-            cache.clear();
+        while cache.len() >= DECISIONS_CACHE_ENTRIES {
+            let Some(oldest) = cache
+                .iter()
+                .min_by_key(|(_, (t, _))| *t)
+                .map(|(k, _)| k.clone())
+            else {
+                break;
+            };
+            cache.remove(&oldest);
         }
         cache.insert(name.to_owned(), (Instant::now(), Arc::clone(&d)));
         Ok(d)
@@ -2402,7 +2467,7 @@ impl SystemAdapter for OpenShellAdapter {
                     ));
                 };
                 let r = self
-                    .sandbox_log(&name, usize::try_from(n).unwrap_or(1))
+                    .sandbox_log(&name, usize::try_from(n).unwrap_or(1), 512_000)
                     .await;
                 Ok(done(
                     t0,

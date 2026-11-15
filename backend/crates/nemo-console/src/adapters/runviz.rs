@@ -316,6 +316,13 @@ impl RunDir {
         renamed
     }
 
+    /// Remove the file `name` in this directory (never a directory; errors ignored). Addendum 9.16.
+    pub fn remove(&self, name: &str) {
+        if one_name(name).is_ok() {
+            let _ = nix::unistd::unlinkat(&self.0, name, nix::unistd::UnlinkatFlags::NoRemoveDir);
+        }
+    }
+
     /// A JSON object from the file `name` (`None`: absent, a symlink, over [`DOC_MAX_BYTES`] or [`JSON_MAX_NODES`],
     /// not an object).
     #[must_use]

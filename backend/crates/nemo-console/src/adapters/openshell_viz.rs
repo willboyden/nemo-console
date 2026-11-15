@@ -5,15 +5,16 @@
 //! Decisions: `openshell logs NAME` prints OCSF lines such as
 //! `[1792841081.496] [sandbox] [OCSF ] [ocsf] SSH:OPEN [INFO] ALLOWED` (tests/fixtures/openshell/logs.txt). A row is
 //! made only from a line whose token after the level is a verdict (`ALLOWED` / `DENIED`, also `ALLOW`, `DENY`,
-//! `BLOCKED`); its `category` / `kind` come from FIXED tables (anything else is `other`), `target` is the next token
-//! only when it is `host:port` or a path-free identifier (at most 120 characters), else null. No other text of the
+//! `BLOCKED`); its `category` / `kind` come from FIXED tables (anything else is `other`), `target` is only ever a
+//! `host:port` (the token after the verdict, else the token after ` -> `; at most 120 characters), else null. No other text of the
 //! line (the message, a command line, a path, a key=value list) is ever copied. At most [`DECISIONS_MAX_ROWS`] rows
 //! (the newest), every line looked at only up to [`DECISION_LINE_PREFIX`] bytes.
 //!
 //! Events: `<state>/openshell/events.jsonl`, one [`SystemEvent`] per line, written by ONE writer (the adapter's
 //! persist lock), 0600, never through a symlink or a hard link (`runviz::RunDir`); past [`EVENTS_REWRITE_AT`] lines it
-//! is rewritten to the newest [`EVENTS_KEEP`]. Read back after a restart with byte and line caps; every field is
-//! checked again (the file is data, not trusted) and the summary is rebuilt from the checked fields.
+//! is rewritten to the newest [`EVENTS_KEEP`] valid lines. Read back after a restart with byte and line caps (a ring of
+//! the newest lines), stale temp files reaped; every field is checked again (the file is data, not trusted; a time
+//! must lie between 0 and now + [`MAX_FUTURE_S`]) and the summary is rebuilt from the checked fields.
 
 use std::collections::VecDeque;
 use std::path::Path;
@@ -34,8 +35,9 @@ pub const DECISIONS_MAX_ROWS: usize = 2000;
 pub const DECISIONS_DEFAULT_LIMIT: usize = 500;
 /// Log lines asked of `openshell logs -n` for the decisions.
 pub const DECISIONS_LOG_LINES: usize = 2000;
-/// The CLI's output cap for the decisions call (the `sandbox_logs` action's cap).
-pub const DECISIONS_MAX_BYTES: usize = 512_000;
+/// The CLI's output cap for the decisions call: 2,000 lines of up to ~520 bytes fit; past it the runner stops the
+/// command and the lines read so far are parsed (`truncated`).
+pub const DECISIONS_MAX_BYTES: usize = 1_048_576;
 /// How long one sandbox's decisions are served from memory.
 pub const DECISIONS_CACHE_S: f64 = 10.0;
 /// Only this many bytes of a line are looked at (a verdict sits in the first hundred).
@@ -79,12 +81,23 @@ static OCSF_RE: LazyLock<Regex> = LazyLock::new(|| {
         r"\[([0-9]{1,12}(?:\.[0-9]{1,9})?)\]\s+\[[A-Za-z0-9_.:-]{0,32}\]\s+\[OCSF\s*\]\s+\[ocsf\]\s+([A-Z][A-Z0-9_]{0,31}):([A-Z][A-Z0-9_]{0,31})\s+\[[A-Z]{1,8}\s*\]\s+([A-Z]{1,16})(?:\s+(\S{1,256}))?(?:\s.*)?",
     )
 });
-/// `host:port` (a DNS name or an IPv4 address, or `[ipv6]`, and a port).
+/// `host:port`: a DNS name (labels of letters, digits and `-`), an IPv4 address or `[ipv6]`, and a port.
 static HOST_PORT_RE: LazyLock<Regex> = LazyLock::new(|| {
-    full(r"(?:[A-Za-z0-9](?:[A-Za-z0-9.-]{0,100}[A-Za-z0-9])?|\[[0-9A-Fa-f:.]{2,45}\]):[0-9]{1,5}")
+    full(
+        r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?){0,8}|\[[0-9A-Fa-f:.]{2,45}\]):([0-9]{1,5})",
+    )
 });
-/// A path-free identifier.
-static IDENT_RE: LazyLock<Regex> = LazyLock::new(|| full(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,119}"));
+
+/// `token` when it is `host:port` with a port from 1 to 65535 and at most [`TARGET_MAX_CHARS`] characters.
+#[must_use]
+pub fn host_port(token: &str) -> Option<&str> {
+    if token.len() > TARGET_MAX_CHARS {
+        return None;
+    }
+    let c = HOST_PORT_RE.captures(token)?;
+    let port: u32 = c.get(1)?.as_str().parse().ok()?;
+    (1..=65_535).contains(&port).then_some(token)
+}
 
 fn lookup(table: &[(&str, &'static str)], key: &str) -> &'static str {
     table
@@ -115,8 +128,10 @@ pub fn decision(line: &str) -> Option<Value> {
         return None;
     }
     let verdict = verdict(c.get(4)?.as_str())?;
-    let target = c.get(5).map(|m| m.as_str()).filter(|t| {
-        t.len() <= TARGET_MAX_CHARS && (HOST_PORT_RE.is_match(t) || IDENT_RE.is_match(t))
+    // the token after the verdict, else the token after the first ` -> ` (`src -> dst`), and only as host:port
+    let target = c.get(5).and_then(|m| host_port(m.as_str())).or_else(|| {
+        let after = head.split_once(" -> ")?.1;
+        host_port(after.split_whitespace().next()?)
     });
     Some(json!({
         "ts": ts,
@@ -157,6 +172,12 @@ pub const EVENTS_REWRITE_AT: usize = 6000;
 pub const EVENTS_MAX_BYTES: u64 = 8 * 1024 * 1024;
 /// A longer line is skipped.
 pub const EVENT_LINE_MAX: usize = 4096;
+/// An event time may lie at most this far in the future (clock skew); later or negative times are dropped.
+pub const MAX_FUTURE_S: f64 = 86_400.0;
+/// The most lines kept in memory while reading the file back (a ring: the newest win).
+pub const EVENTS_READ_LINES: usize = 8192;
+/// The most directory entries looked at when stale temp files are reaped.
+pub const REAP_MAX_ENTRIES: usize = 1024;
 /// The four lifecycle actions the adapter emits.
 pub const ACTIONS: [&str; 4] = ["present", "created", "phase", "deleted"];
 
@@ -202,7 +223,8 @@ pub fn summary(name: &str, phase: &str, action: &str, previous: Option<&str>) ->
 /// The checked event rebuilt from its fields (`None`: a field fails its check, a non-finite time).
 #[must_use]
 pub fn checked_event(ts: f64, kind: &str, data: &Map<String, Value>) -> Option<SystemEvent> {
-    if !ts.is_finite() || kind != super::openshell::EVENT_KIND {
+    let latest = crate::domain::models::now_ts() + MAX_FUTURE_S;
+    if !ts.is_finite() || !(0.0..=latest).contains(&ts) || kind != super::openshell::EVENT_KIND {
         return None;
     }
     let (name, id, phase, action, previous) = fields(data)?;
@@ -230,15 +252,64 @@ pub struct Loaded {
     pub lines: usize,
 }
 
-/// The newest complete lines of the tail of the file (at most `keep`, each at most [`EVENT_LINE_MAX`] bytes; a cut
-/// tail loses its first, partial line).
-fn tail_lines(bytes: &[u8], cut: bool) -> Vec<&[u8]> {
-    let mut parts: Vec<&[u8]> = bytes.split(|b| *b == b'\n').collect();
-    if cut && !parts.is_empty() {
-        parts.remove(0);
+/// The newest non-empty lines of the tail of the file, at most `keep` (a ring: memory is bounded by `keep`, never by
+/// the number of lines), and how many non-empty lines it holds. A cut tail loses its first, partial line.
+fn tail_lines(bytes: &[u8], cut: bool, keep: usize) -> (VecDeque<&[u8]>, usize) {
+    let mut ring: VecDeque<&[u8]> = VecDeque::new();
+    let mut total = 0usize;
+    for (i, l) in bytes.split(|b| *b == b'\n').enumerate() {
+        if (cut && i == 0) || l.is_empty() {
+            continue;
+        }
+        total += 1;
+        if ring.len() == keep {
+            ring.pop_front();
+        }
+        ring.push_back(l);
     }
-    parts.retain(|l| !l.is_empty());
-    parts
+    (ring, total)
+}
+
+/// The checked event of one stored line (`None`: oversize, not JSON, a field fails its check).
+fn parse_line(l: &[u8]) -> Option<SystemEvent> {
+    if l.len() > EVENT_LINE_MAX {
+        return None;
+    }
+    let Ok(Value::Object(m)) = serde_json::from_slice::<Value>(l) else {
+        return None;
+    };
+    if m.get("system").and_then(Value::as_str) != Some("openshell") {
+        return None;
+    }
+    let (Some(ts), Some(kind), Some(Value::Object(data))) = (
+        m.get("ts").and_then(Value::as_f64),
+        m.get("kind").and_then(Value::as_str),
+        m.get("data"),
+    ) else {
+        return None;
+    };
+    checked_event(ts, kind, data)
+}
+
+/// Remove temp files a rewrite left behind (`.events.jsonl.<16 hex>.tmp`), looking at no more than
+/// [`REAP_MAX_ENTRIES`] directory entries.
+fn reap(dir: &Path, d: &RunDir) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let prefix = format!(".{EVENTS_FILE}.");
+    for e in rd.take(REAP_MAX_ENTRIES).flatten() {
+        let name = e.file_name();
+        let Some(name) = name.to_str() else { continue };
+        if let Some(mid) = name
+            .strip_prefix(prefix.as_str())
+            .and_then(|r| r.strip_suffix(".tmp"))
+            && mid.len() == 16
+            && mid.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            d.remove(name);
+        }
+    }
 }
 
 /// Read `<dir>/events.jsonl` back (blocking). An absent file, a symlinked directory or file, a hard link: nothing.
@@ -247,35 +318,14 @@ pub fn load(dir: &Path) -> Loaded {
     let Some(d) = RunDir::open(dir) else {
         return Loaded::default();
     };
+    reap(dir, &d);
     let Some((bytes, cut)) = d.read_tail(EVENTS_FILE, EVENTS_MAX_BYTES) else {
         return Loaded::default();
     };
-    let lines = tail_lines(&bytes, cut);
-    let mut events = Vec::new();
-    for l in &lines {
-        if l.len() > EVENT_LINE_MAX {
-            continue;
-        }
-        let Ok(Value::Object(m)) = serde_json::from_slice::<Value>(l) else {
-            continue;
-        };
-        let (Some(ts), Some(kind), Some(Value::Object(data))) = (
-            m.get("ts").and_then(Value::as_f64),
-            m.get("kind").and_then(Value::as_str),
-            m.get("data"),
-        ) else {
-            continue;
-        };
-        if m.get("system").and_then(Value::as_str) != Some("openshell") {
-            continue;
-        }
-        if let Some(ev) = checked_event(ts, kind, data) {
-            events.push(ev);
-        }
-    }
+    let (lines, total) = tail_lines(&bytes, cut, EVENTS_READ_LINES);
     Loaded {
-        events,
-        lines: lines.len(),
+        events: lines.iter().filter_map(|l| parse_line(l)).collect(),
+        lines: total,
     }
 }
 
@@ -304,6 +354,12 @@ pub fn append(dir: &Path, events: &[SystemEvent], lines: usize) -> std::io::Resu
     crate::services::plumbing::mkdir_leaf(dir, 0o700)?;
     let d = RunDir::open(dir).ok_or_else(|| std::io::Error::other("not a directory"))?;
     let mut f = d.append_private(EVENTS_FILE)?;
+    // a file that does not end with a newline (a write cut short) must not glue its last line to ours
+    if let Some((last, _)) = d.read_tail(EVENTS_FILE, 1)
+        && last.first().is_some_and(|b| *b != b'\n')
+    {
+        text.insert(0, b'\n');
+    }
     f.write_all(&text)?;
     drop(f);
     let total = lines + n;
@@ -313,12 +369,16 @@ pub fn append(dir: &Path, events: &[SystemEvent], lines: usize) -> std::io::Resu
     let Some((bytes, cut)) = d.read_tail(EVENTS_FILE, EVENTS_MAX_BYTES) else {
         return Ok(total);
     };
-    let all = tail_lines(&bytes, cut);
-    let keep = &all[all.len().saturating_sub(EVENTS_KEEP)..];
-    let mut out = Vec::with_capacity(keep.iter().map(|l| l.len() + 1).sum());
-    for l in keep {
-        out.extend_from_slice(l);
-        out.push(b'\n');
+    // keep the newest EVENTS_KEEP lines that are still valid events, each written again from its checked fields
+    let (lines, _) = tail_lines(&bytes, cut, EVENTS_READ_LINES);
+    let valid: Vec<SystemEvent> = lines.iter().filter_map(|l| parse_line(l)).collect();
+    let keep = &valid[valid.len().saturating_sub(EVENTS_KEEP)..];
+    let mut out = Vec::new();
+    for ev in keep {
+        if let Ok(line) = serde_json::to_vec(ev) {
+            out.extend_from_slice(&line);
+            out.push(b'\n');
+        }
     }
     d.replace_private(EVENTS_FILE, &out)?;
     Ok(keep.len())
@@ -354,7 +414,12 @@ mod tests {
         };
         assert_eq!(l("api.example.com:443"), "api.example.com:443");
         assert_eq!(l("[::1]:8080"), "[::1]:8080");
-        assert_eq!(l("curl"), "curl");
+        assert_eq!(l("curl"), Value::Null);
+        assert_eq!(l("Applying"), Value::Null);
+        assert_eq!(l("10.0.0.1:0"), Value::Null);
+        assert_eq!(l("host:65536"), Value::Null);
+        assert_eq!(l("a..b:80"), Value::Null);
+        assert_eq!(l("curl -> api.example.com:443"), "api.example.com:443");
         assert_eq!(l("/usr/bin/curl"), Value::Null);
         assert_eq!(l("cmd=/bin/sh"), Value::Null);
         assert_eq!(l(&"a".repeat(121)), Value::Null);

@@ -491,7 +491,7 @@ async fn decisions_parse_ocsf_lines_into_allowlisted_fields_only() {
             "truncated": false,
         })
     );
-    // the CLI call is the sandbox_logs runner path: `logs NAME -n 2000`, 30 s, 512,000 bytes
+    // the CLI call is the sandbox_logs runner path: `logs NAME -n 2000`, 30 s, the decisions cap of 1 MiB
     let calls: Vec<support::Call> = lab
         .os_runner
         .call_log()
@@ -511,7 +511,10 @@ async fn decisions_parse_ocsf_lines_into_allowlisted_fields_only() {
             "2000"
         ]
     );
-    assert!((calls[0].timeout - 30.0).abs() < f64::EPSILON && calls[0].max_bytes == 512_000);
+    assert!(
+        (calls[0].timeout - 30.0).abs() < f64::EPSILON
+            && calls[0].max_bytes == viz::DECISIONS_MAX_BYTES
+    );
 }
 
 #[tokio::test]
@@ -627,10 +630,135 @@ fn decision_lines_are_looked_at_only_up_to_a_prefix() {
         "x ".repeat(500_000)
     );
     let (rows, more) = viz::decisions(&line);
-    assert!(!more && rows.len() == 1 && rows[0]["target"] == "x");
+    assert!(!more && rows.len() == 1 && rows[0]["target"] == Value::Null); // `x` is not host:port
     // 100,000 non-OCSF lines: linear, no row
     let junk = "[1] [x] junk\n".repeat(100_000);
     assert!(viz::decisions(&junk).0.is_empty());
+}
+
+/// A fake `openshell` on PATH for the REAL `SubprocessRunner`: `--version`, `sandbox list` (one sandbox) and `logs`,
+/// which prints `$LINES` OCSF lines of about 360 bytes each (the newest has the highest number).
+fn fake_openshell(dir: &Path, lines: usize) {
+    let pad = "p".repeat(260);
+    let script = format!(
+        "#!/bin/sh\n\
+case \"$*\" in\n\
+  --version) echo 'openshell 0.0.71' ;;\n\
+  *'sandbox list'*) echo '[{{\"name\": \"{SANDBOX}\", \"id\": \"id-0\", \"phase\": \"Ready\"}}]' ;;\n\
+  *logs*) i=0; while [ $i -lt {lines} ]; do \
+printf '[%d.5] [sandbox] [OCSF ] [ocsf] NET:CONNECT [INFO] DENIED host%d.example:443 {MARK} {pad}\\n' $((1000000 + i)) $i; \
+i=$((i + 1)); done ;;\n\
+  *) exit 1 ;;\n\
+esac\n"
+    );
+    let p = dir.join("openshell");
+    std::fs::write(&p, script).unwrap();
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+async fn decisions_through_the_real_runner(lines: usize) -> Value {
+    let tmp = tempfile::tempdir().unwrap();
+    let bin = tmp.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    fake_openshell(&bin, lines);
+    let bin_s = bin.to_string_lossy().into_owned();
+    let runner = nemo_console::services::runner::SubprocessRunner::with_environ(
+        std::slice::from_ref(&bin_s),
+        Environ::from_pairs(&[("PATH", bin_s.as_str())]),
+    );
+    let mut ctx = support::ctx(
+        support::FakeRunner::new(),
+        &[],
+        &[],
+        &tmp.path().join("state"),
+    );
+    ctx.runner = Arc::new(runner);
+    let a = OpenShellAdapter::new(ctx);
+    a.decisions(SANDBOX, DECISIONS_MAX_ROWS).await.unwrap()
+}
+
+#[tokio::test]
+async fn decisions_through_the_real_runner_are_parsed_when_the_output_reaches_its_cap() {
+    // 2,000 lines of ~360 bytes fit the 1 MiB cap: every row, nothing truncated
+    let v = decisions_through_the_real_runner(2000).await;
+    assert!(!v.to_string().contains(MARK));
+    assert!(v.get("problem").is_none(), "{v}");
+    assert_eq!(v["rows"].as_array().unwrap().len(), 2000);
+    assert_eq!(v["truncated"], false);
+    // 4,000 lines (~1.4 MiB) reach the cap: the runner stops the CLI (SIGKILL), the lines read so far are parsed,
+    // the cut last line is dropped, and the answer says `truncated`
+    let v = decisions_through_the_real_runner(4000).await;
+    assert!(v.get("problem").is_none(), "{v}");
+    let rows = v["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), DECISIONS_MAX_ROWS); // ~2,900 complete lines were read: the newest 2,000 are kept
+    assert_eq!(v["truncated"], true);
+    let first: usize = rows[0]["target"].as_str().unwrap()[4..]
+        .split('.')
+        .next()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!(first > 0 && first + DECISIONS_MAX_ROWS < 4000, "{first}");
+    for (i, r) in rows.iter().enumerate() {
+        // consecutive, complete rows: no partial last line became a row
+        assert_eq!(r["target"], format!("host{}.example:443", first + i));
+        assert_eq!(r["ts"], 1_000_000.5 + (first + i) as f64);
+    }
+}
+
+#[tokio::test]
+async fn rails_of_an_aliased_models_list_are_bounded() {
+    // one mapping with many keys, aliased into `models` thousands of times: the walk must not be quadratic
+    let lab = lab();
+    for n in 0..8 {
+        let mut text = String::from("m: &m {");
+        for i in 0..3000 {
+            text.push_str(&format!("k{i}: 1, "));
+        }
+        text.push_str("type: main, model: lab-model}\nmodels: [");
+        while text.len() < 250 * 1024 {
+            text.push_str("*m, ");
+        }
+        text.push_str("*m]\n");
+        write(
+            &lab.cfg(&format!("alias{n}")).join("config.yml"),
+            text.as_bytes(),
+        );
+    }
+    let t0 = std::time::Instant::now();
+    let v = lab.viewer_json("/api/v1/systems/guardrails/rails").await;
+    assert!(t0.elapsed().as_secs() < 30, "{:?}", t0.elapsed());
+    // `type` sits past the first MAP_SCAN entries of the mapping: not found, so no main model
+    assert!(
+        v["configs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|c| c["main_model"].is_null())
+    );
+}
+
+#[test]
+fn rails_names_that_look_like_credentials_are_dropped() {
+    let (v, p) = {
+        let tmp = tempfile::tempdir().unwrap();
+        let c = tmp.path().join("cfg");
+        write(
+            &c.join("config.yml"),
+            b"models:\n  - type: main\n    model: sk-FAKEFAKEFAKE1234567890abcdef\nrails:\n  input:\n    flows: [ok flow, sk-FAKEFAKEFAKE1234567890abcdef]\n",
+        );
+        let v = nemo_console::adapters::guardrails_rails::rails_answer(Some(tmp.path()));
+        (v["configs"][0].clone(), v["problems"].clone())
+    };
+    assert_eq!(v["main_model"], Value::Null);
+    assert_eq!(v["input"], json!(["ok flow"]));
+    let codes: Vec<&str> = p
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x["code"].as_str().unwrap())
+        .collect();
+    assert_eq!(codes, ["main_model.dropped", "flows.dropped"]);
 }
 
 // ── OpenShell persisted events ──────────────────────────────────────────────────────────────────
@@ -859,6 +987,108 @@ fn a_hostile_events_file_is_read_as_data() {
     let linked_dir = tmp.path().join("linked");
     std::os::unix::fs::symlink(&dir, &linked_dir).unwrap();
     assert!(viz::load(&linked_dir).events.is_empty());
+}
+
+#[test]
+fn event_times_must_be_plausible() {
+    let data = ev(1).data;
+    let now = nemo_console::domain::models::now_ts();
+    assert!(viz::checked_event(now, EVENT_KIND, &data).is_some());
+    assert!(viz::checked_event(now + 3600.0, EVENT_KIND, &data).is_some()); // clock skew
+    for ts in [1e300, -1.0, now + 2.0 * 86_400.0, f64::NAN, f64::INFINITY] {
+        assert!(viz::checked_event(ts, EVENT_KIND, &data).is_none(), "{ts}");
+    }
+    // a planted far-future line is not read back, and not written
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("openshell");
+    let mut planted = serde_json::to_value(ev(2)).unwrap();
+    planted["ts"] = json!(1e300);
+    write(&dir.join(EVENTS_FILE), format!("{planted}\n").as_bytes());
+    assert!(viz::load(&dir).events.is_empty());
+    let mut bad = ev(3);
+    bad.ts = 1e300;
+    assert_eq!(viz::append(&dir, &[bad], 1).unwrap(), 1);
+}
+
+#[test]
+fn the_rewrite_keeps_only_valid_lines_and_temp_files_are_reaped() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("openshell");
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut text = String::new();
+    for i in 0..EVENTS_REWRITE_AT {
+        if i % 2 == 0 {
+            text.push_str(&serde_json::to_string(&ev(i)).unwrap());
+        } else {
+            text.push_str(&format!("{{\"junk\": \"{MARK}\"}}"));
+        }
+        text.push('\n');
+    }
+    std::fs::write(dir.join(EVENTS_FILE), &text).unwrap();
+    let n = viz::append(&dir, &[ev(EVENTS_REWRITE_AT)], EVENTS_REWRITE_AT).unwrap();
+    assert_eq!(n, EVENTS_REWRITE_AT / 2 + 1); // only the valid lines survive the rewrite
+    let after = std::fs::read_to_string(dir.join(EVENTS_FILE)).unwrap();
+    assert!(!after.contains(MARK));
+    // a stale temp file of an interrupted rewrite is removed on load; other names are left alone
+    let stale = dir.join(format!(".{EVENTS_FILE}.0123456789abcdef.tmp"));
+    let other = dir.join("keep.me");
+    std::fs::write(&stale, "x").unwrap();
+    std::fs::write(&other, "x").unwrap();
+    let _ = viz::load(&dir);
+    assert!(!stale.exists() && other.exists());
+}
+
+#[test]
+fn an_append_after_a_cut_line_starts_a_new_line() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("openshell");
+    write(
+        &dir.join(EVENTS_FILE),
+        format!("{}\n{{\"cut\": ", serde_json::to_string(&ev(1)).unwrap()).as_bytes(),
+    );
+    viz::append(&dir, &[ev(2)], 2).unwrap();
+    let back = viz::load(&dir);
+    assert_eq!(back.lines, 3);
+    let names: Vec<&str> = back
+        .events
+        .iter()
+        .map(|e| e.data["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["sb-1", "sb-2"]);
+}
+
+#[test]
+fn an_all_newline_file_is_read_in_bounded_memory() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("openshell");
+    let mut text = vec![b'\n'; 8 * 1024 * 1024];
+    text.extend_from_slice(serde_json::to_string(&ev(1)).unwrap().as_bytes());
+    text.push(b'\n');
+    write(&dir.join(EVENTS_FILE), &text);
+    let t0 = std::time::Instant::now();
+    let back = viz::load(&dir);
+    assert!(t0.elapsed().as_secs() < 10);
+    assert_eq!((back.lines, back.events.len()), (1, 1));
+}
+
+#[tokio::test]
+async fn many_polls_are_written_in_order_by_one_writer() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (r, w) = env::make_runner(None);
+    let a = os_adapter(tmp.path(), r);
+    for i in 0..60 {
+        w.lock().unwrap().sandboxes = sandbox_list(&[&format!("s{i}")]);
+        a.invalidate_snapshot().await;
+        a.invalidate_gw_cache();
+        a.recent_events(1).await.unwrap();
+    }
+    a.flush_persisted().await;
+    let lines = file_lines(&events_file(tmp.path()));
+    // poll i created s{i} and deleted s{i-1}: the file holds them in poll order
+    let ts: Vec<f64> = lines.iter().map(|l| l["ts"].as_f64().unwrap()).collect();
+    assert!(ts.windows(2).all(|w| w[0] <= w[1]));
+    assert_eq!(lines.len(), 60 + 59);
+    assert_eq!(a.persisted_lines(), 119);
 }
 
 // ── audit filters and summary ───────────────────────────────────────────────────────────────────
