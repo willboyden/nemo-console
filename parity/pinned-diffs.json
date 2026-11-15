@@ -77,8 +77,8 @@
     },
     {
       "case": "global.openapi.admin",
-      "deviation": "D-34, D-36, D-38, D-40, D-42, D-43",
-      "why": "D-34, D-36, D-38, D-40 and D-42: the document lists the eleven Relay trace explorer routes, the series route, the DCGM fleet route, the three per-run visualisation routes and the three wave-4 routes (Guardrails rails, OpenShell decisions, the audit summary), which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned); D-43: the /audit entry gains a description and the four optional filter parameters (pinned exactly)",
+      "deviation": "D-34, D-36, D-38, D-40, D-42, D-43, D-44",
+      "why": "D-34, D-36, D-38, D-40, D-42 and D-44: the document lists the eleven Relay trace explorer routes, the series route, the DCGM fleet route, the three per-run visualisation routes, the three wave-4 routes (Guardrails rails, OpenShell decisions, the audit summary) and the Relay diagnostics route, which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned); D-43: the /audit entry gains a description and the four optional filter parameters (pinned exactly)",
       "diffs": [
         {
           "path": "body/paths/~1api~1v1~1audit/get/description",
@@ -119,6 +119,10 @@
         },
         {
           "path": "body/paths/~1api~1v1~1systems~1{system_id}~1decisions",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1diagnostics",
           "a": "(absent)"
         },
         {
@@ -185,8 +189,8 @@
     },
     {
       "case": "global.openapi.viewer",
-      "deviation": "D-34, D-36, D-38, D-40, D-42, D-43",
-      "why": "D-34, D-36, D-38, D-40 and D-42: the document lists the eleven Relay trace explorer routes, the series route, the DCGM fleet route, the three per-run visualisation routes and the three wave-4 routes (Guardrails rails, OpenShell decisions, the audit summary), which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned); D-43: the /audit entry gains a description and the four optional filter parameters (pinned exactly)",
+      "deviation": "D-34, D-36, D-38, D-40, D-42, D-43, D-44",
+      "why": "D-34, D-36, D-38, D-40, D-42 and D-44: the document lists the eleven Relay trace explorer routes, the series route, the DCGM fleet route, the three per-run visualisation routes, the three wave-4 routes (Guardrails rails, OpenShell decisions, the audit summary) and the Relay diagnostics route, which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned); D-43: the /audit entry gains a description and the four optional filter parameters (pinned exactly)",
       "diffs": [
         {
           "path": "body/paths/~1api~1v1~1audit/get/description",
@@ -227,6 +231,10 @@
         },
         {
           "path": "body/paths/~1api~1v1~1systems~1{system_id}~1decisions",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1diagnostics",
           "a": "(absent)"
         },
         {
@@ -293,8 +301,8 @@
     },
     {
       "case": "global.openapi.admin.after",
-      "deviation": "D-34, D-36, D-38, D-40, D-42, D-43",
-      "why": "D-34, D-36, D-38, D-40 and D-42: the document lists the eleven Relay trace explorer routes, the series route, the DCGM fleet route, the three per-run visualisation routes and the three wave-4 routes (Guardrails rails, OpenShell decisions, the audit summary), which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned); D-43: the /audit entry gains a description and the four optional filter parameters (pinned exactly)",
+      "deviation": "D-34, D-36, D-38, D-40, D-42, D-43, D-44",
+      "why": "D-34, D-36, D-38, D-40, D-42 and D-44: the document lists the eleven Relay trace explorer routes, the series route, the DCGM fleet route, the three per-run visualisation routes, the three wave-4 routes (Guardrails rails, OpenShell decisions, the audit summary) and the Relay diagnostics route, which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned); D-43: the /audit entry gains a description and the four optional filter parameters (pinned exactly)",
       "diffs": [
         {
           "path": "body/paths/~1api~1v1~1audit/get/description",
@@ -335,6 +343,10 @@
         },
         {
           "path": "body/paths/~1api~1v1~1systems~1{system_id}~1decisions",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1diagnostics",
           "a": "(absent)"
         },
         {
@@ -401,8 +413,8 @@
     },
     {
       "case": "global.openapi.viewer.after",
-      "deviation": "D-34, D-36, D-38, D-40, D-42, D-43",
-      "why": "D-34, D-36, D-38, D-40 and D-42: the document lists the eleven Relay trace explorer routes, the series route, the DCGM fleet route, the three per-run visualisation routes and the three wave-4 routes (Guardrails rails, OpenShell decisions, the audit summary), which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned); D-43: the /audit entry gains a description and the four optional filter parameters (pinned exactly)",
+      "deviation": "D-34, D-36, D-38, D-40, D-42, D-43, D-44",
+      "why": "D-34, D-36, D-38, D-40, D-42 and D-44: the document lists the eleven Relay trace explorer routes, the series route, the DCGM fleet route, the three per-run visualisation routes, the three wave-4 routes (Guardrails rails, OpenShell decisions, the audit summary) and the Relay diagnostics route, which the Python reference does not have (each entry's content is checked by the Rust tests, so only the paths are pinned); D-43: the /audit entry gains a description and the four optional filter parameters (pinned exactly)",
       "diffs": [
         {
           "path": "body/paths/~1api~1v1~1audit/get/description",
@@ -443,6 +455,10 @@
         },
         {
           "path": "body/paths/~1api~1v1~1systems~1{system_id}~1decisions",
+          "a": "(absent)"
+        },
+        {
+          "path": "body/paths/~1api~1v1~1systems~1{system_id}~1diagnostics",
           "a": "(absent)"
         },
         {
@@ -1175,6 +1191,91 @@
           "path": "body/0/data/benchmarks/0/tokens",
           "a": "(absent)",
           "b": "2875"
+        }
+      ]
+    },
+    {
+      "case": "read.relay.metrics",
+      "deviation": "D-44",
+      "why": "D-44: the Relay poll also reads the gateway's resource and routing figures from Prometheus with four fixed queries; the harness's fake Prometheus answers each with its generic labelled vector, which maps to no Relay key, so the answer is unchanged and only the upstream requests differ",
+      "diffs": [
+        {
+          "path": "upstream-requests (set, cached excluded)",
+          "a": "(none extra)",
+          "b": [
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"histogram_quantile(0.95, sum by (le) (rate(switchyard_routing_overhead_milliseconds_bucket{job=\\\"nemo-relay\\\"}[5m]))) or histogram_quantile(0.95, sum by (le) (rate(switchyard_routing_overhead_ms_bucket{job=\\\"nemo-relay\\\"}[5m])))\"]],\"headers\":{}}",
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"label_replace(max(rate(nemo_relay_resource_cpu_pressure_some_stall_time_milliseconds{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"cpu\\\", \\\"\\\", \\\"\\\") or label_replace(max(rate(nemo_relay_resource_memory_pressure_some_stall_time_milliseconds{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"mem\\\", \\\"\\\", \\\"\\\")\"]],\"headers\":{}}",
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"label_replace(sum(rate(switchyard_routing_requests_total{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"rps\\\", \\\"\\\", \\\"\\\") or label_replace(sum(rate(switchyard_routing_failures_total{job=\\\"nemo-relay\\\"}[5m])) or (sum(rate(switchyard_routing_requests_total{job=\\\"nemo-relay\\\"}[5m])) * 0), \\\"k\\\", \\\"fail\\\", \\\"\\\", \\\"\\\") or label_replace(sum(rate(switchyard_routing_llm_tokens_total{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"tok\\\", \\\"\\\", \\\"\\\")\"]],\"headers\":{}}",
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"{__name__=~\\\"nemo_relay_resource_(cpu_consumption_rate_logical_processors|memory_resident_kibibytes|memory_environment_accounted_kibibytes|thread_count_threads|process_open_file_descriptor_count_file_descriptors|disk_read_throughput_bytes_per_second|disk_write_throughput_bytes_per_second|disk_filesystem_available_capacity_bytes|disk_filesystem_total_capacity_bytes|limit_event_count_events)\\\",job=\\\"nemo-relay\\\"}\"]],\"headers\":{}}"
+          ]
+        }
+      ]
+    },
+    {
+      "case": "reread.relay.metrics",
+      "deviation": "D-44",
+      "why": "D-44: the Relay poll also reads the gateway's resource and routing figures from Prometheus with four fixed queries; the harness's fake Prometheus answers each with its generic labelled vector, which maps to no Relay key, so the answer is unchanged and only the upstream requests differ",
+      "diffs": [
+        {
+          "path": "upstream-requests (set, cached excluded)",
+          "a": "(none extra)",
+          "b": [
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"histogram_quantile(0.95, sum by (le) (rate(switchyard_routing_overhead_milliseconds_bucket{job=\\\"nemo-relay\\\"}[5m]))) or histogram_quantile(0.95, sum by (le) (rate(switchyard_routing_overhead_ms_bucket{job=\\\"nemo-relay\\\"}[5m])))\"]],\"headers\":{}}",
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"label_replace(max(rate(nemo_relay_resource_cpu_pressure_some_stall_time_milliseconds{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"cpu\\\", \\\"\\\", \\\"\\\") or label_replace(max(rate(nemo_relay_resource_memory_pressure_some_stall_time_milliseconds{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"mem\\\", \\\"\\\", \\\"\\\")\"]],\"headers\":{}}",
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"label_replace(sum(rate(switchyard_routing_requests_total{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"rps\\\", \\\"\\\", \\\"\\\") or label_replace(sum(rate(switchyard_routing_failures_total{job=\\\"nemo-relay\\\"}[5m])) or (sum(rate(switchyard_routing_requests_total{job=\\\"nemo-relay\\\"}[5m])) * 0), \\\"k\\\", \\\"fail\\\", \\\"\\\", \\\"\\\") or label_replace(sum(rate(switchyard_routing_llm_tokens_total{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"tok\\\", \\\"\\\", \\\"\\\")\"]],\"headers\":{}}",
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"{__name__=~\\\"nemo_relay_resource_(cpu_consumption_rate_logical_processors|memory_resident_kibibytes|memory_environment_accounted_kibibytes|thread_count_threads|process_open_file_descriptor_count_file_descriptors|disk_read_throughput_bytes_per_second|disk_write_throughput_bytes_per_second|disk_filesystem_available_capacity_bytes|disk_filesystem_total_capacity_bytes|limit_event_count_events)\\\",job=\\\"nemo-relay\\\"}\"]],\"headers\":{}}"
+          ]
+        }
+      ]
+    },
+    {
+      "case": "global:full",
+      "deviation": "D-44",
+      "why": "D-44: the four fixed Prometheus queries of the Relay poll (addendum 9.17) are upstream requests the Python reference never makes; pinned exactly, so any other extra request still fails",
+      "diffs": [
+        {
+          "path": "upstream-requests over the whole run (distinct)",
+          "a": "(none extra)",
+          "b": [
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"histogram_quantile(0.95, sum by (le) (rate(switchyard_routing_overhead_milliseconds_bucket{job=\\\"nemo-relay\\\"}[5m]))) or histogram_quantile(0.95, sum by (le) (rate(switchyard_routing_overhead_ms_bucket{job=\\\"nemo-relay\\\"}[5m])))\"]],\"headers\":{}}",
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"label_replace(max(rate(nemo_relay_resource_cpu_pressure_some_stall_time_milliseconds{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"cpu\\\", \\\"\\\", \\\"\\\") or label_replace(max(rate(nemo_relay_resource_memory_pressure_some_stall_time_milliseconds{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"mem\\\", \\\"\\\", \\\"\\\")\"]],\"headers\":{}}",
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"label_replace(sum(rate(switchyard_routing_requests_total{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"rps\\\", \\\"\\\", \\\"\\\") or label_replace(sum(rate(switchyard_routing_failures_total{job=\\\"nemo-relay\\\"}[5m])) or (sum(rate(switchyard_routing_requests_total{job=\\\"nemo-relay\\\"}[5m])) * 0), \\\"k\\\", \\\"fail\\\", \\\"\\\", \\\"\\\") or label_replace(sum(rate(switchyard_routing_llm_tokens_total{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"tok\\\", \\\"\\\", \\\"\\\")\"]],\"headers\":{}}",
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"{__name__=~\\\"nemo_relay_resource_(cpu_consumption_rate_logical_processors|memory_resident_kibibytes|memory_environment_accounted_kibibytes|thread_count_threads|process_open_file_descriptor_count_file_descriptors|disk_read_throughput_bytes_per_second|disk_write_throughput_bytes_per_second|disk_filesystem_available_capacity_bytes|disk_filesystem_total_capacity_bytes|limit_event_count_events)\\\",job=\\\"nemo-relay\\\"}\"]],\"headers\":{}}"
+          ]
+        }
+      ]
+    },
+    {
+      "case": "global:lifecycle",
+      "deviation": "D-44",
+      "why": "D-44: the four fixed Prometheus queries of the Relay poll (addendum 9.17) are upstream requests the Python reference never makes; pinned exactly, so any other extra request still fails",
+      "diffs": [
+        {
+          "path": "upstream-requests over the whole run (distinct)",
+          "a": "(none extra)",
+          "b": [
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"histogram_quantile(0.95, sum by (le) (rate(switchyard_routing_overhead_milliseconds_bucket{job=\\\"nemo-relay\\\"}[5m]))) or histogram_quantile(0.95, sum by (le) (rate(switchyard_routing_overhead_ms_bucket{job=\\\"nemo-relay\\\"}[5m])))\"]],\"headers\":{}}",
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"label_replace(max(rate(nemo_relay_resource_cpu_pressure_some_stall_time_milliseconds{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"cpu\\\", \\\"\\\", \\\"\\\") or label_replace(max(rate(nemo_relay_resource_memory_pressure_some_stall_time_milliseconds{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"mem\\\", \\\"\\\", \\\"\\\")\"]],\"headers\":{}}",
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"label_replace(sum(rate(switchyard_routing_requests_total{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"rps\\\", \\\"\\\", \\\"\\\") or label_replace(sum(rate(switchyard_routing_failures_total{job=\\\"nemo-relay\\\"}[5m])) or (sum(rate(switchyard_routing_requests_total{job=\\\"nemo-relay\\\"}[5m])) * 0), \\\"k\\\", \\\"fail\\\", \\\"\\\", \\\"\\\") or label_replace(sum(rate(switchyard_routing_llm_tokens_total{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"tok\\\", \\\"\\\", \\\"\\\")\"]],\"headers\":{}}",
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"{__name__=~\\\"nemo_relay_resource_(cpu_consumption_rate_logical_processors|memory_resident_kibibytes|memory_environment_accounted_kibibytes|thread_count_threads|process_open_file_descriptor_count_file_descriptors|disk_read_throughput_bytes_per_second|disk_write_throughput_bytes_per_second|disk_filesystem_available_capacity_bytes|disk_filesystem_total_capacity_bytes|limit_event_count_events)\\\",job=\\\"nemo-relay\\\"}\"]],\"headers\":{}}"
+          ]
+        }
+      ]
+    },
+    {
+      "case": "global:probe-broken",
+      "deviation": "D-44",
+      "why": "D-44: the four fixed Prometheus queries of the Relay poll (addendum 9.17) are upstream requests the Python reference never makes; pinned exactly, so any other extra request still fails",
+      "diffs": [
+        {
+          "path": "upstream-requests over the whole run (distinct)",
+          "a": "(none extra)",
+          "b": [
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"histogram_quantile(0.95, sum by (le) (rate(switchyard_routing_overhead_milliseconds_bucket{job=\\\"nemo-relay\\\"}[5m]))) or histogram_quantile(0.95, sum by (le) (rate(switchyard_routing_overhead_ms_bucket{job=\\\"nemo-relay\\\"}[5m])))\"]],\"headers\":{}}",
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"label_replace(max(rate(nemo_relay_resource_cpu_pressure_some_stall_time_milliseconds{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"cpu\\\", \\\"\\\", \\\"\\\") or label_replace(max(rate(nemo_relay_resource_memory_pressure_some_stall_time_milliseconds{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"mem\\\", \\\"\\\", \\\"\\\")\"]],\"headers\":{}}",
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"label_replace(sum(rate(switchyard_routing_requests_total{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"rps\\\", \\\"\\\", \\\"\\\") or label_replace(sum(rate(switchyard_routing_failures_total{job=\\\"nemo-relay\\\"}[5m])) or (sum(rate(switchyard_routing_requests_total{job=\\\"nemo-relay\\\"}[5m])) * 0), \\\"k\\\", \\\"fail\\\", \\\"\\\", \\\"\\\") or label_replace(sum(rate(switchyard_routing_llm_tokens_total{job=\\\"nemo-relay\\\"}[5m])), \\\"k\\\", \\\"tok\\\", \\\"\\\", \\\"\\\")\"]],\"headers\":{}}",
+            "{\"server\":\"prometheus\",\"method\":\"GET\",\"path\":\"/api/v1/query\",\"query\":[[\"query\",\"{__name__=~\\\"nemo_relay_resource_(cpu_consumption_rate_logical_processors|memory_resident_kibibytes|memory_environment_accounted_kibibytes|thread_count_threads|process_open_file_descriptor_count_file_descriptors|disk_read_throughput_bytes_per_second|disk_write_throughput_bytes_per_second|disk_filesystem_available_capacity_bytes|disk_filesystem_total_capacity_bytes|limit_event_count_events)\\\",job=\\\"nemo-relay\\\"}\"]],\"headers\":{}}"
+          ]
         }
       ]
     }

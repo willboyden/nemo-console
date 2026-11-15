@@ -1,0 +1,7501 @@
+{
+ "schema_version": 1,
+ "catalogue_version": 1,
+ "source": {
+  "instance_id": "00000000-0000-7000-8000-000000000000",
+  "process_id": 4242,
+  "process_role": "cli",
+  "relay_version": "0.11.1"
+ },
+ "captured_at": "2026-01-01T08:27:37.295079873Z",
+ "sequence": "187",
+ "lifetime": {
+  "totals": {
+   "recorded_events_total": {
+    "value": "150",
+    "saturated": false
+   },
+   "occurrences_total": {
+    "value": "150",
+    "saturated": false
+   },
+   "history_evictions_total": {
+    "value": "0",
+    "saturated": false
+   },
+   "successes_total": {
+    "value": "150",
+    "saturated": false
+   },
+   "failures_total": {
+    "value": "0",
+    "saturated": false
+   },
+   "unspecified_total": {
+    "value": "0",
+    "saturated": false
+   }
+  },
+  "elapsed_millis": "18141",
+  "last_failure_at": null,
+  "since_last_failure_millis": null
+ },
+ "components": [
+  {
+   "identity": {
+    "key": "cli.command",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "1"
+   },
+   "registered_at": "2026-01-01T08:27:19.153904187Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18141",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.153904187Z",
+    "elapsed_millis": "18141",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "cli.configuration",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "2"
+   },
+   "registered_at": "2026-01-01T08:27:19.153911467Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18141",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.153911467Z",
+    "elapsed_millis": "18141",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "cli.gateway",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "3"
+   },
+   "registered_at": "2026-01-01T08:27:19.153917347Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18141",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.153917347Z",
+    "elapsed_millis": "18141",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [
+    {
+     "code": "cli.gateway.bound",
+     "occurrences": {
+      "value": "1",
+      "saturated": false
+     },
+     "last_observed_at": "2026-01-01T08:27:19.215145927Z"
+    }
+   ],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "cli.acquire",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "4"
+   },
+   "registered_at": "2026-01-01T08:27:19.153919507Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18141",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.153919507Z",
+    "elapsed_millis": "18141",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "cli.child",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "5"
+   },
+   "registered_at": "2026-01-01T08:27:19.153921647Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18141",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.153921647Z",
+    "elapsed_millis": "18141",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "cli.hook",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "6"
+   },
+   "registered_at": "2026-01-01T08:27:19.153923377Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18141",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.153923377Z",
+    "elapsed_millis": "18141",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "cli.upstream",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "7"
+   },
+   "registered_at": "2026-01-01T08:27:19.153924977Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "4",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "4",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "4",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "2",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18141",
+    "last_failure_at": "2026-01-01T08:27:37.295079873Z",
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.153924977Z",
+    "elapsed_millis": "18141",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "4",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "4",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "4",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [
+    {
+     "code": "cli.upstream.headers_received",
+     "occurrences": {
+      "value": "2",
+      "saturated": false
+     },
+     "last_observed_at": "2026-01-01T08:27:23.212982757Z"
+    },
+    {
+     "code": "cli.upstream.body_completed",
+     "occurrences": {
+      "value": "2",
+      "saturated": false
+     },
+     "last_observed_at": "2026-01-01T08:27:23.254407987Z"
+    }
+   ],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "logging",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "8"
+   },
+   "registered_at": "2026-01-01T08:27:19.153935927Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18141",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.153935927Z",
+    "elapsed_millis": "18141",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [
+    {
+     "code": "logging.initialized",
+     "occurrences": {
+      "value": "1",
+      "saturated": false
+     },
+     "last_observed_at": "2026-01-01T08:27:19.153970327Z"
+    }
+   ],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "logging.stderr",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "9"
+   },
+   "registered_at": "2026-01-01T08:27:19.153937247Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18141",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.153937247Z",
+    "elapsed_millis": "18141",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "1",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [
+    {
+     "code": "logging.sink.initialized",
+     "occurrences": {
+      "value": "1",
+      "saturated": false
+     },
+     "last_observed_at": "2026-01-01T08:27:19.153955067Z"
+    }
+   ],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "plugin.activation",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "10"
+   },
+   "registered_at": "2026-01-01T08:27:19.215985372Z",
+   "closed_at": "2026-01-01T08:27:19.218066553Z",
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "2",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.215985372Z",
+    "elapsed_millis": "2",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": "nemo-relay-plugin.v1.pii_redaction:1:"
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "registered_at": "2026-01-01T08:27:19.216162273Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18079",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.216162273Z",
+    "elapsed_millis": "18079",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [
+    {
+     "code": "pii_redaction.selector_evaluated",
+     "occurrences": {
+      "value": "13",
+      "saturated": false
+     },
+     "last_observed_at": "2026-01-01T08:27:23.254707748Z"
+    }
+   ],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "registered_at": "2026-01-01T08:27:19.216456344Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18079",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.216456344Z",
+    "elapsed_millis": "18079",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [
+    {
+     "code": "pii_redaction.selector_evaluated",
+     "occurrences": {
+      "value": "13",
+      "saturated": false
+     },
+     "last_observed_at": "2026-01-01T08:27:23.254713908Z"
+    }
+   ],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "registered_at": "2026-01-01T08:27:19.216852567Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18079",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.216852567Z",
+    "elapsed_millis": "18079",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [
+    {
+     "code": "pii_redaction.selector_evaluated",
+     "occurrences": {
+      "value": "13",
+      "saturated": false
+     },
+     "last_observed_at": "2026-01-01T08:27:23.254718268Z"
+    }
+   ],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "registered_at": "2026-01-01T08:27:19.217384540Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18078",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.217384540Z",
+    "elapsed_millis": "18078",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [
+    {
+     "code": "pii_redaction.selector_evaluated",
+     "occurrences": {
+      "value": "13",
+      "saturated": false
+     },
+     "last_observed_at": "2026-01-01T08:27:23.254721228Z"
+    }
+   ],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "registered_at": "2026-01-01T08:27:19.217556040Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18078",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.217556040Z",
+    "elapsed_millis": "18078",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [
+    {
+     "code": "pii_redaction.selector_evaluated",
+     "occurrences": {
+      "value": "13",
+      "saturated": false
+     },
+     "last_observed_at": "2026-01-01T08:27:23.254724218Z"
+    }
+   ],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "registered_at": "2026-01-01T08:27:19.217720671Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18078",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.217720671Z",
+    "elapsed_millis": "18078",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [
+    {
+     "code": "pii_redaction.selector_evaluated",
+     "occurrences": {
+      "value": "13",
+      "saturated": false
+     },
+     "last_observed_at": "2026-01-01T08:27:23.254726918Z"
+    }
+   ],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "registered_at": "2026-01-01T08:27:19.217888422Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18077",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.217888422Z",
+    "elapsed_millis": "18077",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [
+    {
+     "code": "pii_redaction.selector_evaluated",
+     "occurrences": {
+      "value": "13",
+      "saturated": false
+     },
+     "last_observed_at": "2026-01-01T08:27:23.254729828Z"
+    }
+   ],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "registered_at": "2026-01-01T08:27:19.217931262Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18077",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.217931262Z",
+    "elapsed_millis": "18077",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [
+    {
+     "code": "pii_redaction.selector_evaluated",
+     "occurrences": {
+      "value": "13",
+      "saturated": false
+     },
+     "last_observed_at": "2026-01-01T08:27:23.254732459Z"
+    }
+   ],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "registered_at": "2026-01-01T08:27:19.217966413Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18077",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.217966413Z",
+    "elapsed_millis": "18077",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [
+    {
+     "code": "pii_redaction.selector_evaluated",
+     "occurrences": {
+      "value": "13",
+      "saturated": false
+     },
+     "last_observed_at": "2026-01-01T08:27:23.254734829Z"
+    }
+   ],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "registered_at": "2026-01-01T08:27:19.218000693Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18077",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.218000693Z",
+    "elapsed_millis": "18077",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [
+    {
+     "code": "pii_redaction.selector_evaluated",
+     "occurrences": {
+      "value": "13",
+      "saturated": false
+     },
+     "last_observed_at": "2026-01-01T08:27:23.254737189Z"
+    }
+   ],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "registered_at": "2026-01-01T08:27:19.218046633Z",
+   "closed_at": null,
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "18077",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.218046633Z",
+    "elapsed_millis": "18077",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "13",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [
+    {
+     "code": "pii_redaction.selector_evaluated",
+     "occurrences": {
+      "value": "13",
+      "saturated": false
+     },
+     "last_observed_at": "2026-01-01T08:27:23.254740479Z"
+    }
+   ],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "plugin.activation",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "33"
+   },
+   "registered_at": "2026-01-01T08:27:19.218069173Z",
+   "closed_at": "2026-01-01T08:27:19.227126104Z",
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "9",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.218069173Z",
+    "elapsed_millis": "9",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": "nemo-relay-plugin.v1.observability:1:"
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [],
+   "windows": []
+  },
+  {
+   "identity": {
+    "key": "plugin.activation",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "34"
+   },
+   "registered_at": "2026-01-01T08:27:19.227139484Z",
+   "closed_at": "2026-01-01T08:27:19.227275974Z",
+   "lifetime": {
+    "totals": {
+     "recorded_events_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    },
+    "elapsed_millis": "0",
+    "last_failure_at": null,
+    "since_last_failure_millis": null
+   },
+   "since_refresh": {
+    "generation": "1",
+    "started_at": "2026-01-01T08:27:19.227139484Z",
+    "elapsed_millis": "0",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": "nemo-relay-plugin.v1.resource_metrics:1:"
+    },
+    "totals": {
+     "recorded_events_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "occurrences_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "history_evictions_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "successes_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "failures_total": {
+      "value": "0",
+      "saturated": false
+     },
+     "unspecified_total": {
+      "value": "0",
+      "saturated": false
+     }
+    }
+   },
+   "counters": [],
+   "windows": []
+  }
+ ],
+ "events": [
+  {
+   "sequence": "10",
+   "observed_at": "2026-01-01T08:27:19.153955067Z",
+   "component": {
+    "key": "logging.stderr",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "9"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "logging.sink.initialized",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "11",
+   "observed_at": "2026-01-01T08:27:19.153970327Z",
+   "component": {
+    "key": "logging",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "8"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "logging.initialized",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "12",
+   "observed_at": "2026-01-01T08:27:19.215145927Z",
+   "component": {
+    "key": "cli.gateway",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "3"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "cli.gateway.bound",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "41",
+   "observed_at": "2026-01-01T08:27:23.202643039Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "42",
+   "observed_at": "2026-01-01T08:27:23.202762560Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "43",
+   "observed_at": "2026-01-01T08:27:23.202829800Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "44",
+   "observed_at": "2026-01-01T08:27:23.202874611Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "45",
+   "observed_at": "2026-01-01T08:27:23.202906971Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "46",
+   "observed_at": "2026-01-01T08:27:23.202944441Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "47",
+   "observed_at": "2026-01-01T08:27:23.202973921Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "48",
+   "observed_at": "2026-01-01T08:27:23.203004881Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "49",
+   "observed_at": "2026-01-01T08:27:23.203041001Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "50",
+   "observed_at": "2026-01-01T08:27:23.203066052Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "51",
+   "observed_at": "2026-01-01T08:27:23.203093152Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "52",
+   "observed_at": "2026-01-01T08:27:23.203375343Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "53",
+   "observed_at": "2026-01-01T08:27:23.203391213Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "54",
+   "observed_at": "2026-01-01T08:27:23.203404283Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "55",
+   "observed_at": "2026-01-01T08:27:23.203423303Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "56",
+   "observed_at": "2026-01-01T08:27:23.203436204Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "57",
+   "observed_at": "2026-01-01T08:27:23.203453704Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "58",
+   "observed_at": "2026-01-01T08:27:23.203466024Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "59",
+   "observed_at": "2026-01-01T08:27:23.203480804Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "60",
+   "observed_at": "2026-01-01T08:27:23.203492934Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "61",
+   "observed_at": "2026-01-01T08:27:23.203508404Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "62",
+   "observed_at": "2026-01-01T08:27:23.203520434Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "63",
+   "observed_at": "2026-01-01T08:27:23.203534424Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "64",
+   "observed_at": "2026-01-01T08:27:23.203546214Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "65",
+   "observed_at": "2026-01-01T08:27:23.203559924Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "66",
+   "observed_at": "2026-01-01T08:27:23.203571474Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "67",
+   "observed_at": "2026-01-01T08:27:23.203585564Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "68",
+   "observed_at": "2026-01-01T08:27:23.203598004Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "69",
+   "observed_at": "2026-01-01T08:27:23.203611554Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "70",
+   "observed_at": "2026-01-01T08:27:23.203623535Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "71",
+   "observed_at": "2026-01-01T08:27:23.203635965Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "72",
+   "observed_at": "2026-01-01T08:27:23.203647225Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "73",
+   "observed_at": "2026-01-01T08:27:23.203659955Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "74",
+   "observed_at": "2026-01-01T08:27:23.203797265Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "75",
+   "observed_at": "2026-01-01T08:27:23.203799965Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "76",
+   "observed_at": "2026-01-01T08:27:23.203807525Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "77",
+   "observed_at": "2026-01-01T08:27:23.203809155Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "78",
+   "observed_at": "2026-01-01T08:27:23.203814736Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "79",
+   "observed_at": "2026-01-01T08:27:23.203816266Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "80",
+   "observed_at": "2026-01-01T08:27:23.203818876Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "81",
+   "observed_at": "2026-01-01T08:27:23.203820446Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "82",
+   "observed_at": "2026-01-01T08:27:23.203823266Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "83",
+   "observed_at": "2026-01-01T08:27:23.203825476Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "84",
+   "observed_at": "2026-01-01T08:27:23.203827806Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "85",
+   "observed_at": "2026-01-01T08:27:23.203829256Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "86",
+   "observed_at": "2026-01-01T08:27:23.203831626Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "87",
+   "observed_at": "2026-01-01T08:27:23.203833086Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "88",
+   "observed_at": "2026-01-01T08:27:23.203835406Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "89",
+   "observed_at": "2026-01-01T08:27:23.203836806Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "90",
+   "observed_at": "2026-01-01T08:27:23.203840836Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "91",
+   "observed_at": "2026-01-01T08:27:23.203842196Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "92",
+   "observed_at": "2026-01-01T08:27:23.203844316Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "93",
+   "observed_at": "2026-01-01T08:27:23.203845596Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "94",
+   "observed_at": "2026-01-01T08:27:23.203847806Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "95",
+   "observed_at": "2026-01-01T08:27:23.203849106Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "96",
+   "observed_at": "2026-01-01T08:27:23.203865456Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "97",
+   "observed_at": "2026-01-01T08:27:23.203868966Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "98",
+   "observed_at": "2026-01-01T08:27:23.203872716Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "99",
+   "observed_at": "2026-01-01T08:27:23.203875126Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "100",
+   "observed_at": "2026-01-01T08:27:23.203877796Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "101",
+   "observed_at": "2026-01-01T08:27:23.203880066Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "102",
+   "observed_at": "2026-01-01T08:27:23.203882666Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "103",
+   "observed_at": "2026-01-01T08:27:23.203884876Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "104",
+   "observed_at": "2026-01-01T08:27:23.203887156Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "105",
+   "observed_at": "2026-01-01T08:27:23.203890086Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "106",
+   "observed_at": "2026-01-01T08:27:23.203892736Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "107",
+   "observed_at": "2026-01-01T08:27:23.203898026Z",
+   "component": {
+    "key": "cli.upstream",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "7"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "cli.upstream.headers_received",
+    "failure_class": "unavailable"
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "error",
+   "outcome": "failure",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "108",
+   "observed_at": "2026-01-01T08:27:23.203928456Z",
+   "component": {
+    "key": "cli.upstream",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "7"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "cli.upstream.body_completed",
+    "failure_class": "unavailable"
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "error",
+   "outcome": "failure",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "109",
+   "observed_at": "2026-01-01T08:27:23.204178897Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "110",
+   "observed_at": "2026-01-01T08:27:23.204184857Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "111",
+   "observed_at": "2026-01-01T08:27:23.204187927Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "112",
+   "observed_at": "2026-01-01T08:27:23.204190257Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "113",
+   "observed_at": "2026-01-01T08:27:23.204196798Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "114",
+   "observed_at": "2026-01-01T08:27:23.204199108Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "115",
+   "observed_at": "2026-01-01T08:27:23.204201948Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "116",
+   "observed_at": "2026-01-01T08:27:23.204204238Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "117",
+   "observed_at": "2026-01-01T08:27:23.204206338Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "118",
+   "observed_at": "2026-01-01T08:27:23.204208458Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "119",
+   "observed_at": "2026-01-01T08:27:23.204210528Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "120",
+   "observed_at": "2026-01-01T08:27:23.204256188Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "121",
+   "observed_at": "2026-01-01T08:27:23.204267208Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "122",
+   "observed_at": "2026-01-01T08:27:23.204270318Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "123",
+   "observed_at": "2026-01-01T08:27:23.204273398Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "124",
+   "observed_at": "2026-01-01T08:27:23.204276438Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "125",
+   "observed_at": "2026-01-01T08:27:23.204279228Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "126",
+   "observed_at": "2026-01-01T08:27:23.204281938Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "127",
+   "observed_at": "2026-01-01T08:27:23.204285438Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "128",
+   "observed_at": "2026-01-01T08:27:23.204287908Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "129",
+   "observed_at": "2026-01-01T08:27:23.204290358Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "130",
+   "observed_at": "2026-01-01T08:27:23.204292848Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "131",
+   "observed_at": "2026-01-01T08:27:23.212449154Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "132",
+   "observed_at": "2026-01-01T08:27:23.212454234Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "133",
+   "observed_at": "2026-01-01T08:27:23.212466314Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "134",
+   "observed_at": "2026-01-01T08:27:23.212468474Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "135",
+   "observed_at": "2026-01-01T08:27:23.212474984Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "136",
+   "observed_at": "2026-01-01T08:27:23.212476784Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "137",
+   "observed_at": "2026-01-01T08:27:23.212487344Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "138",
+   "observed_at": "2026-01-01T08:27:23.212489134Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "139",
+   "observed_at": "2026-01-01T08:27:23.212492534Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "140",
+   "observed_at": "2026-01-01T08:27:23.212494204Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "141",
+   "observed_at": "2026-01-01T08:27:23.212496814Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "142",
+   "observed_at": "2026-01-01T08:27:23.212499394Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "143",
+   "observed_at": "2026-01-01T08:27:23.212502734Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "144",
+   "observed_at": "2026-01-01T08:27:23.212504374Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "145",
+   "observed_at": "2026-01-01T08:27:23.212506804Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "146",
+   "observed_at": "2026-01-01T08:27:23.212508354Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "147",
+   "observed_at": "2026-01-01T08:27:23.212511154Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "148",
+   "observed_at": "2026-01-01T08:27:23.212512944Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "149",
+   "observed_at": "2026-01-01T08:27:23.212515274Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "150",
+   "observed_at": "2026-01-01T08:27:23.212517784Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "151",
+   "observed_at": "2026-01-01T08:27:23.212520054Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "152",
+   "observed_at": "2026-01-01T08:27:23.212521634Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "153",
+   "observed_at": "2026-01-01T08:27:23.212544394Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "154",
+   "observed_at": "2026-01-01T08:27:23.212549444Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "155",
+   "observed_at": "2026-01-01T08:27:23.212553364Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "156",
+   "observed_at": "2026-01-01T08:27:23.212556904Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "157",
+   "observed_at": "2026-01-01T08:27:23.212560834Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "158",
+   "observed_at": "2026-01-01T08:27:23.212564064Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "159",
+   "observed_at": "2026-01-01T08:27:23.212566974Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "160",
+   "observed_at": "2026-01-01T08:27:23.212569764Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "161",
+   "observed_at": "2026-01-01T08:27:23.212572814Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "162",
+   "observed_at": "2026-01-01T08:27:23.212575824Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "163",
+   "observed_at": "2026-01-01T08:27:23.212578514Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "164",
+   "observed_at": "2026-01-01T08:27:23.212982757Z",
+   "component": {
+    "key": "cli.upstream",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "7"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "cli.upstream.headers_received",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "165",
+   "observed_at": "2026-01-01T08:27:23.254407987Z",
+   "component": {
+    "key": "cli.upstream",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "7"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "cli.upstream.body_completed",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "166",
+   "observed_at": "2026-01-01T08:27:23.254587138Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "167",
+   "observed_at": "2026-01-01T08:27:23.254600768Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "168",
+   "observed_at": "2026-01-01T08:27:23.254605488Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "169",
+   "observed_at": "2026-01-01T08:27:23.254610488Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "170",
+   "observed_at": "2026-01-01T08:27:23.254616448Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "171",
+   "observed_at": "2026-01-01T08:27:23.254620518Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "172",
+   "observed_at": "2026-01-01T08:27:23.254628508Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "173",
+   "observed_at": "2026-01-01T08:27:23.254632248Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "174",
+   "observed_at": "2026-01-01T08:27:23.254636118Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "175",
+   "observed_at": "2026-01-01T08:27:23.254639218Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "176",
+   "observed_at": "2026-01-01T08:27:23.254642598Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "177",
+   "observed_at": "2026-01-01T08:27:23.254707748Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "178",
+   "observed_at": "2026-01-01T08:27:23.254713908Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "179",
+   "observed_at": "2026-01-01T08:27:23.254718268Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "180",
+   "observed_at": "2026-01-01T08:27:23.254721228Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "181",
+   "observed_at": "2026-01-01T08:27:23.254724218Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "182",
+   "observed_at": "2026-01-01T08:27:23.254726918Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "183",
+   "observed_at": "2026-01-01T08:27:23.254729828Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "184",
+   "observed_at": "2026-01-01T08:27:23.254732459Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "185",
+   "observed_at": "2026-01-01T08:27:23.254734829Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "186",
+   "observed_at": "2026-01-01T08:27:23.254737189Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  },
+  {
+   "sequence": "187",
+   "observed_at": "2026-01-01T08:27:23.254740479Z",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "origin": {
+    "refresh_generation": "1",
+    "ownership": {
+     "subscriber_instance_id": null,
+     "plugin_instance_id": null,
+     "configuration_id": null,
+     "responsibility": null
+    }
+   },
+   "classification": {
+    "canonical_code": "pii_redaction.selector_evaluated",
+    "failure_class": null
+   },
+   "context": {
+    "execution": null,
+    "phase": null
+   },
+   "severity": "info",
+   "outcome": "success",
+   "detail": {
+    "message": "SECRET-DETAIL-SENTINEL /home/someone/.config/x",
+    "truncated": false
+   },
+   "count": "1",
+   "correlation": {
+    "request": "SECRET-CORRELATION-SENTINEL"
+   }
+  }
+ ],
+ "coverage": {
+  "availability": "available",
+  "summary_scope": "whole_component_lifetime",
+  "retention": {
+   "oldest_event_sequence": "10",
+   "latest_event_sequence": "187",
+   "events_retained": "150",
+   "components_retained": "23",
+   "query_truncated": false
+  },
+  "loss": {
+   "events_evicted": {
+    "value": "0",
+    "saturated": false
+   },
+   "events_omitted": {
+    "value": "0",
+    "saturated": false
+   },
+   "components_evicted": {
+    "value": "0",
+    "saturated": false
+   },
+   "components_rejected": {
+    "value": "0",
+    "saturated": false
+   },
+   "keys_rejected": {
+    "value": "0",
+    "saturated": false
+   },
+   "observations_rejected": {
+    "value": "0",
+    "saturated": false
+   },
+   "messages_truncated": {
+    "value": "0",
+    "saturated": false
+   },
+   "details_omitted": {
+    "value": "0",
+    "saturated": false
+   },
+   "correlations_truncated": {
+    "value": "0",
+    "saturated": false
+   },
+   "correlations_omitted": {
+    "value": "0",
+    "saturated": false
+   },
+   "metadata_rejected": {
+    "value": "0",
+    "saturated": false
+   },
+   "classifications_overflowed": {
+    "value": "0",
+    "saturated": false
+   },
+   "windows_rejected": {
+    "value": "0",
+    "saturated": false
+   },
+   "queries_rejected": {
+    "value": "0",
+    "saturated": false
+   },
+   "stale_observations": {
+    "value": "0",
+    "saturated": false
+   },
+   "projection_deliveries_omitted": {
+    "value": "0",
+    "saturated": false
+   },
+   "projections_panicked": {
+    "value": "0",
+    "saturated": false
+   },
+   "projections_suppressed": {
+    "value": "143",
+    "saturated": false
+   },
+   "sequence_saturated": false
+  },
+  "capabilities": [
+   {
+    "name": "otel",
+    "availability": "unsupported",
+    "reason": "not_integrated"
+   }
+  ]
+ },
+ "continuation": null
+}

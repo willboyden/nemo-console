@@ -25,7 +25,9 @@ test('every literal t("key") and key-like string used in js/ exists in en.json',
       /^(routing\.decision|dyn\.(ttft|itl)(_ms)?|dyn\.inflight|dyn\.kv_cache_usage|dyn\.requests_total|relay\.(atof_bytes|atif_trajectories|exporters_enabled)|ev\.(runs|score|suites|live_running))$/;
     // The Dynamo metric keys of addendum 9.14 (the wave-2 messages live under `dynv.`, so these never collide with a message).
     const dynMetric = /^dyn\.(ttft_window_ms|itl_window_ms|phase_ms|preemptions_total|capacity|spec_accept_pos|spec_accept_ratio|prefix_cache_hit_ratio|requests_running|requests_waiting|tokens)$/;
-    for (const k of keys) if (!notMessage.test(k) && !dynMetric.test(k) && !(k in en) && !(`${k}_one` in en) && !/\.(js|json|md)$/.test(k)) missing.push(`${rel(f)}: ${k}`);
+    // The Relay gateway-resource metric keys of addendum 9.17 (js/relay-runtime-model.js; the cards' messages live under `rt.res.`, so these never collide with a message).
+    const relayMetric = /^relay\.(gw_[a-z_]+|atof_fs_(free|used)|route_[a-z0-9_]+)$/;
+    for (const k of keys) if (!notMessage.test(k) && !dynMetric.test(k) && !relayMetric.test(k) && !(k in en) && !(`${k}_one` in en) && !/\.(js|json|md)$/.test(k)) missing.push(`${rel(f)}: ${k}`);
   }
   assert.deepEqual(missing, []);
 });

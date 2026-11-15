@@ -96,7 +96,7 @@ export function createClient({ base = '/api/v1', getKey = () => null, onUnauthor
     overview: () => get('/overview'),
     topology: () => get('/topology'),
     status: (id) => get(`${sys(id)}/status`),
-    metrics: (id) => get(`${sys(id)}/metrics`),
+    metrics: (id, o) => get(`${sys(id)}/metrics`, null, o),
     history: (id, key, window) => get(`${sys(id)}/metrics/history`, { key, window }),
     // Series for charts (addendum 9.13): one answer per chart. `keys` is an array (1..12 canonical keys) or a comma string;
     // `split` draws one line per label variant; `window` is 15m|1h|24h|7d.
@@ -134,6 +134,8 @@ export function createClient({ base = '/api/v1', getKey = () => null, onUnauthor
     trajectory: (id, q, o) => get(`${sys('relay')}/trajectories/${enc(id)}`, q, o),
     stepContent: (id, step, q, o) => get(`${sys('relay')}/trajectories/${enc(id)}/steps/${enc(step)}/content`, q, o),
     capture: (o) => get(`${sys('relay')}/capture`, null, o),
+    // Relay runtime diagnostics (addendum 9.17), admin only (a viewer gets 403): counters and recent events of the gateway's own runtime.
+    diagnostics: (o) => get(`${sys('relay')}/diagnostics`, null, o),
     routingSummary: (window) => get('/routing/summary', { window }),
     audit: (q) => get('/audit', q),
     settings: () => get('/settings'),

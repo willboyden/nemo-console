@@ -920,3 +920,94 @@ capped, files read without following links and with byte/line caps, parsing off 
   `models` items are looked at; at most 4096 directory entries are listed for config ids (beyond that, which ids appear
   is not defined). The Audit summary's `denied_total` is labelled for what it is: audited calls answered
   401/403 (requests refused before a handler are not audited).
+
+**9.17 (2026-11-15): Relay runtime — gateway resources, plugin routing rates, runtime diagnostics.** Additive (new
+metric keys on the existing Relay poll, a new admin route, new fields on the capture answer, two new Capture-tab
+cards); no existing route or shape changes. Relay 0.11 brought both sources: a `resource_metrics` plugin component
+(enabled here for the gateway PROCESS only, one sample a minute; samples reach Prometheus through the OTLP metrics
+endpoint as `nemo_relay_resource_*{job="nemo-relay"}`, re-exported every 15 s between samples, and ATOF as
+`nemo.relay.resource_metrics` marks of about 17 KB) and runtime diagnostics (bounded counters and recent events in the
+gateway's memory, read only with the account's private gateway credential over Relay's TLS tunnel:
+`nemo-relay diagnostics`; plain HTTP gets 426).
+
+* **New Relay metric keys** (the adapter's `metrics()`; gauges stored and rolled up like every key, so the existing
+  `GET /systems/relay/metrics/series` serves 15m-7d with no new route). Read from Prometheus with FIXED expressions
+  only (no PromQL from a request): 4 queries (the pressure and routing rates share queries through `label_replace`
+  and `or`), run concurrently, 1.5 s timeout and a 4 MiB answer cap each, and only when `urls.prometheus` is set and
+  is a loopback http(s) URL without user info (the default settings have it; tests without it stay hermetic). The
+  points are cached 15 s with one refresh at a time, so the 2 s poll and `GET /metrics` do not re-ask Prometheus. Where a
+  gauge has several series the largest value is used; the p95 accepts only a label-less answer. A key is emitted only
+  for a finite value >= 0; a failed or empty query omits its keys and never fails the snapshot. Labels are never
+  forwarded (the filesystem label holds a home path). Keys and units:
+  `relay.gw_cpu` cores (`..._cpu_consumption_rate_logical_processors`), `relay.gw_rss` B (`..._memory_resident_kibibytes`
+  x 1024), `relay.gw_mem_accounted` B (`..._memory_environment_accounted_kibibytes` x 1024, the unit's cgroup),
+  `relay.gw_threads` 1, `relay.gw_fds` 1 (`..._process_open_file_descriptor_count_file_descriptors`),
+  `relay.gw_disk_read` / `relay.gw_disk_write` B/s (`..._disk_{read,write}_throughput_bytes_per_second`),
+  `relay.atof_fs_free` B (min over series of `..._disk_filesystem_available_capacity_bytes`),
+  `relay.atof_fs_used` ratio 0..1 (1 - available/total, same series), `relay.gw_cpu_pressure` / `relay.gw_mem_pressure`
+  ms/s (`rate(..._{cpu,memory}_pressure_some_stall_time_milliseconds[5m])`), `relay.gw_limit_events` 1
+  (sum of `..._limit_event_count_events`, cumulative since the gateway started), and for the Switchyard plugin inside
+  the gateway: `relay.route_rps` req/s (`sum(rate(switchyard_routing_requests_total{job="nemo-relay"}[5m]))`),
+  `relay.route_failures` req/s (same for `switchyard_routing_failures_total`, 0 when that counter does not exist yet
+  but the requests counter does), `relay.route_tokens` tok/s (same for `switchyard_routing_llm_tokens_total`),
+  `relay.route_overhead_p95` ms (`histogram_quantile(0.95, sum by (le)
+  (rate(switchyard_routing_overhead_milliseconds_bucket{job="nemo-relay"}[5m])))`, falling back to the older
+  `switchyard_routing_overhead_ms_bucket` name with `or`; absent while idle, when Prometheus answers NaN). There is
+  deliberately NO sample-age key: Prometheus re-stamps the last value at every 15 s export, so an age read there
+  cannot go stale; freshness comes from the ATOF marks (next point). Prometheus down = these keys absent,
+  `available` unchanged.
+* **Capture answer** (`GET /systems/{id}/capture`, Relay, viewer) gains `resources: {configured, enabled, scope,
+  interval_s, gpu, network}` parsed from `plugins.toml`'s `resource_metrics` component (all six null when the file
+  cannot be read; a component with `enabled = false` counts as not configured; `scope` identifier-checked, else null;
+  `interval_s` = `polling.interval_millis`/1000 when polling is enabled, else null) and the level row id
+  `resource_metrics` (it replaces 9.12's guessed row of that id; `detail` keeps its pinned shape `{polling,
+  interval_ms}`, `observed` is `{last_ts}`, group "other"): enabled = configured and polling on; state `active` when
+  the newest `nemo.relay.resource_metrics` mark in the ATOF index is no older than 3 x interval (60 s assumed when no
+  interval is configured), `stale` when older, `idle` when enabled with none seen, `off` when not enabled, `unknown`
+  when `plugins.toml` cannot be read or the index is off. When off, one hint with code `relay.resources.off`. The
+  trace index keeps these marks out of traces, sessions, analytics, mark and orphan counts (they hang under the
+  runtime root), keeps only the newest mark's time (no payload), and leaves them out of its reuse stamp. The ATOF and
+  Payloads rows keep judging freshness by traffic only: resource marks alone never make them `active`.
+* **`GET /api/v1/systems/{id}/diagnostics`**, Relay only (an unknown id 404s first, as on every system route; for a
+  known id the role is checked before the system: ADMIN, else 403; other known systems 404; Rust-only D-44). A
+  request carrying `Sec-Fetch-Site: cross-site` or `same-site`, or an `Origin` that does not match the console's own,
+  is refused with 403 before anything runs (under loopback trust a GET from another page would otherwise start
+  processes). The relay URL must be loopback http(s) without user info, else `reason: error` and nothing runs. Runs,
+  through the adapter's existing command runner (same binary resolution as `plugins validate`, argv only, no shell,
+  the runner's cleaned environment with the console's HOME so the CLI finds the account's gateway credential):
+  `nemo-relay diagnostics --gateway-url=<relay url> --max-response-bytes 1048576`, then while the page carries a
+  `continuation` object and fewer than 4 pages were read, the same with `--query {"continuation":<the object as
+  received, compact>}` (never sent when over 3 KiB raw or 4096 URI-encoded bytes, never the same one twice), then
+  `--memory --max-response-bytes 262144` when the snapshot returned JSON. 15 s per call, one 2 MiB output budget
+  shared by all calls (no call with under 64 KiB left), the whole read under a 30 s deadline; JSON parsed off the
+  async workers; cached 30 s (a failure 5 s), one read at a time (single flight). Pages are merged: totals, times,
+  version and `loss` from page 1; components from all pages grouped by key; events deduplicated by sequence, the
+  newest 256 kept. Answer:
+  `{available, reason, relay_version, captured_at, elapsed_s, totals: {recorded, successes, failures, unspecified,
+  evictions}, last_failure_at, components: [{key, instances, successes, failures, occurrences, last_failure_at}],
+  events: [{seq, at, component, code, failure_class, severity, outcome, count}], loss: {<name>: n}, retention:
+  {events_retained, oldest_seq, latest_seq, truncated}, memory: {reserved_bytes, events, event_capacity, detail_bytes,
+  detail_capacity_bytes} | null}`. `retention.truncated` is true when events remained unread (the last page read was
+  still truncated, a later page failed, the deadline or the page limit was hit, or a continuation was refused).
+  `reason` is null or one of `disabled` (the CLI says inspection is unavailable: diagnostics or their HTTP read
+  switched off on the gateway, or the account's credential or tunnel failed), `unreachable`, `unsupported_version`
+  (no `diagnostics` subcommand, Relay < 0.11), `error`; with a reason every other field is null/empty. A failed memory
+  call leaves `memory: null` with the rest available; a failed later page keeps the earlier pages. Numbers come from
+  Relay's decimal strings (saturated or larger than 2^53 -> 2^53). Components: keys identifier-checked
+  `[a-z0-9_.-]{1,96}` (others dropped and counted in `loss.console_dropped`, which is always present), at most 64,
+  sorted by failures then key. Events newest first; `component`, `code`, `failure_class`, `severity`, `outcome`
+  identifier-checked (else `"other"`); timestamps RFC 3339 as Relay prints them (checked, else null). `loss` only from
+  an allowlist of Relay's `coverage.loss` names. NEVER forwarded: `detail` (Relay: "can contain private data that has
+  not been sanitized"), `correlation`, `origin`, ownership ids, instance ids, process ids, `context`, the continuation
+  object. Nothing of the CLI's own output is echoed.
+* **Capture tab**: a "Gateway resources" card (every role): window 1h/24h/7d (default 24h, kept in the URL as
+  `res_window`) through the existing series route; charts for CPU, memory (RSS + cgroup), threads + file descriptors,
+  disk read/write, filesystem of the event files (free, used share), pressure and limit events, routing requests +
+  failures, routing overhead p95, tokens/s; axis labels and tiles keep enough precision for tiny values (millicores);
+  a latest-values strip from the metrics snapshot; a freshness chip from the `resource_metrics` row's
+  `observed.last_ts`; when the capture answer says resources are off, an empty state with the plugins.toml component
+  to add. A "Runtime diagnostics" card, built only for admins (not merely disabled; nothing is fetched for a viewer):
+  totals tiles, a component table (failures first), failures by component as bars, recent events (code, component,
+  severity, outcome, count, time) with an outcome filter and a note when `retention.truncated`, loss counters
+  (non-zero highlighted), memory meters (event slots and detail pool used of capacity; reserved bytes as a figure),
+  fixed texts per `reason`, a refresh button, auto-refresh every 30 s while the tab is visible.

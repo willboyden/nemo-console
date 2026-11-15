@@ -59,6 +59,8 @@ pub struct Info {
     pub files: Vec<FileRow>,
     pub events: u64,
     pub chunk_marks: u64,
+    /// The newest `nemo.relay.resource_metrics` mark (addendum 9.17), microseconds.
+    pub resource_last_us: Option<i64>,
     pub truncated: bool,
     pub limits: Limits,
     pub content: &'static str,
@@ -463,6 +465,7 @@ impl Snapshot {
                 files: Vec::new(),
                 events: 0,
                 chunk_marks: 0,
+                resource_last_us: None,
                 truncated: false,
                 limits,
                 content,

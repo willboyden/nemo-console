@@ -345,6 +345,13 @@ pub trait SystemAdapter: Send + Sync {
         Err(AdapterError::NoSuchEndpoint)
     }
 
+    // ── Relay runtime diagnostics (addendum 9.17): other systems answer 404 ─────────────────────
+    /// `GET /systems/relay/diagnostics` (admin): counts and codes of the gateway's runtime diagnostics, read with
+    /// `nemo-relay diagnostics`. A failed read is an answer with a `reason`, not an error.
+    async fn relay_diagnostics(&self) -> Result<Value, AdapterError> {
+        Err(AdapterError::NoSuchEndpoint)
+    }
+
     // ── standing background work (addendum 9.12) ────────────────────────────────────────────────
     /// Start the adapter's own standing background task, if it has one. Called once when the server starts and
     /// background tasks are on; never from a request.

@@ -7,7 +7,7 @@
 use serde_json::{Value, json};
 
 /// Routes that exist only in the Rust backend: (method, path, auth, PORTING.md deviation).
-const RUST_ONLY: [(&str, &str, &str, &str); 19] = [
+const RUST_ONLY: [(&str, &str, &str, &str); 20] = [
     ("GET", "/api/v1/audit/summary", "admin", "D-42"),
     (
         "GET",
@@ -26,6 +26,12 @@ const RUST_ONLY: [(&str, &str, &str, &str); 19] = [
         "/api/v1/systems/{system_id}/decisions",
         "viewer",
         "D-42",
+    ),
+    (
+        "GET",
+        "/api/v1/systems/{system_id}/diagnostics",
+        "admin",
+        "D-44",
     ),
     ("GET", "/api/v1/systems/{system_id}/fleet", "viewer", "D-38"),
     (

@@ -856,6 +856,104 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
   now runs on the blocking pool. Parity: only the OpenAPI document differs: the `/api/v1/audit` entry gains a
   `description` and the four parameters (`parameters/2..5`), pinned with their exact values in the four
   `global.openapi.*` entries. Tests: `tests/viz_wave4.rs`.
+- **D-44 Relay runtime (addendum 9.17): new Relay metric keys, capture additions, one admin route added after the
+  port.** All in the Relay adapter (`adapters/relay.rs`, pure parts in `adapters/relay_runtime.rs`).
+  * Metric keys on the existing Relay poll (`metrics()`), so `GET /systems/relay/metrics/series` serves them with no new
+    route: `relay.gw_cpu` (cores), `relay.gw_rss` and `relay.gw_mem_accounted` (B, kibibytes x 1024),
+    `relay.gw_threads`, `relay.gw_fds`, `relay.gw_disk_read` / `relay.gw_disk_write` (B/s), `relay.atof_fs_free` (B, the
+    smallest available capacity) and `relay.atof_fs_used` (ratio, 1 - available/total of THAT filesystem, paired by its
+    labels), `relay.gw_cpu_pressure` / `relay.gw_mem_pressure` (ms/s), `relay.gw_limit_events` (sum), `relay.route_rps`
+    / `relay.route_failures` (req/s; 0, not absent, while requests are counted and the failure counter does not exist
+    yet: `sum(rate(failures[5m])) or (sum(rate(requests[5m])) * 0)`), `relay.route_tokens` (tok/s),
+    `relay.route_overhead_p95` (ms, the older `_ms_bucket` name as the `or` fallback; only a label-less value counts).
+    There is NO freshness key: a sample's Prometheus timestamp is its OTLP export time (Relay re-exports the last sample
+    every few seconds), so freshness comes from the capture answer's newest ATOF mark. Four FIXED instant queries
+    (`relay_runtime::QUERIES`: one `__name__=~` query for every gauge, the two pressure rates and the three routing
+    rates each told apart by a constant `label_replace` label `k`, the quantile), all `job="nemo-relay"`, run at once,
+    1.5 s timeout each, the points cached 15 s and refreshed by one caller at a time (the others get points up to 60 s
+    old while a refresh runs, else wait for it), so a slow Prometheus costs a poll at most about 1.5 s once per 15 s; an
+    answer read up to 4 MiB (`get_query_capped`), at most 200 series looked at. Prometheus is asked only when
+    `urls.prometheus` is SET and names a loopback host over http(s) without user info (the container always sets it,
+    default `http://127.0.0.1:9090`; a context without it, such as the existing adapter tests', asks nothing). A key is
+    emitted only for a finite value >= 0; labels are never forwarded (the filesystem label holds a home path); with
+    several series of one gauge the largest is shown (one series per name while the gateway process is the only scope).
+    A failed, empty, oversized or non-success answer omits its keys; `available` is unchanged; when the gateway itself
+    is down the snapshot is the old `available: false` one.
+  * Trace index: `nemo.relay.resource_metrics` marks (about 17 KB each) are counted and their newest time kept
+    (`Counters::resource_last_us` -> `Info::resource_last_us`) and NOTHING else: no mark row, no measurement, no label
+    symbol, so they are in no trace, session, analytics answer, mark count or orphan count. The rows-reuse stamp leaves
+    them out, so a new sample alone publishes a snapshot without a new derive.
+  * Capture answer (`GET /systems/{system_id}/capture`, viewer): new `resources: {configured, enabled, scope,
+    interval_s, gpu, network}` from the first `[[components]] kind = "resource_metrics"` that is not `enabled = false`
+    (`configured`), `polling.enabled == true` (`enabled`), `measurement_scope` (identifier-checked, else null),
+    `polling.interval_millis / 1000` when enabled (else null), `gpu.enabled` / `network.enabled` as booleans; all six
+    null when `plugins.toml` cannot be read. The `resource_metrics` level row (it existed, from an older guess at a
+    `resource_metrics` table inside the observability component, which is no longer read) now follows that component:
+    `enabled` = configured and polling on; `state` `active` when the newest resource mark is no older than 3 x interval
+    (60 s when the interval is not given), `stale` when older, `idle` when on with none seen, `off` when not on,
+    `unknown` when the file cannot be read or the index is off; `observed: {last_ts}`; `detail` unchanged (`{polling,
+    interval_ms}`); one extra key `group: "other"` on that row only. The hint `capture.metrics.resource_off` is replaced
+    by `relay.resources.off` (when the row is `off`, whatever the observability component says; its message names
+    `python3 -I ops/nemo-relay-levels.py resources on`). The ATOF and payload rows keep following the TRAFFIC only (the
+    index's newest stored event, which leaves resource marks out), so a sampler writing a mark a minute does not make an
+    idle capture look active.
+  * `/api/v1/systems/{system_id}/diagnostics` (ADMIN; the role is checked first, so a viewer gets 403 on every system;
+    then a cross-site request, `Sec-Fetch-Site: cross-site` or `same-site`, or an `Origin` that is `null` or names
+    another host than `Host` (the precheck's non-GET test, `api::cross_site_get`), is 403 `cross_origin` before anything
+    runs, because the route starts processes; then Relay only, 404 `not_found` for the others), through the adapter
+    port's `relay_diagnostics` (default `NoSuchEndpoint`). Two calls through the adapter's runner (the same `nemo-relay`
+    resolution as `plugins validate`: argv, no shell, the runner's environment, which keeps `HOME` and
+    `XDG_RUNTIME_DIR`, so the CLI finds the account's private gateway credential under `~/.config/nemo-relay`).
+    `urls.relay` must be http(s) to a loopback address or `localhost` without user info (`relay_runtime::loopback_url`,
+    the same check as for Prometheus), else the answer is reason `error` and the CLI is not run. Snapshot pages:
+    `nemo-relay diagnostics --gateway-url=<urls.relay> --max-response-bytes 1048576`; Relay caps a page at its
+    `max_snapshot_bytes` (128 KiB on 0.11.1) and starts it at the OLDEST retained event, so while a page carries a
+    `continuation` object the same call is made again with `--query '{"continuation":<that object>}'` (the object
+    exactly as received, re-serialized compactly; not sent when that text is over 3,072 bytes or over 4,096 URI-encoded
+    bytes with `query=`, the CLI's cap; not sent twice: a continuation that comes back again stops the reading), at most
+    4 pages (`DIAG_MAX_PAGES`). Then, when page 1 gave a snapshot, `--memory --max-response-bytes 262144`. 15 s timeout
+    each and ONE deadline of 30 s for the whole read (`diag_deadline`; a call past it is not made, a call running at it
+    is stopped: page 1 then gives `unreachable`, a later page keeps what was gathered with `truncated`, the memory call
+    gives `memory: null`); all the calls share ONE output budget of 2 MiB (each call's cap is what is left; no further
+    call below 64 KiB left); every output parsed and mapped on the blocking pool (`relay_runtime::parse_page`,
+    `next_query`, `map_pages`). A page after the first that fails ends the reading and keeps what the earlier pages
+    gave. The adapter keeps the answer 30 s (a failure 5 s) under a tokio mutex held across the CLI calls: one read at a
+    time, waiting callers get its answer. Answer `{available, reason, relay_version, captured_at, elapsed_s, totals:
+    {recorded, successes, failures, unspecified, evictions}, last_failure_at, components: [{key, instances, successes,
+    failures, occurrences, last_failure_at}], events: [{seq, at, component, code, failure_class, severity, outcome,
+    count}], loss: {name: n}, retention: {events_retained, oldest_seq, latest_seq, truncated}, memory: {reserved_bytes,
+    events, event_capacity, detail_bytes, detail_capacity_bytes} | null}`. Totals, `lifetime` fields, `captured_at`,
+    `relay_version` and `loss` come from page 1; components from every page; events from every page (an event seen
+    twice, by sequence, counts once). `retention`: `oldest_seq` / `latest_seq` the smallest / largest of Relay's
+    `coverage.retention` figures of the pages read and the gathered sequences, `events_retained` the larger of Relay's
+    figure and the number of distinct events gathered, `truncated` = the last page read still says `query_truncated` or
+    carries a continuation (also after a failed later page, a loop, a refused continuation or the page limit). The
+    continuation object itself (it holds an instance id) is never read into the answer. Counts from Relay's decimal
+    strings, non-negative JSON integers or `{value, saturated}` counters (saturated or above 2^53 -> 2^53; anything else
+    null). Components grouped by `identity.key` (`[a-z0-9_.-]{1,96}`; others dropped and counted in
+    `loss.console_dropped`, as are the instances of groups past the first 64), sums of their lifetime totals, the newest
+    `lifetime.last_failure_at`, sorted by failures (desc) then key. Events newest first by `sequence`, the newest 256 of
+    all pages (the first 4,096 list entries of each); `component`, `code` (`classification.canonical_code`),
+    `failure_class`, `severity`, `outcome` must match the same pattern (else `"other"`; null stays null). Timestamps
+    only in the RFC 3339 shape Relay prints and parseable, else null. `relay_version` `N.N.N[-+.suffix]` or null. `loss`
+    = the 18 `coverage.loss` names of 0.11.1 (`LOSS_NAMES`) that parse, plus `console_dropped`. NEVER read into the
+    answer: `detail`, `correlation`, `origin`, `context`, ownership, instance, process and collector ids, `source` other
+    than `relay_version`. `reason` (with it every other field is null or empty, and the memory call is not made):
+    `disabled` (no JSON, the CLI's text says "diagnostic inspection unavailable": 0.11.1 prints that, exit 0, when the
+    gateway runs without diagnostics), `unreachable` (the same text with "failed to connect" / "connection refused" /
+    "timed out", or the call timed out), `unsupported_version` ("unrecognized subcommand": a 0.9.x CLI), `error`
+    (anything else: a missing binary, garbage, output cut at the cap, a JSON object without any of `lifetime`,
+    `components`, `events`, `coverage`, a non-zero exit). Nothing of the CLI's text is returned.
+  Parity: like D-36, D-38, D-40 and D-42, `tests/core_routes_table.rs` lists the route in `RUST_ONLY` (row `"rust_only":
+  "D-44"` in `parity/routes.rust.json`), `tests/core_roles.rs` lists it with the admin-only GETs, the corpus has no case
+  for it, and `assets/openapi.json` gains its entry by hand in the generated style (checked by
+  `tests/relay_runtime.rs::the_route_table_and_openapi_entry_match_the_code`); the four `global.openapi.*` pins in
+  `parity/pinned-diffs.json` gain exactly that path. The harness's fake Prometheus now also gets the four fixed queries
+  from the Relay poll: `read.relay.metrics` and `reread.relay.metrics` are pinned to exactly those four upstream
+  requests (the fake's generic labelled answers map to no Relay key: the quantile takes only a label-less value, so the
+  answer is unchanged), and the whole-run sets `global:full`, `global:lifecycle` and `global:probe-broken` to exactly
+  the four requests (`parity/run.mjs` now looks up a pin for a `global:<scenario>` case too, so any other extra request
+  still fails). Tests: `tests/relay_runtime.rs`.
 - **Test-only (workstream B):** in the DCGM `post_apply` restart test the fake upstream answers 503 instead of refusing the
   connection.
 - **Moot since A-7 (the private copies are deleted):** workstream B's "alias expansion over 1,000,000 nodes raises

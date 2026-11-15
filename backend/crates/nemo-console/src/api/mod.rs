@@ -99,6 +99,7 @@ pub enum H {
     Fleet,
     Rails,
     Decisions,
+    RelayDiagnostics,
     Events,
     EventsStream,
     RunRecords,
@@ -212,6 +213,15 @@ pub static ROUTES: &[RouteDef] = &[
         Viewer,
         false,
         Decisions
+    ),
+    // the Relay gateway's runtime diagnostics (addendum 9.17; added after the port, PORTING.md D-44); admin, other
+    // systems answer 404
+    r!(
+        GET,
+        "/systems/{system_id}/diagnostics",
+        Admin,
+        false,
+        RelayDiagnostics
     ),
     r!(GET, "/systems/{system_id}/events", Viewer, false, Events),
     r!(
@@ -723,6 +733,26 @@ fn header<'a>(h: &'a HeaderMap, name: &str) -> Option<std::borrow::Cow<'a, str>>
         })
 }
 
+/// A GET that a page of another site (or another origin) made (addendum 9.17, the diagnostics route, which starts
+/// processes): `Sec-Fetch-Site: cross-site` or `same-site`, or an `Origin` that is `null` or names another host than
+/// the request's `Host` (the same test the precheck applies to non-GET requests).
+#[must_use]
+pub fn cross_site_get(headers: &HeaderMap) -> bool {
+    if header(headers, "sec-fetch-site").is_some_and(|v| {
+        matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "cross-site" | "same-site"
+        )
+    }) {
+        return true;
+    }
+    let host = header(headers, "host")
+        .as_deref()
+        .unwrap_or("")
+        .to_lowercase();
+    header(headers, "origin").is_some_and(|o| o == "null" || netloc(&o).to_lowercase() != host)
+}
+
 struct Precheck<'a> {
     state: &'a AppState,
     hosts: Vec<String>,
@@ -1138,6 +1168,7 @@ async fn run_handler(h: H, req: Req) -> Result<Response<Body>, ApiError> {
         H::Fleet => observe::dcgm_fleet(req).await,
         H::Rails => observe::guardrails_rails(req).await,
         H::Decisions => observe::openshell_decisions(req).await,
+        H::RelayDiagnostics => observe::relay_diagnostics(req).await,
         H::Events => observe::events(req).await,
         H::EventsStream => observe::events_stream(req).await,
         H::RunRecords => observe::run_records(req).await,

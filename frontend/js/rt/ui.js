@@ -78,6 +78,22 @@ export function copyBtn(text, label = t('common.copy')) {
   });
 }
 
+/**
+ * A multi-line text to copy (a config snippet, two environment lines): a label, the text in a <pre>, and a Copy button. The text goes in
+ * as text, never as markup; the copy is exactly the text shown.
+ */
+export function snippetBlock(text, label) {
+  const b = btn(t('common.copy'), {
+    icon: 'copy',
+    size: 'sm',
+    onClick: async () => {
+      const ok = await copyText(text);
+      toast(ok ? t('common.copied') : t('common.copy_failed'), { kind: ok ? 'ok' : 'bad', timeout: 1800 });
+    },
+  });
+  return h('div', { class: 'snippet' }, h('div', { class: 'row gap wrap between snippet-head' }, h('span', { class: 'fix-label' }, label), b), h('pre', { class: 'snippet-code' }, text));
+}
+
 export const kv = (k, v) => h('div', { class: 'kv' }, h('dt', k), h('dd', v ?? dash()));
 export const kvList = (rows) =>
   h(

@@ -4780,3 +4780,157 @@ i.sw.dc-sw.dc-denied {
 .audit-actor {
   white-space: nowrap;
 }
+
+/* Relay runtime cards on the Capture tab (addendum 9.17; js/rt/resources-card.js, js/rt/diagnostics-card.js).
+   A value that needs attention (a failure, an eviction, a limit event, a loss counter) has a warm border AND a glyph and a word. */
+.res-chip:empty {
+  display: none;
+}
+.res-fresh {
+  gap: 6px;
+}
+.res-updated {
+  white-space: nowrap;
+}
+.res-facts {
+  align-items: center;
+}
+.res-facts .chip {
+  max-width: none;
+}
+.res-strip {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+.rtd-totals {
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+}
+.stat.hot {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+.res-grid {
+  align-items: start;
+}
+.rtd-data {
+  min-width: 0;
+}
+.rtd-meta .chip {
+  max-width: none;
+}
+.rtd-table th.rtd-key {
+  font-weight: 500;
+  font-size: inherit;
+  color: var(--text);
+  background: none;
+  position: static;
+  white-space: nowrap;
+}
+.rtd-table td,
+.rtd-table th {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.rtd-table.compact td,
+.rtd-table.compact th {
+  padding-left: var(--s2);
+  padding-right: var(--s2);
+}
+.rtd-table td.rtd-wrap {
+  white-space: normal;
+  overflow-wrap: break-word;
+  min-width: 110px;
+}
+.rtd-table th.rtd-key code {
+  font-size: var(--fs-sm);
+}
+.rtd-zeros > summary {
+  cursor: pointer;
+}
+.rtd-zeros .rtd-loss {
+  margin-top: var(--s2);
+}
+.rtd-table tr.rtd-fail > th.rtd-key {
+  box-shadow: inset 3px 0 0 var(--bad);
+}
+.rtd-table .badge {
+  white-space: nowrap;
+}
+.rtd-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 190px) minmax(60px, 1fr) auto;
+  align-items: center;
+  gap: var(--s2);
+  font-size: var(--fs-sm);
+}
+.rtd-barlist,
+.rtd-mem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rtd-name {
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rtd-val {
+  min-width: 36px;
+  text-align: right;
+  white-space: nowrap;
+}
+.rtd-reserved {
+  margin: 0;
+}
+.rtd-loss {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--s2);
+}
+.rtd-loss li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: var(--s1) var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--r1);
+  background: var(--surface-2);
+  font-size: var(--fs-sm);
+}
+.rtd-loss li.hot {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+.rtd-loss-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A multi-line text to copy (js/rt/ui.js snippetBlock): a config snippet, two environment lines. */
+.snippet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  width: min(100%, 560px);
+  align-self: center;
+  text-align: left;
+}
+.snippet-code {
+  margin: 0;
+  padding: var(--s3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r1);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  white-space: pre;
+  overflow-x: auto;
+}
+.res-remedy {
+  width: 100%;
+}

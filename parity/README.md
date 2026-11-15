@@ -30,7 +30,8 @@ need a value captured by a filtered-out case are skipped), `--allow-diff-routes 
 case id per line, or `stub:<system_id>`, `#` comments: diffs there are reported but do not fail the run; since 0.4.0
 `allow-diffs.txt` holds only the deviations recorded in backend/PORTING.md §13; a `pinned-diffs.json` next to the
 allow file pins cases to their EXACT expected diffs instead, `{pins: [{case, deviation, diffs: [{path, a?, b?}]}]}`, so
-any other difference in a pinned case still fails, a field left out matches anything; regenerate an entry from
+any other difference in a pinned case still fails, a field left out matches anything; a whole-run `global:<scenario>` case
+can be pinned the same way; regenerate an entry from
 `out/report.json` when a deviation changes on purpose), `--dump` (writes `out/dump-<scenario>.json`: A's normalised answer, argv and upstream calls per case),
 `--keep` (keep the temp dirs), `--tmp DIR`, `--list`. Output: a summary grouped by route, and `out/report.json`
 (gitignored). Exit 0 only when no case differs (outside the allowed routes). `PARITY_PROGRESS=1` prints a dot per case,

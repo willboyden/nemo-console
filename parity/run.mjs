@@ -536,7 +536,11 @@ async function runScenario(name, opts, allow, report) {
     compareSets([...sa.allHttp], [...sb.allHttp], 'upstream-requests over the whole run (distinct)', gd);
     if (gd.length) {
       const route = 'GLOBAL argv/upstream sets';
-      out.diffs.push({ id: `global:${name}`, route, allowed: allow.has(route) || allow.has(`global:${name}`), diffs: gd });
+      const id = `global:${name}`;
+      // a whole-run difference can be pinned exactly like a case (D-44: the Relay poll's fixed Prometheus queries)
+      const pin = allow.pinned(id, gd);
+      const allowed = pin ? pin.ok : allow.has(route) || allow.has(id);
+      out.diffs.push({ id, route, allowed, ...(pin ? { pin: pin.why } : {}), diffs: gd });
     }
     out.unknownCli = { a: sa.unknownCli, b: sb.unknownCli };
     out.unknownHttp = { a: sa.unknownHttp, b: sb.unknownHttp };

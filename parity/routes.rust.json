@@ -133,6 +133,13 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/systems/{system_id}/diagnostics",
+      "auth": "admin",
+      "body": false,
+      "rust_only": "D-44"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/systems/{system_id}/events",
       "auth": "viewer",
       "body": false

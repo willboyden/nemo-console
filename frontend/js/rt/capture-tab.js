@@ -2,15 +2,20 @@
 // levels (enabled, state, what is configured, what was observed), the three OTLP projections and the hints as a to-do
 // list. `detail` and `observed` have fixed keys per level (docs/ARCHITECTURE.md 9.12, "Pinned details"); describeLevel()
 // (pure.js) types them and anything it does not know falls back to the generic renderer. Everything is text.
+// Addendum 9.17 adds two cards under the matrix: Gateway resources (every role, js/rt/resources-card.js) and Runtime diagnostics
+// (admins only, js/rt/diagnostics-card.js: built only when the caller's role is admin, torn down if it stops being).
 import { h } from '../dom.js';
 import { t } from '../i18n.js';
 import { fmtInt, fmtBytes, timeAgo } from '../format.js';
 import { badge, card, errorBox, skeleton } from '../components/ui.js';
+import { store, isAdmin } from '../app-context.js';
 import { fmtStamp, fmtDur } from '../viz/fmt.js';
 import { createNav } from './nav.js';
 import { liveLoad } from './live.js';
 import { dash, swap } from './ui.js';
 import { coverage, describeLevel } from './pure.js';
+import { resourcesCard } from './resources-card.js';
+import { diagnosticsCard } from './diagnostics-card.js';
 
 export { coverage };
 
@@ -20,9 +25,11 @@ const GROUPS = [
   ['rt.cap.g_files', ['atof', 'atif']],
   ['rt.cap.g_otel', ['otel_traces', 'otel_logs', 'otel_metrics']],
   ['rt.cap.g_payload', ['payloads', 'redaction']],
-  ['rt.cap.g_enrich', ['resource_metrics', 'pricing']],
+  ['rt.cap.g_enrich', ['pricing']],
 ];
 const PROJ = ['gen_ai', 'openinference', 'full'];
+/** A level the backend files under "Other" itself (`group: "other"`; addendum 9.17: resource_metrics, the gateway process's own figures) is not placed by its id. */
+const filedUnderOther = (l) => l?.group === 'other';
 
 export const stateChip = (s) =>
   h(
@@ -56,6 +63,8 @@ function endpoint(o) {
 }
 const keyLabel = (key) => (t(`rt.cap.k_${key}`) === `rt.cap.k_${key}` ? String(key).replace(/_/g, ' ') : t(`rt.cap.k_${key}`));
 const MODE_KEY = { full: 'rt.cap.mode_full', turn_filtered: 'rt.cap.mode_turn_filtered' };
+/** The row's name: the console's own wording where the message catalogue has one for this level (resource_metrics changed meaning in 9.17), else the backend's label. */
+const levelLabel = (l) => (t(`rt.cap.lvl_${l.id}`) === `rt.cap.lvl_${l.id}` ? l.label : t(`rt.cap.lvl_${l.id}`));
 
 /** One typed fact (pure.js describeLevel) -> [label, value nodes]. */
 function factRow(f) {
@@ -181,7 +190,27 @@ export function renderValue(v, key = '', depth = 0) {
 
 export function captureTab(scope, ctx) {
   const nav = createNav('capture', ctx);
+  // The coverage, the matrix and the cards under them are separate hosts: the capture answer is re-drawn when it changes, the two
+  // runtime cards poll on their own and are never rebuilt by it (an open data table or a scrolled list stays as it is).
   const body = h('div', { class: 'stack-v', 'aria-busy': 'true' }, skeleton(5));
+  const rest = h('div', { class: 'stack-v' });
+  const resources = resourcesCard(scope, { nav });
+  const diagSlot = h('div', { class: 'rt-diag-slot' });
+  let diagScope = null;
+  /** The Runtime diagnostics card exists only for an admin: not built for anyone else, and removed if the role changes. */
+  function syncDiagnostics() {
+    if (isAdmin()) {
+      if (diagScope) return;
+      diagScope = scope.child();
+      diagSlot.replaceChildren(diagnosticsCard(diagScope).el);
+    } else if (diagScope) {
+      diagScope.dispose();
+      diagScope = null;
+      diagSlot.replaceChildren();
+    }
+  }
+  syncDiagnostics();
+  scope.own(store.subscribe(syncDiagnostics, (st) => st.role));
   function render(c) {
     const levels = c.levels || [];
     const cov = coverage(levels);
@@ -214,12 +243,12 @@ export function captureTab(scope, ctx) {
     ]);
     const rows = [];
     for (const [gk, ids] of GROUPS) {
-      const ls = ids.map((i) => byId[i]).filter(Boolean);
+      const ls = ids.map((i) => byId[i]).filter((l) => l && !filedUnderOther(l));
       if (!ls.length) continue;
       rows.push(h('tr', { class: 'grp' }, h('th', { colspan: 5, scope: 'rowgroup' }, t(gk))));
       for (const l of ls) rows.push(levelRow(l, levels));
     }
-    const other = levels.filter((l) => !GROUPS.some(([, ids]) => ids.includes(l.id)));
+    const other = levels.filter((l) => filedUnderOther(l) || !GROUPS.some(([, ids]) => ids.includes(l.id)));
     if (other.length) {
       rows.push(h('tr', { class: 'grp' }, h('th', { colspan: 5, scope: 'rowgroup' }, t('rt.cap.g_other'))));
       for (const l of other) rows.push(levelRow(l, levels));
@@ -269,15 +298,17 @@ export function captureTab(scope, ctx) {
         : h('p', { class: 'note ok' }, t('rt.cap.no_hints')),
       h('p', { class: 'hint' }, t('rt.cap.hints_hint')),
     ]);
-    swap(body, head, matrix, projections, todo);
+    swap(body, head, matrix);
+    swap(rest, projections, todo);
     body.removeAttribute('aria-busy');
+    resources.setCapture(c.resources ?? null, levels.find((l) => l.id === 'resource_metrics')?.observed?.last_ts);
   }
   function levelRow(l, levels) {
     const d = describeLevel(l, levels);
     return h(
       'tr',
       { class: `cap-row st-${l.state}` },
-      h('th', { scope: 'row', class: 'cap-level' }, h('div', l.label), h('code', { class: 'muted small' }, l.id)),
+      h('th', { scope: 'row', class: 'cap-level' }, h('div', levelLabel(l)), h('code', { class: 'muted small' }, l.id)),
       h('td', l.enabled ? badge(`✓ ${t('rt.cap.on')}`, 'ok') : badge(`✕ ${t('rt.cap.off')}`, 'muted')),
       h('td', stateChip(l.state)),
       h(
@@ -295,14 +326,16 @@ export function captureTab(scope, ctx) {
       if (changed || body.getAttribute('aria-busy') === 'true') render(c);
     },
     onError: (e, { quiet }) => {
-      if (!quiet || body.getAttribute('aria-busy') === 'true')
+      if (!quiet || body.getAttribute('aria-busy') === 'true') {
         swap(
           body,
           errorBox(e, () => live.refresh()),
         );
+        swap(rest);
+        resources.setCapture(null, null); // the capture answer is not known: the resources card asks for its own data anyway
+      }
     },
   });
   live.refresh();
-  void nav;
-  return h('div', { class: 'stack-v rt-tab' }, body);
+  return h('div', { class: 'stack-v rt-tab' }, body, resources.el, diagSlot, rest);
 }

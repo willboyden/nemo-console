@@ -103,4 +103,12 @@ export async function visitRelayTraces(ctx) {
   await open(ctx, '#/relay?tab=capture', 'relay › capture (seeded)');
   await need(`${q('.cap-table tbody tr.cap-row')} >= 9`, 'the capture matrix lists the nine levels', 30000);
   await need(`${q('.cap-meter')} === 1 && ${q('.proj-tile')} === 3`, 'the coverage meter and the three projections render');
+  // Addendum 9.17: the two runtime cards under the matrix. The hermetic backend has no Prometheus and no gateway, so the data-less states
+  // are what is asserted here (e2e/viz-pages.mjs checks the charts and tables against the mock): the resources card shows figures or
+  // says why it has none, and the admin's diagnostics card shows its totals or the fixed text of its reason, never the error state.
+  await need(`${q('#rt-resources')} === 1 && !document.querySelector('#rt-resources [aria-busy="true"]')`, 'the Gateway resources card is on the Capture tab and has finished loading', 30000);
+  await need(`${q('#rt-resources .res-strip')} + ${q('#rt-resources .state.empty')} >= 1`, 'the resources card shows its figures or says why it has none');
+  await need(`${q('#rt-diagnostics')} === 1 && !document.querySelector('#rt-diagnostics [aria-busy="true"]')`, 'an admin gets the Runtime diagnostics card, and it has finished loading', 30000);
+  await need(`${q('#rt-diagnostics .rtd-totals .stat')} === 5 || ${q('#rt-diagnostics .state.empty')} === 1`, 'the diagnostics card shows its five totals, or the fixed text of its reason');
+  await need(`!document.querySelector('#rt-resources .state.error, #rt-diagnostics .state.error')`, 'neither runtime card shows the error state');
 }

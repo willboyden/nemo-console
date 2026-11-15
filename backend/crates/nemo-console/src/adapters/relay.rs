@@ -19,6 +19,7 @@ use serde_json::{Map, Value};
 use crate::adapters::base::{
     AdapterContext, AdapterError, AdapterRef, CommandResult, EventStream, RunOpts, SystemAdapter,
 };
+use crate::adapters::relay_runtime::{self, PromRow};
 use crate::adapters::relay_traces::{Request as TraceRequest, TraceConfig, TraceDirs, TraceIndex};
 use crate::adapters::switchyard::{int_value, re, type_name};
 use crate::api::pyjson::PyJson;
@@ -1359,6 +1360,14 @@ pub struct RelayAdapter {
     /// The trace explorer's index (addendum 9.12). Its background task runs only after `start_background`.
     pub traces: Arc<TraceIndex>,
     cache: Mutex<Cache>,
+    /// The diagnostics answer (addendum 9.17): (when, how long it is good for, the answer). The lock is held across
+    /// the CLI calls, so one read runs at a time and callers that waited get its answer.
+    diag: tokio::sync::Mutex<Option<(Instant, Duration, Value)>>,
+    /// The whole diagnostics read ends by then (`DIAG_DEADLINE_S`; tests shorten it).
+    pub diag_deadline: Duration,
+    /// The Prometheus points (addendum 9.17) and the lock that lets one caller refresh them.
+    prom_points: Mutex<Option<(Instant, Vec<MetricPoint>)>>,
+    prom_refresh: tokio::sync::Mutex<()>,
 }
 
 /// Build the adapter (Python: registry `build_adapter` + the container's configure hook).
@@ -1403,6 +1412,10 @@ impl RelayAdapter {
             max_gz_bytes: MAX_GZ_BYTES,
             traces,
             cache: Mutex::new(Cache::default()),
+            diag: tokio::sync::Mutex::new(None),
+            diag_deadline: Duration::from_secs_f64(relay_runtime::DIAG_DEADLINE_S),
+            prom_points: Mutex::new(None),
+            prom_refresh: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -1438,6 +1451,192 @@ impl RelayAdapter {
             .map_or(DEFAULT_LITELLM_URL, String::as_str)
             .trim_end_matches('/')
             .to_owned()
+    }
+
+    /// Prometheus (addendum 9.17): `urls.prometheus` when it is set and names a loopback host; else nothing is asked.
+    fn prom_base(&self) -> Option<String> {
+        relay_runtime::loopback_url(self.ctx.urls.get("prometheus")?)
+    }
+
+    async fn prom_query(&self, base: &str, expr: &str) -> Option<Vec<PromRow>> {
+        let url = format!("{base}/api/v1/query");
+        let resp = self
+            .ctx
+            .http
+            .get_query_capped(
+                &url,
+                &[("query", expr)],
+                relay_runtime::PROM_TIMEOUT_S,
+                relay_runtime::PROM_MAX_BYTES,
+            )
+            .await
+            .ok()??;
+        if resp.status != 200 {
+            return None;
+        }
+        relay_runtime::prom_rows(&resp.body)
+    }
+
+    /// The new Relay metric keys (addendum 9.17), cached `PROM_CACHE_S` and refreshed by one caller at a time: the
+    /// fixed queries, at once. While a refresh runs, the others get points up to `PROM_STALE_S` old (or wait for it).
+    /// Prometheus down = no keys.
+    async fn resource_points(&self) -> Vec<MetricPoint> {
+        let Some(base) = self.prom_base() else {
+            return Vec::new();
+        };
+        let cached = |max_age: f64| -> Option<Vec<MetricPoint>> {
+            let g = match self.prom_points.lock() {
+                Ok(g) => g,
+                Err(p) => p.into_inner(),
+            };
+            g.as_ref()
+                .filter(|(at, _)| at.elapsed().as_secs_f64() < max_age)
+                .map(|(_, p)| p.clone())
+        };
+        if let Some(p) = cached(relay_runtime::PROM_CACHE_S) {
+            return p;
+        }
+        let _refresh = match self.prom_refresh.try_lock() {
+            Ok(g) => g,
+            Err(_) => {
+                if let Some(p) = cached(relay_runtime::PROM_STALE_S) {
+                    return p;
+                }
+                let g = self.prom_refresh.lock().await;
+                if let Some(p) = cached(relay_runtime::PROM_CACHE_S) {
+                    return p;
+                }
+                g
+            }
+        };
+        // another caller may have refreshed between the first look and the lock
+        if let Some(p) = cached(relay_runtime::PROM_CACHE_S) {
+            return p;
+        }
+        let [q0, q1, q2, q3] = relay_runtime::QUERIES;
+        let (a0, a1, a2, a3) = tokio::join!(
+            self.prom_query(&base, q0),
+            self.prom_query(&base, q1),
+            self.prom_query(&base, q2),
+            self.prom_query(&base, q3),
+        );
+        let points = relay_runtime::resource_points(&[a0, a1, a2, a3]);
+        let mut g = match self.prom_points.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        *g = Some((Instant::now(), points.clone()));
+        points
+    }
+
+    /// One `nemo-relay diagnostics` read, mapped off the async workers: the snapshot pages (Relay's page starts at
+    /// the OLDEST retained event; its `continuation` is passed back verbatim with `--query`, at most
+    /// `DIAG_MAX_PAGES` pages, never the same continuation twice), then the `--memory` call. All the calls share one
+    /// output budget of `DIAG_MAX_OUTPUT` bytes.
+    async fn read_diagnostics(&self) -> (Value, bool) {
+        // the CLI is pointed only at a gateway on this machine
+        let Some(gateway) = relay_runtime::loopback_url(&self.base()) else {
+            return (
+                relay_runtime::unavailable(relay_runtime::Reason::Error),
+                false,
+            );
+        };
+        let url = format!("--gateway-url={gateway}");
+        let deadline = Instant::now() + self.diag_deadline;
+        let mut budget = relay_runtime::DIAG_MAX_OUTPUT;
+        let mut pages: Vec<Value> = Vec::new();
+        let mut seen: Vec<String> = Vec::new();
+        let mut query: Option<String> = None;
+        let mut first_error: Option<relay_runtime::Reason> = None;
+        for n in 0..relay_runtime::DIAG_MAX_PAGES {
+            let mut argv: Vec<&str> = vec![
+                "nemo-relay",
+                "diagnostics",
+                &url,
+                "--max-response-bytes",
+                relay_runtime::DIAG_SNAPSHOT_BYTES,
+            ];
+            if let Some(q) = &query {
+                argv.extend(["--query", q.as_str()]);
+            }
+            let r = self.run_until(&argv, deadline, budget).await;
+            budget = budget.saturating_sub(r.stdout.len() + r.stderr.len());
+            let parsed = tokio::task::spawn_blocking(move || {
+                relay_runtime::parse_page(&r).map(|page| {
+                    let next = relay_runtime::next_query(&page);
+                    (page, next)
+                })
+            })
+            .await
+            .unwrap_or(Err(relay_runtime::Reason::Error));
+            let (page, next) = match parsed {
+                Ok(x) => x,
+                Err(reason) => {
+                    // a later page that fails keeps what the earlier ones gave (still truncated)
+                    if n == 0 {
+                        first_error = Some(reason);
+                    }
+                    break;
+                }
+            };
+            pages.push(page);
+            match next {
+                Some(q) if !seen.contains(&q) && budget >= relay_runtime::MIN_PAGE_BUDGET => {
+                    seen.push(q.clone());
+                    query = Some(q);
+                }
+                _ => break,
+            }
+        }
+        if let Some(reason) = first_error.filter(|_| pages.is_empty()) {
+            return (relay_runtime::unavailable(reason), false);
+        }
+        let truncated = pages.last().is_some_and(relay_runtime::page_truncated);
+        let mem = if budget >= relay_runtime::MIN_PAGE_BUDGET {
+            Some(
+                self.run_until(
+                    &[
+                        "nemo-relay",
+                        "diagnostics",
+                        &url,
+                        "--memory",
+                        "--max-response-bytes",
+                        relay_runtime::DIAG_MEMORY_BYTES,
+                    ],
+                    deadline,
+                    budget,
+                )
+                .await,
+            )
+        } else {
+            None
+        };
+        let v = tokio::task::spawn_blocking(move || {
+            let memory = relay_runtime::parse_memory(mem.as_ref());
+            relay_runtime::map_pages(&pages, truncated, memory.as_ref())
+        })
+        .await
+        .unwrap_or_else(|_| relay_runtime::unavailable(relay_runtime::Reason::Error));
+        let ok = v.get("available") == Some(&Value::Bool(true));
+        (v, ok)
+    }
+
+    /// One diagnostics CLI call that ends by `deadline` (and within `DIAG_TIMEOUT_S`); past it, a timed-out result
+    /// and nothing is run.
+    async fn run_until(&self, argv: &[&str], deadline: Instant, budget: usize) -> CommandResult {
+        let left = deadline.saturating_duration_since(Instant::now());
+        let gone = || {
+            let mut r = CommandResult::new(-9, "", "");
+            r.timed_out = true;
+            r
+        };
+        if left < Duration::from_millis(100) {
+            return gone();
+        }
+        let timeout = left.as_secs_f64().min(relay_runtime::DIAG_TIMEOUT_S);
+        tokio::time::timeout(left, self.run(argv, timeout, budget))
+            .await
+            .unwrap_or_else(|_| gone())
     }
 
     fn path(&self, key: &str) -> Result<PathBuf, AdapterError> {
@@ -2350,8 +2549,12 @@ impl SystemAdapter for RelayAdapter {
 
     async fn metrics(&self) -> Result<MetricsSnapshot, AdapterError> {
         let now = now_ts();
-        let (probe, unit, plist) =
-            tokio::join!(self.probe(), self.unit_state(), self.plugins_list());
+        let (probe, unit, plist, resources) = tokio::join!(
+            self.probe(),
+            self.unit_state(),
+            self.plugins_list(),
+            self.resource_points()
+        );
         if !probe.reachable {
             return Ok(MetricsSnapshot {
                 system: SystemId::Relay,
@@ -2404,6 +2607,7 @@ impl SystemAdapter for RelayAdapter {
                 "1",
             ));
         }
+        pts.extend(resources);
         Ok(MetricsSnapshot {
             system: SystemId::Relay,
             ts: now,
@@ -2839,6 +3043,25 @@ impl SystemAdapter for RelayAdapter {
         {
             m.insert("state".to_owned(), Value::String("disabled".to_owned()));
         }
+        Ok(v)
+    }
+
+    /// Runtime diagnostics (addendum 9.17, admin; the route checks the role): cached 30 s (a failure 5 s), one read
+    /// at a time.
+    async fn relay_diagnostics(&self) -> Result<Value, AdapterError> {
+        let mut slot = self.diag.lock().await;
+        if let Some((at, ttl, v)) = slot.as_ref()
+            && at.elapsed() < *ttl
+        {
+            return Ok(v.clone());
+        }
+        let (v, ok) = self.read_diagnostics().await;
+        let ttl = if ok {
+            relay_runtime::DIAG_CACHE_S
+        } else {
+            relay_runtime::DIAG_FAIL_CACHE_S
+        };
+        *slot = Some((Instant::now(), Duration::from_secs_f64(ttl), v.clone()));
         Ok(v)
     }
 

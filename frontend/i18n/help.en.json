@@ -302,6 +302,11 @@
         "tab": "capture"
       },
       {
+        "title": "Watch the gateway itself",
+        "body": "Below the capture levels, the Capture tab has a Gateway resources card (CPU, memory, threads, open files, disk and what the routing plugin did, over 1h, 24h or 7d) and, for an admin, a Runtime diagnostics card with the gateway's own failure counters and recent events.",
+        "tab": "capture"
+      },
+      {
         "title": "Bring it back if it is down",
         "body": "With `relay.gateway.down`, restart the unit. Diagnostics, Restart gateway does the same and waits for several healthy checks and a stable process id.",
         "cmd": "systemctl --user restart nemo-relay-gateway.service",
@@ -384,6 +389,27 @@
       {
         "q": "What does \"once per trace endpoint\" mean on the Capture tab?",
         "a": "OpenTelemetry logs and metrics with no endpoint of their own are sent to every trace endpoint. With one trace endpoint that is fine. With several, every log record and metric is exported once per endpoint, so a backend that receives from more than one of them sees duplicates. The row warns about it; give the signal its own endpoint, or keep a single trace endpoint.",
+        "tab": "capture"
+      },
+      {
+        "q": "The Gateway resources card says resource metrics are off.",
+        "a": "Relay samples its own gateway process only when its `plugins.toml` has a `resource_metrics` component with polling enabled. The card shows the lines to add: a `[[components]]` entry with `kind = \"resource_metrics\"` and `enabled = true`, a `[components.config]` table with `measurement_scope = \"application_process\"`, and `[components.config.polling]` with `enabled = true` and `interval_millis = 60000`. Add them by hand and restart the gateway: that is a human decision, so the console only shows them. After that the first sample can take about a minute, and the console reads the figures through Prometheus: if the card stays empty, check that Prometheus is running and scraping Relay's metrics. In this lab the same is done with the command below.",
+        "cmd": "python3 -I ops/nemo-relay-levels.py resources on",
+        "tab": "capture"
+      },
+      {
+        "q": "What do fresh and stale mean on the Gateway resources card?",
+        "a": "The chip compares the age of the newest sample mark in Relay's event files (the Observed column of the resource_metrics row above) with three sampling intervals. `fresh` is up to that age; `stale` is older: the gateway stopped sampling or writing its event files, or it is down. `no sample yet` means no sample mark has been seen. Stale charts still show the older samples.",
+        "tab": "capture"
+      },
+      {
+        "q": "Why can't I see Runtime diagnostics?",
+        "a": "The card is for admins only and is not built for a viewer: the counters come from the gateway through its private credential, so the console reads them only for an admin key (the key button in the top bar). It shows counts, codes and times, never the text an event carried.",
+        "tab": "capture"
+      },
+      {
+        "q": "Runtime diagnostics says they cannot be read, are unreachable or unsupported.",
+        "a": "`disabled` means the gateway said inspection is unavailable: it runs without `NEMO_RELAY_DIAGNOSTICS=1` or without `NEMO_RELAY_DIAGNOSTICS_HTTP=1` (set both), or this account's gateway credential or tunnel could not be used, for example because the console runs under another HOME than the account that started the gateway. Set both variables in the gateway's environment, restart it, and run the console as that same account. `unreachable`: the console could not reach the gateway's diagnostics channel; check the gateway on the Status tab. `unsupported_version`: Relay is older than 0.11 and has no diagnostics. `error`: the command failed or answered something unreadable; refresh to try again.",
         "tab": "capture"
       },
       {
