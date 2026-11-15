@@ -76,7 +76,7 @@ test('the numbers: null rate from non_null and rows, distinct (capped), length a
         { name: 'bare' },
       ],
     }),
-    { admin: false },
+    { admin: true }, // numeric ranges are real cell values: admin-only
   );
   const [csat, body, bare] = p.columns;
   assert.ok(Math.abs(csat.nullRate - 0.15) < 1e-9);
@@ -186,4 +186,10 @@ test('latestPerRun keeps the newest event of each run id; ddTimelineRows: the du
   assert.equal(t[2].written, 0, 'a failed run that wrote nothing wrote zero records: that one is a real zero');
   assert.equal(t[2].requested, null);
   assert.equal(ddTimelineRows(rows, 0, { max: 1 }).length, 1);
+});
+
+test('numeric ranges are hidden from a viewer by the page too, not only by the server', () => {
+  const ans = answer({ rows: 3, columns: [col('n', { types: { string: 0, number: 3, bool: 0, null: 0, object: 0, array: 0 }, non_null: 3, numeric: { min: 1, p50: 2, p95: 3, max: 3 } })] });
+  assert.equal(shapeProfile(ans, { admin: false }).columns[0].numeric, null);
+  assert.ok(shapeProfile(ans, { admin: true }).columns[0].numeric);
 });

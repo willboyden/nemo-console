@@ -59,7 +59,8 @@ export function shapeProfile(answer, { admin = false } = {}) {
       distinct: num(c.distinct),
       distinctCapped: c.distinct_capped === true,
       length: range(c.length),
-      numeric: range(c.numeric),
+      // numeric ranges are real cell values: shown only under the same rule as `top` (the server also withholds them)
+      numeric: valuesHidden ? null : range(c.numeric),
       top,
     });
   }

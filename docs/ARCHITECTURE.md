@@ -812,8 +812,9 @@ the event `data` additions below (new keys only).
   admin-only too, null for a viewer; `length` is shown to both. Column names are shown to both but must be identifiers
   (`[A-Za-z_][A-Za-z0-9_]{0,63}`); any other column is dropped and `truncated` is set. At most 200 columns and 2000
   rows; the read is capped in bytes and per line (the records file on disk is not itself byte-capped), and any cap that
-  stops the read sets `truncated`. Amended 2026-11-14 after the pre-merge audit (viewers get aggregates, never cell
-  values).
+  stops the read sets `truncated`. Amended 2026-11-14 after the pre-merge audit (viewers get lengths, counts and
+  shapes, never cell values; an oversized run.json or Tier 1 file — over 1 MiB, far above the few KB seen in
+  practice — reads as absent).
 * **Event `data` additions** (new keys only; parity D-41 pins the exact added keys): `evaluator.run` benchmarks gain
   `ci_low`, `ci_high`, `tokens`, `elapsed_s`, `failure_rate`; `gym.smoke` gains `rewards` (the per-task rewards array,
   at most 20 numbers).
