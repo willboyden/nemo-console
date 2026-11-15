@@ -97,6 +97,8 @@ pub enum H {
     History,
     Series,
     Fleet,
+    Rails,
+    Decisions,
     Events,
     EventsStream,
     RunRecords,
@@ -130,6 +132,7 @@ pub enum H {
     PlaygroundChat,
     Routing,
     Audit,
+    AuditSummary,
     SettingsGet,
     SettingsPut,
     ConsoleMetrics,
@@ -200,6 +203,16 @@ pub static ROUTES: &[RouteDef] = &[
     ),
     // the DCGM fleet history (addendum 9.14; added after the port, PORTING.md D-38); other systems answer 404
     r!(GET, "/systems/{system_id}/fleet", Viewer, false, Fleet),
+    // wave-4 answers (addendum 9.16; added after the port, PORTING.md D-42): the Guardrails rail pipeline and the
+    // OpenShell policy decisions; other systems answer 404
+    r!(GET, "/systems/{system_id}/rails", Viewer, false, Rails),
+    r!(
+        GET,
+        "/systems/{system_id}/decisions",
+        Viewer,
+        false,
+        Decisions
+    ),
     r!(GET, "/systems/{system_id}/events", Viewer, false, Events),
     r!(
         GET,
@@ -397,6 +410,8 @@ pub static ROUTES: &[RouteDef] = &[
     // admin
     r!(GET, "/routing/summary", Viewer, false, Routing),
     r!(GET, "/audit", Admin, false, Audit),
+    // the audit summary (addendum 9.16; added after the port, PORTING.md D-42)
+    r!(GET, "/audit/summary", Admin, false, AuditSummary),
     r!(GET, "/settings", Viewer, false, SettingsGet),
     r!(PUT, "/settings", Admin, true, SettingsPut),
     // root router
@@ -1121,6 +1136,8 @@ async fn run_handler(h: H, req: Req) -> Result<Response<Body>, ApiError> {
         H::History => observe::metrics_history(req).await,
         H::Series => observe::metrics_series(req).await,
         H::Fleet => observe::dcgm_fleet(req).await,
+        H::Rails => observe::guardrails_rails(req).await,
+        H::Decisions => observe::openshell_decisions(req).await,
         H::Events => observe::events(req).await,
         H::EventsStream => observe::events_stream(req).await,
         H::RunRecords => observe::run_records(req).await,
@@ -1154,6 +1171,7 @@ async fn run_handler(h: H, req: Req) -> Result<Response<Body>, ApiError> {
         H::PlaygroundChat => act::playground_chat(req).await,
         H::Routing => admin::routing(req).await,
         H::Audit => admin::audit(req).await,
+        H::AuditSummary => admin::audit_summary(req).await,
         H::SettingsGet => admin::settings_get(req).await,
         H::SettingsPut => admin::settings_put(req).await,
         H::ConsoleMetrics => admin::console_metrics(req).await,

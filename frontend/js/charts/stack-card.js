@@ -5,15 +5,17 @@ import { h } from '../dom.js';
 import { t } from '../i18n.js';
 import { stackedRows } from './stacked-rows.js';
 import { stackedChart } from './svg-charts.js';
+import { areaChart } from './area-chart.js';
 import { legendList, chartEmpty } from './parts.js';
 import { finite } from '../series-math.js';
 
 /**
  * @param opts.parts     [{key, name, cls (bf1..bf6)}] the stack order, bottom / left first
  * @param opts.valueFmt  (v) => text for one value;  opts.axisFmt (v) => short y tick text of the time charts;  opts.labelMax the widest row label column in px (default 120; a longer label is cut)
+ * @param opts.timeKind  'bars' (default: stacked bars per bucket) or 'area' (a stepped stacked area, addendum 9.16: counts that hold between samples)
  * Returns {el, update({rows: [{id, label, values: {key: number|null}, totalText?, note?}], time: [{label, ts, bucketS, series: [{key, values}]}]}), fail(msg)}.
  */
-export function stackCard(scope, { title, hint, parts, valueFmt, axisFmt, wide = false, rowsTitle, timeTitle, emptyText, labelMax = 120 }) {
+export function stackCard(scope, { title, hint, parts, valueFmt, axisFmt, wide = false, rowsTitle, timeTitle, emptyText, labelMax = 120, timeKind = 'bars' }) {
   let data = null;
   const noteHost = h('div');
   const rowsHost = h('div', { class: 'chart-wrap-lg' });
@@ -57,7 +59,8 @@ export function stackCard(scope, { title, hint, parts, valueFmt, axisFmt, wide =
     const charts = (data.time || []).map((tc) => {
       const series = tc.series.map((s) => ({ key: s.key, label: nameOf(s.key), cls: parts.find((p) => p.key === s.key)?.cls ?? 'bf1', values: s.values }));
       const aria = t('chart.summary', { title: `${title}${tc.label ? `, ${tc.label}` : ''}`, latest: series.map((s) => `${s.label} ${valueFmt(lastValue(s.values))}`).join(', ') });
-      const node = stackedChart({ ts: tc.ts, bucketS: tc.bucketS, series, width, height: width < 420 ? 170 : 190, ariaLabel: aria, yFmt: axisFmt, valueFmt });
+      const draw = timeKind === 'area' ? areaChart : stackedChart;
+      const node = draw({ ts: tc.ts, bucketS: tc.bucketS, series, width, height: width < 420 ? 170 : 190, ariaLabel: aria, yFmt: axisFmt, valueFmt });
       return h('div', { class: 'sc-chart' }, tc.label ? h('h4', { class: 'sc-sub' }, tc.label) : null, node ?? chartEmpty(t('series.empty')));
     });
     timeHost.replaceChildren(...charts);

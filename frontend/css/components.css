@@ -4306,3 +4306,477 @@ svg.sw-mark {
 .ddv-pick select {
   width: 100%;
 }
+
+/* Wave 4 visualizations (addendum 9.16): the Guardrails rail pipeline, probe matrix and availability strip; the OpenShell lifecycle lanes, phase area and decision timeline; the Flare target grid;
+   the Overview sparklines, up / down strips and problem counts; the Audit summary and log filters (js/guardrails/, js/runviz/guardrails-detail.js, js/openshell/, js/flare/, js/overview/,
+   js/audit/, js/charts/{strip,area,lifecycle,decision}-chart.js, sparkline.js). Marks are told apart by shape, height, hatching or text as well as colour; no style attributes. */
+
+/* stepped stacked area */
+.areachart path.ar-fill {
+  fill-opacity: 0.88;
+  stroke: var(--surface);
+  stroke-width: 1;
+}
+.areachart rect.ar-hit {
+  fill: transparent;
+}
+.areachart rect.ar-hit:hover {
+  fill: var(--text);
+  fill-opacity: 0.07;
+}
+
+/* up / down strip: the height of a cell is its state as well as its colour */
+.stripchart .st-base {
+  stroke: var(--border-strong);
+}
+.stripchart rect.st-up {
+  fill: var(--ok);
+}
+.stripchart rect.st-part {
+  fill: var(--warn);
+}
+.stripchart rect.st-down {
+  fill: var(--bad);
+}
+.stripchart rect.st-none {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+.stripchart rect.st-cell:hover {
+  filter: brightness(1.2);
+}
+i.sw.st-sw {
+  width: 12px;
+  vertical-align: bottom;
+  border-radius: 2px;
+}
+i.sw.st-sw.st-up {
+  height: 5px;
+  background: var(--ok);
+}
+i.sw.st-sw.st-part {
+  height: 9px;
+  background: var(--warn);
+}
+i.sw.st-sw.st-down {
+  height: 13px;
+  background: var(--bad);
+}
+i.sw.st-sw.st-none {
+  height: 13px;
+  background: repeating-linear-gradient(45deg, var(--surface-2) 0 3px, var(--border-strong) 3px 4px);
+  border: 1px solid var(--border-strong);
+}
+.strip-legend {
+  align-items: flex-end;
+}
+.gr-up-summary {
+  margin: 0;
+}
+
+/* sparkline */
+.chart.spark {
+  display: block;
+  max-width: 100%;
+}
+.spark .spark-base {
+  stroke: var(--border);
+  stroke-dasharray: 2 3;
+}
+.spark .spark-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.spark .spark-dot {
+  fill: var(--accent);
+}
+.tile-spark {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s2) 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.spark-latest {
+  font-size: var(--fs-lg);
+}
+.spark-host {
+  min-height: 36px;
+  min-width: 0;
+}
+.spark-note {
+  margin: 0;
+  padding: var(--s2) 0;
+}
+.spark-up {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+.spark-strip {
+  min-height: 20px;
+  min-width: 0;
+}
+.spark-strip-text {
+  margin: 0;
+}
+.ovw-problem-totals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+}
+
+/* Guardrails: the rail pipeline */
+.gr-config {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  min-width: 0;
+}
+.gr-config-id {
+  margin: 0;
+  font-size: var(--fs);
+}
+ol.gr-pipe {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--s2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+ol.gr-pipe > li {
+  min-width: 0;
+}
+.gr-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r1);
+  min-width: 140px;
+}
+.gr-stage.model {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.gr-stage.none {
+  border-style: dashed;
+  background: transparent;
+}
+.gr-stage-title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-2);
+}
+.gr-model {
+  overflow-wrap: anywhere;
+}
+ol.gr-flows {
+  list-style: none;
+  counter-reset: flow;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+ol.gr-flows > li {
+  counter-increment: flow;
+  display: flex;
+  gap: var(--s2);
+  align-items: baseline;
+  overflow-wrap: anywhere;
+}
+ol.gr-flows > li::before {
+  content: counter(flow);
+  flex: none;
+  min-width: 1.4em;
+  text-align: center;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+}
+.gr-arrow {
+  display: flex;
+  align-items: center;
+  color: var(--text-3);
+  font-size: var(--fs-lg);
+}
+.gr-end {
+  display: flex;
+  align-items: center;
+}
+.gr-end-word {
+  padding: var(--s1) var(--s3);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.gr-flow-chip {
+  display: inline-block;
+  margin: 0 var(--s2) var(--s1) 0;
+}
+.gr-facts .kv {
+  grid-template-columns: 110px minmax(0, 1fr);
+}
+.rv-facts-line {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+/* OpenShell: lifecycle lanes */
+.lcchart .tl-lane {
+  fill: var(--surface-2);
+  stroke: var(--border);
+}
+.lcchart .lc-name {
+  fill: var(--text-2);
+}
+.lcchart .lc-name.gone {
+  fill: var(--text-3);
+  font-style: italic;
+}
+.lcchart rect.lc-seg {
+  stroke-width: 1.5;
+}
+.lcchart rect.lc-provisioning {
+  fill: var(--info-soft);
+  stroke: var(--info);
+  stroke-dasharray: 4 2;
+}
+.lcchart rect.lc-ready {
+  fill: var(--ok-soft);
+  stroke: var(--ok);
+}
+.lcchart rect.lc-error {
+  stroke: var(--bad);
+}
+.lcchart rect.lc-deleting {
+  fill: var(--warn-soft);
+  stroke: var(--warn);
+  stroke-dasharray: 1 2.5;
+  stroke-linecap: round;
+}
+.lcchart rect.lc-other {
+  fill: var(--surface-3);
+  stroke: var(--border-strong);
+}
+.lcchart rect.lc-seg.cut {
+  stroke-dasharray: none;
+}
+.lc-hatch-bg {
+  fill: var(--bad-soft);
+}
+.lc-hatch-line {
+  stroke: var(--bad);
+  stroke-width: 2;
+}
+.lcchart .lc-seg-text {
+  fill: var(--text);
+  font: 600 10.5px var(--font);
+  pointer-events: none;
+}
+.lcchart path.lc-arrow.lc-provisioning {
+  fill: var(--info);
+}
+.lcchart path.lc-arrow.lc-ready {
+  fill: var(--ok);
+}
+.lcchart path.lc-arrow.lc-error {
+  fill: var(--bad);
+}
+.lcchart path.lc-arrow.lc-deleting {
+  fill: var(--warn);
+}
+.lcchart path.lc-arrow.lc-other {
+  fill: var(--text-3);
+}
+.lcchart .lc-cross {
+  fill: var(--bad);
+  font: 700 12px var(--font);
+  pointer-events: none;
+}
+.lcchart g.lc-lane {
+  outline: none;
+}
+.lcchart g.lc-lane.lc-pick {
+  cursor: pointer;
+}
+.lcchart g.lc-lane.selected .tl-lane {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.lcchart g.lc-lane.lc-pick:hover .tl-lane,
+.lcchart g.lc-lane:focus-visible .tl-lane {
+  stroke: var(--focus);
+  stroke-width: 2;
+}
+i.sw.lc-sw {
+  width: 16px;
+  height: 12px;
+  border-width: 1.5px;
+  border-style: solid;
+  box-sizing: border-box;
+}
+i.sw.lc-sw.lc-provisioning {
+  background: var(--info-soft);
+  border-color: var(--info);
+  border-style: dashed;
+}
+i.sw.lc-sw.lc-ready {
+  background: var(--ok-soft);
+  border-color: var(--ok);
+}
+i.sw.lc-sw.lc-error {
+  background: repeating-linear-gradient(45deg, var(--bad-soft) 0 3px, var(--bad) 3px 4px);
+  border-color: var(--bad);
+}
+i.sw.lc-sw.lc-deleting {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  border-style: dotted;
+}
+i.sw.lc-sw.lc-other {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}
+
+/* OpenShell: decisions */
+.dcchart .tl-lane {
+  fill: var(--surface-2);
+  stroke: var(--border);
+}
+.dcchart .dc-name {
+  fill: var(--text-2);
+}
+.dcchart rect.dc-allowed {
+  fill: var(--accent);
+  fill-opacity: 0.85;
+}
+.dcchart rect.dc-denied {
+  stroke: var(--bad);
+  stroke-width: 1;
+}
+.dcchart .dc-col:hover rect {
+  filter: brightness(1.25);
+}
+.dc-hatch-bg {
+  fill: var(--bad-soft);
+}
+.dc-hatch-line {
+  stroke: var(--bad);
+  stroke-width: 1.8;
+}
+.dcchart .dc-cross {
+  fill: var(--bad);
+  font: 700 10px var(--font);
+  pointer-events: none;
+}
+i.sw.dc-sw.dc-allowed {
+  background: var(--accent);
+}
+i.sw.dc-sw.dc-denied {
+  background: repeating-linear-gradient(45deg, var(--bad-soft) 0 3px, var(--bad) 3px 4px);
+  border: 1px solid var(--bad);
+  box-sizing: border-box;
+}
+.os-dec-totals {
+  margin: 0;
+}
+.os-pick {
+  flex: 0 1 260px;
+}
+.os-pick select {
+  width: 100%;
+}
+
+/* Flare: the target grid */
+.fl-summary {
+  margin: 0;
+}
+.fl-group-head {
+  margin: 0 0 var(--s2);
+}
+.fl-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: var(--s3);
+}
+.fl-target {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border-strong);
+  border-radius: var(--r2);
+  min-width: 0;
+}
+.fl-target.st-serving {
+  border-left-color: var(--ok);
+}
+.fl-target.st-loading {
+  border-left-color: var(--info);
+}
+.fl-target.st-busy {
+  border-left-color: var(--warn);
+}
+.fl-target.st-failed {
+  border-left-color: var(--bad);
+}
+.fl-target.st-absent,
+.fl-target.st-stopped {
+  border-left-style: dashed;
+}
+.fl-target-name {
+  overflow-wrap: anywhere;
+}
+.fl-facts .kv {
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: var(--s2);
+  font-size: var(--fs-sm);
+}
+
+/* Audit */
+.audv-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s4);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--fs-sm);
+}
+.audit-filters .field {
+  min-width: 150px;
+}
+.audit-filters input[type='search'] {
+  min-width: 0;
+  width: 100%;
+}
+.audit-count {
+  margin: 0;
+}
+.audit-actor {
+  white-space: nowrap;
+}

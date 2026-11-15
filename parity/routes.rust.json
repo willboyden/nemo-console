@@ -9,6 +9,13 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/audit/summary",
+      "auth": "admin",
+      "body": false,
+      "rust_only": "D-42"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/health",
       "auth": "public",
       "body": false
@@ -119,6 +126,13 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/systems/{system_id}/decisions",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-42"
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/systems/{system_id}/events",
       "auth": "viewer",
       "body": false
@@ -184,6 +198,13 @@
       "path": "/api/v1/systems/{system_id}/playground/chat",
       "auth": "admin",
       "body": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/systems/{system_id}/rails",
+      "auth": "viewer",
+      "body": false,
+      "rust_only": "D-42"
     },
     {
       "method": "GET",

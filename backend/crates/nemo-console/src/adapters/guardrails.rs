@@ -455,27 +455,9 @@ impl GuardrailsAdapter {
     /// Config dir names that hold a config.yml/config.yaml (what the server lists).
     #[must_use]
     pub fn config_ids(&self) -> Vec<String> {
-        let Some(root) = self.cfg_root() else {
-            return Vec::new();
-        };
-        let Ok(rd) = std::fs::read_dir(root) else {
-            return Vec::new();
-        };
-        let mut ids: Vec<String> = rd
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| {
-                p.is_dir()
-                    && !p.is_symlink()
-                    && p.file_name()
-                        .and_then(|n| n.to_str())
-                        .is_some_and(|n| full(&CONFIG_DIR_RE, n))
-                    && (p.join("config.yml").is_file() || p.join("config.yaml").is_file())
-            })
-            .filter_map(|p| p.file_name().and_then(|n| n.to_str()).map(str::to_owned))
-            .collect();
-        ids.sort();
-        ids
+        self.cfg_root().map_or_else(Vec::new, |root| {
+            crate::adapters::guardrails_rails::config_ids_in(root)
+        })
     }
 
     fn spec(fid: &str, cfg: &str, rel: &str, path: &Path) -> ConfigFileSpec {
@@ -1326,6 +1308,16 @@ impl SystemAdapter for GuardrailsAdapter {
             points,
             error: None,
         })
+    }
+
+    async fn rails(&self) -> Result<Value, AdapterError> {
+        let root = self.cfg_root().cloned();
+        crate::adapters::runviz::blocking(move || {
+            Ok(crate::adapters::guardrails_rails::rails_answer(
+                root.as_deref(),
+            ))
+        })
+        .await
     }
 
     async fn recent_events(&self, limit: usize) -> Result<Vec<SystemEvent>, AdapterError> {

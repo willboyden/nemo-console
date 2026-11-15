@@ -853,3 +853,70 @@ the event `data` additions below (new keys only).
   `columns_dropped` (columns that are not identifiers or come after the 200th); hard links are refused and every file
   is opened relative to the run directory (`openat`, `O_NOFOLLOW`). Peak memory per request measured at 5-37 MiB
   (`tests/runviz_memory.rs`).
+
+**9.16 (2026-11-14): visualizations, wave 4 — NeMo Guardrails, OpenShell, NVIDIA Flare, Overview, Audit.** Additive
+(new routes, persisted OpenShell events, new cards); no existing route or shape changes except the additive audit
+query parameters below. Same rules as 9.13-9.15: viewers never see content, every string identifier-checked and
+capped, files read without following links and with byte/line caps, parsing off the async workers, bounded memory.
+
+* **Guardrails — `GET /api/v1/systems/guardrails/rails`** (viewer; Rust-only D-42): the rail pipeline of each served
+  config, parsed from the config files the adapter already reads: `{configs: [{id, main_model, input: [flow, ..],
+  output: [flow, ..], streaming: {enabled, chunk_size, context_size} | null, retrieval: [flow, ..]}], problems}`.
+  Flow names identifier-checked (letters, digits, space, `_-.`, at most 80 chars; others dropped and counted); no
+  prompt text, no `.co` content. Config ids as the adapter already lists them.
+* **OpenShell — persisted sandbox events:** the adapter's `openshell.sandbox` lifecycle events (created / phase /
+  deleted) are also appended to `<state>/openshell/events.jsonl` (0600, at most 5000 lines: older lines dropped by a
+  rewrite when it grows past 6000; one writer), and `recent_events` reads them after a restart. Only the fields the
+  ring already has (name, id, phase, action, previous_phase, ts).
+* **OpenShell — `GET /api/v1/systems/openshell/decisions?sandbox=<name>&limit=<1..2000>`** (viewer; D-42): the
+  policy decisions in a sandbox's log (the OCSF lines `openshell logs` prints): `{sandbox, rows: [{ts, category,
+  verdict: "allowed"|"denied", kind, target}], truncated}`. `sandbox` must be a name in the current sandbox list
+  (else 404); `category`/`kind` from fixed allowlists of the OCSF fields seen in the fixtures (others "other");
+  `target` only when it is host:port or a path-free identifier (at most 120 chars, else null). No free text, no
+  command line, no file contents. The CLI call reuses the adapter's existing `sandbox_logs` runner path with its
+  timeout and redaction; at most 2000 rows; cached 10 s per sandbox.
+* **Audit — `GET /api/v1/audit` gains optional `since`, `until` (epoch seconds), `actor`, `status`
+  (`ok|error`)** (still admin; additive; parity D-43 if the corpus notices), and **`GET /api/v1/audit/summary?window=
+  24h|7d|30d`** (admin; Rust-only D-42): `{window, by_day: [{day, system, count}], by_actor: [{actor, system, count}],
+  errors: [{ts_bucket, count}], denied_total}` from the audit table (actor = the key's alias as stored; no params).
+* **Frontend** (shared toolkit; textContent only; CSP unchanged):
+  * **Guardrails:** a probe matrix over time (rows = the three probes, columns = check runs, cell = expected vs
+    actual, a latency strip) from the existing check events; the rail pipeline diagram per config (input flows -> main
+    model -> output flows, streaming settings) from `/rails`; an up/down strip from `gr.up` history.
+  * **OpenShell:** sandbox lifecycle swim lanes (one lane per sandbox, coloured phase segments, create -> ready ->
+    delete) from the persisted events, a phase-count stacked area from `os.sandboxes_by_phase` history, and a
+    per-sandbox policy-decision timeline (allowed vs denied by category) from `/decisions`. Read-only: no new controls
+    that change policy; delete stays the existing destructive action.
+  * **Flare:** a target grid (target x host x chip x state: serving / loading / busy / absent, package counts) from
+    status, tokens/s and request rate per target (rates of the existing counters, series route split by target),
+    prefill vs generated vs cache-reused stacked bars, active vs pending per target.
+  * **Overview:** a sparkline of one key metric per system tile (series route, 1h), problem counts by severity across
+    systems, and an up/down strip for systems that have a `*.up`-style metric.
+  * **Audit:** actions per day stacked by system, an actor x system heatmap, an error timeline, time-range, actor,
+    status filters (URL state) on the log.
+  * Mock server: every new route and the persisted OpenShell events, generic names; the browser suite visits every
+    new card.
+* Pinned details (2026-11-14, from the build): the three routes are templated (`/systems/{system_id}/rails`,
+  `/decisions`; 404 for every other system). Rails: read from `config.yml`, else `config.yaml`; flow order kept; the
+  YAML is composed but never constructed (aliases are not expanded: no alias bomb), merge keys are not applied;
+  problems are `{config, code, count}` with fixed codes (no free text); an unreadable config is listed with empty
+  lists. Decisions: a row only when the token after the level is ALLOWED/ALLOW/DENIED/DENY/BLOCKED, `target` only the
+  next token when it passes the check; rows oldest first (the newest `limit`, default 500); one `openshell logs` call at
+  a time for this route (`-n 2000`, the action's 30 s timeout, 512,000-byte cap, redaction); a failed call is 200 with
+  `rows: []` and a fixed `problem`. Persisted events: re-checked on write and on read; after a restart the newest 200
+  refill the ring and the sandboxes they leave alive become the baseline (no burst of "present" events; a sandbox
+  deleted while the console was down is reported once). Audit summary: default `7d`, extra keys `from`, `to`,
+  `bucket_s` (3600 / 21600 / 86400), `truncated`; `denied_total` counts audit rows with status 401/403 (requests
+  refused before a handler are not audit rows); an unknown stored system is `"other"`, an actor that fails the check
+  is null.
+* After the pre-merge audit (2026-11-14): decisions `target` is only `host:port` (a DNS name, IPv4 or [IPv6] address
+  and a port 1-65535; the token after the verdict, else the token after ` -> `; at most 120 characters), else null;
+  output that reaches the CLI cap (1 MiB for this route) is parsed up to its last complete line and sets `truncated`
+  (the log is chronological, so a capped answer holds the OLDER part of the requested lines),
+  any other CLI failure gives `rows: []` and `problem`; cached 10 s per sandbox, at most 32 sandboxes. Persisted
+  events: a time from 0 to now + 1 day; the rewrite keeps the newest 5000 valid lines, re-serialised; one ordered
+  writer; stale temp files reaped on load; reads through a bounded ring. Rails: the main model and flow names must come
+  out of `redact()` unchanged; a key past the first 256 entries of a mapping is not found; at most 32 distinct
+  `models` items are looked at; at most 4096 directory entries are listed for config ids (beyond that, which ids appear
+  is not defined). The Audit summary's `denied_total` is labelled for what it is: audited calls answered
+  401/403 (requests refused before a handler are not audited).

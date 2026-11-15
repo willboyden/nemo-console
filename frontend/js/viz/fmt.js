@@ -8,7 +8,7 @@ export function shortId(id, head = 8, tail = 4) {
   return s.length > head + tail + 1 ? `${s.slice(0, head)}…${s.slice(-tail)}` : s || '–';
 }
 /** `MM-DD HH:MM:SS` in UTC from epoch seconds. */
-export const fmtStamp = (s) => (isNum(s) ? new Date(s * 1000).toISOString().slice(5, 19).replace('T', ' ') : '–');
+export const fmtStamp = (s) => (isNum(s) && Math.abs(s) <= 8.64e12 ? new Date(s * 1000).toISOString().slice(5, 19).replace('T', ' ') : '–');
 /** Duration in ms, null-safe: 230 ms, 1.42 s, and minutes above a minute. */
 export function fmtDur(ms) {
   if (!isNum(ms)) return '–';

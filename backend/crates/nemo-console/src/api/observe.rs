@@ -394,3 +394,78 @@ pub async fn run_profile(req: Req) -> Result<Response<Body>, ApiError> {
     let admin = req.principal.role == crate::services::auth::PrincipalRole::Admin;
     viz_answer(a.run_profile(req.param("run_id"), admin).await)
 }
+
+/// The answer of a wave-4 visualisation route (addendum 9.16): 404 for a system without the route.
+fn wave4_answer(r: Result<Value, AdapterError>, unknown: &str) -> Result<Response<Body>, ApiError> {
+    match r {
+        Ok(v) => Ok(json_response(200, &v)),
+        Err(AdapterError::NoSuchEndpoint) => Err(ApiError::new(
+            404,
+            "not_found",
+            "no such endpoint for this system",
+        )),
+        Err(AdapterError::UnknownId(_)) => Err(ApiError::new(404, "not_found", unknown)),
+        Err(AdapterError::Invalid(m)) => Err(ApiError::new(422, "invalid_request", m)),
+        Err(e) => Err(adapter_failure(&e)),
+    }
+}
+
+fn only(a: &crate::adapters::base::AdapterRef, system: SystemId) -> Result<(), ApiError> {
+    if a.id() == system {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            404,
+            "not_found",
+            "no such endpoint for this system",
+        ))
+    }
+}
+
+/// `GET /systems/guardrails/rails` (addendum 9.16, Rust-only, PORTING.md D-42): the rail pipeline of each config
+/// (flow names, main model, streaming). Every other system answers 404.
+pub async fn guardrails_rails(req: Req) -> Result<Response<Body>, ApiError> {
+    let a = dep_adapter(&req)?;
+    dep_viewer(&req)?;
+    only(&a, SystemId::Guardrails)?;
+    wave4_answer(a.rails().await, "not found")
+}
+
+/// A sandbox name (= the OpenShell adapter's `NAME_RE`).
+#[allow(clippy::expect_used)]
+static SANDBOX_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z").expect("static regex"));
+
+/// `GET /systems/openshell/decisions?sandbox=<name>&limit=<1..2000>` (addendum 9.16, D-42): the policy decisions in
+/// one live sandbox's log. A malformed or missing `sandbox`, a bad `limit`: 422; a name not in the live list: 404.
+pub async fn openshell_decisions(req: Req) -> Result<Response<Body>, ApiError> {
+    use crate::adapters::openshell_viz::{DECISIONS_DEFAULT_LIMIT, DECISIONS_MAX_ROWS};
+    let a = dep_adapter(&req)?;
+    dep_viewer(&req)?;
+    only(&a, SystemId::Openshell)?;
+    let sandbox = query_str(&req.query, "sandbox").unwrap_or_default();
+    if !SANDBOX_RE.is_match(&sandbox) {
+        return Err(ApiError::new(
+            422,
+            "invalid_request",
+            "sandbox must be a sandbox name (letters, digits and . _ -, starting with a letter or digit)",
+        ));
+    }
+    let mut v = V::new();
+    let limit = query_int(
+        &mut v,
+        &req.query,
+        "limit",
+        i64::try_from(DECISIONS_DEFAULT_LIMIT).unwrap_or(500),
+        Some(1),
+        Some(i64::try_from(DECISIONS_MAX_ROWS).unwrap_or(2000)),
+    );
+    let Some(limit) = limit.filter(|_| v.errors.is_empty()) else {
+        return Err(validation_error(&v.errors));
+    };
+    wave4_answer(
+        a.decisions(&sandbox, usize::try_from(limit).unwrap_or(1))
+            .await,
+        "unknown sandbox",
+    )
+}

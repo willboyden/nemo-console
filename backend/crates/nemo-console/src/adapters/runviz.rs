@@ -240,6 +240,89 @@ impl RunDir {
         Some((buf, len > cap))
     }
 
+    /// The LAST `cap` bytes of the file `name` and whether the file was longer (the caller drops the first, partial
+    /// line then). `None` when it cannot be opened or read (absent, a symlink, not a regular file, several links).
+    /// Addendum 9.16 (the persisted OpenShell events).
+    #[must_use]
+    pub fn read_tail(&self, name: &str, cap: u64) -> Option<(Vec<u8>, bool)> {
+        use std::io::{Seek, SeekFrom};
+        let (mut f, len) = self.file(name).ok()?;
+        let cut = len > cap;
+        if cut {
+            f.seek(SeekFrom::Start(len - cap)).ok()?;
+        }
+        let mut buf = Vec::new();
+        f.take(cap).read_to_end(&mut buf).ok()?;
+        Some((buf, cut))
+    }
+
+    /// Open the file `name` in this directory for appending, creating it with mode 0600: never through a symlink,
+    /// only a regular file with exactly one link; an existing file is set to 0600. Addendum 9.16.
+    pub fn append_private(&self, name: &str) -> std::io::Result<std::fs::File> {
+        use std::os::unix::fs::PermissionsExt as _;
+        one_name(name)?;
+        let flags = OFlag::O_WRONLY
+            | OFlag::O_APPEND
+            | OFlag::O_CREAT
+            | OFlag::O_NOFOLLOW
+            | OFlag::O_NONBLOCK
+            | OFlag::O_CLOEXEC;
+        let fd = openat(&self.0, name, flags, Mode::from_bits_truncate(0o600))
+            .map_err(std::io::Error::from)?;
+        let f = std::fs::File::from(fd);
+        let md = f.metadata()?;
+        if !md.file_type().is_file() {
+            return Err(std::io::Error::other("not a regular file"));
+        }
+        if md.nlink() != 1 {
+            return Err(std::io::Error::other("a file with more than one link"));
+        }
+        if md.mode() & 0o777 != 0o600 {
+            f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        }
+        Ok(f)
+    }
+
+    /// Replace the file `name` in this directory with `bytes`: a new file with a random name created exclusively
+    /// (mode 0600, never through a symlink), synced, then renamed over `name` in the same directory. Addendum 9.16.
+    pub fn replace_private(&self, name: &str, bytes: &[u8]) -> std::io::Result<()> {
+        use std::io::Write as _;
+        one_name(name)?;
+        let mut rnd = [0u8; 8];
+        getrandom::fill(&mut rnd).map_err(|e| std::io::Error::other(e.to_string()))?;
+        let tmp = format!(".{name}.{}.tmp", hex::encode(rnd));
+        let flags =
+            OFlag::O_WRONLY | OFlag::O_CREAT | OFlag::O_EXCL | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC;
+        let fd = openat(
+            &self.0,
+            tmp.as_str(),
+            flags,
+            Mode::from_bits_truncate(0o600),
+        )
+        .map_err(std::io::Error::from)?;
+        let mut f = std::fs::File::from(fd);
+        let written = f.write_all(bytes).and_then(|()| f.sync_all());
+        drop(f);
+        let renamed = written.and_then(|()| {
+            nix::fcntl::renameat(&self.0, tmp.as_str(), &self.0, name).map_err(std::io::Error::from)
+        });
+        if renamed.is_err() {
+            let _ = nix::unistd::unlinkat(
+                &self.0,
+                tmp.as_str(),
+                nix::unistd::UnlinkatFlags::NoRemoveDir,
+            );
+        }
+        renamed
+    }
+
+    /// Remove the file `name` in this directory (never a directory; errors ignored). Addendum 9.16.
+    pub fn remove(&self, name: &str) {
+        if one_name(name).is_ok() {
+            let _ = nix::unistd::unlinkat(&self.0, name, nix::unistd::UnlinkatFlags::NoRemoveDir);
+        }
+    }
+
     /// A JSON object from the file `name` (`None`: absent, a symlink, over [`DOC_MAX_BYTES`] or [`JSON_MAX_NODES`],
     /// not an object).
     #[must_use]

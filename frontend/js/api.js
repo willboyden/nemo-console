@@ -103,6 +103,12 @@ export function createClient({ base = '/api/v1', getKey = () => null, onUnauthor
     series: (id, { keys, window = '1h', split = false }, o) => get(`${sys(id)}/metrics/series`, { keys: [].concat(keys).join(','), window, split: split ? 1 : 0 }, o),
     // GPU telemetry fleet heatmap (addendum 9.14): per-GPU history of every DCGM host Prometheus scrapes. q = {metric, window}.
     fleet: (q, o) => get(`${sys('dcgm')}/fleet`, q, o),
+    // Wave 4 (addendum 9.16), all read-only GETs. The rail pipeline of each served Guardrails config; the policy decisions in one OpenShell sandbox's log (`sandbox` must be in
+    // the gateway's current list, else 404; at most 2000 rows); the audit summary of the last 24h | 7d | 30d (admin). The audit LOG takes since / until (epoch s), actor, status
+    // (ok|error) and system through `audit(q)`.
+    rails: (o) => get(`${sys('guardrails')}/rails`, null, o),
+    decisions: (sandbox, limit = 2000, o) => get(`${sys('openshell')}/decisions`, { sandbox, limit }, o),
+    auditSummary: (window, o) => get('/audit/summary', { window }, o),
     events: (id, limit = 50) => get(`${sys(id)}/events`, { limit }),
     configList: (id) => get(`${sys(id)}/config`),
     config: (id, file) => get(`${sys(id)}/config/${enc(file)}`),

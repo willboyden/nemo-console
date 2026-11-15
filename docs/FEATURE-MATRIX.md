@@ -301,6 +301,16 @@ spare port against the real captures of one workstation (Relay 0.9.2: 7 ATOF fil
 | Event data additions (Evaluator CI/cost fields, Gym rewards) | Implemented | fakes; parity pinned (D-41) | New keys only. |
 | AIPerf, Evaluator, Gym, Model Optimizer, SkillEvaluator, Data Designer run-detail cards | Implemented | verified live for Data Designer (timeline, profile) and SkillEvaluator (validator heatmap); the others only against the mock (no runs on the workstation that day) | Missing values are an en dash, never 0. |
 
+## Charts, wave 4 (addendum 9.16)
+
+| Feature | Status | Verification | Notes |
+|---|---|---|---|
+| Guardrails rails route + pipeline, probe matrix, availability strip | Implemented | verified live (2026-11-14, a debug build on a copy of the state: the lab's `lab-input-output` config, its two rails, main model and streaming settings); fakes `tests/viz_wave4.rs` | Flow names only; YAML aliases never expanded. |
+| OpenShell persisted lifecycle events, lanes, phase area, decisions route | Implemented | fakes (no sandbox ran on the workstation that day; decisions parsed only from the fixture's line formats) | Allowlisted fields only; one CLI call at a time. |
+| Flare target grid and per-target rates | Implemented | verified live for the grid's "absent" states (no Flare target served that day); rates against the mock | |
+| Overview sparklines and problems by severity | Implemented | verified live (problems card over 13 systems) | |
+| Audit summary route, Summary tab, log filters | Implemented | verified live (30 days of the workstation's audit table) | Admin only, in the handler too. |
+
 ## Not planned for v1
 
 Editing Relay `plugins.toml` / `config.toml`; multi-user or per-user audit identity beyond the key

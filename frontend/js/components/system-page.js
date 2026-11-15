@@ -98,7 +98,8 @@ export function systemPage(view, { system, tabDefs, active }) {
 
 /** Overview, Audit, Settings: the page's own content as the first tab, then the help tabs. `page` is the route path. */
 export function consolePage(view, { page, tabDefs, active }) {
-  const area = helpTabs(view.scope, { path: page, helpKey: page, name: t(`nav.${page}`), tabDefs, active });
+  // `initial` tells a tab whether a deep link's query is meant (the first render) or it was opened by a click (which starts clean): the Audit tabs keep their filters in the URL (addendum 9.16).
+  const area = helpTabs(view.scope, { path: page, helpKey: page, name: t(`nav.${page}`), tabDefs, active, panelCtx: (ps, initial) => ({ initial }) });
   view.append(h('h1', t(`nav.${page}`)), area.tablist, area.panel);
   area.open();
   return area;

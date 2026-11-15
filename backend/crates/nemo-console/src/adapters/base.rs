@@ -334,6 +334,17 @@ pub trait SystemAdapter: Send + Sync {
         Err(AdapterError::NoSuchEndpoint)
     }
 
+    // ── wave-4 visualisation answers (addendum 9.16): other systems answer 404 ─────────────────
+    /// `GET /systems/guardrails/rails`: the rail pipeline of each served config (flow names, main model, streaming).
+    async fn rails(&self) -> Result<Value, AdapterError> {
+        Err(AdapterError::NoSuchEndpoint)
+    }
+    /// `GET /systems/openshell/decisions?sandbox=&limit=`: the policy decisions in one live sandbox's log. `sandbox`
+    /// passed the route's name check and `limit` is 1..=2000; `UnknownId` -> 404 (not in the live list).
+    async fn decisions(&self, _sandbox: &str, _limit: usize) -> Result<Value, AdapterError> {
+        Err(AdapterError::NoSuchEndpoint)
+    }
+
     // ── standing background work (addendum 9.12) ────────────────────────────────────────────────
     /// Start the adapter's own standing background task, if it has one. Called once when the server starts and
     /// background tasks are on; never from a request.

@@ -26,6 +26,9 @@ pub mod flare;
 pub mod relay_traces;
 // after the port: per-run visualisation answers (addendum 9.15) shared by AIPerf, SkillEvaluator and Data Designer
 pub mod runviz;
+// after the port: wave-4 visualisation answers (addendum 9.16)
+pub mod guardrails_rails;
+pub mod openshell_viz;
 
 use crate::adapters::base::{AdapterContext, AdapterError, AdapterRef};
 use crate::config::Settings;

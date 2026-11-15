@@ -7,6 +7,7 @@
 // Values are a deterministic function of (key, labels, timestamp), so two requests agree and a chart does not jump on refresh.
 
 import { dcgmCounterRate, SY_COUNTER_RATE, DYN_COUNTER_RATE } from './mock-wave2.mjs';
+import { WAVE4_GAUGES, FLARE_RATES } from './mock-wave4.mjs';
 
 export const WINDOW_SPAN_S = { '15m': 900, '1h': 3600, '24h': 86400, '7d': 604800 };
 export const MAX_KEYS = 12;
@@ -68,11 +69,7 @@ const isCounter = (base) => /_total$/.test(base) || COUNTER_KEYS.has(base);
 const STEADY = /\.(capacity|max_context_tokens|power_limit_w)$/;
 // Per-second rate of each counter (the mock's own picture of a busy lab); anything else starts at a small default.
 const COUNTER_RATE = {
-  'flare.generated_total': 42,
-  'flare.prefill_total': 210,
-  'flare.requests_completed_total': 0.04, // slow: shown per minute
-  'flare.requests_failed_total': 0.002,
-  'flare.cache_reused_total': 95,
+  ...FLARE_RATES, // per target (addendum 9.16): a function of the labels
   'sy.requests_total': 0.4,
   'sy.errors_total': 0.003,
   'dyn.requests_total': 0.2,
@@ -130,17 +127,23 @@ export function buildSeries({ keys, window, split, points, now, pollS = 2 }) {
   for (const key of keys) {
     const { base, sel } = parseKey(key);
     const variants = points.filter((p) => p.key === base && Object.entries(sel).every(([k, v]) => p.labels?.[k] === v));
+    const custom = WAVE4_GAUGES[base]; // addendum 9.16: the up / down histories and the OpenShell phase counts are functions of their own story
     const sample = (p) =>
       grid
         .filter((ts) => !holeAt(ts, now))
         .map((ts) => {
           const id = labelId(p.labels);
+          if (custom) {
+            const v = custom(p.labels || {}, ts, step, now);
+            return v == null ? null : [ts, +v.toFixed(4), +v.toFixed(4)];
+          }
           const avg = isCounter(base) ? counterAt(base, id, ts, now, p.labels) : gaugeAt(base, id, ts, nominal(`${base}|${id}`, p.value), p.unit);
           const spread = window === '15m' || isCounter(base) ? 0 : 0.05 + 0.1 * Math.abs(Math.sin(ts * 1.7 + unit(`${base}|${id}`) * 6.28));
           let max = avg * (1 + spread);
           if (p.unit === 'ratio') max = Math.min(1, max);
           return [ts, +avg.toFixed(4), +max.toFixed(4)];
-        });
+        })
+        .filter(Boolean);
     if (!variants.length) {
       series.push({ key, label: null, points: [] });
     } else if (!split) {

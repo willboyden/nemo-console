@@ -230,7 +230,9 @@ curl -s -X POST -H "Authorization: Bearer $KEY" -H 'X-Console: 1' -H 'Content-Ty
 
 State directory contents: `console.db` (+ `-wal`, `-shm`): keys (hashed), append-only audit, config revisions
 (full previous file bytes), 1-minute metric rollups (8 days), settings and saved Dynamo parameters;
-`bootstrap-admin.key` / `minted-*.key`; `dynamo/override.yml` (0600) once parameters are applied.
+`bootstrap-admin.key` / `minted-*.key`; `dynamo/override.yml` (0600) once parameters are applied;
+`openshell/events.jsonl` (0600, at most about 6000 lines): the OpenShell sandbox lifecycle events, so the lanes survive a restart
+(addendum 9.16; safe to delete, the history restarts).
 
 **Back up the console:** stop it, copy the directory (or, running, `sqlite3 console.db ".backup /path/backup.db"`).
 Treat the copy as sensitive (it holds config revisions, key hashes and audit paths). Losing it loses rollback
