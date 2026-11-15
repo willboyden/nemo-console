@@ -911,10 +911,12 @@ capped, files read without following links and with byte/line caps, parsing off 
   is null.
 * After the pre-merge audit (2026-11-14): decisions `target` is only `host:port` (a DNS name, IPv4 or [IPv6] address
   and a port 1-65535; the token after the verdict, else the token after ` -> `; at most 120 characters), else null;
-  output that reaches the CLI cap (1 MiB for this route) is parsed up to its last complete line and sets `truncated`,
+  output that reaches the CLI cap (1 MiB for this route) is parsed up to its last complete line and sets `truncated`
+  (the log is chronological, so a capped answer holds the OLDER part of the requested lines),
   any other CLI failure gives `rows: []` and `problem`; cached 10 s per sandbox, at most 32 sandboxes. Persisted
   events: a time from 0 to now + 1 day; the rewrite keeps the newest 5000 valid lines, re-serialised; one ordered
   writer; stale temp files reaped on load; reads through a bounded ring. Rails: the main model and flow names must come
   out of `redact()` unchanged; a key past the first 256 entries of a mapping is not found; at most 32 distinct
-  `models` items are looked at. The Audit summary's `denied_total` is labelled for what it is: audited calls answered
+  `models` items are looked at; at most 4096 directory entries are listed for config ids (beyond that, which ids appear
+  is not defined). The Audit summary's `denied_total` is labelled for what it is: audited calls answered
   401/403 (requests refused before a handler are not audited).
