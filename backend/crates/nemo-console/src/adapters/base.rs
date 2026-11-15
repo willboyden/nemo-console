@@ -318,6 +318,22 @@ pub trait SystemAdapter: Send + Sync {
         Err(AdapterError::NoSuchEndpoint)
     }
 
+    // ── per-run visualisation answers (addendum 9.15): other systems answer 404 ─────────────────
+    /// `GET /systems/{id}/runs/{run_id}/summary` (AIPerf, SkillEvaluator): numbers and identifiers of one stored
+    /// run. Errors: `Invalid` -> 422 (a run id the adapter's run-id check refuses), `UnknownId` -> 404 "unknown run".
+    async fn run_summary(&self, _run_id: &str) -> Result<Value, AdapterError> {
+        Err(AdapterError::NoSuchEndpoint)
+    }
+    /// `GET /systems/aiperf/runs/{run_id}/requests`: per-request numbers of one stored run (errors as above).
+    async fn run_requests(&self, _run_id: &str) -> Result<Value, AdapterError> {
+        Err(AdapterError::NoSuchEndpoint)
+    }
+    /// `GET /systems/datadesigner/runs/{run_id}/profile`: per-column aggregates of one stored run; `with_values`
+    /// (the caller is an admin) fills the top values, else they are withheld (errors as above).
+    async fn run_profile(&self, _run_id: &str, _with_values: bool) -> Result<Value, AdapterError> {
+        Err(AdapterError::NoSuchEndpoint)
+    }
+
     // ── standing background work (addendum 9.12) ────────────────────────────────────────────────
     /// Start the adapter's own standing background task, if it has one. Called once when the server starts and
     /// background tasks are on; never from a request.

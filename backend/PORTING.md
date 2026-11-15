@@ -689,6 +689,77 @@ E2E at lock (`E2E_BACKEND=rust`): the overview, audit and settings pages render;
   systems differ (`read.*.metrics`, `reread.*.metrics`, `sysv.metrics.viewer`), every difference an appended point
   (`A` absent); they are pinned in `parity/pinned-diffs.json` to exactly those points. Tests:
   `tests/dcgm_viz_wave2.rs`, `tests/switchyard_viz_wave2.rs`, `tests/dynamo_viz_wave2.rs`.
+- **D-40 Three per-run visualisation routes (addendum 9.15), added after the port.** All `GET`, viewer, under
+  `/api/v1/systems/{system_id}/runs/{run_id}/`: `summary` (AIPerf and SkillEvaluator), `requests` (AIPerf) and
+  `profile` (Data Designer), through three adapter-port methods (`run_summary`, `run_requests`, `run_profile`) whose
+  defaults answer `NoSuchEndpoint`, so every other system answers 404 `not_found` (after the role check, whatever the
+  run id). The adapter checks the run id with its own `RUN_ID_RE` (AIPerf: lowercase preset; SkillEvaluator and Data
+  Designer: `\d{8}T\d{6}-\d{3}-[A-Za-z0-9._-]{1,128}`): a refused id is 422 `invalid_request` (unlike `/records`
+  and `/files`, which answer 404 for it: the Python reference's behaviour, kept there); a run without a readable
+  `run.json` is 404 "unknown run". Nothing from the request but that run id reaches a path. Files are read in
+  `adapters/runviz.rs` on the blocking pool, at most four reads at a time (`MAX_PARALLEL`), each opened with
+  `O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC`, regular files only (a FIFO neither blocks nor is read), size-capped; a run
+  directory or AIPerf `artifacts` directory that is a symlink is not read (`run.json` at most 4 MiB; a run left at
+  `running` reads as `interrupted`, as `load_meta` does). Answers:
+  * AIPerf `summary`: `{run_id, preset, model, verdict, concurrency, requests, isl, osl, duration_s, metrics,
+    http_phases_ms}` from `run.json` and `artifacts/profile_export_aiperf.json` (8 MiB, `MAX_JSON_BYTES`): every
+    top-level object with at least one finite statistic and a name matching `[a-z][a-z0-9_]{0,63}`, in file order, at
+    most 100, each `{unit, avg, min, max, std, p1, p5, p10, p25, p50, p75, p90, p95, p99}` (absent or non-finite ->
+    null; `count` and `sum` dropped; a unit not matching `[A-Za-z%][A-Za-z0-9/%._ -]{0,31}` -> null). `http_phases_ms`
+    = the `avg` of `http_req_dns_lookup` / `_connecting` / `_sending` / `_waiting` / `_receiving` in ms (null when none
+    is there); `duration_s` = `benchmark_duration` (sec), else `run.json` `metrics.duration_s`. `preset`, `model` and
+    `verdict` pass the adapter's checks or are null; the numbers are finite numbers or null. No metric without numbers
+    (`input_config`, `run_info`, `error_summary`, ids, times) reaches the answer. Without a profile `metrics` is `{}`.
+  * AIPerf `requests`: from `artifacts/profile_export.jsonl` (16 MiB, `MAX_EXPORT_BYTES`; a longer file is cut at the
+    last whole line and the answer says `truncated`), at most 200,000 lines looked at. Two passes over the bytes: the
+    first parses each line once (a request = a JSON object), finds the first `request_start_ns` and numbers the
+    `worker_id`s by first appearance in the file (at most 1,024 workers, ids of at most 128 bytes; others null); the
+    second re-parses only the rows returned: all when there are at most 5,000, else 5,000 evenly spaced (`k * (total -
+    1) / 4999`, first and last included). Row `{i, start_ms, end_ms, latency_ms, ttft_ms, itl_avg_ms, input_tokens,
+    output_tokens, worker, error_code}`: `i` = the request's index in the file; times relative to the first start;
+    `latency_ms` / `ttft_ms` / `itl_avg_ms` from the record metrics `request_latency` / `time_to_first_token` /
+    `inter_token_latency` (`{value, unit}`, unit ms, ns, us or s converted, any other unit null); tokens from
+    `input_sequence_length` (else `usage_prompt_tokens`, `error_isl`) and `output_sequence_length` (else
+    `output_token_count`, `usage_completion_tokens`); `error_code` = an integer `error.code` in 0..999999 or a string
+    of 1..6 digits, 0 when the record has a non-empty `error` without such a code, null without an error. No request,
+    correlation, conversation or worker id, no error text: `error.message` and `error.type` are never read.
+  * SkillEvaluator `summary`: `{run_id, skill, tiers, verdict, tier1, tier3}`. `tier1` (null when
+    `skillevaluator-tier1.json` is absent, over 8 MiB `MAX_RESULT_BYTES` or not an object): `validators` (at most 64;
+    name matching `[A-Za-z0-9][A-Za-z0-9 &._/()+:-]{0,79}`, others left out; `passed` a bool or null; `status` a word
+    or null; `findings` = counts by severity `critical/high/medium/low/info`, case-insensitive, a finding without a
+    severity counted as `info` as `failed_checks` does, an unknown severity not counted), `rubric` (at most 32 of
+    `rubric_eval.checks`: `id` matching `[a-z][a-z0-9_]{0,63}`, `importance` high/medium/low or null, `score`, `pass`,
+    `judge_pass`), `dimensions` (`quality_summary[0].dimensions.<name>.score`, at most 16). `tier3` (null unless
+    `run.json` has a `tier3` object): `agents` (at most 8, the adapter's name and model checks) with `skill_lift`,
+    `with_skill`, `without_skill` and `metrics` (at most 16, `[{name, with_skill, without_skill, delta}]`) from the
+    numbers `summarize_tier3` already stored. Never a finding message, title, check or suggestion, criterion text,
+    note, summary, conclusion, recommendation or error text.
+  * Data Designer `profile`: `{run_id, rows, columns, values_hidden, truncated}` over `records.jsonl` (the lines the
+    console exported, read with the same 16 MiB line bound as `files::for_each_line` and at most 64 MiB in all), at
+    most 2,000 records (`MAX_PREVIEW_RECORDS`; a 2,001st line sets `truncated`), values measured as `/records` shows
+    them (`cap_value`: strings cut to 2,048 characters). Columns in first-seen order, at most 200; a name not matching
+    `[A-Za-z0-9_][A-Za-z0-9_ .:-]{0,127}` is not profiled (both set `truncated`). Per column `{name, types: {string,
+    number, bool, null, object, array}, non_null, distinct, distinct_capped, length, numeric, top}`: `types.null` =
+    records without a non-null value (absent keys count as null, so the counts add up to `rows`); `distinct` over
+    non-null values, counted with per-request keyed 64-bit hashes up to 1,000 (`distinct_capped` past it);
+    `length` / `numeric` = nearest-rank `{min, p50, p95, max}` of string lengths / finite numbers, null when there are
+    none; `top` = the 10 most frequent non-null values (ties by first appearance) of a column with at most 50 distinct
+    values, a string or the JSON text of an object / array cut to 64 characters, numbers and booleans as they are,
+    ONLY for an admin (the handler passes `principal.role == Admin`; loopback trust is admin): a viewer gets `top: null`
+    everywhere and `values_hidden: true`, and the values are not even collected for a viewer.
+  Parity: like D-36 and D-38, `tests/core_routes_table.rs` lists the three in `RUST_ONLY` (rows `"rust_only": "D-40"`
+  in `parity/routes.rust.json`), the corpus has no case for them, and `assets/openapi.json` gains their entries by
+  hand in the generated style (checked by `the_openapi_entries_of_the_run_routes_match_the_code`); the four
+  `global.openapi.*` pins in `parity/pinned-diffs.json` gain exactly those three paths. Tests:
+  `tests/runviz_wave3.rs`.
+- **D-41 Wider run event data (addendum 9.15).** New keys only. `evaluator.run`: each `benchmarks[]` entry gains
+  `ci_low`, `ci_high`, `tokens`, `elapsed_s`, `failure_rate`, copied from the run's stored `results` (which
+  `Inner::results` already keeps from summary.json) when they are finite numbers (an integer stays an integer), else
+  null. `gym.smoke`: `rewards`, the per-task rewards `run.json` keeps (finite numbers, at most 20,
+  `EVENT_MAX_REWARDS`), null when the run recorded none. Parity: of the corpus only `reread.evaluator.events`
+  differs, by exactly the five keys of its one benchmark (`A` absent), pinned in `parity/pinned-diffs.json`; the gym
+  change is not visible to the harness (the Python reference has no NeMo Gym adapter: `stub:gym`, D-8). Tests:
+  `tests/runviz_wave3.rs` (`evaluator_events_carry_the_benchmark_numbers`, `gym_events_carry_at_most_20_rewards`).
 - **Test-only (workstream B):** in the DCGM `post_apply` restart test the fake upstream answers 503 instead of refusing the
   connection.
 - **Moot since A-7 (the private copies are deleted):** workstream B's "alias expansion over 1,000,000 nodes raises
