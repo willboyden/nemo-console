@@ -113,8 +113,13 @@ export function describeLevel(level, levels = []) {
       take('detectors', (items) => ({ type: 'chips', key: 'detectors', items }));
       break;
     case 'resource_metrics':
+      // Addendum 9.17: the sampled scope, the interval in seconds (shown like the older interval_ms) and the optional GPU / network sampling.
+      take('scope', (value) => ({ type: 'text', key: 'scope', value }));
       take('polling', (value) => ({ type: 'bool', key: 'polling', value }));
       take('interval_ms', (value) => ({ type: 'ms', key: 'interval_ms', value }));
+      take('interval_s', (value) => (typeof value === 'number' ? { type: 'ms', key: 'interval_s', value: value * 1000 } : { type: 'text', key: 'interval_s', value }));
+      take('gpu', (value) => ({ type: 'bool', key: 'gpu', value }));
+      take('network', (value) => ({ type: 'bool', key: 'network', value }));
       break;
     default:
   }

@@ -7,6 +7,7 @@ implemented / verified-live / unverified defined in the README.
 
 ### Added
 
+- **Relay runtime** (addendum 9.17, Relay 0.11). **Gateway resources** on the Capture tab: the gateway process's CPU, memory (resident and cgroup), threads and open files, disk I/O, the filesystem its event files sit on, pressure and limit events, and the Switchyard plugin's routing requests, failures, overhead p95 and tokens/s, over 1 h, 24 h or 7 d. Read from Prometheus with fixed queries (new `relay.gw_*`, `relay.route_*`, `relay.atof_fs_*` metric keys) when Relay's `resource_metrics` component runs; its freshness comes from the samples in the event log, and the capture matrix gains its row. **Runtime diagnostics** (admins only, `/systems/relay/diagnostics`): totals, failures per component, recent events (codes only, never event detail), loss counters and recorder memory, read through `nemo-relay diagnostics`; cross-site requests are refused before anything runs.
 - **Charts, wave 4** (addendum 9.16). **NeMo Guardrails:** each config's rail pipeline (input rails, main model, output
   rails, streaming; flow names only, from `/systems/guardrails/rails`), a probe matrix over check runs (expected vs
   actual, latency) and an availability strip. **OpenShell:** sandbox lifecycle lanes from lifecycle events that now

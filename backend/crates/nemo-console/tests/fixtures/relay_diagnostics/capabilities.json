@@ -1,0 +1,104 @@
+{
+ "discovery_version": 1,
+ "snapshot_version": 1,
+ "catalogue_version": 1,
+ "source": {
+  "instance_id": "00000000-0000-7000-8000-000000000000",
+  "process_id": 4242,
+  "process_role": "cli",
+  "relay_version": "0.11.1"
+ },
+ "collection_enabled": true,
+ "queries_enabled": true,
+ "max_components": "64",
+ "max_events": "256",
+ "detail_pool_bytes": "262144",
+ "max_queries": "4",
+ "max_snapshot_bytes": "131072",
+ "max_owned_bytes": "33554432",
+ "memory_inspection": true,
+ "restricted_detail": true,
+ "producer_support": [
+  {
+   "name": "logging",
+   "supported": true
+  },
+  {
+   "name": "plugin.configuration",
+   "supported": true
+  },
+  {
+   "name": "plugin.activation",
+   "supported": true
+  },
+  {
+   "name": "plugin.native",
+   "supported": true
+  },
+  {
+   "name": "plugin.native.emission",
+   "supported": true
+  },
+  {
+   "name": "plugin.policy",
+   "supported": true
+  },
+  {
+   "name": "plugin.worker.host",
+   "supported": true
+  },
+  {
+   "name": "plugin.worker.emission",
+   "supported": true
+  },
+  {
+   "name": "otel",
+   "supported": false
+  },
+  {
+   "name": "resource_metrics",
+   "supported": false
+  }
+ ],
+ "max_query_components": "64",
+ "max_query_events": "256",
+ "detailed_memory_inspection": true,
+ "resource_correlation": true,
+ "producers": [
+  "cli.command",
+  "cli.configuration",
+  "cli.gateway",
+  "cli.acquire",
+  "cli.child",
+  "cli.hook",
+  "cli.upstream",
+  "plugin.native_abi",
+  "plugin.worker_protocol"
+ ],
+ "inspection_policy": "whole_context_private_bootstrap",
+ "limits": {
+  "max_components": "64",
+  "max_counters": "2048",
+  "max_events": "256",
+  "max_window_buckets": "3840",
+  "max_extensions": "128",
+  "max_metadata_bytes": "65536",
+  "max_identity_bytes": "128",
+  "max_detail_bytes": "4096",
+  "max_correlation_bytes": "128",
+  "detail_pool_bytes": "262144",
+  "detail_block_bytes": "256",
+  "max_queries": "4",
+  "max_query_components": "64",
+  "max_query_events": "256",
+  "max_query_counters": "256",
+  "max_query_window_buckets": "512",
+  "max_snapshot_bytes": "131072",
+  "query_text_bytes": "65536",
+  "max_projections": "16",
+  "max_projection_workspaces": "4",
+  "max_owned_bytes": "33554432"
+ },
+ "response_slots": 4,
+ "response_bytes": 131072
+}

@@ -1,0 +1,2676 @@
+{
+ "schema_version": 1,
+ "source": {
+  "instance_id": "00000000-0000-7000-8000-000000000000",
+  "process_id": 4242,
+  "process_role": "cli",
+  "relay_version": "0.11.1"
+ },
+ "captured_at": "2026-01-01T08:27:37.309079661Z",
+ "sequence": "187",
+ "aggregate": {
+  "reserved_bytes": "2595089",
+  "components": "23",
+  "counters": "65",
+  "events": "150",
+  "event_slot_bytes": "552",
+  "event_capacity": "256",
+  "history_reserved_bytes": "141328",
+  "history_occupied_bytes": "82800",
+  "detail_bytes": "38400",
+  "detail_capacity_bytes": "262144",
+  "detail_reserved_bytes": "286720",
+  "detail_metadata_bytes": "24576",
+  "detail_logical_bytes": "8591",
+  "detail_slack_bytes": "29809",
+  "metadata_bytes": "1718",
+  "window_buckets": "0",
+  "extensions": "11",
+  "query_workspaces": "1",
+  "projections": "1",
+  "projection_workspaces": "0"
+ },
+ "loss": {
+  "events_evicted": {
+   "value": "0",
+   "saturated": false
+  },
+  "events_omitted": {
+   "value": "0",
+   "saturated": false
+  },
+  "components_evicted": {
+   "value": "0",
+   "saturated": false
+  },
+  "components_rejected": {
+   "value": "0",
+   "saturated": false
+  },
+  "keys_rejected": {
+   "value": "0",
+   "saturated": false
+  },
+  "observations_rejected": {
+   "value": "0",
+   "saturated": false
+  },
+  "messages_truncated": {
+   "value": "0",
+   "saturated": false
+  },
+  "details_omitted": {
+   "value": "0",
+   "saturated": false
+  },
+  "correlations_truncated": {
+   "value": "0",
+   "saturated": false
+  },
+  "correlations_omitted": {
+   "value": "0",
+   "saturated": false
+  },
+  "metadata_rejected": {
+   "value": "0",
+   "saturated": false
+  },
+  "classifications_overflowed": {
+   "value": "0",
+   "saturated": false
+  },
+  "windows_rejected": {
+   "value": "0",
+   "saturated": false
+  },
+  "queries_rejected": {
+   "value": "0",
+   "saturated": false
+  },
+  "stale_observations": {
+   "value": "0",
+   "saturated": false
+  },
+  "projection_deliveries_omitted": {
+   "value": "0",
+   "saturated": false
+  },
+  "projections_panicked": {
+   "value": "0",
+   "saturated": false
+  },
+  "projections_suppressed": {
+   "value": "143",
+   "saturated": false
+  },
+  "sequence_saturated": false
+ },
+ "component_occupied_bytes": "155192",
+ "shared_or_unassigned_reserved_bytes": "2439897",
+ "selection": {
+  "components": "23",
+  "events": "150",
+  "component_occupied_bytes": "155192",
+  "entry_occupied_bytes": "124800"
+ },
+ "page": {
+  "components": "23",
+  "events": "150",
+  "component_occupied_bytes": "155192",
+  "entry_occupied_bytes": "124800"
+ },
+ "components": [
+  {
+   "component": {
+    "key": "cli.command",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "1"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "320",
+   "window_bytes": "0",
+   "extension_bytes": "0",
+   "retained_event_count": "0",
+   "retained_event_bytes": "0",
+   "occupied_bytes": "1136"
+  },
+  {
+   "component": {
+    "key": "cli.configuration",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "2"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "80",
+   "window_bytes": "0",
+   "extension_bytes": "0",
+   "retained_event_count": "0",
+   "retained_event_bytes": "0",
+   "occupied_bytes": "896"
+  },
+  {
+   "component": {
+    "key": "cli.gateway",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "3"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "320",
+   "window_bytes": "0",
+   "extension_bytes": "0",
+   "retained_event_count": "1",
+   "retained_event_bytes": "832",
+   "occupied_bytes": "1968"
+  },
+  {
+   "component": {
+    "key": "cli.acquire",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "4"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "160",
+   "window_bytes": "0",
+   "extension_bytes": "0",
+   "retained_event_count": "0",
+   "retained_event_bytes": "0",
+   "occupied_bytes": "976"
+  },
+  {
+   "component": {
+    "key": "cli.child",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "5"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "560",
+   "window_bytes": "0",
+   "extension_bytes": "0",
+   "retained_event_count": "0",
+   "retained_event_bytes": "0",
+   "occupied_bytes": "1376"
+  },
+  {
+   "component": {
+    "key": "cli.hook",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "6"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "160",
+   "window_bytes": "0",
+   "extension_bytes": "0",
+   "retained_event_count": "0",
+   "retained_event_bytes": "0",
+   "occupied_bytes": "976"
+  },
+  {
+   "component": {
+    "key": "cli.upstream",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "7"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "320",
+   "window_bytes": "0",
+   "extension_bytes": "0",
+   "retained_event_count": "4",
+   "retained_event_bytes": "3328",
+   "occupied_bytes": "4464"
+  },
+  {
+   "component": {
+    "key": "logging",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "8"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "400",
+   "window_bytes": "0",
+   "extension_bytes": "0",
+   "retained_event_count": "1",
+   "retained_event_bytes": "832",
+   "occupied_bytes": "2048"
+  },
+  {
+   "component": {
+    "key": "logging.stderr",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "9"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "560",
+   "window_bytes": "0",
+   "extension_bytes": "0",
+   "retained_event_count": "1",
+   "retained_event_bytes": "832",
+   "occupied_bytes": "2208"
+  },
+  {
+   "component": {
+    "key": "plugin.activation",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "10"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "480",
+   "window_bytes": "0",
+   "extension_bytes": "0",
+   "retained_event_count": "0",
+   "retained_event_bytes": "0",
+   "occupied_bytes": "1296"
+  },
+  {
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "80",
+   "window_bytes": "0",
+   "extension_bytes": "584",
+   "retained_event_count": "13",
+   "retained_event_bytes": "10816",
+   "occupied_bytes": "12296"
+  },
+  {
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "80",
+   "window_bytes": "0",
+   "extension_bytes": "584",
+   "retained_event_count": "13",
+   "retained_event_bytes": "10816",
+   "occupied_bytes": "12296"
+  },
+  {
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "80",
+   "window_bytes": "0",
+   "extension_bytes": "584",
+   "retained_event_count": "13",
+   "retained_event_bytes": "10816",
+   "occupied_bytes": "12296"
+  },
+  {
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "80",
+   "window_bytes": "0",
+   "extension_bytes": "584",
+   "retained_event_count": "13",
+   "retained_event_bytes": "10816",
+   "occupied_bytes": "12296"
+  },
+  {
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "80",
+   "window_bytes": "0",
+   "extension_bytes": "584",
+   "retained_event_count": "13",
+   "retained_event_bytes": "10816",
+   "occupied_bytes": "12296"
+  },
+  {
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "80",
+   "window_bytes": "0",
+   "extension_bytes": "584",
+   "retained_event_count": "13",
+   "retained_event_bytes": "10816",
+   "occupied_bytes": "12296"
+  },
+  {
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "80",
+   "window_bytes": "0",
+   "extension_bytes": "584",
+   "retained_event_count": "13",
+   "retained_event_bytes": "10816",
+   "occupied_bytes": "12296"
+  },
+  {
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "80",
+   "window_bytes": "0",
+   "extension_bytes": "584",
+   "retained_event_count": "13",
+   "retained_event_bytes": "10816",
+   "occupied_bytes": "12296"
+  },
+  {
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "80",
+   "window_bytes": "0",
+   "extension_bytes": "584",
+   "retained_event_count": "13",
+   "retained_event_bytes": "10816",
+   "occupied_bytes": "12296"
+  },
+  {
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "80",
+   "window_bytes": "0",
+   "extension_bytes": "584",
+   "retained_event_count": "13",
+   "retained_event_bytes": "10816",
+   "occupied_bytes": "12296"
+  },
+  {
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "80",
+   "window_bytes": "0",
+   "extension_bytes": "584",
+   "retained_event_count": "13",
+   "retained_event_bytes": "10816",
+   "occupied_bytes": "12296"
+  },
+  {
+   "component": {
+    "key": "plugin.activation",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "33"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "480",
+   "window_bytes": "0",
+   "extension_bytes": "0",
+   "retained_event_count": "0",
+   "retained_event_bytes": "0",
+   "occupied_bytes": "1296"
+  },
+  {
+   "component": {
+    "key": "plugin.activation",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "34"
+   },
+   "registration_bytes": "816",
+   "counter_bytes": "480",
+   "window_bytes": "0",
+   "extension_bytes": "0",
+   "retained_event_count": "0",
+   "retained_event_bytes": "0",
+   "occupied_bytes": "1296"
+  }
+ ],
+ "entries": [
+  {
+   "sequence": "10",
+   "component": {
+    "key": "logging.stderr",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "9"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "24",
+   "detail_slack_bytes": "232",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "11",
+   "component": {
+    "key": "logging",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "8"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "31",
+   "detail_slack_bytes": "225",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "12",
+   "component": {
+    "key": "cli.gateway",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "3"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "22",
+   "detail_slack_bytes": "234",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "41",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "42",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "43",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "44",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "45",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "46",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "47",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "48",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "49",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "50",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "51",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "52",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "53",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "54",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "55",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "56",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "57",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "58",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "59",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "60",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "61",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "62",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "63",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "64",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "65",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "66",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "67",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "68",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "69",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "70",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "71",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "72",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "73",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "61",
+   "detail_slack_bytes": "195",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "74",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "75",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "76",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "77",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "78",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "79",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "80",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "81",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "82",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "83",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "84",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "85",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "86",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "87",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "88",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "89",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "90",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "91",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "92",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "93",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "94",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "95",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "96",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "97",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "98",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "99",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "100",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "101",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "102",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "103",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "104",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "105",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "106",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "107",
+   "component": {
+    "key": "cli.upstream",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "7"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "22",
+   "detail_slack_bytes": "234",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "108",
+   "component": {
+    "key": "cli.upstream",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "7"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "22",
+   "detail_slack_bytes": "234",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "109",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "110",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "111",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "112",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "113",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "114",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "115",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "116",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "117",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "118",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "119",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "120",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "121",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "122",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "123",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "124",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "125",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "126",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "127",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "128",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "129",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "130",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "131",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "132",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "133",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "134",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "135",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "136",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "137",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "138",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "139",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "140",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "141",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "142",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "143",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "144",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "145",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "146",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "147",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "148",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "149",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "150",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "151",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "60",
+   "detail_slack_bytes": "196",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "152",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "153",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "154",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "155",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "156",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "157",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "158",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "159",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "160",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "161",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "162",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "163",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "164",
+   "component": {
+    "key": "cli.upstream",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "7"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "22",
+   "detail_slack_bytes": "234",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "165",
+   "component": {
+    "key": "cli.upstream",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "7"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "22",
+   "detail_slack_bytes": "234",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "166",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "167",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "168",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "169",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "170",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "171",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "172",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "173",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "174",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "175",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "176",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "59",
+   "detail_slack_bytes": "197",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "177",
+   "component": {
+    "key": "pii_redaction.selector.profile_0",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "11"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "178",
+   "component": {
+    "key": "pii_redaction.selector.profile_1",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "13"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "179",
+   "component": {
+    "key": "pii_redaction.selector.profile_2",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "15"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "180",
+   "component": {
+    "key": "pii_redaction.selector.profile_3",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "17"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "181",
+   "component": {
+    "key": "pii_redaction.selector.profile_4",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "19"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "182",
+   "component": {
+    "key": "pii_redaction.selector.profile_5",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "21"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "183",
+   "component": {
+    "key": "pii_redaction.selector.profile_6",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "23"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "184",
+   "component": {
+    "key": "pii_redaction.selector.profile_7",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "25"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "185",
+   "component": {
+    "key": "pii_redaction.selector.profile_8",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "27"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "186",
+   "component": {
+    "key": "pii_redaction.selector.profile_9",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "29"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  },
+  {
+   "sequence": "187",
+   "component": {
+    "key": "pii_redaction.selector.profile_10",
+    "instance_id": "00000000-0000-7000-8000-000000000000",
+    "generation": "31"
+   },
+   "header_bytes": "552",
+   "detail_payload_bytes": "256",
+   "detail_metadata_bytes": "24",
+   "logical_text_bytes": "58",
+   "detail_slack_bytes": "198",
+   "occupied_bytes": "832"
+  }
+ ],
+ "resource": {
+  "availability": "available",
+  "sample": {
+   "collector_instance_id": "00000000-0000-7000-8000-000000000000",
+   "runtime_generation": "2",
+   "target_generation": "2",
+   "stream": "polling",
+   "ordinal": "7",
+   "started_at": "2026-01-01T08:27:37.239571025Z",
+   "completed_at": "2026-01-01T08:27:37.241166204Z",
+   "collection_millis": "1",
+   "operating_system": "linux",
+   "measurement_scope": "application_process",
+   "root": {
+    "process_id": 4242,
+    "start_identity": "7864353"
+   },
+   "visible_processes": "1",
+   "sampled_processes": "1",
+   "memory": {
+    "system_used": {
+     "value": {
+      "kind": "integer",
+      "value": "33554432"
+     },
+     "unit": {
+      "dimension": "capacity",
+      "name": "kibibytes"
+     },
+     "measurement_scope": "system",
+     "sampled_processes": null
+    },
+    "system_total": {
+     "value": {
+      "kind": "integer",
+      "value": "67108864"
+     },
+     "unit": {
+      "dimension": "capacity",
+      "name": "kibibytes"
+     },
+     "measurement_scope": "system",
+     "sampled_processes": null
+    },
+    "system_available": {
+     "value": {
+      "kind": "integer",
+      "value": "33554432"
+     },
+     "unit": {
+      "dimension": "capacity",
+      "name": "kibibytes"
+     },
+     "measurement_scope": "system",
+     "sampled_processes": null
+    },
+    "resident": {
+     "value": {
+      "kind": "integer",
+      "value": "44208"
+     },
+     "unit": {
+      "dimension": "capacity",
+      "name": "kibibytes"
+     },
+     "measurement_scope": "selected_processes",
+     "sampled_processes": "1"
+    },
+    "private": {
+     "value": {
+      "kind": "integer",
+      "value": "28668"
+     },
+     "unit": {
+      "dimension": "capacity",
+      "name": "kibibytes"
+     },
+     "measurement_scope": "selected_processes",
+     "sampled_processes": "1"
+    },
+    "physical_footprint": null,
+    "virtual_memory": {
+     "value": {
+      "kind": "integer",
+      "value": "5125748"
+     },
+     "unit": {
+      "dimension": "capacity",
+      "name": "kibibytes"
+     },
+     "measurement_scope": "selected_processes",
+     "sampled_processes": "1"
+    },
+    "peak_resident": {
+     "value": {
+      "kind": "integer",
+      "value": "51148"
+     },
+     "unit": {
+      "dimension": "capacity",
+      "name": "kibibytes"
+     },
+     "measurement_scope": "selected_processes",
+     "sampled_processes": "1"
+    },
+    "limit": null,
+    "environment_accounted": null,
+    "some_pressure_stall_time": null,
+    "full_pressure_stall_time": null,
+    "out_of_memory_event_count": null,
+    "limit_events": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   }
+  },
+  "association": "host_process",
+  "age_millis": "67",
+  "stale": false,
+  "projection_slot_bytes": "1072"
+ },
+ "continuation": null
+}

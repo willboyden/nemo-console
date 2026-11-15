@@ -3,6 +3,9 @@
 // (local-large, local-small, judge-small, opencode, claude-cli, example-agent), no real hosts, paths or people.
 // The structure is fixed (seeded generator); only the timestamps float with the clock, anchored so that the newest
 // event is a few minutes old. Nothing here is a verified fact about the real backend.
+// Addendum 9.17 (the gateway's own resources and runtime diagnostics) lives in dev/mock-runtime.mjs; this file serves it from the
+// capture answer (`resources`, the `resource_metrics` level, the `relay.resources.off` hint) and GET /diagnostics (admin only).
+import { RESOURCE_MODES, DIAG_MODES, resourcesOf, resourceLevel, resourceHint, diagnosticsAnswer } from './mock-runtime.mjs';
 
 const WINDOWS = { '1h': 3600, '6h': 21600, '24h': 86400, '7d': 604800, '30d': 2592000, all: null };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1045,7 +1048,7 @@ function buildTrajectories(world) {
 }
 
 // ---------------------------------------------------------------------------------------------- capture
-function capture(variant, world) {
+function capture(variant, world, resMode = 'on', nowS = Date.now() / 1000) {
   const full = variant !== 'gen_ai';
   const last = world.latest;
   // The shapes are pinned in docs/ARCHITECTURE.md 9.12 ("Pinned details"): a level that is off still carries every key (unknown = null, lists empty).
@@ -1059,7 +1062,8 @@ function capture(variant, world) {
   const derived = traceEndpoints.map((e) => ({ target: e.target, transport: e.transport, reachable: e.reachable }));
   const lv = (id, label, enabled, state, detail, observed) => ({ id, label, enabled, state, detail, observed });
   return {
-    relay_version: '0.9.2',
+    relay_version: '0.11.1',
+    resources: resourcesOf(resMode),
     levels: [
       lv(
         'atof',
@@ -1079,28 +1083,30 @@ function capture(variant, world) {
       full
         ? lv('redaction', 'Redaction of secrets and PII', true, 'active', { detectors: ['secrets', 'pii', 'email'] }, {})
         : lv('redaction', 'Redaction of secrets and PII', false, 'off', { detectors: [] }, {}),
-      full
-        ? lv('resource_metrics', 'Host resource metrics (CPU, memory)', true, 'unknown', { polling: true, interval_ms: 15000 }, {})
-        : lv('resource_metrics', 'Host resource metrics (CPU, memory)', false, 'off', { polling: null, interval_ms: null }, {}),
+      resourceLevel(resMode, nowS),
       lv('pricing', 'Pricing and cost attribution', false, 'off', {}, {}),
     ],
     projections: { gen_ai: true, openinference: full, full },
-    hints: full
-      ? [
-          { code: 'capture.otlp.unreachable', message: 'The "full" projection endpoint does not answer from this machine: nothing reaches the collector behind it.' },
-          { code: 'capture.otlp.derived_duplicate', message: 'Logs and metrics have no endpoint of their own, so Relay exports them once per trace endpoint: 3 times each, a duplicate export.' },
-          { code: 'capture.pricing.off', message: 'Pricing is not configured: token counts are shown but no cost.' },
-        ]
-      : [
-          { code: 'capture.projection.gen_ai_only', message: 'Only the gen_ai projection is exported: tool arguments and agent structure are not in the OTLP traces.' },
-          { code: 'capture.logs.marks_not_exported', message: 'Marks are not exported as logs, so routing decisions are only in the local ATOF files.' },
-          { code: 'capture.payloads.turn_filtered', message: 'Payloads are turn-filtered: earlier messages of a long conversation are not recorded.' },
-          { code: 'capture.redaction.off', message: 'Redaction is off: payload files can contain secrets pasted into a prompt.' },
-          { code: 'capture.metrics.resource_off', message: 'Resource metrics are not collected.' },
-          { code: 'capture.pricing.off', message: 'Pricing is not configured: token counts are shown but no cost.' },
-        ],
+    hints: withResourceHint(
+      full
+        ? [
+            { code: 'capture.otlp.unreachable', message: 'The "full" projection endpoint does not answer from this machine: nothing reaches the collector behind it.' },
+            { code: 'capture.otlp.derived_duplicate', message: 'Logs and metrics have no endpoint of their own, so Relay exports them once per trace endpoint: 3 times each, a duplicate export.' },
+            { code: 'capture.pricing.off', message: 'Pricing is not configured: token counts are shown but no cost.' },
+          ]
+        : [
+            { code: 'capture.projection.gen_ai_only', message: 'Only the gen_ai projection is exported: tool arguments and agent structure are not in the OTLP traces.' },
+            { code: 'capture.logs.marks_not_exported', message: 'Marks are not exported as logs, so routing decisions are only in the local ATOF files.' },
+            { code: 'capture.payloads.turn_filtered', message: 'Payloads are turn-filtered: earlier messages of a long conversation are not recorded.' },
+            { code: 'capture.redaction.off', message: 'Redaction is off: payload files can contain secrets pasted into a prompt.' },
+            { code: 'capture.pricing.off', message: 'Pricing is not configured: token counts are shown but no cost.' },
+          ],
+      resMode,
+    ),
   };
 }
+/** The `relay.resources.off` hint goes first when the gateway's resource component is off (addendum 9.17). */
+const withResourceHint = (hints, resMode) => [...(resourceHint(resMode) ? [resourceHint(resMode)] : []), ...hints];
 
 // ---------------------------------------------------------------------------------------------- the API
 export function createTracesMock({ now = () => Date.now() / 1000 } = {}) {
@@ -1113,7 +1119,15 @@ export function createTracesMock({ now = () => Date.now() / 1000 } = {}) {
     byId = new Map(world.traces.map((tr) => [tr.id, tr]));
     rotated = world.traces[0].spans.find((s) => s.category === 'llm').id; // its source line "can no longer be read"
   };
-  const flags = { index: process.env.MOCK_TRACES || 'ready', content: 'admin', capture: process.env.MOCK_CAPTURE || 'full', truncated: false, stale: process.env.MOCK_TRACES_STALE === '1' };
+  const flags = {
+    index: process.env.MOCK_TRACES || 'ready',
+    content: 'admin',
+    capture: process.env.MOCK_CAPTURE || 'full',
+    truncated: false,
+    stale: process.env.MOCK_TRACES_STALE === '1',
+    resources: RESOURCE_MODES.includes(process.env.MOCK_RESOURCES) ? process.env.MOCK_RESOURCES : 'on', // addendum 9.17: the gateway's resource sampler
+    diag: DIAG_MODES.includes(process.env.MOCK_DIAG) ? process.env.MOCK_DIAG : 'ok', // addendum 9.17: what GET /diagnostics answers
+  };
   const STALE_S = 3 * 86400;
   load(flags.stale ? STALE_S + 7 * 60 : 7 * 60);
   const setStale = (on) => {
@@ -1319,7 +1333,11 @@ export function createTracesMock({ now = () => Date.now() / 1000 } = {}) {
       if (!st) return bad(404, 'not_found', 'unknown step');
       return ok(stepContent(st));
     }
-    if (sub === '/capture') return ok(capture(flags.capture, world));
+    if (sub === '/capture') return ok(capture(flags.capture, world, flags.resources, now()));
+    if (sub === '/diagnostics') {
+      if (!admin) return bad(403, 'forbidden', 'runtime diagnostics need the admin role');
+      return ok(diagnosticsAnswer(flags.diag, now()));
+    }
     return null;
   }
 

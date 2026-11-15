@@ -298,7 +298,7 @@ const K = {
   traj: 'id source file bytes mtime schema_version agent session_id steps tool_calls prompt_tokens completion_tokens cached_tokens first_ts last_ts trace_id',
   step: 'step_id ts source model message_chars reasoning_chars tool_calls observations metrics duration_ms span_id status',
   stepContent: 'step_id message reasoning tool_calls observations truncated redactions',
-  capture: 'relay_version levels projections hints',
+  capture: 'relay_version resources levels projections hints', // `resources`: addendum 9.17
   level: 'id label enabled state detail observed',
 };
 const kw = (k) => K[k].split(' ');
@@ -519,7 +519,7 @@ test('9.12: sessions, with context that grows; analytics, trajectories and captu
     cap.levels.map((l) => l.id),
     ['atof', 'atif', 'otel_traces', 'otel_logs', 'otel_metrics', 'payloads', 'redaction', 'resource_metrics', 'pricing'],
   );
-  for (const l of cap.levels) same(l, kw('level'));
+  for (const l of cap.levels) same(l, l.id === 'resource_metrics' ? [...kw('level'), 'group'] : kw('level')); // the gateway-resource row alone carries `group: "other"` (addendum 9.17)
   assert.deepEqual(cap.projections, { gen_ai: true, openinference: true, full: true });
   // pinned keys per level, in both variants (a level that is off still carries every key)
   const DETAIL = {
@@ -540,7 +540,8 @@ test('9.12: sessions, with context that grows; analytics, trajectories and captu
     for (const l of cv.levels) {
       assert.deepEqual(keysOf(l.detail), DETAIL[l.id], `${variant} ${l.id} detail`);
       if (OBSERVED[l.id]) assert.deepEqual(keysOf(l.observed), OBSERVED[l.id], `${variant} ${l.id} observed`);
-      else if (l.id.startsWith('otel_') || ['redaction', 'resource_metrics', 'pricing'].includes(l.id)) assert.deepEqual(l.observed, {}, `${l.id}: the console cannot observe it, so observed is {}`);
+      else if (l.id === 'resource_metrics') assert.deepEqual(keysOf(l.observed), ['last_ts'], `${variant} resource_metrics observed: the newest mark's time (addendum 9.17), null when none was seen`);
+      else if (l.id.startsWith('otel_') || ['redaction', 'pricing'].includes(l.id)) assert.deepEqual(l.observed, {}, `${l.id}: the console cannot observe it, so observed is {}`);
     }
     const lv = Object.fromEntries(cv.levels.map((l) => [l.id, l]));
     assert.deepEqual(keysOf(lv.atof.detail.sinks[0]), ['file', 'mode', 'type']);

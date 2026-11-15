@@ -431,6 +431,25 @@ pub async fn guardrails_rails(req: Req) -> Result<Response<Body>, ApiError> {
     wave4_answer(a.rails().await, "not found")
 }
 
+/// `GET /systems/relay/diagnostics` (addendum 9.17, ADMIN, Rust-only, PORTING.md D-44): counts and codes of the
+/// Relay gateway's runtime diagnostics. The role is checked first (a viewer gets 403), then every other system
+/// answers 404. A cross-site request (`Sec-Fetch-Site`, `Origin`) is 403 `cross_origin` before anything runs. A
+/// read that fails is a 200 answer with `available: false` and a `reason`.
+pub async fn relay_diagnostics(req: Req) -> Result<Response<Body>, ApiError> {
+    let a = dep_adapter(&req)?;
+    dep_admin(&req)?;
+    // it starts processes: a page of another site in the admin's browser must not be able to make it do that
+    if crate::api::cross_site_get(&req.headers) {
+        return Err(ApiError::new(
+            403,
+            "cross_origin",
+            "cross-origin requests are not allowed",
+        ));
+    }
+    only(&a, SystemId::Relay)?;
+    wave4_answer(a.relay_diagnostics().await, "not found")
+}
+
 /// A sandbox name (= the OpenShell adapter's `NAME_RE`).
 #[allow(clippy::expect_used)]
 static SANDBOX_RE: LazyLock<Regex> =

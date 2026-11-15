@@ -332,3 +332,31 @@
     max-width: 100%;
   }
 }
+
+/* Relay runtime cards (rules in components.css; these override them and so come after). */
+@media (max-width: 720px) {
+  /* the strip keeps two columns (the generic .stats rule above); the bar rows give the label its own line */
+  .res-strip,
+  .rtd-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rtd-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .rtd-row > .lbar {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+  .rtd-loss {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rt-res .card-head .row,
+  .rt-diag .card-head .row {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+  .rt-res .card-head select {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+}

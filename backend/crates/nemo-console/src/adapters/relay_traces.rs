@@ -444,6 +444,7 @@ impl TraceIndex {
                 files: scan.files.clone(),
                 events: c.events,
                 chunk_marks: c.chunk_marks,
+                resource_last_us: c.resource_last_us,
                 // labels or ids left out are data left out too
                 truncated: scan.truncated || scan.ing.syms.dropped > 0 || scan.ing.ids.dropped > 0,
                 limits: scan.limits,
@@ -467,7 +468,11 @@ impl TraceIndex {
                 .hash(&mut h);
         }
         (
-            scan.ing.counters.events,
+            // a new resource sample alone changes no trace: the snapshot is published without a new derive
+            scan.ing
+                .counters
+                .events
+                .saturating_sub(scan.ing.counters.resource_marks),
             scan.ing.counters.duplicates,
             scan.evicted_spans + scan.evicted_marks,
             Arc::as_ptr(traj) as usize,

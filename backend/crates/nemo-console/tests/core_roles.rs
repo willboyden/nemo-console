@@ -46,7 +46,8 @@ fn test_every_route_carries_exactly_one_role_dependency() {
         }
         // admin-only GETs: the audit log, the two content routes of the Relay trace explorer (addendum 9.12),
         // which return captured prompts, answers and tool payloads, and the Data Designer run records (addendum
-        // 9.13, model-written rows; PORTING.md D-37), and the audit summary (addendum 9.16; PORTING.md D-42)
+        // 9.13, model-written rows; PORTING.md D-37), the audit summary (addendum 9.16; PORTING.md D-42) and the
+        // Relay runtime diagnostics (addendum 9.17; PORTING.md D-44)
         if is_get && ADMIN_GETS.contains(&r.path) {
             assert_eq!(r.role, RoleDep::Admin, "{} must be admin-only", r.path);
         } else if is_get {
@@ -61,9 +62,10 @@ fn test_every_route_carries_exactly_one_role_dependency() {
 }
 
 /// The only GET routes that are admin-only.
-const ADMIN_GETS: [&str; 5] = [
+const ADMIN_GETS: [&str; 6] = [
     "/api/v1/audit",
     "/api/v1/audit/summary",
+    "/api/v1/systems/{system_id}/diagnostics",
     "/api/v1/systems/{system_id}/runs/{run_id}/records",
     "/api/v1/systems/{system_id}/traces/{trace_id}/spans/{span_id}/content",
     "/api/v1/systems/{system_id}/trajectories/{trajectory_id}/steps/{step_id}/content",

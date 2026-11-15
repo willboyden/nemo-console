@@ -388,6 +388,9 @@ pub struct MarkField {
     pub val: Val,
 }
 
+/// The name of Relay's resource sample marks (addendum 9.17).
+pub const RESOURCE_MARK: &str = "nemo.relay.resource_metrics";
+
 /// One measurement of a metric mark.
 #[derive(Clone, Copy, Debug)]
 pub struct MeasRec {
@@ -438,6 +441,9 @@ pub struct Counters {
     pub bad_id: u64,
     pub oversize_lines: u64,
     pub malformed_lines: u64,
+    /// `nemo.relay.resource_metrics` marks (addendum 9.17): counted, the newest time kept, nothing else stored.
+    pub resource_marks: u64,
+    pub resource_last_us: Option<i64>,
 }
 
 /// Symbols the ingest compares against.
@@ -769,6 +775,14 @@ impl Ingest {
                     self.counters.chunk_marks -= 1;
                 }
             }
+            return;
+        }
+        if ev.name.as_str() == Some(RESOURCE_MARK) {
+            // a resource sample (about 17 KB of measurements): only its time is needed (the capture view's
+            // freshness); it is no part of a trace, a session, the analytics or the orphan counts
+            self.counters.resource_marks += 1;
+            self.counters.resource_last_us =
+                Some(self.counters.resource_last_us.map_or(ts, |t| t.max(ts)));
             return;
         }
         let Some(id) = ev.uuid.as_str().and_then(|s| self.ids.parse(s)) else {

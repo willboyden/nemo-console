@@ -14,6 +14,12 @@ use crate::services::pytoml::{self, Table, TomlVal};
 /// "Something was written in the last 15 minutes" / "within 7 days".
 const ACTIVE_S: f64 = 15.0 * 60.0;
 const IDLE_S: f64 = 7.0 * 86_400.0;
+/// Resource samples (addendum 9.17): `active` while the newest is no older than this many intervals; the interval
+/// assumed when the configuration does not give one.
+const RESOURCE_INTERVALS: f64 = 3.0;
+const RESOURCE_DEFAULT_INTERVAL_S: f64 = 60.0;
+/// The command the `relay.resources.off` hint names.
+pub const RESOURCES_ON: &str = "python3 -I ops/nemo-relay-levels.py resources on";
 
 /// One OTLP endpoint of the configuration.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -143,9 +149,15 @@ pub struct CaptureConfig {
     pub full_payloads: bool,
     pub redaction: bool,
     pub detectors: Vec<String>,
+    /// A `resource_metrics` component (addendum 9.17) that is not switched off.
     pub resource_metrics: bool,
+    /// Its `polling.enabled` and `polling.interval_millis`.
     pub resource_polling: Option<bool>,
     pub resource_interval_ms: Option<i64>,
+    /// Its `measurement_scope` (identifier-checked), `gpu.enabled`, `network.enabled`.
+    pub resource_scope: Option<String>,
+    pub resource_gpu: Option<bool>,
+    pub resource_network: Option<bool>,
     pub pricing: bool,
 }
 
@@ -190,6 +202,16 @@ pub fn parse_config(text: &str) -> CaptureConfig {
                 }
             }
             Some("pricing" | "model_pricing") => c.pricing = true,
+            // Relay 0.11's resource sampler, a component of its own (the first one counts)
+            Some("resource_metrics") if !c.resource_metrics => {
+                c.resource_metrics = true;
+                let polling = tbl(cfg.get("polling"));
+                c.resource_polling = flag(polling, "enabled");
+                c.resource_interval_ms = int(polling, "interval_millis");
+                c.resource_scope = ident(Some(cfg), "measurement_scope");
+                c.resource_gpu = flag(tbl(cfg.get("gpu")), "enabled");
+                c.resource_network = flag(tbl(cfg.get("network")), "enabled");
+            }
             Some("observability") => {
                 c.observability = true;
                 c.full_payloads = flag(Some(cfg), "enable_full_payloads") == Some(true);
@@ -247,15 +269,6 @@ pub fn parse_config(text: &str) -> CaptureConfig {
                     .take(16)
                     .map(|t| endpoint_of(t, false))
                     .collect();
-                // resource metrics (host figures sampled by Relay): a section of its own where a version has it
-                let res = tbl(cfg.get("resource_metrics"))
-                    .or_else(|| tbl(otel.and_then(|o| o.get("resource_metrics"))))
-                    .or_else(|| tbl(metrics.and_then(|m| m.get("resource_metrics"))));
-                c.resource_metrics = flag(res, "enabled") == Some(true);
-                c.resource_polling = flag(res, "polling");
-                c.resource_interval_ms = int(res, "interval_millis")
-                    .or_else(|| int(res, "interval_ms"))
-                    .or_else(|| int(res, "polling_interval_millis"));
             }
             _ => {}
         }
@@ -275,6 +288,8 @@ pub struct Observed {
     pub atif_last_ts: Option<f64>,
     pub atif_trajectories: u64,
     pub atif_bytes: u64,
+    /// The newest `nemo.relay.resource_metrics` mark (addendum 9.17).
+    pub resource_last_ts: Option<f64>,
 }
 
 impl Observed {
@@ -287,10 +302,14 @@ impl Observed {
             .iter()
             .filter(|t| t.source == super::atif::GATEWAY)
             .collect();
+        let resource_last_ts = snap.info.resource_last_us.and_then(super::ids::secs);
+        // the ATOF and payload rows follow the TRAFFIC (`d.last_us` leaves resource samples out): a sampler that
+        // writes a mark a minute must not make an idle capture look active
+        let atof_last_ts = super::ids::secs(core.d.last_us);
         #[allow(clippy::cast_precision_loss)]
         Observed {
             indexed: snap.info.state != "disabled",
-            atof_last_ts: super::ids::secs(core.d.last_us),
+            atof_last_ts,
             atof_events: snap.info.events,
             atof_bytes: snap.info.files.iter().map(|f| f.bytes).sum(),
             atof_files: snap.info.files.len() as u64,
@@ -301,6 +320,7 @@ impl Observed {
                 .map(|us| us as f64 / 1e6),
             atif_trajectories: gateway.len() as u64,
             atif_bytes: gateway.iter().map(|t| t.bytes).sum(),
+            resource_last_ts,
         }
     }
 }
@@ -408,12 +428,35 @@ pub fn capture(
     } else {
         json!({"last_ts": null, "events": null, "bytes": null, "files": null})
     };
+    // resource samples (addendum 9.17): on = a resource_metrics component with polling on
+    let resources_on = c.readable && c.resource_metrics && c.resource_polling == Some(true);
+    let interval_s = c
+        .resource_interval_ms
+        .filter(|ms| *ms > 0 && resources_on)
+        .map(|ms| {
+            #[allow(clippy::cast_precision_loss)]
+            let s = ms as f64 / 1000.0;
+            s
+        });
+    let resource_state = resource_state(
+        c.readable,
+        resources_on,
+        o.indexed,
+        o.resource_last_ts,
+        interval_s.unwrap_or(RESOURCE_DEFAULT_INTERVAL_S),
+        now,
+    );
+    let resource_observed = if o.indexed {
+        json!({"last_ts": num(o.resource_last_ts)})
+    } else {
+        json!({"last_ts": null})
+    };
     let atif_observed = if o.indexed {
         json!({"last_ts": num(o.atif_last_ts), "trajectories": o.atif_trajectories, "bytes": o.atif_bytes})
     } else {
         json!({"last_ts": null, "trajectories": null, "bytes": null})
     };
-    let levels = vec![
+    let mut levels = vec![
         level(
             "atof",
             "ATOF event log (JSON lines on disk)",
@@ -473,11 +516,11 @@ pub fn capture(
         ),
         level(
             "resource_metrics",
-            "Resource metrics (host figures sampled by Relay)",
-            on && c.resource_metrics,
-            st(on && c.resource_metrics, false, None),
+            "Gateway resource metrics (CPU, memory, disk of the gateway process)",
+            resources_on,
+            resource_state,
             json!({"polling": c.resource_polling, "interval_ms": c.resource_interval_ms}),
-            json!({}),
+            resource_observed,
         ),
         level(
             "pricing",
@@ -488,6 +531,13 @@ pub fn capture(
             json!({}),
         ),
     ];
+    if let Some(row) = levels
+        .iter_mut()
+        .find(|l| l["id"] == "resource_metrics")
+        .and_then(Value::as_object_mut)
+    {
+        row.insert("group".to_owned(), json!("other"));
+    }
     let has = |p: &str| traces && c.traces.iter().any(|e| e.projection.as_deref() == Some(p));
     let mut hints: Vec<Value> = Vec::new();
     let mut hint =
@@ -565,12 +615,6 @@ pub fn capture(
                     .to_owned(),
             );
         }
-        if !c.resource_metrics {
-            hint(
-                "capture.metrics.resource_off",
-                "Resource metrics are not collected, so host load cannot be lined up with slow requests.".to_owned(),
-            );
-        }
         if !c.pricing {
             hint(
                 "capture.pricing.off",
@@ -594,16 +638,64 @@ pub fn capture(
             );
         }
     }
+    if resource_state == "off" {
+        hint(
+            "relay.resources.off",
+            format!(
+                "Gateway resource metrics are off: the gateway's CPU, memory and disk are not sampled. Add a `resource_metrics` component with polling enabled to plugins.toml and restart the gateway (in the lab: `{RESOURCES_ON}`)."
+            ),
+        );
+    }
     let mut projections = Map::new();
     for p in ["gen_ai", "openinference", "full"] {
         projections.insert(p.to_owned(), json!(has(p)));
     }
+    let resources = if c.readable {
+        json!({
+            "configured": c.resource_metrics,
+            "enabled": resources_on,
+            "scope": c.resource_scope,
+            "interval_s": interval_s,
+            "gpu": c.resource_gpu == Some(true),
+            "network": c.resource_network == Some(true),
+        })
+    } else {
+        json!({"configured": null, "enabled": null, "scope": null, "interval_s": null, "gpu": null, "network": null})
+    };
     json!({
         "relay_version": relay_version.filter(|v| is_ident(v)),
         "levels": levels,
         "projections": projections,
         "hints": hints,
+        "resources": resources,
     })
+}
+
+/// The `resource_metrics` level (addendum 9.17): `active` while the newest sample is no older than three intervals,
+/// `stale` when older, `idle` when on and none seen, `off` when not on; `unknown` when the file cannot be read or
+/// the index is off.
+fn resource_state(
+    readable: bool,
+    on: bool,
+    indexed: bool,
+    last_ts: Option<f64>,
+    interval_s: f64,
+    now: f64,
+) -> &'static str {
+    if !readable {
+        return "unknown";
+    }
+    if !on {
+        return "off";
+    }
+    if !indexed {
+        return "unknown";
+    }
+    match last_ts {
+        Some(t) if now - t <= RESOURCE_INTERVALS * interval_s => "active",
+        Some(_) => "stale",
+        None => "idle",
+    }
 }
 
 #[cfg(test)]

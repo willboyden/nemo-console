@@ -812,6 +812,207 @@ export async function visitWave4(ctx) {
   await visitAudit(ctx);
 }
 
+// ------------------------------------------------------------------------------------------------------------------ Relay runtime (addendum 9.17)
+
+/**
+ * Relay › Capture: the Gateway resources card (every role) and the Runtime diagnostics card (admins only), against the mock
+ * server: the strip, the eleven charts and their text alternatives, the window in the URL, the freshness chip, the empty state with
+ * its command, the diagnostics totals / tables / bars / filter / reasons, and the viewer, for whom the diagnostics card is ABSENT
+ * (not built, and its route never asked). The role is read once at page load, so each role change is followed by a reload.
+ */
+export async function visitRelayRuntime(ctx) {
+  const need = async (expr, what, ms) => {
+    if (!(await until(ctx, expr, ms))) ctx.fail(`relay › capture runtime: ${what}`);
+  };
+  const reload = async () => {
+    await ctx.evaluate('location.reload(); true');
+    await ctx.sleep(1500);
+    await ctx.settle();
+  };
+  const refreshDiag = () => ctx.evaluate(`[...document.querySelectorAll('#rt-diagnostics .card-head button')].find((b) => /Refresh/.test(b.textContent))?.click(); true`);
+  const diagText = `(document.querySelector('#rt-diagnostics') || { textContent: '' }).textContent`;
+  await dev(ctx, 'role?set=admin');
+  await dev(ctx, 'traces?resources=on&diag=ok');
+  await reload();
+  await fresh(ctx, '#/relay?tab=capture', 'relay › capture runtime (mock, admin)');
+
+  // ---- Gateway resources
+  await need(`${q('#rt-resources')} === 1 && ${q('#rt-resources .res-strip .stat')} === 10`, 'the resources card has its ten latest-value tiles', 30000);
+  await need(
+    `${q('#rt-resources svg.tschart')} === 11 && [...document.querySelectorAll('#rt-resources svg.tschart')].every((s) => s.getAttribute('aria-label') && s.querySelector('title'))`,
+    'eleven charts (one per panel), each with an aria-label and a title',
+    30000,
+  );
+  await need(`${q('#rt-resources details.chart-data')} === 7`, 'each of the seven chart cards offers its data table as the text alternative');
+  await need(`${q('#rt-resources .res-fresh.st-fresh')} === 1 && /fresh/.test(document.querySelector('#rt-resources .res-fresh').textContent)`, 'the freshness chip says fresh in words');
+  await need(NO_JUNK('#rt-resources'), 'no resource tile or chart prints null, undefined or NaN');
+  // a gateway that uses well under a hundredth of a core still gets a readable axis: distinct labels, not 0 0 0 0
+  await need(
+    `(() => { const ys = [...document.querySelectorAll('#rt-resources svg.tschart')[0].querySelectorAll('text.tick[text-anchor="end"]')].map((t) => t.textContent.trim()); return ys.length >= 3 && new Set(ys).size === ys.length && ys.some((y) => /m$/.test(y)); })()`,
+    'the CPU chart axis labels are all different (millicores for a tiny figure), not 0, 0, 0, 0',
+  );
+  await need(`/millicores/.test(document.querySelector('#rt-resources .res-strip .stat').textContent)`, 'the CPU tile reads a tiny figure in millicores, not 0.00 cores');
+  await need(`document.querySelector('#rt-resources select').value === '24h' && !/res_window/.test(location.hash)`, 'the window defaults to the last 24 hours and the URL stays clean');
+  await setSelect(ctx, '#rt-resources select', '7d');
+  await need(`/res_window=7d/.test(location.hash) && ${q('#rt-resources svg.tschart')} === 11`, 'choosing 7 days is kept in the URL and the charts follow', 30000);
+  const deep = await ctx.evaluate('location.hash');
+  await open(ctx, '#/overview', 'relay › capture runtime › leave');
+  await open(ctx, deep, 'relay › capture runtime (deep link)');
+  await need(`document.querySelector('#rt-resources select').value === '7d'`, 'a deep link restores the window', 30000);
+  await setSelect(ctx, '#rt-resources select', '1h');
+  await need(`/res_window=1h/.test(location.hash) && ${q('#rt-resources svg.tschart')} === 11`, 'one hour draws the charts too', 30000);
+  await setSelect(ctx, '#rt-resources select', '24h');
+  await need(`!/res_window/.test(location.hash)`, 'the default window leaves the URL clean again');
+  await need(
+    `/resource_metrics/.test(document.querySelector('.cap-table').textContent) && ${q('.cap-table tr.cap-row')} === 9`,
+    'the capture matrix still lists nine levels, with the resource_metrics row',
+  );
+  await need(
+    `(() => { const g = [...document.querySelectorAll('.cap-table tr.grp')].find((r) => /Other/.test(r.textContent)); return !!g && /resource_metrics/.test(g.nextElementSibling?.textContent || ''); })()`,
+    'the resource_metrics row sits under the Other group, as the backend files it',
+  );
+
+  // ---- Runtime diagnostics (admin)
+  await need(`${q('#rt-diagnostics')} === 1 && ${q('#rt-diagnostics .rtd-totals .stat')} === 5`, 'an admin sees the Runtime diagnostics card with its five totals', 30000);
+  await need(`${q('#rt-diagnostics .rtd-totals .stat.hot')} === 1`, 'recorded failures mark the Failures tile (and only it)');
+  await need(
+    `(() => { const rows = [...document.querySelectorAll('#rt-diagnostics table.rtd-table')[0].querySelectorAll('tbody tr')]; const f = rows.map((r) => Number((r.children[3].textContent.match(/\\d+/) || [0])[0])); return rows.length >= 8 && f[0] > 0 && f.every((n, i) => i === 0 || n <= f[i - 1]) && rows[0].classList.contains('rtd-fail'); })()`,
+    'the component table lists the failing components first, most failures first',
+  );
+  await need(
+    `(() => { const rows = [...document.querySelectorAll('#rt-diagnostics table.rtd-table')[0].querySelectorAll('tbody tr')].map((r) => [Number((r.children[3].textContent.match(/\\d+/) || [0])[0]), r.children[0].textContent.trim()]); const zero = rows.filter((r) => r[0] === 0).map((r) => r[1]); return zero.length >= 5 && zero.every((k, i) => i === 0 || zero[i - 1] < k); })()`,
+    'components without failures keep the server order, by key (the page does not re-sort them by occurrences)',
+  );
+  await need(
+    `${q('#rt-diagnostics .rtd-barlist .lbar[aria-label]')} === 2 && ${q('#rt-diagnostics .rtd-mem .lbar[aria-label]')} === 2`,
+    'failures by component and the memory meter are bars with an aria-label each',
+  );
+  await need(
+    `${q('#rt-diagnostics .rtd-loss li.hot')} === 1 && /⚠/.test(document.querySelector('#rt-diagnostics .rtd-loss li.hot').textContent)`,
+    'a loss counter above zero is highlighted with a glyph and its number',
+  );
+  await need(`${q('#rt-diagnostics .rtd-zeros')} === 1`, 'the counters at zero are one tap away');
+  const evRows = () => `[...document.querySelectorAll('#rt-diagnostics table.rtd-table')[1].querySelectorAll('tbody tr')]`;
+  await need(
+    `${evRows()}.length >= 100 && /Showing \\d+ of \\d+ retained events/.test(document.querySelector('#rt-diagnostics .rtd-data').textContent)`,
+    'the recent events are listed under a caption that says how many are retained',
+  );
+  await need(`${evRows()}.every((r) => r.children.length === 6)`, 'every event row has code, component, severity, outcome, count and time');
+  await setSelect(ctx, '#rtd-outcome', 'failure');
+  await need(`${evRows()}.length > 0 && ${evRows()}.length < 100 && ${evRows()}.every((r) => /failure/.test(r.children[3].textContent))`, 'the outcome filter keeps only failures');
+  await setSelect(ctx, '#rtd-outcome', 'all');
+  await need(`${evRows()}.length >= 100`, 'All outcomes brings every event back');
+  await need(NO_JUNK('#rt-diagnostics'), 'the diagnostics card prints no null, undefined or NaN');
+  await need(`!/gathered/.test(document.querySelector('#rt-diagnostics .rtd-data').textContent)`, 'an answer that is not truncated has no truncation note in the events caption');
+  await dev(ctx, 'traces?diag=truncated');
+  await refreshDiag();
+  await need(
+    `/Showing \\d+ of 256 retained events/.test(document.querySelector('#rt-diagnostics .rtd-data').textContent) && /gathered 150 of them/.test(document.querySelector('#rt-diagnostics .rtd-data').textContent)`,
+    'when the gateway holds more events than were gathered, the events caption says so (150 gathered of 256 retained)',
+    30000,
+  );
+  await dev(ctx, 'traces?diag=ok');
+  await refreshDiag();
+  await need(`!/gathered/.test(document.querySelector('#rt-diagnostics .rtd-data').textContent)`, 'the truncation note goes when the answer is whole again', 30000);
+  await refreshDiag();
+  await need(`${q('#rt-diagnostics .rtd-totals .stat')} === 5`, 'the refresh button keeps the card on screen');
+  // the four reasons each have a fixed text; disabled says how to turn diagnostics on
+  for (const [mode, re] of [
+    ['disabled', 'cannot be read from the gateway'],
+    ['unreachable', 'could not be reached'],
+    ['unsupported_version', 'has no diagnostics'],
+    ['error', 'could not be read'],
+  ]) {
+    await dev(ctx, `traces?diag=${mode}`);
+    await refreshDiag();
+    await need(
+      `${q('#rt-diagnostics .state.empty')} === 1 && ${diagText}.includes(${JSON.stringify(re)}) && ${q('#rt-diagnostics .rtd-totals')} === 0`,
+      `the ${mode} reason has its fixed text and no figures`,
+      30000,
+    );
+  }
+  await dev(ctx, 'traces?diag=disabled');
+  await refreshDiag();
+  await need(
+    `(() => { const c = document.querySelector('#rt-diagnostics .snippet-code')?.textContent || ''; return /^NEMO_RELAY_DIAGNOSTICS=1\\nNEMO_RELAY_DIAGNOSTICS_HTTP=1\\n?$/.test(c) && ${q('#rt-diagnostics .snippet button')} === 1 && /NEMO_RELAY_DIAGNOSTICS_HTTP=1/.test(${diagText}) && /same account/.test(${diagText}); })()`,
+    'the disabled reason names both environment variables, offers the two lines in one copyable block, and says to run the console as the same account',
+  );
+  await dev(ctx, 'traces?diag=ok');
+  await refreshDiag();
+  await need(`${q('#rt-diagnostics .rtd-totals .stat')} === 5`, 'the card recovers when diagnostics come back', 30000);
+
+  // ---- the sampler off, polling off and stale
+  await dev(ctx, 'traces?resources=off');
+  await fresh(ctx, '#/relay?tab=capture', 'relay › capture runtime (mock, sampler off)');
+  await need(
+    `${q('#rt-resources .state.empty')} === 1 && ${q('#rt-resources svg.tschart')} === 0 && /python3 -I ops\\/nemo-relay-levels\\.py resources on/.test(document.querySelector('#rt-resources .fix-cmd')?.textContent || '')`,
+    'with the sampler off the card is an empty state that shows the command to switch it on, and draws no chart',
+    30000,
+  );
+  await need(
+    `(() => { const r = document.querySelector('#rt-resources .res-remedy'); if (!r) return false; const kids = [...r.children]; const sn = r.querySelector('.snippet-code')?.textContent || ''; return kids[0].classList.contains('snippet') && /kind = "resource_metrics"/.test(sn) && /measurement_scope = "application_process"/.test(sn) && /interval_millis = 60000/.test(sn) && kids[1].classList.contains('fix') && /In the lab/.test(kids[1].textContent) && ${q('#rt-resources .snippet button')} === 1; })()`,
+    'the generic plugins.toml snippet comes first with a copy button, and the lab command is the second line, labelled "In the lab"',
+  );
+  await need(`[...document.querySelectorAll('.todo li code')].some((c) => c.textContent === 'relay.resources.off')`, 'the to-do list carries the relay.resources.off hint');
+  await need(`document.querySelector('#rt-resources select').hidden === true`, 'the window picker is hidden while nothing is sampled');
+  await dev(ctx, 'traces?resources=polling_off');
+  await fresh(ctx, '#/relay?tab=capture', 'relay › capture runtime (mock, polling off)');
+  await need(
+    `${q('#rt-resources .state.empty')} === 1 && /polling is not enabled/.test(document.querySelector('#rt-resources .state.empty').textContent)`,
+    'a configured component with polling off says so',
+    30000,
+  );
+  await dev(ctx, 'traces?resources=stale');
+  await fresh(ctx, '#/relay?tab=capture', 'relay › capture runtime (mock, stale)');
+  await need(
+    `${q('#rt-resources .res-fresh.st-stale')} === 1 && /stale/.test(document.querySelector('#rt-resources .res-fresh').textContent) && ${q('#rt-resources svg.tschart')} === 11`,
+    'old samples are marked stale in words while the charts still draw',
+    30000,
+  );
+  await dev(ctx, 'traces?resources=quiet');
+  await fresh(ctx, '#/relay?tab=capture', 'relay › capture runtime (mock, quiet gateway)');
+  await need(
+    `(() => { const tile = [...document.querySelectorAll('#rt-resources .res-strip .stat')].find((x) => /Routing/.test(x.textContent) && !/overhead/i.test(x.textContent)); return !!tile && /0 req\\/s/.test(tile.querySelector('.stat-value').textContent) && /0 req\\/s failing/.test(tile.textContent) && !/–/.test(tile.textContent); })()`,
+    'a quiet gateway that reports 0 requests and 0 failures reads "0 req/s" and "0 req/s failing", not an en dash',
+    30000,
+  );
+  await need(
+    `${q('#rt-resources svg.tschart')} === 10`,
+    'the routing rates still draw (flat zero lines) for a quiet gateway, and only the overhead quantile, which has nothing to take, is an empty panel',
+  );
+  await dev(ctx, 'traces?resources=idle');
+  await fresh(ctx, '#/relay?tab=capture', 'relay › capture runtime (mock, no sample yet)');
+  await need(
+    `${q('#rt-resources .res-fresh.st-unknown')} === 1 && /no sample yet/.test(document.querySelector('#rt-resources .res-fresh').textContent) && ${q('#rt-resources .state.empty')} === 1 && ${q('#rt-resources svg.tschart')} === 0`,
+    'a sampler that is on but has produced nothing yet says "no sample yet" and draws no chart',
+    30000,
+  );
+  await dev(ctx, 'traces?resources=unreadable');
+  await fresh(ctx, '#/relay?tab=capture', 'relay › capture runtime (mock, plugins.toml unreadable)');
+  await need(
+    `${q('#rt-resources .res-fresh.st-unknown')} === 1 && ${q('#rt-resources .fix-cmd')} === 0 && [...document.querySelectorAll('.todo li code')].some((c) => c.textContent === 'capture.config.unreadable')`,
+    'with the configuration unreadable the card does not claim the sampler is off (it asks anyway) and the to-do list says the file is unreadable',
+    30000,
+  );
+  await dev(ctx, 'traces?resources=on');
+
+  // ---- a viewer: resources yes, diagnostics absent and never asked
+  await dev(ctx, 'role?set=viewer');
+  await reload();
+  await fresh(ctx, '#/relay?tab=capture', 'relay › capture runtime (mock, viewer)');
+  await need(`${q('#rt-resources')} === 1 && ${q('#rt-resources svg.tschart')} === 11`, 'a viewer still sees the Gateway resources card and its charts', 30000);
+  await need(
+    `${q('#rt-diagnostics')} === 0 && ${q('.rt-diag-slot > *')} === 0 && !/Runtime diagnostics/.test(document.querySelector('#main').textContent)`,
+    'a viewer has no Runtime diagnostics card at all (not built, not merely disabled)',
+  );
+  const asked = await ctx.evaluate(`performance.getEntriesByType('resource').filter((e) => e.name.includes('/relay/diagnostics')).length`);
+  if (asked) ctx.fail(`relay › capture runtime: a viewer's page asked for the diagnostics ${asked} time(s)`);
+  const denied = await ctx.evaluate(`fetch('/api/v1/systems/relay/diagnostics').then(async (r) => [r.status, (await r.json()).error?.code])`);
+  if (denied?.[0] !== 403 || denied?.[1] !== 'forbidden') ctx.fail(`relay › capture runtime: the route answered a viewer ${JSON.stringify(denied)}, not 403 forbidden`);
+  await dev(ctx, 'role?set=admin');
+  await reload();
+}
+
 /** Every check below fails with a message naming what was expected; nothing here throws. */
 export async function visitVizPages(ctx) {
   await checkRoute(ctx);
@@ -823,6 +1024,7 @@ export async function visitVizPages(ctx) {
   await visitWave2(ctx);
   await visitWave3(ctx);
   await visitWave4(ctx);
+  await visitRelayRuntime(ctx);
 }
 
 /**

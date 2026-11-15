@@ -8,6 +8,7 @@
 //   Series + run history (9.13): GET /systems/{id}/metrics/series and 10-30 run events per run-based system are always on; /__dev/seven?dcgm_gpus=6 gives the DCGM page six GPUs (the series picker needs more than four lines)
 //   Wave 4 (9.16): GET /systems/guardrails/rails, GET /systems/openshell/decisions?sandbox=&limit=, GET /audit/summary?window= and the /audit filters (since, until, actor, status, system); persisted openshell.sandbox events; Flare targets; /__dev/wave4?rails=ok|empty|problem|unsupported&decisions=ok|empty|many|fail|sparse&flare=default|mixed|none
 //   Relay trace explorer (9.12): MOCK_TRACES=ready|building|empty|disabled  MOCK_CAPTURE=full|gen_ai  MOCK_TRACES_STALE=1  (or /__dev/traces?index=&content=admin|off&capture=&truncated=1&stale=1)
+//   Relay runtime (9.17): gateway-resource series on the Relay metrics, the capture answer's `resources`, GET /systems/relay/diagnostics (admin only, 403 for a viewer): MOCK_RESOURCES=on|off|stale|polling_off  MOCK_DIAG=ok|clean|truncated|disabled|unreachable|unsupported_version|error  (or /__dev/traces?resources=&diag=)
 // Dev helpers (not part of the contract): /__dev/scenario /__dev/touch /__dev/role /__dev/fail /__dev/vllm /__shot
 import http from 'node:http';
 import fs from 'node:fs';
@@ -35,6 +36,7 @@ import {
   GR_REFUSAL,
 } from './mock-seven.mjs';
 import { createTracesMock } from './mock-traces.mjs';
+import { RESOURCE_MODES, DIAG_MODES, resourcePoints } from './mock-runtime.mjs';
 import { RAILS_MODES, DECISION_MODES, FLARE_MODES, railsAnswer, openshellEvents, presentSandboxNames, decisionsAnswer, auditSeeds, auditSummary, filterAudit, SUMMARY_WINDOWS } from './mock-wave4.mjs';
 import { parseSeriesQuery, buildSeries } from './mock-series.mjs';
 import { runSeeds, extraDdRuns } from './mock-runs.mjs';
@@ -293,7 +295,7 @@ function status(id) {
     return {
       system: id,
       health: 'degraded',
-      version: '0.9.2',
+      version: '0.11.1',
       summary: 'Gateway up on :4040; plugin loaded; 1 warning (exporter disabled)',
       endpoints: [{ name: 'gateway', url: 'http://127.0.0.1:4040', role: 'api', auth: 'none' }],
       components: [
@@ -475,7 +477,15 @@ function metrics(id) {
       system: id,
       ts,
       available: true,
-      points: [P('relay.gateway_up', 1), P('relay.plugin_loaded', 1), P('relay.atof_files', 214), P('relay.atof_bytes', 48e6, 'B'), P('relay.atif_trajectories', 37), P('relay.exporters_enabled', 0)],
+      points: [
+        P('relay.gateway_up', 1),
+        P('relay.plugin_loaded', 1),
+        P('relay.atof_files', 214),
+        P('relay.atof_bytes', 48e6, 'B'),
+        P('relay.atif_trajectories', 37),
+        P('relay.exporters_enabled', 0),
+        ...resourcePoints(traceMock.flags.resources, wob), // gateway process + routing plugin figures (addendum 9.17), none while the sampler is off
+      ],
     };
   if (id === 'datadesigner') {
     const by = {};
@@ -970,7 +980,7 @@ function runAction(system, id, params) {
     if (id === 'doctor_offline')
       return R(
         true,
-        'nemo-relay 0.9.2\n[ok]   config parses\n[ok]   plugin dir readable\n[ok]   attestation key present (mode=enforce)\n[warn] exporters.otlp.enabled = false\n[ok]   atof dir writable (214 files, 48 MB)\n5 checks, 1 warning',
+        'nemo-relay 0.11.1\n[ok]   config parses\n[ok]   plugin dir readable\n[ok]   attestation key present (mode=enforce)\n[warn] exporters.otlp.enabled = false\n[ok]   atof dir writable (214 files, 48 MB)\n5 checks, 1 warning',
         [{ severity: 'warn', code: 'relay.exporter.disabled', message: 'OTLP exporter disabled', fix: 'nemo-relay config set exporters.otlp.enabled true' }],
       );
     if (id === 'agents_list')
@@ -1275,11 +1285,11 @@ async function api(req, res, url) {
       req.on('close', () => streams.delete(c));
       return;
     }
-    if (id === 'relay' && M === 'GET' && /^\/(traces|sessions|analytics|trajectories|capture)(\/|$)/.test(sub)) {
+    if (id === 'relay' && M === 'GET' && /^\/(traces|sessions|analytics|trajectories|capture|diagnostics)(\/|$)/.test(sub)) {
       const r = traceMock.route(sub, url.searchParams, { admin });
       if (r) return json(res, r.status, r.body);
     }
-    if (id !== 'relay' && /^\/(traces|sessions|analytics|trajectories|capture)(\/|$)/.test(sub)) return err(res, 404, 'not_found', `${id} has no trace explorer`);
+    if (id !== 'relay' && /^\/(traces|sessions|analytics|trajectories|capture|diagnostics)(\/|$)/.test(sub)) return err(res, 404, 'not_found', `${id} has no trace explorer`);
     if (sub === '/config') return json(res, 200, specs[id]);
     let rm;
     // Wave 3 (addendum 9.15), viewer routes, GET only: the per-run summary (aiperf, skillevaluator), the per-request rows (aiperf) and the column profile (datadesigner).
@@ -1442,6 +1452,8 @@ function dev(req, res, url) {
     if (['full', 'gen_ai'].includes(q.get('capture'))) f.capture = q.get('capture');
     if (q.has('truncated')) f.truncated = q.get('truncated') === '1';
     if (q.has('stale')) traceMock.setStale(q.get('stale') === '1');
+    if (RESOURCE_MODES.includes(q.get('resources'))) f.resources = q.get('resources');
+    if (DIAG_MODES.includes(q.get('diag'))) f.diag = q.get('diag');
     return json(res, 200, f);
   }
   if (p === '/__dev/seven') {
