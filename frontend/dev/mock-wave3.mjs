@@ -171,7 +171,7 @@ export function aiperfRequests(ev, { maxRows = MAX_REQUEST_ROWS } = {}) {
   });
   const truncated = all.length > maxRows;
   const picked = truncated ? Array.from({ length: maxRows }, (_, k) => all[Math.floor((k * all.length) / maxRows)]) : all;
-  return { run_id: d.run_id, total: all.length, returned: picked.length, truncated, rows: picked.map(clean) };
+  return { run_id: d.run_id, total: all.length, returned: picked.length, skipped: 0, truncated, rows: picked.map(clean) };
 }
 
 // ------------------------------------------------------------------------------------------------ skillevaluator summary
@@ -300,8 +300,9 @@ export function ddProfile(run, { admin }) {
             .slice(0, MAX_TOP)
             .map(([value, count]) => ({ value: cut(value), count }))
         : null;
-    return { name, types, non_null: rows.length - types.null, distinct: seen.size, distinct_capped: seen.size >= DISTINCT_CAP, length: stats(lengths), numeric: stats(numbers), top };
+    return { name, types, non_null: rows.length - types.null, distinct: seen.size, distinct_capped: seen.size >= DISTINCT_CAP, length: stats(lengths), numeric: admin ? stats(numbers) : null, top };
   });
   // `values_hidden` is always there (false for an admin); `truncated` is true when rows > 2000, columns > 200 or bad column names were dropped
-  return { run_id: run.run_id, rows: rows.length, columns, values_hidden: !admin, truncated: rows.length > 2000 };
+  // numeric ranges are real cell values: admin-only like `top`; `columns_dropped` counts non-identifier / over-cap columns
+  return { run_id: run.run_id, rows: rows.length, columns, values_hidden: !admin, columns_dropped: 0, truncated: rows.length > 2000 };
 }

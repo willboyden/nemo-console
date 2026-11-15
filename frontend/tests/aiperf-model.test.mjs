@@ -131,7 +131,7 @@ test('cleanRequests: documented fields only; error_code is null (success), 0 (fa
   assert.equal(a.rows[1].error_code, 429);
   assert.equal(a.rows[2].error_code, 0, '0 stays 0: a failure with no usable HTTP code');
   assert.equal(a.rows[3].error_code, null);
-  assert.equal(a.rows[3].worker, 0, 'a bad worker index becomes 0');
+  assert.equal(a.rows[3].worker, -1, 'a bad worker index becomes -1 (its own "?" lane, never worker 0)');
   assert.equal(a.rows[3].latency_ms, null, 'a text latency is no latency');
   assert.ok(!('extra' in a.rows[3]));
   assert.deepEqual(Object.keys(a.rows[0]).sort(), ['end_ms', 'error_code', 'i', 'input_tokens', 'itl_avg_ms', 'latency_ms', 'output_tokens', 'start_ms', 'ttft_ms', 'worker']);
@@ -303,4 +303,17 @@ test('the mock requests, shaped: workers by first appearance, failures carry cod
   const h = requestHistogram(req.rows, 'latency_ms');
   assert.equal(h.n + h.failed + h.missing, 300);
   assert.equal(swimLanes(req.rows).lanes.length, 8);
+});
+
+test('requests: a row without a usable worker index gets its own "?" lane, never worker 0', () => {
+  const { rows } = cleanRequests({
+    rows: [
+      { i: 0, start_ms: 0, end_ms: 10, latency_ms: 10, worker: 0, error_code: null },
+      { i: 1, start_ms: 1, end_ms: 9, latency_ms: 8, worker: null, error_code: null },
+    ],
+  });
+  const sw = swimLanes(rows);
+  const labels = sw.lanes.map((l) => l.label);
+  assert.ok(labels.includes('?') && labels.includes('#0'));
+  assert.notEqual(sw.items.find((x) => x.i === 1).lane, sw.items.find((x) => x.i === 0).lane);
 });

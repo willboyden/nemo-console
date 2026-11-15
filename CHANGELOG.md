@@ -14,8 +14,8 @@ implemented / verified-live / unverified defined in the README.
   rates. **NeMo Gym:** the per-task reward distribution and trends by model. **Model Optimizer:** a job timeline, base
   vs output size and the age of a running job. **SkillEvaluator:** a validator x run heatmap, rubric bars and the
   Tier 3 lift per agent and metric (no finding or model text). **Data Designer:** a run timeline and a column profile
-  (`/runs/{id}/profile`): types, missing share, distinct values, lengths and ranges for everyone; the most frequent
-  values for admins only.
+  (`/runs/{id}/profile`): types, missing share, distinct values and text lengths for everyone; numeric ranges and the
+  most frequent values (real cell values) for admins only.
 - **Charts, wave 2** (addendum 9.14). **GPU telemetry:** a Fleet tab with a heatmap of every GPU of every DCGM host
   Prometheus scrapes (utilisation, temperature, power or memory over 1 h, 24 h or 7 d; gaps drawn as gaps), from a new
   route that builds its queries from a fixed table; on Status, an "is it really busy?" card per GPU (utilisation next

@@ -808,8 +808,12 @@ the event `data` additions below (new keys only).
   distinct, distinct_capped, length: {min, p50, p95, max} | null, numeric: {min, p50, p95, max} | null, top: [{value,
   count}] | null}]}`. `top` (the 10 most frequent values of a column with at most 50 distinct values, each value cut
   to 64 characters) is filled ONLY for an admin; for a viewer it is null and the answer says `values_hidden: true` —
-  the values are model-written content (9.13). Column names are shown to both (they come from the operator's script).
-  At most 200 columns; reads at most the 2000-line, 2 KiB-per-value records file the adapter already caps.
+  the values are model-written content (9.13). `numeric` (min, p50, p95, max: nearest-rank, so real cell values) is
+  admin-only too, null for a viewer; `length` is shown to both. Column names are shown to both but must be identifiers
+  (`[A-Za-z_][A-Za-z0-9_]{0,63}`); any other column is dropped and `truncated` is set. At most 200 columns and 2000
+  rows; the read is capped in bytes and per line (the records file on disk is not itself byte-capped), and any cap that
+  stops the read sets `truncated`. Amended 2026-11-14 after the pre-merge audit (viewers get aggregates, never cell
+  values).
 * **Event `data` additions** (new keys only; parity D-41 pins the exact added keys): `evaluator.run` benchmarks gain
   `ci_low`, `ci_high`, `tokens`, `elapsed_s`, `failure_rate`; `gym.smoke` gains `rewards` (the per-task rewards array,
   at most 20 numbers).
@@ -840,4 +844,11 @@ the event `data` additions below (new keys only).
   collected for a viewer; request rows give `error_code` 0 for a failed request with no usable code (null = success),
   number workers by first appearance over the whole file (at most 1024), and convert ns/us/ms/s (any other unit is
   null); the AIPerf summary drops `count`/`sum`, takes each HTTP phase's average, and answers `metrics: {}` for a run
-  without a profile file; at most 4 of these parses run at once on the blocking pool.
+  without a profile file. After the pre-merge audit (2026-11-14): at most 2 of these reads run at once on the
+  blocking pool; every JSON document (run.json, the AIPerf summary, the Tier 1 file) is parsed only if it is at most
+  1 MiB and 100,000 values (else it reads as absent: `metrics: {}` / `tier1: null`); a request line over 256 KiB or
+  100,000 values is not parsed and is counted in a new `skipped` key (and sets `truncated`), every line counts toward
+  the 200,000-line cap; a profile line over 1 MiB is skipped and sets `truncated`; the profile answer gains
+  `columns_dropped` (columns that are not identifiers or come after the 200th); hard links are refused and every file
+  is opened relative to the run directory (`openat`, `O_NOFOLLOW`). Peak memory per request measured at 5-37 MiB
+  (`tests/runviz_memory.rs`).

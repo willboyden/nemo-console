@@ -143,6 +143,10 @@ test('the mock profile: an admin gets top values, a viewer gets null and values_
     'a viewer is never sent a value',
   );
   assert.ok(!JSON.stringify(viewer).includes('"high"'), 'not even by accident');
+  assert.ok(
+    viewer.columns.every((c) => c.numeric === null),
+    'numeric ranges are real cell values: admin-only',
+  );
   for (const c of admin.columns)
     assert.equal(
       Object.values(c.types).reduce((a, b) => a + b, 0),
@@ -154,7 +158,7 @@ test('the mock profile: an admin gets top values, a viewer gets null and values_
   assert.equal(pr.non_null, 60);
   assert.deepEqual(admin.columns.find((c) => c.name === 'csat').numeric.min, 1);
   assert.equal(admin.columns.find((c) => c.name === 'tags').types.array, 60);
-  assert.deepEqual(ddProfile({ run_id: 'e', rows: [], columns: [] }, { admin: true }), { run_id: 'e', rows: 0, columns: [], values_hidden: false, truncated: false });
+  assert.deepEqual(ddProfile({ run_id: 'e', rows: [], columns: [] }, { admin: true }), { run_id: 'e', rows: 0, columns: [], values_hidden: false, columns_dropped: 0, truncated: false });
 });
 
 test('latestPerRun keeps the newest event of each run id; ddTimelineRows: the duration, or the age of a running run, requested vs written, nothing as 0', () => {

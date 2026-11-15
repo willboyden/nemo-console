@@ -931,7 +931,7 @@
       },
       {
         "q": "What do the charts under the run history show?",
-        "a": "Scores with 95% confidence intervals for run A (and B if you pick one), a model by benchmark matrix of the newest score for each pair, cost (tokens or time) against score, and failure rates. A run recorded before these figures existed shows a bar without a whisker and is left out of the cost chart; a missing figure is never drawn as zero.",
+        "a": "Scores with the confidence intervals NeMo Evaluator reports for run A (and B if you pick one), a model by benchmark matrix of the newest score for each pair, cost (tokens or time) against score, and failure rates. A run recorded before these figures existed shows a bar without a whisker and is left out of the cost chart; a missing figure is never drawn as zero.",
         "tab": "history"
       }
     ]

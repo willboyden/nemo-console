@@ -394,7 +394,7 @@ async function checkWave3Routes(ctx) {
   })()`);
   if (r.s1 !== 200 || r.sumKeys !== 'concurrency,duration_s,http_phases_ms,isl,metrics,model,osl,preset,requests,run_id,verdict' || !(r.ttft > 0))
     ctx.fail(`the aiperf summary route answered ${JSON.stringify(r)}`);
-  if (r.s2 !== 200 || r.reqKeys !== 'returned,rows,run_id,total,truncated' || r.rows < 1) ctx.fail(`the aiperf requests route answered ${JSON.stringify(r)}`);
+  if (r.s2 !== 200 || r.reqKeys !== 'returned,rows,run_id,skipped,total,truncated' || r.rows < 1) ctx.fail(`the aiperf requests route answered ${JSON.stringify(r)}`);
   if (r.s3 !== 200 || r.hidden !== false || r.cols < 3) ctx.fail(`the datadesigner profile route answered ${JSON.stringify(r)}`);
   if (r.s4 !== 404 || r.s5 !== 404 || r.s6 !== 422) ctx.fail(`the wave-3 routes' refusals are not 404 / 404 / 422: ${JSON.stringify(r)}`);
 }

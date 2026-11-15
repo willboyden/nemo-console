@@ -109,7 +109,8 @@ export function cleanRequests(answer) {
   const rows = [];
   for (const r of src) {
     if (!r || typeof r !== 'object' || !isNum(r.start_ms) || !isNum(r.end_ms)) continue;
-    const worker = Number.isInteger(r.worker) && r.worker >= 0 ? r.worker : 0;
+    // no usable worker index (over the server's 1024-worker cap, or an oversized id): its own lane, never worker 0's
+    const worker = Number.isInteger(r.worker) && r.worker >= 0 ? r.worker : -1;
     rows.push({
       i: isNum(r.i) ? r.i : rows.length,
       start_ms: r.start_ms,
@@ -170,7 +171,7 @@ export function swimLanes(rows, { maxLanes = 12, maxBars = 1500 } = {}) {
     .sort((a, b) => a.start_ms - b.start_ms || a.i - b.i)
     .map((r) => ({ i: r.i, lane: laneOf.get(r.worker), start: r.start_ms, end: r.end_ms, error: r.error_code != null, latency: r.latency_ms, code: r.error_code }));
   return {
-    lanes: kept.map((w) => ({ id: `w${w.worker}`, label: `#${w.worker}`, worker: w.worker, n: w.n, errors: w.errors })),
+    lanes: kept.map((w) => ({ id: w.worker < 0 ? 'wunknown' : `w${w.worker}`, label: w.worker < 0 ? '?' : `#${w.worker}`, worker: w.worker, n: w.n, errors: w.errors })),
     items,
     workers: workers.length,
     shown: items.length,

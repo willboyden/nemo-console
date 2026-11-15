@@ -30,7 +30,7 @@ const json = async (p) => (await get(p)).json();
 const dev = (u) => fetch(`${base}${u}`, { headers: { 'X-Console': '1' } });
 const events = async (id) => (await json(`/systems/${id}/events?limit=500`)).filter((e) => e.data?.run_id);
 const enc = encodeURIComponent;
-const REAL_NAMES = /spark\d|ai300|aitop|node\d|willaybee|willboyden/i;
+const REAL_NAMES = /spark\d|ai300|aitop|node\d/i;
 
 test('aiperf summary: the documented shape, percentiles that rise, units named, throughput as an average only, nothing for a run that measured nothing', async () => {
   const evs = await events('aiperf');
@@ -64,7 +64,7 @@ test('aiperf requests: the documented shape, error codes (0 included), workers b
   const evs = await events('aiperf');
   const ok = evs.find((e) => e.data.verdict === 'succeeded' && e.data.error_rate_pct > 0);
   const a = await json(`/systems/aiperf/runs/${enc(ok.data.run_id)}/requests`);
-  assert.deepEqual(Object.keys(a).sort(), ['returned', 'rows', 'run_id', 'total', 'truncated']);
+  assert.deepEqual(Object.keys(a).sort(), ['returned', 'rows', 'run_id', 'skipped', 'total', 'truncated']);
   assert.equal(a.total, ok.data.requests);
   assert.equal(a.returned, a.rows.length);
   assert.equal(a.truncated, false);
@@ -158,7 +158,7 @@ test('the summary route is aiperf and skillevaluator only; requests is aiperf on
   assert.ok(RUN_ID_RE.test('20261112T091512-104-chat-short') && RUN_ID_RE.test('abc#2') && !RUN_ID_RE.test('a b') && !RUN_ID_RE.test(''));
 });
 
-test('profile: an admin gets top values and values_hidden false; a viewer gets top null and values_hidden true; the aggregates are the same for both', async () => {
+test('profile: an admin gets top values and values_hidden false; a viewer gets top null and values_hidden true; numeric ranges are admin-only too; the other aggregates are the same for both', async () => {
   const runs = (await events('datadesigner')).filter((e) => e.data.verdict === 'succeeded' && e.data.num_records > 0);
   const id = runs[0].data.run_id;
   await dev('/__dev/role?set=admin');
@@ -166,16 +166,20 @@ test('profile: an admin gets top values and values_hidden false; a viewer gets t
   await dev('/__dev/role?set=viewer');
   const v = await json(`/systems/datadesigner/runs/${enc(id)}/profile`);
   await dev('/__dev/role?set=admin');
-  assert.deepEqual(Object.keys(a).sort(), ['columns', 'rows', 'run_id', 'truncated', 'values_hidden']);
+  assert.deepEqual(Object.keys(a).sort(), ['columns', 'columns_dropped', 'rows', 'run_id', 'truncated', 'values_hidden']);
   assert.equal(a.values_hidden, false);
   assert.equal(v.values_hidden, true);
   assert.ok(a.rows > 0 && a.rows === v.rows);
   assert.ok(a.columns.some((c) => Array.isArray(c.top) && c.top.length > 0));
   assert.ok(v.columns.every((c) => c.top === null));
+  assert.ok(
+    v.columns.every((c) => c.numeric === null),
+    'a viewer never gets numeric ranges (real cell values)',
+  );
   assert.deepEqual(
-    a.columns.map((c) => ({ ...c, top: null })),
+    a.columns.map((c) => ({ ...c, top: null, numeric: null })),
     v.columns,
-    'only top differs',
+    'only top and numeric differ',
   );
   for (const c of a.columns) {
     assert.deepEqual(Object.keys(c).sort(), ['distinct', 'distinct_capped', 'length', 'name', 'non_null', 'numeric', 'top', 'types']);
